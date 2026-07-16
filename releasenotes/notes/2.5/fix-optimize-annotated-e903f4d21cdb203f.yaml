@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.OptimizeAnnotated` transpiler pass where control modifiers
+    with open controls were not combined correctly.
+
+    See `#16410 <https://github.com/Qiskit/qiskit/issues/16410>`__.

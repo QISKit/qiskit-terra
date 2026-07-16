@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 60
     runs-on: ${{ inputs.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ inputs.python-version }}
         uses: actions/setup-python@v6
         with:

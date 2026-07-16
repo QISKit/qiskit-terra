@@ -1,0 +1,25 @@
+features_c:
+  - |
+    The C API now exposes the global phase of both :c:struct:`QkCircuit`
+    and :c:struct:`QkDag` objects. It can be retrieved via 
+    :c:func:`qk_circuit_global_phase` and set via :c:func:`qk_circuit_set_global_phase`
+    on the circuit, with analogous methods on the DAG called
+    :c:func:`qk_dag_global_phase` and :c:func:`qk_dag_set_global_phase`.
+    This global phase is passed as generic :c:struct:`QkParam` to support numeric 
+    and symbolic values. Importantly, the user retains ownership of the global phase, 
+    meaning the values must be freed via :c:func:`qk_free_param` after usage both 
+    when retrieving and when setting the phase.
+
+    .. code-block:: c
+
+        QkCircuit *qc = qk_circuit_new(2, 0);
+        
+        QkParam *out_phase = qk_circuit_global_phase(qc);
+        double out_phase_val = qk_param_as_real(out_phase);
+        qk_param_free(out_phase);
+        
+        QkParam *in_phase = qk_param_from_double(1.23);
+        qk_circuit_set_global_phase(qc, in_phase);
+        qk_param_free(in_phase);
+        
+        qk_circuit_free(qc);

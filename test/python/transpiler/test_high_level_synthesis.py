@@ -63,8 +63,8 @@ from qiskit.quantum_info import (
     Statevector,
     SparsePauliOp,
     SparseObservable,
+    random_unitary,
 )
-from qiskit.quantum_info.random import random_unitary
 from qiskit.synthesis.evolution import synth_pauli_network_rustiq, LieTrotter
 from qiskit.synthesis.linear import random_invertible_binary_matrix
 from qiskit.synthesis.arithmetic import adder_qft_d00

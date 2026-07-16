@@ -34,7 +34,7 @@ from qiskit.circuit.annotated_operation import (
 )
 from qiskit.quantum_info import random_clifford
 from qiskit.quantum_info.operators import SuperOp
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.transpiler.layout import Layout, TranspileLayout
 from qiskit.visualization.circuit.circuit_visualization import _text_circuit_drawer
 from qiskit.visualization import circuit_drawer

@@ -1,0 +1,6 @@
+---
+build:
+  - |
+    ``qiskit-bindgen-cli`` gained a ``check-abi`` command, which can check that two slots listings
+    (either from ``qiskit-bindgen-cli show-slots`` or compiled into ``qiskit-cext-vtable``) are
+    semver-compatible for the relevant version numbers.

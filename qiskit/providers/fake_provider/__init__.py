@@ -67,3 +67,5 @@ V2 Simulated Backends
 
 """
 from .generic_backend_v2 import GenericBackendV2
+
+__all__ = ["GenericBackendV2"]

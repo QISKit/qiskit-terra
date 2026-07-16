@@ -33,6 +33,16 @@ Quantum Circuit
    qk-classical-register
    qk-param
 
+Dynamic Circuits
+++++++++++++++++
+
+.. toctree::
+   :maxdepth: 1
+
+   qk-dynamic-circuits
+   qk-control-flow
+   qk-classical-expressions
+
 Circuit Library
 +++++++++++++++
 

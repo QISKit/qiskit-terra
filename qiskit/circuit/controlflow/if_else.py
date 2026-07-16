@@ -118,6 +118,8 @@ class IfElseOp(ControlFlowOp):
                 "IfElseOp expects a true_body parameter of type "
                 f"QuantumCircuit, but received {type(true_body)}."
             )
+        if true_body.num_input_vars:
+            raise self._unexpected_input_var_error()
 
         if true_body.num_qubits != self.num_qubits or true_body.num_clbits != self.num_clbits:
             raise CircuitError(
@@ -133,6 +135,8 @@ class IfElseOp(ControlFlowOp):
                     "IfElseOp expects a false_body parameter of type "
                     f"QuantumCircuit, but received {type(false_body)}."
                 )
+            if false_body.num_input_vars:
+                raise self._unexpected_input_var_error()
 
             if false_body.num_qubits != self.num_qubits or false_body.num_clbits != self.num_clbits:
                 raise CircuitError(

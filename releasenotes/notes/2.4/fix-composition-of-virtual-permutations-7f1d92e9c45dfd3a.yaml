@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`ElidePermutations` and :class:`StarPreRouting` when composing
+    virtual permutation layouts (implicit permutations applied at the end of circuit).

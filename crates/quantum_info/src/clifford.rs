@@ -14,6 +14,14 @@ use std::fmt;
 use fixedbitset::FixedBitSet;
 use ndarray::{Array2, ArrayView2};
 
+/// 1-qubit Paulis
+#[derive(Clone, Copy, PartialEq)]
+pub enum Pauli1q {
+    X,
+    Y,
+    Z,
+}
+
 /// Symplectic matrix.
 pub struct SymplecticMatrix {
     /// Number of qubits.
@@ -287,10 +295,193 @@ impl Clifford {
             &mut self.scratch,
         );
     }
+    /// Modifies the tableau in-place by appending RZ-gate,
+    /// with an angle that is an integer multiple of pi/2
+    /// so RZ is necessarily a Clifford gate
+    pub fn append_rz(&mut self, qubit: usize, multiple: usize) {
+        let multiple = multiple.rem_euclid(4);
+        match multiple {
+            0 => {}
+            1 => self.append_s(qubit),
+            2 => self.append_z(qubit),
+            3 => self.append_sdg(qubit),
+            _ => unreachable!("Multiple should be an integer."),
+        }
+    }
+    /// Modifies the tableau in-place by appending RX-gate,
+    /// with an angle that is an integer multiple of pi/2
+    /// so RX is necessarily a Clifford gate
+    pub fn append_rx(&mut self, qubit: usize, multiple: usize) {
+        let multiple = multiple.rem_euclid(4);
+        match multiple {
+            0 => {}
+            1 => self.append_sx(qubit),
+            2 => self.append_x(qubit),
+            3 => self.append_sxdg(qubit),
+            _ => unreachable!("Multiple should be an integer."),
+        }
+    }
+    /// Modifies the tableau in-place by appending RY-gate,
+    /// with an angle that is an integer multiple of pi/2
+    /// so RY is necessarily a Clifford gate
+    pub fn append_ry(&mut self, qubit: usize, multiple: usize) {
+        let multiple = multiple.rem_euclid(4);
+        match multiple {
+            0 => {}
+            1 => {
+                self.append_z(qubit);
+                self.append_h(qubit)
+            }
+            2 => self.append_y(qubit),
+            3 => {
+                self.append_h(qubit);
+                self.append_z(qubit)
+            }
+            _ => unreachable!("Multiple should be an integer."),
+        }
+    }
+    /// Applies the initial basis transformation for a Pauli Product Rotation,
+    /// and modifies the tableau in-place.
+    ///
+    /// For each qubit in the Pauli string:
+    /// - Z basis: no transformation needed
+    /// - X basis: apply H gate
+    /// - Y basis: apply SX gate
+    ///
+    /// Then applies a CX ladder to entangle the qubits, preparing for the
+    /// central rotation on the first qubit.
+    fn _append_initial_part_ppr(
+        &mut self,
+        z: &[bool],
+        x: &[bool],
+        indices: &[u32],
+        active_indices: &[usize],
+    ) {
+        // initial H or SX gates (in case of pauli X or pauli Y respectively)
+        for &qubit in active_indices {
+            match (z[qubit], x[qubit]) {
+                (true, false) => {}                                      // pauli Z on qubit
+                (true, true) => self.append_sx(indices[qubit] as usize), // pauli Y on qubit
+                (false, true) => self.append_h(indices[qubit] as usize), // pauli X on qubit
+                (false, false) => panic!("Pauli I terms are ignored."),  // pauli I on qubit
+            }
+        }
 
-    /// Evolving the single-qubit Pauli-Z with Z on qubit qbit.
+        // CX ladder (reverse order)
+        if active_indices.len() > 1 {
+            for w in active_indices.windows(2).rev() {
+                let (a, b) = (w[0], w[1]);
+                self.append_cx(indices[b] as usize, indices[a] as usize);
+            }
+        }
+    }
+
+    /// Applies the final basis transformation for a Pauli Product Rotation,
+    /// and modifies the tableau in-place.
+    ///
+    /// First, applies a reversed CX ladder to disentangle the qubits.
+    ///
+    /// Then, for each qubit in the Pauli string:
+    /// - Z basis: no transformation needed
+    /// - X basis: apply H gate
+    /// - Y basis: apply SXdg gate
+    fn _append_final_part_ppr(
+        &mut self,
+        z: &[bool],
+        x: &[bool],
+        indices: &[u32],
+        active_indices: &[usize],
+    ) {
+        // CX ladder
+        if active_indices.len() > 1 {
+            for w in active_indices.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                self.append_cx(indices[b] as usize, indices[a] as usize);
+            }
+        }
+
+        // final H or SXdg gates (in case of pauli X or pauli Y respectively)
+        for &qubit in active_indices {
+            match (z[qubit], x[qubit]) {
+                (true, false) => {}                                        // pauli Z on qubit
+                (true, true) => self.append_sxdg(indices[qubit] as usize), // pauli Y on qubit
+                (false, true) => self.append_h(indices[qubit] as usize),   // pauli X on qubit
+                (false, false) => panic!("Pauli I terms were ignored."),   // pauli I on qubit
+            }
+        }
+    }
+
+    /// Modifies the tableau in-place by appending PPR gate,
+    /// with an angle that is an integer multiple of pi/2
+    /// so PPR is necessarily a Clifford gate
+    pub fn append_ppr(
+        &mut self,
+        pauli_z: &[bool],
+        pauli_x: &[bool],
+        indices: &[u32],
+        multiple: usize,
+    ) {
+        // Ignore I terms from a sparse Pauli list and indicate their corresponsing indices
+        // For example, if the input Pauli is "XIYZ" (read left-to-right) on qubits [1, 2, 4, 7]
+        // then the output is "XYZ" on qubits [1, 4, 7]
+        let active_indices: Vec<usize> = pauli_z
+            .iter()
+            .zip(pauli_x)
+            .enumerate()
+            .filter_map(|(i, (&z, &x))| (z || x).then_some(i))
+            .collect();
+
+        self._append_initial_part_ppr(pauli_z, pauli_x, indices, &active_indices);
+
+        // internal RZ gate
+        if let Some(&idx) = active_indices.first() {
+            self.append_rz(indices[idx] as usize, multiple);
+        }
+
+        self._append_final_part_ppr(pauli_z, pauli_x, indices, &active_indices);
+    }
+
+    /// Evolving a (dense) Pauli gate by the Clifford.
+    /// This is done by appending PPR (PPM) initial and final gates to the Clifford tableau in-place,
+    /// and evolving the internal RZ gate.
+    pub fn evolve_pauli(
+        &mut self,
+        in_z: &[bool],
+        in_x: &[bool],
+        indices_in: &[u32],
+    ) -> (bool, Vec<bool>, Vec<bool>, Vec<u32>) {
+        // Ignore I terms from a sparse Pauli list and indicate their corresponsing indices
+        // For example, if the input Pauli is "XIYZ" (read left-to-right) on qubits [1, 2, 4, 7]
+        // then the output is "XYZ" on qubits [1, 4, 7]
+        let active_indices: Vec<usize> = in_z
+            .iter()
+            .zip(in_x)
+            .enumerate()
+            .filter_map(|(i, (&z, &x))| (z || x).then_some(i))
+            .collect();
+
+        if let Some(&idx) = active_indices.first() {
+            self._append_initial_part_ppr(in_z, in_x, indices_in, &active_indices);
+
+            // Evolving RZ by the Clifford.
+            let (sign, z, x, indices) =
+                self.evolve_single_qubit_pauli(Pauli1q::Z, indices_in[idx] as usize);
+
+            self._append_final_part_ppr(in_z, in_x, indices_in, &active_indices);
+
+            return (sign, z, x, indices);
+        }
+        (false, in_z.to_vec(), in_x.to_vec(), indices_in.to_vec())
+    }
+
+    /// Evolving a single qubit pauli on qubit qbit by the Clifford.
+    /// The pauli (X, Y or Z) is given as (pauli_z, pauli_x)
     /// Returns the evolved Pauli in the a sparse ZX format: (sign, z, x, indices).
-    pub fn get_inverse_z(&self, qbit: usize) -> (bool, Vec<bool>, Vec<bool>, Vec<u32>) {
+    pub fn evolve_single_qubit_pauli(
+        &self,
+        pauli: Pauli1q,
+        qbit: usize,
+    ) -> (bool, Vec<bool>, Vec<bool>, Vec<u32>) {
         let mut z = Vec::with_capacity(self.num_qubits);
         let mut x = Vec::with_capacity(self.num_qubits);
         let mut indices = Vec::with_capacity(self.num_qubits);
@@ -298,8 +489,21 @@ impl Clifford {
         // Compute the y-count to avoid recomputing it later
         let mut pauli_y_count: u32 = 0;
         for i in 0..self.num_qubits {
-            let z_bit = self.tableau[qbit][i];
-            let x_bit = self.tableau[qbit][i + self.num_qubits];
+            let (z_bit, x_bit) = match pauli {
+                Pauli1q::Z => (
+                    self.tableau[qbit][i],
+                    self.tableau[qbit][i + self.num_qubits],
+                ),
+                Pauli1q::X => (
+                    self.tableau[qbit + self.num_qubits][i],
+                    self.tableau[qbit + self.num_qubits][i + self.num_qubits],
+                ),
+                Pauli1q::Y => (
+                    self.tableau[qbit + self.num_qubits][i] ^ self.tableau[qbit][i],
+                    self.tableau[qbit + self.num_qubits][i + self.num_qubits]
+                        ^ self.tableau[qbit][i + self.num_qubits],
+                ),
+            };
             if z_bit || x_bit {
                 z.push(z_bit);
                 x.push(x_bit);

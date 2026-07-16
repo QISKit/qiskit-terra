@@ -134,6 +134,31 @@ class TestSimple(QiskitTestCase):
         parameters = list(parsed.data[0].operation.params)
         self.assertEqual([bigint, -bigint, 2 * bigint], parameters)
 
+    def test_excessive_depth_unary(self):
+        """We should either succeed in the evaluation or raise a Python-space error. We should _not_
+        segfault."""
+        expr = "-" * 100_000 + "2.0"
+        program = f"qreg q[1]; U({expr}, -{expr}, 0.0) q[0];"
+        parsed = qiskit.qasm2.loads(program)
+        self.assertEqual(list(parsed.data[0].operation.params), [2.0, -2.0, 0.0])
+
+    def test_excessive_depth_binary(self):
+        """We should either succeed in the evaluation or raise a Python-space error. We should _not_
+        segfault."""
+        # We have to include the parentheses to go against standard associativity, or a naive
+        # implementation will be effectively iterative anyway.
+        expr = "1.0+(" * 100_000 + "1.0" + ")" * 100_000
+        program = f"qreg q[1]; U({expr}, 0.0, 0.0) q[0];"
+        parsed = qiskit.qasm2.loads(program)
+        self.assertEqual(list(parsed.data[0].operation.params), [100_001.0, 0.0, 0.0])
+
+    def test_parenthesised_lhs_followed_by_infix(self):
+        """A parenthesised subexpression on the left of an infix operator should evaluate
+        correctly regardless of the relative precedences involved."""
+        program = "qreg q[1]; U((1.0 + 2.0) + 3.0, (1.0 * 2.0) + 3.0, (4.0 / 2.0) * 3.0) q[0];"
+        parsed = qiskit.qasm2.loads(program)
+        self.assertEqual(list(parsed.data[0].operation.params), [6.0, 5.0, 6.0])
+
 
 class TestPrecedenceAssociativity(QiskitTestCase):
     def test_precedence(self):

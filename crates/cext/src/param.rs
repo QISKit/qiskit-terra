@@ -47,7 +47,7 @@ pub unsafe extern "C" fn qk_param_new_symbol(name: *const c_char) -> *mut Param 
         // Per documentation, the name cannot be empty.
         panic!("Invalid empty name.");
     } else {
-        let symbol = Symbol::new(name, None, None);
+        let symbol = Symbol::standalone(name.to_owned(), None);
         let expr = ParameterExpression::from_symbol(symbol);
         let param = Param::ParameterExpression(Arc::new(expr));
         Box::into_raw(Box::new(param))

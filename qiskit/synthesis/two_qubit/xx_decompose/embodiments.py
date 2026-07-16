@@ -21,7 +21,7 @@ from __future__ import annotations
 import numpy as np
 
 from qiskit.circuit import QuantumCircuit, Parameter
-from qiskit.circuit.library.standard_gates import (
+from qiskit.circuit.library import (
     RXXGate,
     RZZGate,
     RZXGate,

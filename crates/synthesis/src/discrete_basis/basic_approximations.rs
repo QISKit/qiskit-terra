@@ -484,7 +484,7 @@ impl BasicApproximations {
     /// Query the closest point to a [GateSequence].
     pub fn query(&self, matrix: &Matrix3<f64>) -> Option<&GateSequence> {
         let query_point = BasicPoint::from_matrix(matrix);
-        self.points.nearest_neighbor(&query_point).map(|point| {
+        self.points.nearest_neighbor(query_point).map(|point| {
             let index = point
                 .index
                 .expect("All registered sequences should have an index. Blame a dev.");

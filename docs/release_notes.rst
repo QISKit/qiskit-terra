@@ -21,4 +21,4 @@ Qiskit |version| release notes
       though, which is typically `rc1` tags.
 
 .. release-notes::
-   :earliest-version: 2.4.0rc1
+   :earliest-version: 2.5.0rc1

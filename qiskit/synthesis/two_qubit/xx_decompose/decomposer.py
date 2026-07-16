@@ -21,10 +21,10 @@ from collections.abc import Callable
 
 import numpy as np
 
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit.library.standard_gates import RXXGate, RZXGate
+from qiskit.circuit import QuantumCircuit
+from qiskit.circuit.library import RXXGate, RZXGate, UnitaryGate
 from qiskit.exceptions import QiskitError
-from qiskit.quantum_info.operators import Operator
+from qiskit.quantum_info import Operator, average_gate_fidelity
 from qiskit.synthesis.one_qubit.one_qubit_decompose import ONE_QUBIT_EULER_BASIS_GATES
 from qiskit.synthesis.two_qubit.two_qubit_decompose import TwoQubitWeylDecomposition
 
@@ -126,8 +126,6 @@ class XXDecomposer:
         Checks that `self.embodiments` is populated with legal circuit embodiments: the key-value
         pair (angle, circuit) satisfies Operator(circuit) approx RXX(angle).to_matrix().
         """
-
-        from qiskit.quantum_info.operators.measures import average_gate_fidelity
 
         for angle, embodiment in self.embodiments.items():
             actual = Operator(RXXGate(angle))
@@ -258,8 +256,6 @@ class XXDecomposer:
             basis_fidelity, approximate=approximate
         )
 
-        from qiskit.circuit.library import UnitaryGate
-
         # get the associated _positive_ canonical coordinate
         weyl_decomposition = TwoQubitWeylDecomposition(unitary)
         target = [getattr(weyl_decomposition, x) for x in ("a", "b", "c")]
@@ -318,7 +314,5 @@ class XXDecomposer:
 
         circ = self._decomposer1q(circ)
         if use_dag:
-            from qiskit.converters import circuit_to_dag
-
-            return circuit_to_dag(circ, copy_operations=False)
+            return circ.to_dag(copy_operations=False)
         return circ

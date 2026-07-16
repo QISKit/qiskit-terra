@@ -3,4 +3,6 @@ disallowed-types = [
     "std::collections::HashMap",
     "ahash::HashSet",
     "ahash::HashMap",
+    "indexmap::IndexMap",
+    "indexmap::IndexSet",
 ]

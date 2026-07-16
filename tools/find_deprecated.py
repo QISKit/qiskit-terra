@@ -14,7 +14,7 @@
 
 """List deprecated decorators."""
 from __future__ import annotations
-from typing import cast, Optional
+from typing import cast
 from re import findall
 from pathlib import Path
 from collections import OrderedDict, defaultdict

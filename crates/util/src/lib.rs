@@ -15,6 +15,18 @@ use std::env;
 #[cfg(feature = "py")]
 pub mod py;
 
+/// A common type alias to use IndexMap with Qiskit's default hasher all
+/// internal crate usage of IndexMap should use this instead of the indexmap
+/// crate directly.
+#[allow(clippy::disallowed_types)]
+pub type IndexMap<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
+
+/// A common type alias to use IndexSet with Qiskit's default hasher all
+/// internal crate usage of IndexSet should use this instead of the indexmap
+/// crate directly.
+#[allow(clippy::disallowed_types)]
+pub type IndexSet<V> = indexmap::IndexSet<V, foldhash::fast::RandomState>;
+
 pub mod complex {
     use num_complex::Complex64;
 

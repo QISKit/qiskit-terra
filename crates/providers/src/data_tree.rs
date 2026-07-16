@@ -11,6 +11,7 @@
 // that they have been altered from the originals.
 
 use hashbrown::HashMap;
+use thiserror::Error;
 
 /// A path entry used for tracking a path through a [`DataTree`]
 ///
@@ -20,6 +21,30 @@ use hashbrown::HashMap;
 pub enum PathEntry<'a> {
     Index(usize),
     Key(&'a str),
+}
+
+/// Returned by [`DataTree::unflatten`] when the supplied value count doesn't
+/// match the template's leaf count.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("unflatten: expected {expected} values, got {actual}")]
+pub struct ArityMismatch {
+    pub expected: usize,
+    pub actual: usize,
+}
+
+/// Errors returned by [`DataTree::flatten_against`] when `data`'s structure
+/// does not match self's structure.
+///
+/// The `path` field is rendered as a dotted string (e.g. `"x.0.creg"`),
+/// built lazily at the point of error construction.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum TreeMatchError {
+    /// The path is missing in `data`, or descends through a leaf.
+    #[error("missing path {path}")]
+    MissingPath { path: String },
+    /// A leaf was expected at this path but `data` had a branch.
+    #[error("expected a leaf at {path}, found a branch")]
+    ExpectedLeaf { path: String },
 }
 
 /// A struct representing a branch in a [`DataTree`].
@@ -455,7 +480,7 @@ impl<T> DataTree<T> {
     /// let expected = vec![0, 3, 4, 5, 6, 7, 26];
     /// assert_eq!(leaves, expected);
     /// ```
-    pub fn iter_leaves(&self) -> IterLeaves<'_, T> {
+    pub fn iter_leaves(&self) -> impl Iterator<Item = &T> {
         IterLeaves {
             tree: Some(self),
             branch: None,
@@ -517,6 +542,144 @@ impl<T> DataTree<T> {
             inner_next: None,
             path: Vec::new(),
         }
+    }
+
+    /// Build a tree with the same shape as `self`, replacing each leaf value
+    /// by `f(&leaf)`.
+    ///
+    /// ```rust
+    /// use qiskit_providers::DataTree;
+    /// let mut tree = DataTree::new();
+    /// tree.insert_leaf("a", 1);
+    /// tree.insert_leaf("b", 2);
+    /// let doubled = tree.map_leaves(|v| v * 2);
+    /// assert_eq!(doubled.iter_leaves().copied().collect::<Vec<_>>(), vec![2, 4]);
+    /// ```
+    pub fn map_leaves<U>(&self, mut f: impl FnMut(&T) -> U) -> DataTree<U> {
+        fn inner<T, U>(tree: &DataTree<T>, f: &mut impl FnMut(&T) -> U) -> DataTree<U> {
+            match tree {
+                DataTree::Leaf(value) => DataTree::new_leaf(f(value)),
+                DataTree::Branch(_) => {
+                    let mut result = DataTree::with_capacity(tree.len());
+                    for (key, child) in tree.iter_children() {
+                        let new_child = inner(child, f);
+                        match (key, new_child) {
+                            (Some(k), DataTree::Leaf(v)) => result.insert_leaf(k, v),
+                            (Some(k), sub @ DataTree::Branch(_)) => result.insert_branch(k, sub),
+                            (None, DataTree::Leaf(v)) => result.push_leaf(v),
+                            (None, sub @ DataTree::Branch(_)) => result.push_branch(sub),
+                        }
+                    }
+                    result
+                }
+            }
+        }
+        inner(self, &mut f)
+    }
+
+    /// Consume this tree, yielding owned leaf values in DFS order. Mirrors
+    /// [`iter_leaves`](Self::iter_leaves) for the consuming case.
+    pub fn into_leaves(self) -> impl Iterator<Item = T> {
+        IntoLeaves {
+            stack: vec![vec![self].into_iter()],
+        }
+    }
+
+    /// Build a tree with the same shape as `self`, taking leaf values from
+    /// `values` in DFS order.
+    ///
+    /// Returns [`ArityMismatch`] if `values.len()` does not equal the leaf
+    /// count of `self`.
+    pub fn unflatten<U>(&self, values: Vec<U>) -> Result<DataTree<U>, ArityMismatch> {
+        fn inner<T, U>(
+            template: &DataTree<T>,
+            iter: &mut std::vec::IntoIter<U>,
+        ) -> Result<DataTree<U>, ()> {
+            match template {
+                DataTree::Leaf(_) => Ok(DataTree::new_leaf(iter.next().ok_or(())?)),
+                DataTree::Branch(_) => {
+                    let mut result = DataTree::with_capacity(template.len());
+                    for (key, child) in template.iter_children() {
+                        let subtree = inner(child, iter)?;
+                        match (key, subtree) {
+                            (Some(k), DataTree::Leaf(v)) => result.insert_leaf(k, v),
+                            (Some(k), sub @ DataTree::Branch(_)) => result.insert_branch(k, sub),
+                            (None, DataTree::Leaf(v)) => result.push_leaf(v),
+                            (None, sub @ DataTree::Branch(_)) => result.push_branch(sub),
+                        }
+                    }
+                    Ok(result)
+                }
+            }
+        }
+
+        let actual = values.len();
+        let mut iter = values.into_iter();
+        match inner(self, &mut iter) {
+            Ok(result) => {
+                let left_over = iter.len();
+                if left_over == 0 {
+                    Ok(result)
+                } else {
+                    Err(ArityMismatch {
+                        expected: actual - left_over,
+                        actual,
+                    })
+                }
+            }
+            Err(()) => {
+                // The Iterator was exhausted mid-walk, rewalk the tree to find
+                // out how many we should have expected.
+                Err(ArityMismatch {
+                    expected: self.iter_leaves().count(),
+                    actual,
+                })
+            }
+        }
+    }
+
+    /// Walk `data` lockstep with `self`'s structure, returning `data`'s leaves
+    /// in DFS order. Errors structurally if `data`'s shape doesn't match.
+    pub fn flatten_against<U: Clone>(&self, data: &DataTree<U>) -> Result<Vec<U>, TreeMatchError> {
+        fn inner<'a, T, U: Clone>(
+            template: &'a DataTree<T>,
+            data: &'a DataTree<U>,
+            path: &mut Vec<PathEntry<'a>>,
+            out: &mut Vec<U>,
+        ) -> Result<(), TreeMatchError> {
+            match (template, data) {
+                (DataTree::Leaf(_), DataTree::Leaf(value)) => {
+                    out.push(value.clone());
+                    Ok(())
+                }
+                (DataTree::Leaf(_), DataTree::Branch(_)) => Err(TreeMatchError::ExpectedLeaf {
+                    path: dotted_path(path),
+                }),
+                (DataTree::Branch(_), _) => {
+                    for (i, (key, child_template)) in template.iter_children().enumerate() {
+                        let entry = match key {
+                            Some(k) => PathEntry::Key(k),
+                            None => PathEntry::Index(i),
+                        };
+                        let data_child = match entry {
+                            PathEntry::Key(k) => data.get_by_str_key(k),
+                            PathEntry::Index(idx) => data.get(idx),
+                        };
+                        path.push(entry);
+                        let data_child = data_child.ok_or_else(|| TreeMatchError::MissingPath {
+                            path: dotted_path(path),
+                        })?;
+                        inner(child_template, data_child, path, out)?;
+                        path.pop();
+                    }
+                    Ok(())
+                }
+            }
+        }
+
+        let mut out = Vec::new();
+        inner(self, data, &mut Vec::new(), &mut out)?;
+        Ok(out)
     }
 }
 
@@ -633,7 +796,30 @@ impl<'a, T> Iterator for IterDataTree<'a, T> {
     }
 }
 
-pub struct IterLeaves<'a, T> {
+struct IntoLeaves<T> {
+    /// DFS stack of child iterators, one frame per nesting level.
+    /// Each frame is the remaining children of a branch node.
+    stack: Vec<std::vec::IntoIter<DataTree<T>>>,
+}
+
+impl<T> Iterator for IntoLeaves<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        loop {
+            let top = self.stack.last_mut()?;
+            match top.next() {
+                None => {
+                    self.stack.pop();
+                }
+                Some(DataTree::Leaf(v)) => return Some(v),
+                Some(DataTree::Branch(b)) => self.stack.push(b.data.into_iter()),
+            }
+        }
+    }
+}
+
+struct IterLeaves<'a, T> {
     tree: Option<&'a DataTree<T>>,
     branch: Option<&'a DataTreeBranch<T>>,
     index: usize,
@@ -641,7 +827,7 @@ pub struct IterLeaves<'a, T> {
     inner_next: Option<&'a T>,
 }
 
-impl<'a, T: std::fmt::Debug> Iterator for IterLeaves<'a, T> {
+impl<'a, T> Iterator for IterLeaves<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -752,6 +938,19 @@ impl<T: PartialEq> PartialEq for DataTree<T> {
             }
         }
     }
+}
+
+/// Render a `[PathEntry]` slice as a dotted path string. Empty path renders
+/// as `""`. Used only to format error messages, so the per-leaf allocation is
+/// fine.
+fn dotted_path(path: &[PathEntry<'_>]) -> String {
+    path.iter()
+        .map(|e| match e {
+            PathEntry::Index(i) => i.to_string(),
+            PathEntry::Key(k) => k.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 #[cfg(test)]
@@ -902,5 +1101,141 @@ mod test {
         assert_eq!(None, tree.get_by_str_key("x.yy.a"));
         assert_eq!(None, tree.get_by_str_key("🎩"));
         assert_eq!(None, tree.get_by_str_key("z.yyy.a"));
+    }
+
+    #[test]
+    fn test_map_leaves() {
+        let mut sub = DataTree::new();
+        sub.insert_leaf("a", 2);
+        sub.push_leaf(3);
+        let mut tree = DataTree::new();
+        tree.insert_branch("x", sub);
+        tree.insert_leaf("y", 5);
+
+        let doubled = tree.map_leaves(|v| v * 2);
+        assert_eq!(
+            doubled.iter_leaves().copied().collect::<Vec<_>>(),
+            vec![4, 6, 10]
+        );
+        // Shape is preserved: keyed children are still keyed.
+        assert!(doubled.get_by_str_key("x").is_some());
+        assert!(doubled.get_by_str_key("y").is_some());
+    }
+
+    #[test]
+    fn test_into_leaves() {
+        let mut sub = DataTree::new();
+        sub.insert_leaf("a", 1);
+        sub.push_leaf(2);
+        let mut tree = DataTree::new();
+        tree.insert_branch("x", sub);
+        tree.insert_leaf("y", 3);
+        assert_eq!(tree.into_leaves().collect::<Vec<_>>(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_unflatten_preserves_named_vs_anonymous() {
+        let mut sub = DataTree::new();
+        sub.insert_leaf("a", 0);
+        sub.push_leaf(0);
+        let mut template = DataTree::new();
+        template.insert_branch("x", sub);
+        template.insert_leaf("y", 0);
+
+        let result = template.unflatten(vec![1, 2, 3]).unwrap();
+        assert_eq!(result.get_by_str_key("x.a"), Some(&DataTree::Leaf(1)));
+        assert!(result.get_by_str_key("x").unwrap().get(1).is_some()); // anonymous
+        assert_eq!(result.get_by_str_key("y"), Some(&DataTree::Leaf(3)));
+    }
+
+    #[test]
+    fn test_unflatten_arity_mismatch_errors() {
+        let mut template = DataTree::new();
+        template.insert_leaf("x", 0);
+        template.insert_leaf("y", 0);
+        // 2 leaves; passing 1 value
+        let err = template.unflatten(vec![42]).unwrap_err();
+        assert_eq!(
+            err,
+            ArityMismatch {
+                expected: 2,
+                actual: 1
+            }
+        );
+        // 2 leaves; passing 3 values
+        let err = template.unflatten(vec![1, 2, 3]).unwrap_err();
+        assert_eq!(
+            err,
+            ArityMismatch {
+                expected: 2,
+                actual: 3
+            }
+        );
+    }
+
+    #[test]
+    fn test_flatten_against_branch_with_keys() {
+        let mut template = DataTree::new();
+        template.insert_leaf("x", 0);
+        template.insert_leaf("y", 0);
+        let mut data = DataTree::new();
+        data.insert_leaf("x", 1);
+        data.insert_leaf("y", 2);
+        assert_eq!(template.flatten_against(&data).unwrap(), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_flatten_against_missing_key_errors() {
+        let mut template = DataTree::new();
+        template.insert_leaf("x", 0);
+        template.insert_leaf("y", 0);
+        let mut data = DataTree::new();
+        data.insert_leaf("x", 1);
+        let err = template.flatten_against(&data).unwrap_err();
+        assert_eq!(
+            err,
+            TreeMatchError::MissingPath {
+                path: "y".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_flatten_against_branch_where_leaf_expected_errors() {
+        let mut template = DataTree::new();
+        template.insert_leaf("x", 0);
+        template.insert_leaf("y", 0);
+        let mut data = DataTree::new();
+        data.insert_leaf("x", 1);
+        data.insert_branch("y", DataTree::<i32>::new());
+        let err = template.flatten_against(&data).unwrap_err();
+        assert_eq!(
+            err,
+            TreeMatchError::ExpectedLeaf {
+                path: "y".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_flatten_against_then_unflatten_roundtrip() {
+        let mut sub = DataTree::new();
+        sub.insert_leaf("a", 0);
+        sub.push_leaf(0);
+        let mut template = DataTree::new();
+        template.insert_leaf("x", 0);
+        template.insert_branch("y", sub);
+
+        let mut data_sub = DataTree::new();
+        data_sub.insert_leaf("a", 20);
+        data_sub.push_leaf(30);
+        let mut data = DataTree::new();
+        data.insert_leaf("x", 10);
+        data.insert_branch("y", data_sub);
+
+        let flat = template.flatten_against(&data).unwrap();
+        assert_eq!(flat, vec![10, 20, 30]);
+        let back = template.unflatten(flat).unwrap();
+        assert_eq!(back, data);
     }
 }

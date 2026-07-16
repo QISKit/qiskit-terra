@@ -7,7 +7,7 @@ on:
         description: Python version to test.
         type: string
         required: true
-      runner: 
+      runner:
         description: Runner image to use.
         type: string
         required: true
@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # We need to fetch the whole history so 'reno' can do its job and we can inspect tags.
           fetch-depth: 0
@@ -35,5 +35,4 @@ jobs:
           # package. The exact command isn't important, it should just be cheap and update the lock.
           cargo metadata --format-version=1 --locked >/dev/null
           make cformat
-          tools/check_slots.bash
           tox -e lint

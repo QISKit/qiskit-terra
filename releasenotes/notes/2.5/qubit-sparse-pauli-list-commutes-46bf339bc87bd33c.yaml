@@ -1,0 +1,5 @@
+---
+features_quantum_info:
+  - |
+    Added the method :meth:`.QubitSparsePauliList.commutes`. This method returns the commutation
+    relations of this :class:`.QubitSparsePauliList` with another as an array of bools.

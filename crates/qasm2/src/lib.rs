@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use pyo3::Python;
 use pyo3::prelude::*;
 
 use crate::error::QASM2ParseError;
@@ -18,59 +17,13 @@ use crate::error::QASM2ParseError;
 mod bytecode;
 mod error;
 mod expr;
+mod ext;
 mod lex;
 mod parse;
 
-/// Information about a custom instruction that Python space is able to construct to pass down to
-/// us.
-#[pyclass(from_py_object)]
-#[derive(Clone)]
-pub struct CustomInstruction {
-    pub name: String,
-    pub num_params: usize,
-    pub num_qubits: usize,
-    pub builtin: bool,
-}
-
-#[pymethods]
-impl CustomInstruction {
-    #[new]
-    fn __new__(name: String, num_params: usize, num_qubits: usize, builtin: bool) -> Self {
-        Self {
-            name,
-            num_params,
-            num_qubits,
-            builtin,
-        }
-    }
-}
-
-/// Information about a custom classical function that should be defined in mathematical
-/// expressions.
-///
-/// The given `callable` must be a Python function that takes `num_params` floats, and returns a
-/// float.  The `name` is the identifier that refers to it in the OpenQASM 2 program.  This cannot
-/// clash with any defined gates.
-#[pyclass(from_py_object)]
-#[derive(Clone)]
-pub struct CustomClassical {
-    pub name: String,
-    pub num_params: usize,
-    pub callable: Py<PyAny>,
-}
-
-#[pymethods]
-impl CustomClassical {
-    #[new]
-    #[pyo3(text_signature = "(name, num_params, callable, /)")]
-    fn __new__(name: String, num_params: usize, callable: Py<PyAny>) -> Self {
-        Self {
-            name,
-            num_params,
-            callable,
-        }
-    }
-}
+pub use self::ext::{
+    ClassicalBuiltinExt, ClassicalCallableExt, CustomClassical, CustomInstruction,
+};
 
 /// Create a bytecode iterable from a string containing an OpenQASM 2 program.  The iterable will
 /// lex and parse the source lazily; evaluating OpenQASM 2 statements as required, without loading

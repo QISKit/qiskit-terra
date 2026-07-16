@@ -873,7 +873,6 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         np.testing.assert_array_equal(zero_op.paulis.phase, np.zeros(zero_op.size))
         np.testing.assert_array_equal(simplified_op.paulis.phase, np.zeros(simplified_op.size))
 
-    @unittest.skipUnless(optionals.HAS_SYMPY, "sympy required")
     def test_simplify_parameters(self):
         """Test simplify methods for parameterized SparsePauliOp."""
         a = Parameter("a")
@@ -887,7 +886,6 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         self.assertEqual(simplified_op, target_op)
         np.testing.assert_array_equal(simplified_op.paulis.phase, np.zeros(simplified_op.size))
 
-    @unittest.skipUnless(optionals.HAS_SYMPY, "Sympy required")
     def test_simplify_complex_parameters(self):
         """Test calling simplify when a parameter has a complex coefficient."""
         a = Parameter("a")
@@ -899,6 +897,21 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         target_coeffs = np.array([(1 + 1j) * a])
         target_labels = ["X"]
         target_op = SparsePauliOp(target_labels, target_coeffs)
+        self.assertEqual(simplified_op, target_op)
+        np.testing.assert_array_equal(simplified_op.paulis.phase, np.zeros(simplified_op.size))
+
+    def test_simplify_multiparameter_cancellation(self):
+        """Multi-parameter coefficients that cancel to zero are dropped without sympy."""
+        a = Parameter("a")
+        b = Parameter("b")
+        c = Parameter("c")
+        # The four X terms sum to a + b - a - b == 0 and must be removed;
+        # the Z term must survive.
+        coeffs = np.array([a, b, -a, -b, c])
+        labels = ["X", "X", "X", "X", "Z"]
+        spp_op = SparsePauliOp(labels, coeffs)
+        simplified_op = spp_op.simplify()
+        target_op = SparsePauliOp(["Z"], np.array([c]))
         self.assertEqual(simplified_op, target_op)
         np.testing.assert_array_equal(simplified_op.paulis.phase, np.zeros(simplified_op.size))
 

@@ -32,7 +32,7 @@ from qiskit.circuit.library import (
 )
 from qiskit.quantum_info import Operator
 from qiskit.quantum_info import get_clifford_gate_names
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.synthesis import gridsynth_rz, gridsynth_unitary
 from qiskit.converters import dag_to_circuit
 from qiskit.transpiler import PassManager

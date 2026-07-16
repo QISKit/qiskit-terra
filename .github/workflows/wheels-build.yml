@@ -84,7 +84,7 @@ jobs:
           - windows-latest
           - ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}
@@ -125,7 +125,7 @@ jobs:
     if: (inputs.wheels-macos-intel == 'default' && inputs.default-action || inputs.wheels-macos-intel) == 'build'
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         name: Install Python
         with:
@@ -143,7 +143,7 @@ jobs:
     if: (inputs.wheels-linux-s390x == 'default' && inputs.default-action || inputs.wheels-linux-s390x) == 'build'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         name: Install Python
         with:
@@ -166,7 +166,7 @@ jobs:
     if: (inputs.wheels-linux-ppc64le == 'default' && inputs.default-action || inputs.wheels-linux-ppc64le) == 'build'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         name: Install Python
         with:
@@ -189,7 +189,7 @@ jobs:
     if: (inputs.sdist == 'default' && inputs.default-action || inputs.sdist) == 'build'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}

@@ -17,12 +17,8 @@ from math import ceil
 import numpy as np
 
 from qiskit.exceptions import QiskitError
-from qiskit.circuit.quantumcircuit import QuantumCircuit, QuantumRegister, AncillaRegister
-from qiskit.circuit.library.standard_gates import (
-    HGate,
-    CU1Gate,
-)
-
+from qiskit.circuit import QuantumCircuit, QuantumRegister, AncillaRegister
+from qiskit.circuit.library import HGate, CU1Gate
 from qiskit._accelerate.synthesis.multi_controlled import (
     c3x as c3x_rs,
     c4x as c4x_rs,
@@ -30,6 +26,7 @@ from qiskit._accelerate.synthesis.multi_controlled import (
     synth_mcx_noaux_v24 as synth_mcx_noaux_v24_rs,
     synth_mcx_noaux_hp24 as synth_mcx_noaux_hp24_rs,
 )
+from .gray_code import gray_code_chain
 
 
 def synth_mcx_n_dirty_i15(
@@ -249,15 +246,13 @@ def synth_mcx_gray_code(num_ctrl_qubits: int) -> QuantumCircuit:
     if num_ctrl_qubits <= 2:
         return _synth_mcx_special_cases(num_ctrl_qubits)
 
-    from qiskit.circuit.library.standard_gates.u3 import _gray_code_chain
-
     num_qubits = num_ctrl_qubits + 1
     q = QuantumRegister(num_qubits, name="q")
     qc = QuantumCircuit(q)
     qc._append(HGate(), [q[-1]], [])
     scaled_lam = np.pi / (2 ** (num_ctrl_qubits - 1))
     bottom_gate = CU1Gate(scaled_lam)
-    definition = _gray_code_chain(q, num_ctrl_qubits, bottom_gate)
+    definition = gray_code_chain(q, num_ctrl_qubits, bottom_gate)
     for instr, qargs, cargs in definition:
         qc._append(instr, qargs, cargs)
     qc._append(HGate(), [q[-1]], [])

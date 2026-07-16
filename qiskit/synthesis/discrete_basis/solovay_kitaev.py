@@ -17,8 +17,8 @@ from __future__ import annotations
 import typing
 import warnings
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit.gate import Gate
+
+from qiskit.circuit import QuantumCircuit, Gate
 from qiskit.circuit.library import get_standard_gate_name_mapping, IGate
 from qiskit.utils.deprecation import deprecate_func
 from qiskit._accelerate.synthesis.discrete_basis import (
@@ -240,10 +240,7 @@ class SolovayKitaevDecomposition:
         circuit = QuantumCircuit._from_circuit_data(data, legacy_qubits=True)
 
         if return_dag:
-            from qiskit.converters import circuit_to_dag
-
-            return circuit_to_dag(circuit)
-
+            return circuit.to_dag()
         return circuit
 
     def query_basic_approximation(self, gate: np.ndarray | Gate) -> QuantumCircuit:

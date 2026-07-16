@@ -18,21 +18,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Shared configuration values.  It's also possible to specify these in the GitHub web interface,
-  # but that separates them from the rest of the configuration logic and means that the changes to
-  # the configuration do not appear in the git history.
   config:
     name: Configure
-    runs-on: 'ubuntu-latest'
-    steps:
-      - run: ':'
-    outputs:
-      python-old: '3.10'
-      python-new: '3.14'
-      runner-linux-x86_64: 'ubuntu-latest'
-      runner-linux-arm64: 'ubuntu-24.04-arm'
-      runner-macos-arm64: 'macos-15'
-      runner-windows-x86_64: 'windows-latest'
+    uses: ./.github/workflows/config.yml
 
   # This 'finalize' job is a no-op; its sole purpose is to depend on all the other jobs and provide
   # a single in-code determination of whether the branch-protection rules have been passed.  The

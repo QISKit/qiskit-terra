@@ -50,7 +50,7 @@ _NOISE_DEFAULTS = {
     "x": (2.997e-08, 5.994e-08, 9e-5, 1e-4),
     "measure": (6.99966e-07, 1.500054e-06, 1e-5, 5e-3),
     "delay": (None, None),
-    "reset": (None, None),
+    "reset": (2.212008e-06, None),
 }
 
 # Fallback values for gates with unknown noise default ranges.

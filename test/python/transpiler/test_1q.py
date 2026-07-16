@@ -22,9 +22,11 @@ from qiskit.transpiler import TranspilerError
 from test import combine
 from test import QiskitTestCase
 
-Fake1QV2 = GenericBackendV2(
-    num_qubits=1, basis_gates=["u1", "u2", "u3"], coupling_map=None, dtm=1.3333, seed=42
-)
+
+def fake_1q_v2():
+    return GenericBackendV2(
+        num_qubits=1, basis_gates=["u1", "u2", "u3"], coupling_map=None, dtm=1.3333, seed=42
+    )
 
 
 def emptycircuit():
@@ -54,7 +56,7 @@ class Test1QV2Failing(QiskitTestCase):
     def test(self, circuit, level):
         """All the levels with all the 1Q backendV2"""
         with self.assertRaises(TranspilerError):
-            transpile(circuit(), backend=Fake1QV2, optimization_level=level, seed_transpiler=42)
+            transpile(circuit(), backend=fake_1q_v2(), optimization_level=level, seed_transpiler=42)
 
 
 @ddt
@@ -87,6 +89,6 @@ class Test1QV2Working(QiskitTestCase):
     def test_device(self, circuit, level):
         """All the levels with all the 1Q backendV2"""
         result = transpile(
-            circuit(), backend=Fake1QV2, optimization_level=level, seed_transpiler=42
+            circuit(), backend=fake_1q_v2(), optimization_level=level, seed_transpiler=42
         )
         self.assertIsInstance(result, QuantumCircuit)

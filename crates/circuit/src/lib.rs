@@ -240,6 +240,7 @@ pub fn circuit(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<parameter::parameter_expression::PyParameterExpression>()?;
     m.add_class::<parameter::parameter_expression::PyParameter>()?;
     m.add_class::<parameter::parameter_expression::PyParameterVectorElement>()?;
+    m.add_class::<parameter::parameter_expression::PyParameterVector>()?;
     m.add_class::<parameter::parameter_expression::OpCode>()?;
     m.add_class::<parameter::parameter_expression::OPReplay>()?;
     let classical_mod = PyModule::new(m.py(), "classical")?;

@@ -14,3 +14,5 @@ Plotter API.
 """
 
 from qiskit.visualization.timeline.plotters.matplotlib import MplPlotter
+
+__all__ = ["MplPlotter"]

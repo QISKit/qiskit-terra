@@ -19,7 +19,7 @@ use qiskit_circuit::NoBlocks;
 use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::circuit_instruction::OperationFromPython;
 use qiskit_circuit::instruction::Instruction;
-use qiskit_circuit::operations::{OperationRef, Param, StandardGate};
+use qiskit_circuit::operations::{OperationRef, Param, PyInstruction, PyOpKind, StandardGate};
 
 use crate::discrete_basis::basic_approximations::{BasicApproximations, GateSequence};
 
@@ -119,21 +119,20 @@ impl SolovayKitaevSynthesis {
                 let matrix_nalgebra: Matrix2<Complex64> = Matrix2::from_fn(|i, j| matrix[(i, j)]);
                 self.synthesize_matrix(&matrix_nalgebra, recursion_degree)
             }
+            OperationRef::PyCustom(
+                gate @ PyInstruction {
+                    kind: PyOpKind::Gate,
+                    ..
+                },
+            ) => {
+                let matrix = gate.matrix().ok_or(DiscreteBasisError::NoMatrix)?;
+                let matrix_nalgebra: Matrix2<Complex64> = Matrix2::from_fn(|i, j| matrix[(i, j)]);
+                self.synthesize_matrix(&matrix_nalgebra, recursion_degree)
+            }
             OperationRef::PauliProductRotation(ppr) => {
                 let matrix = ppr.matrix().expect("PPR should have a matrix defined");
                 let matrix_nalgebra: Matrix2<Complex64> = Matrix2::from_fn(|i, j| matrix[(i, j)]);
                 self.synthesize_matrix(&matrix_nalgebra, recursion_degree)
-            }
-            OperationRef::Gate(gate) => {
-                let matrix = gate.matrix();
-                match matrix {
-                    Some(matrix) => {
-                        let matrix_nalgebra: Matrix2<Complex64> =
-                            Matrix2::from_fn(|i, j| matrix[(i, j)]);
-                        self.synthesize_matrix(&matrix_nalgebra, recursion_degree)
-                    }
-                    None => Err(DiscreteBasisError::NoMatrix),
-                }
             }
             _ => Err(DiscreteBasisError::NoMatrix),
         }

@@ -24,7 +24,6 @@ use std::io::Write;
 
 use crate::printer::BasicPrinter;
 use hashbrown::{HashMap, HashSet};
-use indexmap::IndexMap;
 use pyo3::Python;
 use pyo3::prelude::*;
 use qiskit_circuit::bit::{
@@ -36,6 +35,7 @@ use qiskit_circuit::operations::{Operation, Param};
 use qiskit_circuit::packed_instruction::PackedInstruction;
 use qiskit_circuit::parameter::parameter_expression::ParameterExpression;
 use qiskit_circuit::parameter::symbol_expr;
+use qiskit_util::IndexMap;
 use thiserror::Error;
 
 use lazy_static::lazy_static;
@@ -263,7 +263,7 @@ impl SymbolTable {
             symbols,
             bitinfo,
             reginfo,
-            gates: IndexMap::new(),
+            gates: IndexMap::default(),
             stdgates: HashSet::new(),
             _counter: Counter::new(),
         }
@@ -1213,7 +1213,7 @@ impl<'a> QASM3Builder {
             None => {
                 if delay_unit == DelayUnit::PS {
                     DurationLiteral {
-                        value: duration * 1000.0,
+                        value: duration / 1000.0,
                         unit: DurationUnit::Nanosecond,
                     }
                 } else {
@@ -1307,9 +1307,8 @@ impl<'a> QASM3Builder {
             .map(|i| {
                 let name = format!("{}_{}", self._gate_param_prefix, i);
                 // TODO this need to be achievable more easily
-                let symbol = symbol_expr::Symbol::new(name.as_str(), None, None);
-                let symbol_expr = symbol_expr::SymbolExpr::Symbol(Arc::new(symbol));
-                let expr = ParameterExpression::from_symbol_expr(symbol_expr);
+                let symbol = symbol_expr::Symbol::standalone(name, None);
+                let expr = ParameterExpression::from_symbol(symbol);
                 Param::ParameterExpression(Arc::new(expr))
             })
             .collect();

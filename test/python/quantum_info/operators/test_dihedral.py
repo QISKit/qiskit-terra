@@ -37,9 +37,8 @@ from qiskit.circuit.library import (
     CCZGate,
 )
 from qiskit.quantum_info.operators import Operator
-from qiskit.quantum_info.operators import random
 from qiskit.quantum_info.operators.dihedral import CNOTDihedral
-from qiskit.quantum_info.random import random_cnotdihedral
+from qiskit.quantum_info import random_cnotdihedral, random_pauli
 from qiskit.synthesis.cnotdihedral import (
     synth_cnotdihedral_general,
     synth_cnotdihedral_full,
@@ -902,7 +901,7 @@ class TestCNOTDihedral(unittest.TestCase):
         rng = np.random.default_rng(999)
         for num_qubits in range(1, 5):
             for _ in range(samples):
-                pauli = random.random_pauli(num_qubits, seed=rng)
+                pauli = random_pauli(num_qubits, seed=rng)
                 elem = CNOTDihedral(pauli)
                 value = Operator(pauli)
                 target = Operator(elem)

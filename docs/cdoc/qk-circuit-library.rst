@@ -1,3 +1,5 @@
+.. _capi-circuit-library:
+
 ===============
 Circuit Library
 ===============

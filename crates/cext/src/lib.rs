@@ -17,6 +17,8 @@ mod py;
 
 pub mod circuit;
 pub mod circuit_library;
+pub mod classical_expr;
+pub mod control_flow;
 pub mod dag;
 pub mod exit_codes;
 pub mod param;

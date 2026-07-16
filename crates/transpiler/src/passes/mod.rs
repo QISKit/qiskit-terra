@@ -25,6 +25,7 @@ mod apply_layout;
 mod barrier_before_final_measurement;
 mod basis_translator;
 mod check_map;
+pub mod common;
 mod commutation_analysis;
 mod commutation_cancellation;
 mod commutative_optimization;
@@ -88,7 +89,8 @@ pub use instruction_duration_check::{
 pub use inverse_cancellation::{inverse_cancellation_mod, run_inverse_cancellation_standard_gates};
 pub use litinski_transformation::{litinski_transformation_mod, run_litinski_transformation};
 pub use optimize_1q_gates_decomposition::{
-    optimize_1q_gates_decomposition_mod, run_optimize_1q_gates_decomposition,
+    Optimize1qGatesDecompositionState, optimize_1q_gates_decomposition_mod,
+    run_optimize_1q_gates_decomposition,
 };
 pub use optimize_clifford_t::{optimize_clifford_t_mod, run_optimize_clifford_t};
 pub use remove_diagonal_gates_before_measure::{

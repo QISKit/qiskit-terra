@@ -11,6 +11,10 @@ on:
         description: Runner image to use.
         type: string
         required: true
+      only-update-cache:
+        description: Only run the test suite if we need to regenerate the cached files.
+        type: boolean
+        default: false
 
 jobs:
   backward_compat:
@@ -19,7 +23,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v6
         with:
@@ -27,16 +31,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: test/qpy_compat/qpy_cache
           # The hashing is this key can be too eager to invalidate the cache,
           # but since we risk the QPY tests failing to update if they're not in
           # sync, it's better safe than sorry.
           key: qpy-${{ hashFiles('test/qpy_compat/**') }}
+        id: cache
 
       - name: Run QPY backwards compatibility tests
         working-directory: test/qpy_compat
         run: ./run_tests.sh
         env:
           QISKIT_IGNORE_USER_SETTINGS: TRUE
+        if: (!inputs.only-update-cache) || (steps.cache.outputs.cache-hit != 'true')

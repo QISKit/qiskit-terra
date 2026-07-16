@@ -19,7 +19,7 @@ import ddt
 import rustworkx as rx
 
 from qiskit import capi
-from qiskit.circuit import QuantumCircuit, Clbit, QuantumRegister, ClassicalRegister
+from qiskit.circuit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.circuit.library import CXGate
 from qiskit.transpiler import CouplingMap
 from qiskit.quantum_info import Operator

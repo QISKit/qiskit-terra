@@ -14,5 +14,6 @@
 CNOTDihedral Operators
 """
 
-from __future__ import annotations
 from .dihedral import CNOTDihedral
+
+__all__ = ["CNOTDihedral"]

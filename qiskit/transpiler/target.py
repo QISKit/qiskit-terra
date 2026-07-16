@@ -42,9 +42,6 @@ from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.instruction_durations import InstructionDurations
 from qiskit.transpiler.timing_constraints import TimingConstraints
 
-# import QubitProperties here to provide convenience alias for building a
-# full target
-from qiskit.providers.backend import QubitProperties
 
 logger = logging.getLogger(__name__)
 
@@ -540,7 +537,7 @@ class Target(BaseTarget):
         is globally defined.
         """
         return [
-            (self._gate_name_map[op], qarg)
+            (self.operation_from_name(op), qarg)
             for op, qargs in self._gate_map.items()
             for qarg in qargs
         ]
@@ -591,7 +588,7 @@ class Target(BaseTarget):
             self._coupling_graph.add_nodes_from([{} for _ in range(self.num_qubits)])
         for gate, qarg_map in self._gate_map.items():
             if qarg_map is None:
-                if self._gate_name_map[gate].num_qubits == 2:
+                if self.operation_from_name(gate).num_qubits == 2:
                     self._coupling_graph = None
                     return
                 continue

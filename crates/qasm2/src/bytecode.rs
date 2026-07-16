@@ -11,14 +11,14 @@
 // that they have been altered from the originals.
 
 use num_bigint::BigUint;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
+use pyo3::types::PyTuple;
 
 use crate::error::QASM2ParseError;
 use crate::expr::Expr;
-use crate::lex;
-use crate::parse;
 use crate::parse::{ClbitId, CregId, GateId, ParamId, QubitId};
-use crate::{CustomClassical, CustomInstruction};
+use crate::{ClassicalCallableExt, CustomClassical, CustomInstruction, lex, parse};
 
 /// The Rust parser produces an iterator of these `Bytecode` instructions, which comprise an opcode
 /// integer for operation distinction, and a free-form tuple containing the operands.
@@ -103,10 +103,29 @@ pub struct ExprBinary {
 #[pyclass(module = "qiskit._accelerate.qasm2", frozen, skip_from_py_object)]
 #[derive(Clone)]
 pub struct ExprCustom {
+    pub callable: ClassicalCallableExt,
     #[pyo3(get)]
-    pub callable: Py<PyAny>,
-    #[pyo3(get)]
-    pub arguments: Vec<Py<PyAny>>,
+    pub arguments: Py<PyTuple>,
+}
+#[pymethods]
+impl ExprCustom {
+    #[pyo3(signature = (*args))]
+    fn call(&self, args: Bound<PyTuple>) -> PyResult<f64> {
+        match &self.callable {
+            ClassicalCallableExt::Builtin(builtin) => builtin
+                .call(args.extract::<Vec<f64>>()?.as_slice())
+                .map_err(|actual| {
+                    PyTypeError::new_err(format!(
+                        "argument mismatch: expected {}, got {}",
+                        builtin.num_params(),
+                        actual
+                    ))
+                }),
+            ClassicalCallableExt::Py { ob, num_params: _ } => {
+                ob.bind(args.py()).call1(args).and_then(|ob| ob.extract())
+            }
+        }
+    }
 }
 
 /// Discriminator for the different types of unary operator.  We could have a separate class for

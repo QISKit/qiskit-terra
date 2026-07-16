@@ -14,6 +14,7 @@
 
 import unittest
 
+import os
 import numpy as np
 from ddt import ddt, data, unpack
 
@@ -31,7 +32,7 @@ from qiskit.circuit.library import (
 )
 
 from qiskit.transpiler import PassManager, TransformationPass, CouplingMap, Target, TranspilerError
-from qiskit.transpiler.passes import SynthesizeRZRotations, CheckGateDirection
+from qiskit.transpiler.passes import SynthesizeRZRotations, CheckGateDirection, SabreLayout
 from qiskit.transpiler.preset_passmanagers.plugin import PassManagerStagePluginManager
 from qiskit.transpiler.preset_passmanagers import (
     generate_preset_pass_manager,
@@ -815,6 +816,28 @@ class TestCliffordTPassManager(QiskitTestCase):
 
         basis_gates = get_clifford_gate_names() + ["t", "tdg"]
         self.assertLessEqual(set(transpiled.count_ops()), set(basis_gates))
+
+    def test_parse_seed_transpiler_from_env_var(self):
+        """Test that the environment variable QISKIT_TRANSPILER_SEED is passed to the transpiler."""
+        qc = QuantumCircuit(3)
+        qc.cx(0, 1)
+        qc.cx(1, 2)
+        qc.cx(2, 0)
+
+        # Save the original SabreLayout.run method, and create a mock method that calls the original method,
+        # but also records the value for seed.
+        original_run = SabreLayout.run
+        run_calls = []
+
+        def mock_run(self, dag):
+            run_calls.append(self.seed)
+            original_run(self, dag)
+
+        with unittest.mock.patch.dict(os.environ, {"QISKIT_TRANSPILER_SEED": "9876"}):
+            with unittest.mock.patch.object(SabreLayout, "run", new=mock_run):
+                _ = transpile(qc, optimization_level=1, coupling_map=CouplingMap.from_line(3))
+        self.assertEqual(len(run_calls), 1)
+        self.assertEqual(run_calls[0], 9876)
 
 
 def _get_t_count(qc):

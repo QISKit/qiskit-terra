@@ -15,18 +15,18 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use pyo3::{Bound, PyResult, Python, pyfunction, wrap_pyfunction};
 
-use indexmap::IndexMap;
+use qiskit_util::IndexMap;
 use rayon::prelude::*;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 
-use crate::commutation_checker::CommutationChecker;
+use crate::commutation_checker::{CommutationChecker, CommutationError};
 use qiskit_circuit::Qubit;
 use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, Wire};
 
 // Custom types to store the commutation sets and node indices,
 // see the docstring below for more information.
 type CommutationSet = Vec<Vec<Vec<NodeIndex>>>;
-type NodeIndices = Vec<IndexMap<NodeIndex, usize, ::foldhash::fast::RandomState>>;
+type NodeIndices = Vec<IndexMap<NodeIndex, usize>>;
 
 // the maximum number of qubits we check commutativity for
 const MAX_NUM_QUBITS: u32 = 3;
@@ -54,88 +54,85 @@ pub fn analyze_commutations(
     dag: &mut DAGCircuit,
     commutation_checker: &CommutationChecker,
     approximation_degree: f64,
-) -> PyResult<(CommutationSet, NodeIndices)> {
+) -> Result<(CommutationSet, NodeIndices), CommutationError> {
     let mut commutation_set = vec![vec![]; dag.num_qubits()];
     let mut node_indices: NodeIndices = vec![IndexMap::default(); dag.num_qubits()];
 
-    let evaluate_qubit =
-        |qubit: usize,
-         commutation_entry: &mut Vec<Vec<NodeIndex>>,
-         node_indices: &mut IndexMap<NodeIndex, usize, ::foldhash::fast::RandomState>|
-         -> PyResult<()> {
-            let wire = Wire::Qubit(Qubit(qubit as u32));
+    let evaluate_qubit = |qubit: usize,
+                          commutation_entry: &mut Vec<Vec<NodeIndex>>,
+                          node_indices: &mut IndexMap<NodeIndex, usize>|
+     -> Result<(), CommutationError> {
+        let wire = Wire::Qubit(Qubit(qubit as u32));
 
-            for current_gate_idx in dag.nodes_on_wire(wire) {
-                // create a new inner vec if the entry is empty
-                if commutation_entry.is_empty() {
-                    commutation_entry.push(vec![current_gate_idx]);
-                }
+        for current_gate_idx in dag.nodes_on_wire(wire) {
+            // create a new inner vec if the entry is empty
+            if commutation_entry.is_empty() {
+                commutation_entry.push(vec![current_gate_idx]);
+            }
 
-                // we can unwrap as we know the commutation entry has at least one element
-                let last = commutation_entry.last_mut().unwrap();
+            // we can unwrap as we know the commutation entry has at least one element
+            let last = commutation_entry.last_mut().unwrap();
 
-                // if the current gate index is not in the set, check whether it commutes with
-                // the previous nodes -- if yes, add it to the commutation set
-                if !last.contains(&current_gate_idx) {
-                    let mut all_commute = true;
+            // if the current gate index is not in the set, check whether it commutes with
+            // the previous nodes -- if yes, add it to the commutation set
+            if !last.contains(&current_gate_idx) {
+                let mut all_commute = true;
 
-                    for prev_gate_idx in last.iter() {
-                        // if the node is an input/output node, they do not commute, so we only
-                        // continue if the nodes are operation nodes
-                        if let (
-                            NodeType::Operation(packed_inst0),
-                            NodeType::Operation(packed_inst1),
-                        ) = (&dag[current_gate_idx], &dag[*prev_gate_idx])
+                for prev_gate_idx in last.iter() {
+                    // if the node is an input/output node, they do not commute, so we only
+                    // continue if the nodes are operation nodes
+                    if let (NodeType::Operation(packed_inst0), NodeType::Operation(packed_inst1)) =
+                        (&dag[current_gate_idx], &dag[*prev_gate_idx])
+                    {
+                        let op1 = packed_inst0.op.view();
+                        let op2 = packed_inst1.op.view();
+
+                        if packed_inst0.op.try_control_flow().is_some()
+                            || packed_inst1.op.try_control_flow().is_some()
                         {
-                            let op1 = packed_inst0.op.view();
-                            let op2 = packed_inst1.op.view();
-
-                            if packed_inst0.op.try_control_flow().is_some()
-                                || packed_inst1.op.try_control_flow().is_some()
-                            {
-                                all_commute = false;
-                                break;
-                            }
-
-                            let qargs1 = dag.get_qargs(packed_inst0.qubits);
-                            let qargs2 = dag.get_qargs(packed_inst1.qubits);
-                            let cargs1 = dag.get_cargs(packed_inst0.clbits);
-                            let cargs2 = dag.get_cargs(packed_inst1.clbits);
-
-                            all_commute = commutation_checker.commute(
-                                &op1,
-                                packed_inst0.params.as_deref(),
-                                qargs1,
-                                cargs1,
-                                &op2,
-                                packed_inst1.params.as_deref(),
-                                qargs2,
-                                cargs2,
-                                None,
-                                MAX_NUM_QUBITS,
-                                approximation_degree,
-                            )?;
-                            if !all_commute {
-                                break;
-                            }
-                        } else {
                             all_commute = false;
                             break;
                         }
-                    }
 
-                    if all_commute {
-                        // all commute, add to current list
-                        last.push(current_gate_idx);
+                        let qargs1 = dag.get_qargs(packed_inst0.qubits);
+                        let qargs2 = dag.get_qargs(packed_inst1.qubits);
+                        let cargs1 = dag.get_cargs(packed_inst0.clbits);
+                        let cargs2 = dag.get_cargs(packed_inst1.clbits);
+
+                        all_commute = commutation_checker.commute(
+                            &op1,
+                            packed_inst0.params.as_deref(),
+                            qargs1,
+                            cargs1,
+                            &op2,
+                            packed_inst1.params.as_deref(),
+                            qargs2,
+                            cargs2,
+                            None,
+                            MAX_NUM_QUBITS,
+                            approximation_degree,
+                        )?;
+                        if !all_commute {
+                            break;
+                        }
                     } else {
-                        // does not commute, create new list
-                        commutation_entry.push(vec![current_gate_idx]);
+                        all_commute = false;
+                        break;
                     }
                 }
-                node_indices.insert(current_gate_idx, commutation_entry.len() - 1);
+
+                if all_commute {
+                    // all commute, add to current list
+                    last.push(current_gate_idx);
+                } else {
+                    // does not commute, create new list
+                    commutation_entry.push(vec![current_gate_idx]);
+                }
             }
-            Ok(())
-        };
+            node_indices.insert(current_gate_idx, commutation_entry.len() - 1);
+        }
+        Ok(())
+    };
 
     if qiskit_util::getenv_use_multiple_threads() {
         commutation_set
@@ -143,12 +140,12 @@ pub fn analyze_commutations(
             .zip(node_indices.par_iter_mut())
             .enumerate()
             .map(
-                |(qubit, (local_commutation_set, local_indices))| -> PyResult<()> {
+                |(qubit, (local_commutation_set, local_indices))| -> Result<(), CommutationError> {
                     evaluate_qubit(qubit, local_commutation_set, local_indices)?;
                     Ok(())
                 },
             )
-            .collect::<PyResult<()>>()?;
+            .collect::<Result<(), CommutationError>>()?;
         Ok((commutation_set, node_indices))
     } else {
         for qubit in 0..dag.num_qubits() {

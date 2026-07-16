@@ -24,38 +24,19 @@ static EMPTY_DATA_TREE: LazyLock<DataTree<TensorType>> = LazyLock::new(DataTree:
 /// In a data-flow graph, `Store` nodes play the role of constants — they are wired to
 /// the input ports of computation nodes to supply fixed values.
 pub struct Store {
-    data: DataTree<Tensor>,
+    /// Tensors in DFS leaf order matching `output_types`.
+    leaves: Vec<Tensor>,
     output_types: DataTree<TensorType>,
 }
 
 impl Store {
     /// Construct a new `Store` holding the given data.
     pub fn new(data: DataTree<Tensor>) -> Self {
-        let output_types = derive_output_types(&data);
-        Self { data, output_types }
-    }
-
-    /// Return a reference to the stored data.
-    pub fn data(&self) -> &DataTree<Tensor> {
-        &self.data
-    }
-}
-
-/// Recursively derive output types from concrete tensor data.
-fn derive_output_types(data: &DataTree<Tensor>) -> DataTree<TensorType> {
-    match data {
-        DataTree::Leaf(tensor) => DataTree::new_leaf(tensor.tensor_type()),
-        DataTree::Branch(_) => {
-            let mut result = DataTree::with_capacity(data.len());
-            for (key, child) in data.iter_children() {
-                let child_type = derive_output_types(child);
-                if let Some(k) = key {
-                    result.insert_branch(k, child_type);
-                } else {
-                    result.push_branch(child_type);
-                }
-            }
-            result
+        let output_types = data.map_leaves(Tensor::tensor_type);
+        let leaves: Vec<Tensor> = data.into_leaves().collect();
+        Self {
+            leaves,
+            output_types,
         }
     }
 }
@@ -83,8 +64,8 @@ impl ProgramNode for Store {
         true
     }
 
-    fn call(&self, _args: &DataTree<Tensor>) -> Result<DataTree<Tensor>, Self::CallError> {
-        Ok(self.data.clone())
+    fn call_flat(&self, _args: &[Tensor]) -> Result<Vec<Tensor>, Self::CallError> {
+        Ok(self.leaves.to_vec())
     }
 }
 
@@ -97,29 +78,20 @@ mod tests {
     fn test_store_leaf_call() {
         let data = DataTree::new_leaf(Tensor::from([1.0_f64, 2.0, 3.0]));
         let store = Store::new(data);
-        let result = store.call(&DataTree::new()).unwrap();
-        let DataTree::Leaf(Tensor::F64(arr)) = result else {
+        let result = store.call_flat(&[]).unwrap();
+        assert_eq!(result.len(), 1);
+        let Tensor::F64(arr) = &result[0] else {
             panic!("expected f64 leaf");
         };
         assert_eq!(arr.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
     }
 
     #[test]
-    fn test_store_output_types_leaf() {
-        let data = DataTree::new_leaf(Tensor::from([1.0_f64, 2.0, 3.0]));
-        let store = Store::new(data);
-        let DataTree::Leaf(tt) = store.output_types() else {
-            panic!("expected leaf output type");
-        };
-        assert!(matches!(tt.dtype, DTypeLike::Concrete(DType::F64)));
-        assert_eq!(tt.shape, vec![Dim::Fixed(3)]);
-        assert!(!tt.broadcastable);
-    }
-
-    #[test]
     fn test_store_output_types_2d() {
         use ndarray::arr2;
-        let data = DataTree::new_leaf(Tensor::F64(arr2(&[[1.0_f64, 2.0], [3.0, 4.0]]).into_dyn()));
+        let data = DataTree::new_leaf(Tensor::F64(
+            arr2(&[[1.0_f64, 2.0], [3.0, 4.0]]).into_dyn().into_shared(),
+        ));
         let store = Store::new(data);
         let DataTree::Leaf(tt) = store.output_types() else {
             panic!("expected leaf output type");
@@ -154,9 +126,20 @@ mod tests {
     }
 
     #[test]
-    fn test_store_no_inputs() {
-        let store = Store::new(DataTree::new_leaf(Tensor::from([42.0_f64])));
-        assert!(store.input_types().is_empty());
-        assert!(store.implements_call());
+    fn test_store_branched_call_returns_flat_in_dfs_order() {
+        let mut data = DataTree::new();
+        data.insert_leaf("a", Tensor::from([1.0_f64]));
+        data.insert_leaf("b", Tensor::from([2.0_f64]));
+        let store = Store::new(data);
+        let result = store.call_flat(&[]).unwrap();
+        assert_eq!(result.len(), 2);
+        let Tensor::F64(arr_a) = &result[0] else {
+            panic!()
+        };
+        let Tensor::F64(arr_b) = &result[1] else {
+            panic!()
+        };
+        assert_eq!(arr_a.as_slice().unwrap(), &[1.0]);
+        assert_eq!(arr_b.as_slice().unwrap(), &[2.0]);
     }
 }

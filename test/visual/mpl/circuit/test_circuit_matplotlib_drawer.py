@@ -47,7 +47,7 @@ from qiskit.circuit.annotated_operation import (
 from qiskit.circuit import Parameter, Qubit, Clbit, IfElseOp, SwitchCaseOp
 from qiskit.circuit.classical import expr, types
 from qiskit.quantum_info import random_clifford
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.utils import optionals
 from test.visual import VisualTestUtilities
 from test import QiskitTestCase

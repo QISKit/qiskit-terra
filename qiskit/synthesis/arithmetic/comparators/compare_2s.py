@@ -13,8 +13,9 @@
 """Integer comparator based on 2s complement."""
 
 import math
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit.library.boolean_logic.quantum_or import OrGate
+
+from qiskit.circuit import QuantumCircuit
+from qiskit.circuit.library import OrGate
 
 
 def synth_integer_comparator_2s(

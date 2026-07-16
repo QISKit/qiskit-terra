@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    :class:`.CouplingMap` will now ignore edges that join a qubit to itself, and issue a warning
+    about it.  Previously these were incorrectly silently accepted, which could cause long-range
+    errors in code depending on the coupling graph.

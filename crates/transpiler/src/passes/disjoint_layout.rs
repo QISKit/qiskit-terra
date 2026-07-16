@@ -20,6 +20,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyList;
 use rustworkx_core::connectivity::connected_components;
 use rustworkx_core::petgraph::EdgeType;
+use rustworkx_core::petgraph::algo::toposort;
 use rustworkx_core::petgraph::prelude::*;
 use rustworkx_core::petgraph::visit::{IntoEdgeReferences, IntoNodeReferences, NodeFiltered};
 use uuid::Uuid;
@@ -27,7 +28,7 @@ use uuid::Uuid;
 use crate::TranspilerError;
 use crate::target::{Qargs, Target};
 use qiskit_circuit::bit::ShareableQubit;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
 use qiskit_circuit::operations::{Operation, OperationRef, StandardInstruction};
 use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::{
@@ -467,15 +468,17 @@ fn separate_dag(dag: &mut DAGCircuit) -> PyResult<Vec<DAGCircuit>> {
     let decomposed_dags: PyResult<Vec<DAGCircuit>> = component_qubits
         .into_iter()
         .map(|dag_qubits| -> PyResult<DAGCircuit> {
-            let mut new_dag = dag.copy_empty_like(VarsMode::Alike, BlocksMode::Drop)?;
+            let mut new_dag = dag.copy_empty_like(VarsMode::Alike, BlocksMode::Drop);
             let qubits_to_revmove: Vec<Qubit> = qubits.difference(&dag_qubits).copied().collect();
 
             new_dag.remove_qubits(qubits_to_revmove)?;
             new_dag.set_global_phase_f64(0.);
             let old_qubits = dag.qubits();
             let mut block_map = BlockMapper::new();
-            for index in dag.topological_op_nodes(false) {
-                let node = dag[index].unwrap_operation();
+            for index in toposort(dag.dag(), None).expect("DAGCircuit can't have a cycle") {
+                let NodeType::Operation(ref node) = dag.dag()[index] else {
+                    continue;
+                };
                 let qargs: HashSet<Qubit> = dag.get_qargs(node.qubits).iter().copied().collect();
                 if dag_qubits.is_superset(&qargs) {
                     let qargs = dag.get_qargs(node.qubits);

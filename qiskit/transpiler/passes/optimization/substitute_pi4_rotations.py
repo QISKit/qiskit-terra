@@ -86,10 +86,5 @@ class SubstitutePi4Rotations(TransformationPass):
         Returns:
             The output DAG.
         """
-        new_dag = substitute_pi4_rotations(dag, self.approximation_degree)
-
-        # If the pass did not do anything, the result is None
-        if new_dag is None:
-            return dag
-
-        return new_dag
+        substitute_pi4_rotations(dag, self.approximation_degree)
+        return dag

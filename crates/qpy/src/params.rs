@@ -12,14 +12,12 @@
 use binrw::Endian;
 use num_complex::Complex64;
 use pyo3::prelude::*;
-use pyo3::types::IntoPyDict;
-use qiskit_circuit::imports;
 use qiskit_circuit::operations::Param;
 use qiskit_circuit::parameter::parameter_expression::{
     OPReplay, ParameterExpression, ParameterValueType,
 };
-use qiskit_circuit::parameter::symbol_expr::Symbol;
-use std::sync::Arc;
+use qiskit_circuit::parameter::symbol_expr::{Symbol, SymbolVector};
+use std::sync::{Arc, atomic};
 use uuid::Uuid;
 
 use crate::bytes::Bytes;
@@ -31,7 +29,7 @@ use crate::value::{
     pack_generic_value, serialize,
 };
 use binrw::binrw;
-use hashbrown::HashMap;
+use hashbrown::hash_map::HashMap;
 
 // The various values of values that can exist in a parameter expression node
 // This data is stored inside the parent of the node, not in the node itself
@@ -154,29 +152,28 @@ pub(crate) fn pack_parameter_expression(
 fn pack_symbol_table_element(
     symbol: &Symbol,
 ) -> Result<formats::ParameterExpressionSymbolPack, QpyError> {
-    let value_data = Bytes::new(); // this was used only when packing symbol tables related to substitution commands and no longer relevant
-    if symbol.is_vector_element() {
-        let value_key = ValueType::ParameterVector;
-        let symbol_data = pack_parameter_vector(symbol)?;
-        let symbol_pack = formats::ParameterExpressionParameterVectorSymbolPack {
-            value_key,
-            value_data,
-            symbol_data,
-        };
-        Ok(formats::ParameterExpressionSymbolPack::ParameterVector(
-            symbol_pack,
-        ))
-    } else {
-        let value_key = ValueType::Parameter;
-        let symbol_data = pack_symbol(symbol);
-        let symbol_pack = formats::ParameterExpressionParameterSymbolPack {
-            value_key,
-            value_data,
-            symbol_data,
-        };
-        Ok(formats::ParameterExpressionSymbolPack::Parameter(
-            symbol_pack,
-        ))
+    // The `value_data` part in the QPY format is only used for "substitute" commands in the replay,
+    // but the Rust-space writer has no need to output those, so it's always empty for us.
+    let value_data = Bytes::new();
+    match symbol {
+        Symbol::Standalone { .. } => {
+            let pack = formats::ParameterExpressionParameterSymbolPack {
+                value_key: ValueType::Parameter,
+                value_data,
+                symbol_data: pack_symbol(symbol),
+            };
+            Ok(formats::ParameterExpressionSymbolPack::Parameter(pack))
+        }
+        Symbol::Element { .. } => {
+            let pack = formats::ParameterExpressionParameterVectorSymbolPack {
+                value_key: ValueType::ParameterVector,
+                value_data,
+                symbol_data: pack_parameter_vector(symbol)?,
+            };
+            Ok(formats::ParameterExpressionSymbolPack::ParameterVector(
+                pack,
+            ))
+        }
     }
 }
 
@@ -232,12 +229,10 @@ fn pack_parameter_replay_entry(
             Bytes::from(val).try_to_16_byte_slice()?,
         ),
         ParameterValueType::Parameter(parameter) => {
-            (ParameterType::Parameter, *parameter.symbol.uuid.as_bytes())
+            // We don't distinguish between `Parameter` and `ParameterVectorElement` in the QPY
+            // format here, because we only use the UUID as a lookup anyway.
+            (ParameterType::Parameter, *parameter.0.uuid().as_bytes())
         }
-        ParameterValueType::VectorElement(element) => (
-            ParameterType::Parameter, // Python QPY expects Parameter, not ParameterVector
-            *element.symbol.uuid.as_bytes(),
-        ),
     })
 }
 
@@ -283,7 +278,7 @@ pub(crate) fn unpack_parameter_expression(
                     return Ok(map);
                 }
             };
-            map.insert(symbol.uuid, symbol);
+            map.insert(symbol.uuid(), symbol);
             Ok(map)
         },
     )?;
@@ -354,7 +349,7 @@ pub(crate) fn unpack_parameter_expression(
         match value {
             GenericValue::ParameterExpressionSymbol(sym)
             | GenericValue::ParameterExpressionVectorSymbol(sym) => {
-                Ok(ParameterExpression::from_symbol(sym))
+                Ok(ParameterExpression::from_arc_symbol(sym))
             }
             GenericValue::ParameterExpression(expr) => Ok((*expr).clone()),
             GenericValue::Int64(_) | GenericValue::Float64(_) | GenericValue::Complex64(_) => {
@@ -476,105 +471,68 @@ pub(crate) fn unpack_parameter_expression(
 }
 
 pub(crate) fn pack_symbol(symbol: &Symbol) -> formats::ParameterSymbolPack {
-    let uuid = *symbol.uuid.as_bytes();
-    let name = symbol.name.clone();
+    let uuid = *symbol.uuid().as_bytes();
+    let name = symbol.name().to_owned();
     formats::ParameterSymbolPack { uuid, name }
 }
 
 pub(crate) fn unpack_symbol(parameter_pack: &formats::ParameterSymbolPack) -> Symbol {
     let name = parameter_pack.name.clone();
     let uuid = Uuid::from_bytes(parameter_pack.uuid);
-    Symbol {
-        name,
-        uuid,
-        index: None,
-        vector: None,
-    }
+    Symbol::Standalone { name, uuid }
 }
 
-// currently, the only way to extract the length of the vector the symbol belongs to
-// is via python space since the vector is stored as a python reference in the symbol
 pub(crate) fn pack_parameter_vector(
     symbol: &Symbol,
 ) -> Result<formats::ParameterVectorElementPack, QpyError> {
-    let vector_size = Python::attach(|py| -> Result<_, QpyError> {
-        match &symbol.vector {
-            None => Err(QpyError::ConversionError(
-                "No vector data for parameter vector element".to_string(),
-            )),
-            Some(vector) => Ok(vector.bind(py).call_method0("__len__")?.extract()?),
-        }
-    })?;
-    let index = match symbol.index {
-        None => {
-            return Err(QpyError::ConversionError(
-                "No index data for parameter vector element".to_string(),
-            ));
-        }
-        Some(index_value) => index_value as u64,
+    let Symbol::Element { index, base } = symbol else {
+        return Err(QpyError::ConversionError(
+            "internal logic error: attempted to pack a standalone symbol as a vector element"
+                .to_owned(),
+        ));
     };
     Ok(formats::ParameterVectorElementPack {
-        vector_size,
-        uuid: *symbol.uuid.as_bytes(),
-        index,
-        name: symbol.name.clone(),
+        vector_size: base.len.load(atomic::Ordering::Relaxed) as u64,
+        uuid: *symbol.uuid().as_bytes(),
+        index: *index as u64,
+        name: base.name.clone(),
     })
 }
 
-// parameter vector symbols are currently much more tricky than standalone symbols
-// since we don't have a rust-space concept of ParameterVector; it is a pure python object
-// which we must manage while creating its elements. Moreover, the vector itself is not stored anywhere
-// so we need to create it in an ad-hoc fashion as we encounter its elements during the parsing of the
-// qpy file. In particular we need to keep our qpy_data nearby so we can update the vector list as needed
-// and we must use python calls to create and modify the python-space ParameterVector
+/// Unpack a `ParameterVectorElement` into a `Symbol`.
+///
+/// Actually, the majority of the work we have to do here is unpacking the underlying _vector_ and
+/// ensuring it is consistent with any other definitions of this vector that we've seen.
 pub(crate) fn unpack_parameter_vector(
-    parameter_vector_pack: &formats::ParameterVectorElementPack,
+    pack: &formats::ParameterVectorElementPack,
     qpy_data: &mut QPYReadData,
 ) -> Result<Symbol, QpyError> {
-    let name = parameter_vector_pack.name.clone();
-    let uuid = Uuid::from_bytes(parameter_vector_pack.uuid);
-    let index = parameter_vector_pack.index as u32; // sadly, the `Symbol` class does not conform to the qpy u64 format
-    // we have extracted the rust-space data, but now we must deal with the python-space vector class
-
-    // first get the uuid for the vector's "root" (it's first element)
-    // we rely on the convention that the uuid's for the vector elements are sequential
-    let root_uuid_int = uuid.as_u128() - (index as u128);
-    let root_uuid = Uuid::from_bytes(root_uuid_int.to_be_bytes());
-
-    let vector = Python::attach(|py| -> Result<_, QpyError> {
-        // we use python-space to interface with the ParameterVector data
-        let vector_data = match qpy_data.vectors.get_mut(&root_uuid) {
-            Some(value) => value,
-            None => Python::attach(|py| -> Result<_, QpyError> {
-                // we use python-space to create a new parameter vector
-                let py_uuid = {
-                    let kwargs = [("int", root_uuid_int)].into_py_dict(py)?;
-                    py.import("uuid")?
-                        .getattr("UUID")?
-                        .call((), Some(&kwargs))?
-                };
-                let vector = imports::PARAMETER_VECTOR
-                    .get_bound(py)
-                    .call1((name.clone(), parameter_vector_pack.vector_size, py_uuid))?
-                    .unbind();
-                qpy_data
-                    .vectors
-                    .insert(root_uuid, (vector, Default::default()));
-                qpy_data.vectors.get_mut(&root_uuid).ok_or_else(|| {
-                    QpyError::MissingData("Parameter vector creation failed".to_string())
-                })
-            })?,
-        };
-        let vector = vector_data.0.bind(py);
-        vector_data.1.insert(index);
-        Ok(vector.clone().unbind())
-    })?;
-
-    Ok(Symbol {
-        name,
-        uuid,
-        index: Some(index),
-        vector: Some(vector),
+    // Historical versions of Qiskit assigned independent UUIDs to every element of a vector.
+    // Modern Qiskit doesn't even permit this representation; elements' UUIDs are offset from the
+    // base vector's.  With certain payloads from very old Qiskit versions (pre Terra 0.25), this
+    // would cause elements to disagree on the vectors that own them, but that largely shouldn't be
+    // observable, and at the time of writing (2026-05-19), we don't handle old enough QPY versions
+    // in Rust space for it to trigger.
+    let uuid = Uuid::from_u128(u128::from_be_bytes(pack.uuid) - (pack.index as u128));
+    let vector = qpy_data.vectors.entry(uuid).or_insert_with(|| {
+        Arc::new(SymbolVector {
+            name: pack.name.clone(),
+            uuid,
+            len: (pack.vector_size as usize).into(),
+        })
+    });
+    let vector_len = vector.len.load(atomic::Ordering::Relaxed);
+    if vector.name != pack.name || vector_len != pack.vector_size as usize {
+        return Err(QpyError::InvalidParameter(format!(
+            "'{}[{}]' has a base vector ('{}[{}]') that disagrees with another ('{}[{}]')",
+            pack.name, pack.index, pack.name, pack.vector_size, vector.name, vector_len,
+        )));
+    }
+    vector.get(pack.index as usize).ok_or_else(|| {
+        QpyError::InvalidParameter(format!(
+            "index {} is out of range for vector '{}[{}]'",
+            pack.index, vector.name, vector_len
+        ))
     })
 }
 
@@ -584,10 +542,12 @@ pub(crate) fn pack_param_expression(
 ) -> Result<formats::GenericDataPack, QpyError> {
     // if the parameter expression is a single symbol, we should treat it like a parameter
     // or a parameter vector, depending on whether the `vector` field exists
-    if let Ok(symbol) = exp.try_to_symbol() {
-        match symbol.vector {
-            None => pack_generic_value(&GenericValue::ParameterExpressionSymbol(symbol), qpy_data),
-            Some(_) => pack_generic_value(
+    if let Ok(symbol) = exp.try_to_symbol().map(Arc::new) {
+        match &*symbol {
+            Symbol::Standalone { .. } => {
+                pack_generic_value(&GenericValue::ParameterExpressionSymbol(symbol), qpy_data)
+            }
+            Symbol::Element { .. } => pack_generic_value(
                 &GenericValue::ParameterExpressionVectorSymbol(symbol),
                 qpy_data,
             ),
@@ -627,11 +587,11 @@ pub(crate) fn generic_value_to_param(value: &GenericValue) -> Result<Param, QpyE
     match value {
         GenericValue::Float64(float_val) => Ok(Param::Float(*float_val)),
         GenericValue::ParameterExpressionSymbol(symbol) => {
-            let parameter_expression = ParameterExpression::from_symbol(symbol.clone());
+            let parameter_expression = ParameterExpression::from_arc_symbol(symbol.clone());
             Ok(Param::ParameterExpression(Arc::new(parameter_expression)))
         }
         GenericValue::ParameterExpressionVectorSymbol(symbol) => {
-            let parameter_expression = ParameterExpression::from_symbol(symbol.clone());
+            let parameter_expression = ParameterExpression::from_arc_symbol(symbol.clone());
             Ok(Param::ParameterExpression(Arc::new(parameter_expression)))
         }
         GenericValue::ParameterExpression(exp) => Ok(Param::ParameterExpression(exp.clone())),

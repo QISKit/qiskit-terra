@@ -11,16 +11,17 @@
 # that they have been altered from the originals.
 
 """Base transpiler passes."""
+
 from __future__ import annotations
 
 import abc
 from abc import abstractmethod
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import Hashable, Iterable
 from inspect import signature
 
 from qiskit.circuit import QuantumCircuit
 from qiskit.dagcircuit import DAGCircuit
-from qiskit.passmanager.base_tasks import GenericPass, PassManagerIR
+from qiskit.passmanager.base_tasks import GenericPass, Callback
 from qiskit.passmanager.compilation_status import PropertySet, RunState, PassManagerState
 
 from .exceptions import TranspilerError
@@ -66,7 +67,7 @@ class MetaPass(abc.ABCMeta):
         return frozenset(arguments)
 
 
-class BasePass(GenericPass, metaclass=MetaPass):
+class BasePass(GenericPass[DAGCircuit, DAGCircuit], metaclass=MetaPass):
     """Base class for transpiler passes."""
 
     def __init__(self):
@@ -160,10 +161,10 @@ class TransformationPass(BasePass):
 
     def execute(
         self,
-        passmanager_ir: PassManagerIR,
-        state: PassManagerState,
-        callback: Callable | None = None,
-    ) -> tuple[PassManagerIR, PassManagerState]:
+        passmanager_ir: DAGCircuit,
+        state: DAGCircuit,
+        callback: Callback[DAGCircuit] | None = None,
+    ) -> tuple[DAGCircuit, PassManagerState]:
         new_dag, state = super().execute(
             passmanager_ir=passmanager_ir,
             state=state,

@@ -13,7 +13,8 @@
 """Integer comparator based on an exponential number of multi-controlled gates."""
 
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+
+from qiskit.circuit import QuantumCircuit
 
 
 def synth_integer_comparator_greedy(

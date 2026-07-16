@@ -1,0 +1,6 @@
+---
+performance:
+  - The :class:`.ConsolidateBlocks` transpiler pass, and its
+    C API function :c:func:`qk_transpiler_pass_standalone_consolidate_blocks`,
+    is now multithreaded which results in improved runtime performance. See
+    `#16230 <https://github.com/Qiskit/qiskit/pull/16230>`__ for more details.

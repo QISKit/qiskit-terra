@@ -1805,16 +1805,6 @@ def read_circuit(
     if version >= 5:
         _read_calibrations(file_obj, version, vectors, metadata_deserializer)
 
-    for vector, initialized_params in vectors.values():
-        if len(initialized_params) != len(vector):
-            warnings.warn(
-                f"The ParameterVector: '{vector.name}' is not fully identical to its "
-                "pre-serialization state. Elements "
-                f"{', '.join([str(x) for x in set(range(len(vector))) - initialized_params])} "
-                "in the ParameterVector will be not equal to the pre-serialized ParameterVector "
-                f"as they weren't used in the circuit: {circ.name}",
-                UserWarning,
-            )
     if version >= 8:
         if version >= 10:
             _read_layout_v2(file_obj, circ)

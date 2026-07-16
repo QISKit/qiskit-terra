@@ -1,0 +1,7 @@
+---
+features_c:
+  - Added two new functions to the C API,
+    :c:func:`qk_transpiler_pass_standalone_2q_peephole_optimization` and
+    :c:func:`qk_transpiler_pass_2q_peephole_optimization`, for running the two qubit unitary
+    peephole optimization pass from C. This is the same pass as the :class:`.TwoQubitPeepholeOptimization`
+    for Python.

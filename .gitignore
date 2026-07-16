@@ -62,6 +62,8 @@ coverage.xml
 test/python/*.log
 test/python/*.pdf
 test/python/*.prof
+test/qpy_compat/forward-qpy-files
+test/qpy_compat/dev-files
 .stestr/
 
 # Translations

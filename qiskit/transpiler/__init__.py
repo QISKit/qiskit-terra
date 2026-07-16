@@ -78,9 +78,16 @@ sample transpilation looks like::
     # ... and use it (as many times as you like).
     physical = pm.run(abstract)
 
-For early experiments towards fault tolerance, the function :func:`.generate_preset_pass_manager`
-invokes a specialized transpilation pipeline when the target basis consists of Clifford+T gates,
-see :func:`.clifford_t_pass_manager` for documentation. For example::
+For early experiments towards fault tolerance, the functions :func:`.generate_preset_pass_manager`
+and :func:`.transpile` invoke a specialized transpilation pipeline when the target basis consists of 
+Clifford+T gates, see :func:`.generate_preset_clifford_t_pass_manager` for documentation.
+It is recommended to use the latter for a detailed configuration of Clifford+T pipelines. 
+For example, the :math:`R_Z` synthesis accuracy cannot be set via 
+``"unitary_synthesis_method"`` in :func:`.generate_preset_pass_manager` but can only be globally
+set via the ``"approximation_degree"``. However, :func:`.generate_preset_clifford_t_pass_manager`
+exposes ``"rz_synthesis_config"`` for this matter.
+
+For example::
 
     from qiskit.circuit import QuantumCircuit
     from qiskit.circuit.library import QFTGate
@@ -1491,6 +1498,7 @@ Pass Manager Definition
    PassManagerCliffordTConfig
    generate_preset_pass_manager
    generate_preset_clifford_t_pass_manager
+   generate_preset_pbc_pass_manager
 
 Layout and Topology
 -------------------
@@ -1548,6 +1556,9 @@ from qiskit.passmanager import (
 )
 from qiskit.passmanager.compilation_status import PropertySet
 
+# import QubitProperties here to provide convenience alias for building a full target
+from qiskit.providers.backend import QubitProperties
+
 from qiskit._accelerate.angle_bound_registry import WrapAngleRegistry
 
 from .passmanager import PassManager, StagedPassManager
@@ -1567,8 +1578,42 @@ from .instruction_durations import InstructionDurations
 from .preset_passmanagers import (
     generate_preset_pass_manager,
     generate_preset_clifford_t_pass_manager,
+    generate_preset_pbc_pass_manager,
 )
 from .target import Target
 from .target import InstructionProperties
-from .target import QubitProperties
 from .optimization_metric import OptimizationMetric
+
+from . import passes, preset_passmanagers
+
+__all__ = [
+    "AnalysisPass",
+    "CircuitTooWideForTarget",
+    "ConditionalController",
+    "CouplingError",
+    "CouplingMap",
+    "DoWhileController",
+    "InstructionDurations",
+    "InstructionProperties",
+    "InvalidLayoutError",
+    "Layout",
+    "LayoutError",
+    "OptimizationMetric",
+    "PassManager",
+    "PassManagerCliffordTConfig",
+    "PassManagerConfig",
+    "PropertySet",
+    "QubitProperties",
+    "StagedPassManager",
+    "Target",
+    "TransformationPass",
+    "TranspileLayout",
+    "TranspilerAccessError",
+    "TranspilerError",
+    "WrapAngleRegistry",
+    "generate_preset_clifford_t_pass_manager",
+    "generate_preset_pass_manager",
+    "generate_preset_pbc_pass_manager",
+    "passes",
+    "preset_passmanagers",
+]

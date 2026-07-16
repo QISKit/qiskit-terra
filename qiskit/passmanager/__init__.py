@@ -26,18 +26,7 @@ but it is designed to take a Python object as an input instead of plain source c
 The pass manager converts the input Python object into an intermediate representation (IR),
 and it can be optimized and get lowered with a variety of transformations over multiple passes.
 The pass manager framework may employ multiple IRs with interleaved conversion passes,
-depending on the context of the optimization.
-
-.. note::
-
-    Currently there is no actual use/design of multiple IRs in the builtin Qiskit pass managers.
-    The implementation of the :mod:`passmanager` module is agnostic to
-    actual IR types (i.e. no strict type check is performed), and the pass manager works
-    as long as the IR implements all methods required by subsequent passes.
-    A concrete design for the use of multiple IRs might be provided in the future release.
-
-The passes may consume the hardware constraints that the Qiskit backend may provide.
-Finally, the IR is converted back to some Python object.
+depending on the context of the compilation. Finally, the IR is converted back to some Python object.
 Note that the input type and output type are not necessarily the same.
 
 Compilation in the pass manager is a chain of :class:`~.passmanager.Task` executions that
@@ -58,10 +47,10 @@ The status is updated after every pass is run, and contains information about th
 (number of passes run, failure state, and so on) as opposed to the :class:`PropertySet`, which
 contains information about the IR being optimized.
 
-A pass manager is a wrapper of the flow controller, with responsibilities of
+A :class:`BasePassManager` is a wrapper of the flow controller, with responsibilities of
 
-* Scheduling optimization tasks,
-* Converting an input Python object to a particular Qiskit IR,
+* Scheduling tasks,
+* Converting an input Python object to an internal IR,
 * Initializing a property set and workflow status,
 * Running scheduled tasks to apply a series of transformations to the IR,
 * Converting the IR back to an output Python object.
@@ -76,6 +65,12 @@ A single flow controller always takes a single IR object, and returns a single
 IR object. Parallelism for multiple input objects is supported by the
 :class:`BasePassManager` by broadcasting the flow controller via
 the :func:`.parallel_map` function.
+
+The :class:`MultiStagePassManager` allows constructing staged compiler workflows with
+multiple IRs. A stage is defined by a :class:`~.passmanager.Task` or an iterable thereof, which can
+also be grouped inside a :class:`BasePassManager`.
+The stages must be set up such that the output IR of the current stage matches the input IR
+of the next stage, there are (currently) no automatic translations.
 
 
 Examples
@@ -221,6 +216,15 @@ Base classes
    BaseController
    GenericPass
 
+
+Pass managers
+-------------
+
+.. autosummary::
+   :toctree: ../stubs/
+
+   MultiStagePassManager
+
 Flow controllers
 ----------------
 
@@ -248,6 +252,7 @@ Exceptions
 """
 
 from .passmanager import BasePassManager
+from .multistage_passmanager import MultiStagePassManager
 from .flow_controllers import (
     FlowControllerLinear,
     ConditionalController,
@@ -256,3 +261,17 @@ from .flow_controllers import (
 from .base_tasks import GenericPass, BaseController
 from .compilation_status import PropertySet, WorkflowStatus, PassManagerState
 from .exceptions import PassManagerError
+
+__all__ = [
+    "BaseController",
+    "BasePassManager",
+    "ConditionalController",
+    "DoWhileController",
+    "FlowControllerLinear",
+    "GenericPass",
+    "MultiStagePassManager",
+    "PassManagerError",
+    "PassManagerState",
+    "PropertySet",
+    "WorkflowStatus",
+]

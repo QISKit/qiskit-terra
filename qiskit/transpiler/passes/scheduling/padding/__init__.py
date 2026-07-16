@@ -15,3 +15,9 @@
 from .context_aware_dynamical_decoupling import ContextAwareDynamicalDecoupling
 from .dynamical_decoupling import PadDynamicalDecoupling
 from .pad_delay import PadDelay
+
+__all__ = [
+    "ContextAwareDynamicalDecoupling",
+    "PadDelay",
+    "PadDynamicalDecoupling",
+]

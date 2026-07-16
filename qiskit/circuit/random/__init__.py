@@ -48,3 +48,9 @@ Generating arbitrary circuits with clifford gates
 """
 
 from .utils import random_circuit, random_clifford_circuit, random_circuit_from_graph
+
+__all__ = [
+    "random_circuit",
+    "random_circuit_from_graph",
+    "random_clifford_circuit",
+]

@@ -86,6 +86,8 @@ class BoxOp(ControlFlowOp):
                 "BoxOp expects a body parameter of type "
                 f"QuantumCircuit, but received {type(body)}."
             )
+        if body.num_input_vars:
+            raise self._unexpected_input_var_error()
 
         if body.num_qubits != self.num_qubits or body.num_clbits != self.num_clbits:
             raise CircuitError(

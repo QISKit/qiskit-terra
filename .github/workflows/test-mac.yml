@@ -32,13 +32,13 @@ jobs:
     env:
       QISKIT_TEST_CAPTURE_STREAMS: 1
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ inputs.python-version }}
         uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}
       - name: Cache stestr
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           key: 'stestr | "${{ runner.os }}" | "${{ inputs.python-version }}" | "${{ github.run_id }}"'
           restore-keys: |
@@ -80,10 +80,7 @@ jobs:
           RUST_BACKTRACE: 1
       - name: Filter stestr history
         run: |
-          set -e
-          pushd .stestr
-          ls | grep -e '^[[:digit:]]' | xargs -n1 rm -f
-          popd
+          test-job/bin/stestr history remove all
       - name: Copy and Publish images
         uses: actions/upload-artifact@v7
         if: ${{ failure() }}

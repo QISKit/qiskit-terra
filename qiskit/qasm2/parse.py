@@ -195,11 +195,7 @@ LEGACY_CUSTOM_INSTRUCTIONS = (
     CustomInstruction("delay", 1, 1, _generate_delay),
 )
 
-LEGACY_CUSTOM_CLASSICAL = (
-    CustomClassical("asin", 1, math.asin),
-    CustomClassical("acos", 1, math.acos),
-    CustomClassical("atan", 1, math.atan),
-)
+LEGACY_CUSTOM_CLASSICAL = tuple(CustomClassical.builtins())
 
 
 def from_bytecode(bytecode, custom_instructions: Iterable[CustomInstruction]):
@@ -433,5 +429,5 @@ def _evaluate_argument(expr, parameters):
             return left**right
         raise ValueError(f"unhandled binary opcode: {opcode}")
     if isinstance(expr, ExprCustom):
-        return expr.callable(*(_evaluate_argument(x, parameters) for x in expr.arguments))
+        return expr.call(*(_evaluate_argument(x, parameters) for x in expr.arguments))
     raise ValueError(f"unhandled expression type: {expr}")

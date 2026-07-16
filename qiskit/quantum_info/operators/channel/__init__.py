@@ -20,10 +20,18 @@ References:
         Open access: arXiv:1111.6950 [quant-ph]
 """
 
-from __future__ import annotations
 from .superop import SuperOp
 from .choi import Choi
 from .kraus import Kraus
 from .stinespring import Stinespring
 from .ptm import PTM
 from .chi import Chi
+
+__all__ = [
+    "PTM",
+    "Chi",
+    "Choi",
+    "Kraus",
+    "Stinespring",
+    "SuperOp",
+]

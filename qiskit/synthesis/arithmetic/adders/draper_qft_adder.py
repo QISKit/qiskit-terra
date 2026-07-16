@@ -14,9 +14,8 @@
 
 import numpy as np
 
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit import QuantumRegister
-from qiskit.circuit.library.basis_change import QFTGate
+from qiskit.circuit import QuantumRegister, QuantumCircuit
+from qiskit.circuit.library import QFTGate
 
 
 def adder_qft_d00(

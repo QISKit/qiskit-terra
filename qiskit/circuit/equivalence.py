@@ -17,13 +17,24 @@ import rustworkx as rx
 
 
 from qiskit.exceptions import InvalidFileError
+from qiskit._accelerate.equivalence import BaseEquivalenceLibrary
+
+# This re-exports structs from Rust for the Python interface
 from qiskit._accelerate.equivalence import (
-    BaseEquivalenceLibrary,
     Key,
     Equivalence,
     NodeData,
     EdgeData,
 )
+
+__all__ = [
+    "BaseEquivalenceLibrary",
+    "EdgeData",
+    "Equivalence",
+    "EquivalenceLibrary",
+    "Key",
+    "NodeData",
+]
 
 
 class EquivalenceLibrary(BaseEquivalenceLibrary):

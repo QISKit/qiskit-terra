@@ -1,0 +1,25 @@
+---
+features_transpiler:
+  - |
+    Added a new argument ``getter`` to the :class:`.FixedPoint` analysis pass.
+    This optional callback can be provided to derive a value from the
+    property set instead of reading a single key directly. When ``None`` (default),
+    the pass preserves the old bahavior. For example::
+
+      # returns a tuple consisting of the size and the number of T and Tdg gates
+      def get_size_and_t_count(property_set):
+          return (
+              property_set["size"],
+              property_set["count_ops"].get("t", 0) + property_set["count_ops"].get("tdg", 0),
+          )
+
+      fixed_point_pass = FixedPoint("size_and_t_count", getter=get_size_and_t_count)
+
+performance:
+  - |
+    Improved the performance of optimization levels 1, 2 and 3 for compiling to Clifford+T
+    basis gates, in particular for very deep circuits.  Previously the depth of the circuit has
+    been used as indicator of whether a fixed point in the optimization stages has been reached,
+    which has been replaced by the RZ and T counts (depending on the optimization stage).
+    This is not only significantly faster, but also reflects the target metric better.
+    See `#16218 <https://github.com/Qiskit/qiskit/pull/16218>`__ for more details.

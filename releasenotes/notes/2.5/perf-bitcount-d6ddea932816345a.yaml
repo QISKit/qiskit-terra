@@ -1,0 +1,6 @@
+---
+performance:
+  - |
+    :meth:`.BitArray.bitcount` now uses a more efficient NumPy call internally, with approximately a
+    5x speedup at 100 qubits.  See `#15836 <https://github.com/Qiskit/qiskit/pull/15836>`__ for more
+    detail.

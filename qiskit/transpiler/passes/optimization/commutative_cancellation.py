@@ -65,8 +65,8 @@ class CommutativeCancellation(TransformationPass):
 
         self._var_z_map = {"rz": RZGate, "p": PhaseGate, "u1": U1Gate}
 
-        self._z_rotations = {"p", "z", "u1", "rz", "t", "s"}
-        self._x_rotations = {"x", "rx"}
+        self._z_rotations = {"p", "z", "u1", "rz", "t", "s", "tdg", "sdg"}
+        self._x_rotations = {"x", "rx", "sx", "sxdg"}
         self._gates = {"cx", "cy", "cz", "h", "y"}  # Now the gates supported are hard-coded
 
         # build a commutation checker restricted to the gates we cancel -- the others we

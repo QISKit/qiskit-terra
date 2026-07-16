@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import typing
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit, QuantumRegister, AncillaRegister
+
+from qiskit.circuit import QuantumCircuit, QuantumRegister, AncillaRegister
 from qiskit.synthesis.multi_controlled import synth_mcx_n_clean_m15
 
 if typing.TYPE_CHECKING:

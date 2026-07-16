@@ -1,11 +1,10 @@
 [build-system]
 # This is duplicated as `dependency-groups.build` for convenience.
 requires = [
+    # Minimum is for PEP 639 / SPDX licence metadata.
     "setuptools>=77.0",
-    # This is hard-pinned to permit the awful monkeypatching in `setup.py`.
-    # It should be removed when we can use a released version of
-    # https://github.com/PyO3/setuptools-rust/pull/574
-    "setuptools-rust==1.12.0",
+    # Minimum is for `Extension(generated_files=...)`.
+    "setuptools-rust>=1.13.0",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -188,7 +187,7 @@ default = "qiskit.transpiler.preset_passmanagers.builtin_plugins:DefaultScheduli
 # process.  If you intended that, use `project.optional-dependencies` instead.
 [dependency-groups]
 # Sync with `build-system.requires`.
-build = ["setuptools>=77.0", "setuptools-rust==1.12.0"]
+build = ["setuptools>=77.0", "setuptools-rust>=1.13.0"]
 # We use quite tight pins on pylint and astroid because they have a habit of adding new
 # on-by-default lints that are harder to deal with.
 lint = [
@@ -199,7 +198,7 @@ lint = [
 # Dependencies to run the test suite.  This group needs to be installable on all Python versions
 # that Qiskit supports.
 test = [
-    "stestr>=2.0",
+    "stestr>=3.2.0",
     "ddt>=1.2.0",
     "coverage>=4.4.0",
     "threadpoolctl",  # More detail from Numpy/Scipy BLAS-usage reports.
@@ -357,7 +356,6 @@ select = [
 ]
 ignore = [
     "E402",  # module-import-not-at-top-of-file false positives with module docs
-    "F401",  # unused-import false triggers on init re-exports with __all__
     "E501",  # line-too-long rely on black for formatting
     "PLR2004",  # magic-value-comparison overly pedantic especially in tests
     "PLR0911",  # too-many-return-statements
@@ -383,6 +381,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F403"]  # allow star imports in init files for re-export
 "*.ipynb" = ["F821"]
 # Security rules from bandit don't apply to tests and utils
 "tools/*" = [

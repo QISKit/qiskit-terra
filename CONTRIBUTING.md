@@ -11,6 +11,10 @@ community in this goal.
 * [Set up Python virtual development environment](#set-up-python-virtual-development-environment)
 * [Installing Qiskit from source](#installing-qiskit-from-source)
 * [Issues and pull requests](#issues-and-pull-requests)
+  * [Pull request author checklist](#pull-request-author-checklist)
+  * [Code review](#code-review)
+  * [Pull request merging checking](#pull-request-merging-checklist)
+  * [Use of AI tools](#use-of-ai-tools)
 * [Contributor Licensing Agreement](#contributor-licensing-agreement)
 * [Changelog generation](#changelog-generation)
 * [Release notes](#release-notes)
@@ -28,6 +32,7 @@ community in this goal.
   * [Release Cycle](#release-cycle)
 * [Adding deprecation warnings](#adding-deprecation-warnings)
 * [Using dependencies](#using-dependencies)
+  * [Version support policy](#version-support-policy)
   * [Adding a requirement](#adding-a-requirement)
   * [Adding an optional dependency](#adding-an-optional-dependency)
   * [Checking for optionals](#checking-for-optionals)
@@ -95,7 +100,7 @@ You then install Qiskit in editable mode using:
 pip install -e .
 ```
 
-Changes to Python packages will need be picked up automatically.
+Changes to Python packages will be picked up automatically.
 Changes to Rust files will require a recompilation; see "Installing Qiskit from source" below.
 
 You can easily install all the standard developer dependencies for in-place testing, documentation-building,
@@ -215,7 +220,7 @@ Before marking your Pull Request as "ready for review" make sure you have follow
 PR Checklist below. PRs that adhere to this list are more likely to get reviewed and
 merged in a timely manner.
 
-### Pull request checklist
+### Pull request author checklist
 
 When submitting a pull request and you feel it is ready for review,
 please ensure that:
@@ -227,6 +232,7 @@ please ensure that:
    If your code fails the local style checks (specifically the black
    or Rust code formatting check) you can use `tox -eblack` and
    `cargo fmt` to automatically fix the code formatting.
+
 2. The documentation has been updated accordingly. In particular, if a
    function or class has been modified during the PR, please update the
    *docstring* accordingly.
@@ -234,33 +240,30 @@ please ensure that:
    If your pull request is adding a new class, function, or module that is
    intended to be user facing ensure that you've also added those to a
    documentation `autosummary` index to include it in the api documentation.
+
 3. If you are of the opinion that the modifications you made warrant additional tests,
-   feel free to include them
+   feel free to include them.
+
 4. Ensure that if your change has an end user facing impact (new feature,
-   deprecation, removal etc) that you have added a reno release note for that
+   deprecation, removal etc) that you have added a `reno` release note for that
    change and that the PR is tagged for the changelog.
-5. All contributors have signed the CLA.
-6. The PR has a concise and explanatory title (e.g. `Fixes Issue1234` is a bad title!).
+
+5. All contributors have [signed the CLA](#contributor-licensing-agreement).
+
+   You will need to ensure that all commits in the PR chain have a correctly configured
+   email address, and the email address is registered to a GitHub account that has signed
+   the CLA.  A bot will leave a comment with a link to sign the CLA.
+
+6. The PR has a concise and explanatory title that can be understood without
+   clicking on another GitHub issue.
+
+   The PR title will become the summary line of the commit, which appears in `git log`.
+   For example, "Fixes Issue 1234" is a bad title, and "Fix `ApplyLayout` with
+   empty layouts" is good.
+
 7. If the PR addresses an open issue the PR description includes the `fixes #issue-number`
-  syntax to link the PR to that issue (**you must use the exact phrasing in order for GitHub
-  to automatically close the issue when the PR merges**)
-
-### Code Review
-
-Code review is done in the open and is open to anyone. While only maintainers have
-access to merge commits, community feedback on pull requests is extremely valuable.
-It is also a good mechanism to learn about the code base.
-
-Response times may vary for your PR, it is not unusual to wait a few weeks for a maintainer
-to review your work, due to other internal commitments. If you have been waiting over a week
-for a review on your PR feel free to tag the relevant maintainer in a comment to politely remind
-them to review your work.
-
-Please be patient! Maintainers have a number of other priorities to focus on and so it may take
-some time for your work to get reviewed and merged. PRs that are in a good shape (i.e. following the [Pull request checklist](#pull-request-checklist))
-are easier for maintainers to review and more likely to get merged in a timely manner. Please also make
-sure to always be kind and respectful in your interactions with maintainers and other contributors, you can read
-[the Qiskit Code of Conduct](https://github.com/Qiskit/qiskit/blob/main/CODE_OF_CONDUCT.md).
+   syntax to link the PR to that issue (**you must use the exact phrasing in order for GitHub
+   to automatically close the issue when the PR merges**)
 
 ### Use of AI tools
 
@@ -280,6 +283,183 @@ When using AI tools for code generation, your submission must still be your own 
 Submissions that appear unreviewed or copied directly from an AI tool without proper understanding may be requested to be revised or declined.
 
 Remember that spamming issues or pull requests with AI-generated comments is prohibited under the [Qiskit Code of Conduct](https://qisk.it/coc).
+
+
+### Code review
+
+All code merged to Qiskit, even from maintainers, goes through a code-review
+process after a pull request is made.  There are a small number of
+maintainers who can authorize a final merge, but code review involves everyone
+working together to make Qiskit better.  You can review code even if you
+are not a maintainer, which helps make sure pull requests are technically
+correct, well tested, and easier to tackle in their final maintainer review.
+
+The code-review process is a normal part of software development, and nothing to
+be scared of; for very easy changes it can be as simple as a maintainer saying
+"looks good to me!" (or in short, "LGTM!") and merging the PR.  For more complex changes, it's often a
+back-and-forth where the reviewer may ask a couple of questions about why things
+were done a particular way, and make suggestions for improvement.  You don't
+need to do everything suggested if you've got good reasons to disagree, but
+communicate that clearly and politely.
+
+If you're struggling with code review or a PR on Qiskit, you can ask for help in
+the `#qiskit-pr-help` channel on [the public Qiskit Slack](https://qisk.it/join-slack).
+
+Remember that the PR author is a human, not just a username!  It's OK to ask
+questions about the code, but don't be mean or rude about it even if you don't
+like it.  It's also fine to provide comments that are just compliments with no
+suggested changes, if you particularly like something!
+
+#### What to focus on in review
+
+* Is everything in [the PR checklist](#pull-request-checklist) done?
+
+* Are any new public APIs easy to use, well documented, and consistent with
+  other parts of the Qiskit API?
+
+* Do any changes to the code have knock-on effects for other parts of Qiskit
+  that may be using them, or do they imply changes to the assumptions in
+  our data structures?
+
+* Are there any edge cases you can think of that the code might not handle well?
+  Could the PR benefit from extra tests to cover these, or to verify other edge
+  cases that it *does* handle successfully?
+
+* Is the code reasonably easy for you to understand?  This particular point is
+  tricky; the more you review code, the easier it will be for you to understand
+  other code, so don't worry about this as much if you're getting started.
+
+* If this PR is a bugfix, is it suitable for backport?  If not, could the PR be
+  split into a "simple" bugfix that is suitable for backport and a follow-on
+  improvement?  (Not all bugfixes *must* be backported.)
+
+#### Writing review comments
+
+* Make concrete suggestions when you think something should be changed, but
+  remember that the author might have already thought about it and have a
+  reason.  Try "What do you think about us raising a `TypeError` here instead of
+  returning `None`?", rather than "You should raise an exception here".
+
+* Try to make each round of review thorough.  Don't add one or two comments on
+  one file, then come back a day later and add a couple of other unrelated
+  comments on a different file, and so on.  Try to review the whole PR
+  thoroughly in one go; it's easier to catch bugs like this, and less
+  frustrating for the PR creator. If that's too much for you, consider
+  asking if the PR could be split into smaller independent chunks.
+
+* Try to keep the number of comments reasonable.  This depends on the size of
+  the PR, but remember that there's somebody who'll read all your comments, and
+  it can be demoralizing if you get a PR back and it's got 30 comments on from a
+  50-line change.  If you feel like you're putting too many comments on,
+  consider if you could group several of them into one theme, and ask them as a
+  more detailed question with a focus on only one part of the code.  Try not to
+  comment the same thing in many places.
+
+* Try to avoid saying "you do" in review comments, and instead try to
+  say things like "we do" even when talking about new code. It's not a big
+  change, yet it helps to make us think about Qiskit's code as something that we
+  all own and care about, and that we're all working together to make it better.
+
+#### Responding to review comments
+
+* Ask questions if you don't understand what a reviewer is saying, or if you're
+  not certain whether they're suggesting changes.
+
+* Feel free to respond to suggestions or questions with your reasoning for doing
+  things a different way, if you don't fully agree with the review comment.
+  Code review is a collaborative two-way process.
+
+* Don't use the "update branch" on GitHub unless a maintainer suggests it or
+  there are merge conflicts.  The merge queue will take care of this when the
+  PR is approved, and pressing it unnecessarily uses up CI resources that other
+  PRs might need.
+
+* Try not to take suggestions personally.  It's hard to communicate over text,
+  especially when we might have different native languages and we're talking
+  about improving something.  Assume that the reviewer was acting in good faith,
+  trying to be polite, and knows what they're talking about; it's unlikely that
+  they meant to make you feel bad or insult you.  If you _do_ feel like somebody
+  is not following [the code of conduct](/CODE_OF_CONDUCT.md), please report it
+  using the violation form there.
+
+#### Things that shouldn't be said
+
+* Anything about the formatting of the code, unless it is illegible.  We have
+  automated code formatters that enforce a uniform style, and CI requires them
+  to have been run.
+
+* Minor stylistic changes in _how_ people code, except where they might be
+  seriously affecting performance or legibility.  There are lots of ways to
+  program, especially in Python, and lots of ways that achieve the same thing.
+  For example, if somebody has written
+  ```python
+  if my_condition:
+      my_first_variable = 123
+      my_second_variable = 456
+  else:
+      my_first_variable = 456
+      my_second_variable = 123
+  ```
+  there's no need to suggest changes like
+  ```python
+  my_first_variable = 123 if my_condition else 456
+  my_second_variable = 456 if my_condition else 123
+  ```
+  Both are perfectly legible, and focusing on small details like this is
+  frustrating for everybody.
+
+### Pull request merging checklist
+
+When a PR is fully approved by code owners, it can be queued for merge.
+Authorised users (those with write access to the repository) will be able to
+press the "merge when ready" button.  Before enqueuing for merge, check that the
+following PR metadata items are set correctly:
+
+* The "milestone" is set to the expected release version.  For PRs to be
+  backported, this should be (for example) "2.3.2".  For PRs for the next minor
+  release, it should be (for example) "2.4.0".  If the PR is unrelated to any
+  particular release (such as a change only to a test), you can leave this
+  blank.
+
+  This metadata lets us quickly jump from `git log` to the PR page, and see
+  there which Qiskit release a patch went out in.
+
+* The correct "Changelog: X" label is applied, including "Changelog: None" if
+  the PR need not appear.
+
+  These labels are much simpler than the `reno` structure; they are for the
+  GitHub "releases" page instead, and categorize PRs into "Added", "Deprecated",
+  "Changed" or "Fixed".
+
+* Suitable backport commands have been set, if necessary.
+
+  In most cases, applying the label "stable backport potential" is sufficient.
+  In this case, the Mergify bot will open a backport PR to the most recent
+  stable branch (for example `stable/2.3` if we are currently preparing for
+  2.4.0).  If you need more complex backports, write a GitHub comment of the
+  form:
+
+  ```
+  @Mergifyio backport <branch> <branch2> ...
+  ```
+
+  You can have as many branches as necessary.  It usually only necessary to do
+  this to support old major branches.
+
+* Any issues fixed by the PR have their own "Fix #<num>" line in the author's PR
+  comment.  If you are empowered to merge PRs, you should be empowered to edit
+  the author's comment to add these, if necessary.
+
+* The PR title is clear, concise, and does not link to GitHub issues.
+
+  As a merger, you can edit the title; there is an "edit" button at the top right
+  of the PR main page, right of the title.  This title becomes the `git` commit
+  summary line, so should be understandable without reference to GitHub.
+
+If a PR is backported, the Mergify bot will open a PR for each branch to
+backport it to.  Assuming there are no merge conflicts, you can immediately
+approve and enqueue those PRs; a GitHub Actions workflow will copy across the
+labels (except for "stable backport potential") and milestone.
 
 
 ## Contributor Licensing Agreement
@@ -806,10 +986,10 @@ You can check that your local modifications conform to the style rules by
 running `tox -elint` which will run `black` and  `ruff` to check the
 local code formatting and lint. If black returns a code formatting error you can
 run `tox -eblack` to automatically update the code formatting to conform to the
-style. However, if `ruff`  return any error you will have to fix these issues by
+style. However, if `ruff` returns any error you will have to fix these issues by
 manually updating your code. Sometimes `ruff` will be able to fix failures with
 the `--fix` flag. In these cases the output will tell you how many errors can be
-automatically fixed
+automatically fixed.
 
 Because they are so fast, it is sometimes convenient to run the tools `black` and `ruff` separately
 rather than via `tox`.  You can install all the lint dependencies using the `lint` or `dev`
@@ -916,7 +1096,7 @@ https://github.com/Qiskit/qiskit/milestone/23).
 After the proposal freeze a release review period will begin, during this time
 release candidate PRs will be reviewed as we finalize the feature set and merge
 the last PRs for the release. Following the review period a release candidate will be
-tagged and published. This release candidate is pre-release that enables users and
+tagged and published. This release candidate is a pre-release that enables users and
 developers to test the release ahead of time. When the pre-release is tagged the release
 automation will publish the pre-release to PyPI (but only get installed on user request),
 create the `stable/*` branch, and generate a pre-release changelog/release page. At
@@ -954,17 +1134,29 @@ def test_method2(self):
 
 ## Using dependencies
 
-We distinguish between "requirements" and "optional dependencies" in qiskit.
-A requirement is a package that is absolutely necessary for core functionality in qiskit, such as Numpy or Scipy.
+We distinguish between "requirements" and "optional dependencies" in Qiskit.
+A requirement is a package that is absolutely necessary for core functionality in Qiskit, such as NumPy or SciPy.
 An optional dependency is a package that is used for specialized functionality, which might not be needed by all users.
 If a new feature has a new dependency, it is almost certainly optional.
+
+
+### Version support policy
+
+For Python-space dependencies, Qiskit follows [the scientific-computing standard SPEC 0](https://scientific-python.org/specs/spec-0000/).
+In short: Qiskit will require versions of NumPy and SciPy that are at least two years old.
+For packages not covered by SPEC 0, the requirements must be satisfiable with published binary artifacts from PyPI for all supported Python versions on [all platforms with tier 1 and tier 2 support](https://quantum.cloud.ibm.com/docs/guides/install-qiskit#operating-system-support).
+
+Python dependencies that are optional at runtime, only used during the build, or only used during the development process are not constrained.
+Qiskit supports all versions of CPython that are not end of life, which is wider than the minimum SPEC 0 support.
+
+Rust dependencies are not constrained, other than by the platform support requirements and minimum supported Rust version of the repository.
 
 ### Adding a requirement
 
 Any new requirement must have broad system support; it needs to be supported on all the Python versions and operating systems that qiskit supports.
 It also cannot impose many version restrictions on other packages.
 Users often install qiskit into virtual environments with many different packages in, and we need to ensure that neither we, nor any of our requirements, conflict with their other packages.
-When adding a new requirement, you must add it to [`requirements.txt`](requirements.txt) with as loose a constraint on the allowed versions as possible.
+When adding a new requirement, you must add it to [`requirements.txt`](requirements.txt) following the [version-support policy](#version-support-policy).
 
 ### Adding an optional dependency
 
@@ -972,7 +1164,6 @@ New features can also use optional dependencies, which might be used only in ver
 These are not required to use the rest of the package, and so should not be added to `requirements.txt`.
 Instead, if several optional dependencies are grouped together to provide one feature, you can consider adding an "extra" to the package metadata, such as the `visualization` extra that installs Matplotlib and Seaborn (amongst others).
 To do this, modify the [`setup.py`](setup.py) file, adding another entry in the `extras_require` keyword argument to `setup()` at the bottom of the file.
-You do not need to be quite as accepting of all versions here, but it is still a good idea to be as permissive as you possibly can be.
 You should also add a new "tester" to [`qiskit.utils.optionals`](qiskit/utils/optionals.py), for use in the next section.
 
 ### Checking for optionals
@@ -1005,5 +1196,5 @@ can update your local repository's configuration with:
 git config blame.ignoreRevsFile .git-blame-ignore-revs
 ```
 
-which will update your local repositories configuration to use the ignore list
+which will update your local repository's configuration to use the ignore list
 by default.

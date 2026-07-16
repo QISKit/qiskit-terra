@@ -1,3 +1,5 @@
+.. _capi-transpiler-passes:
+
 =================
 Transpiler Passes
 =================

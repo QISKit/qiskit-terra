@@ -1,0 +1,5 @@
+---
+performance:
+  - |
+    Fixed a performance regression only in v2.5.0rc1 when running :class:`.VF2Layout` and
+    :class:`.VF2PostLayout` on large coupling maps with very high-degree connectivity.

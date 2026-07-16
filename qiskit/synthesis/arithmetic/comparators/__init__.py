@@ -14,3 +14,8 @@
 
 from .compare_2s import synth_integer_comparator_2s
 from .compare_greedy import synth_integer_comparator_greedy
+
+__all__ = [
+    "synth_integer_comparator_2s",
+    "synth_integer_comparator_greedy",
+]

@@ -19,3 +19,13 @@ from .lie_trotter import LieTrotter
 from .suzuki_trotter import SuzukiTrotter
 from .qdrift import QDrift
 from .pauli_network import synth_pauli_network_rustiq
+
+__all__ = [
+    "EvolutionSynthesis",
+    "LieTrotter",
+    "MatrixExponential",
+    "ProductFormula",
+    "QDrift",
+    "SuzukiTrotter",
+    "synth_pauli_network_rustiq",
+]

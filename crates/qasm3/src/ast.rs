@@ -138,7 +138,7 @@ impl Display for DurationUnit {
         let unit_str = match self {
             DurationUnit::Nanosecond => "ns",
             DurationUnit::Microsecond => "us",
-            DurationUnit::Millisecond => "us",
+            DurationUnit::Millisecond => "ms",
             DurationUnit::Second => "s",
             DurationUnit::Sample => "dt",
         };

@@ -11,12 +11,11 @@
 // that they have been altered from the originals.
 #![allow(clippy::too_many_arguments)]
 
-use foldhash::fast::RandomState;
 use hashbrown::{HashMap, HashSet};
-use indexmap::IndexSet;
 use ndarray::prelude::*;
 use numpy::IntoPyArray;
 use numpy::PyReadonlyArray2;
+use qiskit_util::IndexSet;
 use rayon::prelude::*;
 
 use pyo3::Python;
@@ -35,14 +34,13 @@ struct SubsetResult {
 
 fn bfs_sort(adj_matrix: ArrayView2<f64>, start: usize, num_qubits: usize) -> Vec<usize> {
     let n = adj_matrix.shape()[0];
-    let mut next_level: IndexSet<usize, RandomState> =
-        IndexSet::with_hasher(RandomState::default());
+    let mut next_level: IndexSet<usize> = IndexSet::default();
     let mut bfs_order = Vec::with_capacity(num_qubits);
     let mut seen: HashSet<usize> = HashSet::with_capacity(n);
     next_level.insert(start);
     while !next_level.is_empty() {
         let this_level = next_level;
-        next_level = IndexSet::with_hasher(RandomState::default());
+        next_level = IndexSet::default();
         let mut found: Vec<usize> = Vec::new();
         for v in this_level {
             if !seen.contains(&v) {

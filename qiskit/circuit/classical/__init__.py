@@ -39,3 +39,8 @@ target of :meth:`.QuantumCircuit.switch` (:class:`.SwitchCaseOp`).
 """
 
 from . import types, expr
+
+__all__ = [
+    "expr",
+    "types",
+]

@@ -11,18 +11,19 @@
 # that they have been altered from the originals.
 
 """Manager for a set of Passes and their scheduling during transpilation."""
+
 from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from itertools import chain
-from typing import Any
+from typing import Any, Generic
 
 import dill
 
 from qiskit.utils.parallel import parallel_map, should_run_in_parallel
-from .base_tasks import Task, PassManagerIR
+from .base_tasks import Task, IR, Callback
 from .exceptions import PassManagerError
 from .flow_controllers import FlowControllerLinear
 from .compilation_status import PropertySet, WorkflowStatus, PassManagerState
@@ -30,12 +31,12 @@ from .compilation_status import PropertySet, WorkflowStatus, PassManagerState
 logger = logging.getLogger(__name__)
 
 
-class BasePassManager(ABC):
+class BasePassManager(Generic[IR], ABC):
     """Pass manager base class."""
 
     def __init__(
         self,
-        tasks: Task | list[Task] = (),
+        tasks: Task[IR, IR] | list[Task[IR, IR]] = (),
         max_iteration: int = 1000,
     ):
         """Initialize an empty pass manager object.
@@ -56,7 +57,7 @@ class BasePassManager(ABC):
 
     def append(
         self,
-        tasks: Task | list[Task],
+        tasks: Task[IR, IR] | list[Task[IR, IR]],
     ) -> None:
         """Append tasks to the schedule of passes.
 
@@ -76,7 +77,7 @@ class BasePassManager(ABC):
     def replace(
         self,
         index: int,
-        tasks: Task | list[Task],
+        tasks: Task[IR, IR] | list[Task[IR, IR]],
     ) -> None:
         """Replace a particular pass in the scheduler.
 
@@ -138,7 +139,7 @@ class BasePassManager(ABC):
         self,
         input_program: Any,
         **kwargs,
-    ) -> PassManagerIR:
+    ) -> IR:
         """Convert input program into pass manager IR.
 
         Args:
@@ -152,7 +153,7 @@ class BasePassManager(ABC):
     @abstractmethod
     def _passmanager_backend(
         self,
-        passmanager_ir: PassManagerIR,
+        passmanager_ir: IR,
         in_program: Any,
         **kwargs,
     ) -> Any:
@@ -172,7 +173,7 @@ class BasePassManager(ABC):
     def run(
         self,
         in_programs: Any | list[Any],
-        callback: Callable | None = None,
+        callback: Callback[IR] | None = None,
         num_processes: int | None = None,
         *,
         property_set: dict[str, object] | None = None,
@@ -263,7 +264,7 @@ class BasePassManager(ABC):
             num_processes=num_processes,
         )
 
-    def to_flow_controller(self) -> FlowControllerLinear:
+    def to_flow_controller(self) -> FlowControllerLinear[IR, IR]:
         """Linearize this manager into a single :class:`.FlowControllerLinear`,
         so that it can be nested inside another pass manager.
 
@@ -273,7 +274,7 @@ class BasePassManager(ABC):
         flatten_tasks = list(self._flatten_tasks(self._tasks))
         return FlowControllerLinear(flatten_tasks)
 
-    def _flatten_tasks(self, elements: Iterable | Task) -> Iterable:
+    def _flatten_tasks(self, elements: Iterable | Task) -> Iterable[Task[IR, IR]]:
         """A helper method to recursively flatten a nested task chain."""
         if not isinstance(elements, Iterable):
             return [elements]

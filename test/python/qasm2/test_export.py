@@ -596,13 +596,14 @@ qreg ({VALID_QASM2_IDENTIFIER.pattern})\[1\];
         qc.p(pi * pi, 0)
         qc.p(MAX_FRAC * pi + 1, 0)
 
-        expected_qasm = """\
+        boundary = MAX_FRAC * pi + 1
+        expected_qasm = f"""\
 OPENQASM 2.0;
 include "qelib1.inc";
 qreg q[1];
 p(0.123456789) q[0];
 p(9.869604401089358) q[0];
-p(51.26548245743669) q[0];"""
+p({boundary:#}) q[0];"""
         self.assertEqual(qasm2.dumps(qc), expected_qasm)
 
     def test_rotation_angles_close_to_pi(self):

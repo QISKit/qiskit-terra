@@ -12,12 +12,21 @@
 
 use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
 use qiskit_circuit::{circuit_data::CircuitData, dag_circuit::DAGCircuit};
-use qiskit_transpiler::{passes::run_optimize_1q_gates_decomposition, target::Target};
+use qiskit_transpiler::{
+    passes::{Optimize1qGatesDecompositionState, run_optimize_1q_gates_decomposition},
+    target::Target,
+};
 
 /// @ingroup QkTranspilerPassesStandalone
 /// Runs the Optimize1qGatesDecomposition pass in standalone mode on a circuit.
 ///
 /// \qk_deprecated{2.4.0|use :c:func:`qk_transpiler_pass_standalone_optimize_1q_sequences` instead.}
+///
+/// This function is multithreaded and will potentially launch a thread pool
+/// with threads equal to the number of CPUs by default. You can tune the
+/// number of threads with the ``RAYON_NUM_THREADS`` environment variable.
+/// For example, setting ``RAYON_NUM_THREADS=4`` would limit the thread pool
+/// to 4 threads.
 ///
 /// @param circuit A pointer to the ``QkCircuit`` object to transform.
 /// @param target A pointer to the ``QkTarget`` object or a null pointer.
@@ -47,6 +56,13 @@ pub unsafe extern "C" fn qk_transpiler_standalone_optimize_1q_sequences(
 /// Runs the Optimize1qGatesDecomposition pass in standalone mode on a circuit.
 ///
 /// Refer to the ``qk_transpiler_pass_optimize_1q_sequences`` function for more details about the pass.
+///
+/// This function is multithreaded and will potentially launch a thread pool
+/// with threads equal to the number of CPUs by default. You can tune the
+/// number of threads with the ``RAYON_NUM_THREADS`` environment variable.
+/// For example, setting ``RAYON_NUM_THREADS=4`` would limit the thread pool
+/// to 4 threads.
+///
 ///
 /// @param circuit A pointer to the ``QkCircuit`` object to transform.
 /// @param target A pointer to the ``QkTarget`` object or a null pointer.
@@ -78,8 +94,11 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_optimize_1q_sequences(
     let mut circuit_as_dag = DAGCircuit::from_circuit_data(circuit, false, None, None, None, None)
         .expect("Error while converting the circuit to a dag.");
 
+    let state = Optimize1qGatesDecompositionState::new(
+        target.map(|x| x.num_qubits.unwrap_or(0)).unwrap_or(0) as usize,
+    );
     // Run the pass
-    run_optimize_1q_gates_decomposition(&mut circuit_as_dag, target, None, None)
+    run_optimize_1q_gates_decomposition(&mut circuit_as_dag, &state, target, None, None)
         .expect("Error while running the pass.");
 
     // Convert the DAGCircuit back to an instance of CircuitData
@@ -100,6 +119,12 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_optimize_1q_sequences(
 ///
 /// The error is the combined multiplication of the errors of individual gates on the
 /// qubit it operates on.
+///
+/// This function is multithreaded and will potentially launch a thread pool
+/// with threads equal to the number of CPUs by default. You can tune the
+/// number of threads with the ``RAYON_NUM_THREADS`` environment variable.
+/// For example, setting ``RAYON_NUM_THREADS=4`` would limit the thread pool
+/// to 4 threads.
 ///
 /// @param dag A pointer to the ``QkDag`` object to transform.
 /// @param target A pointer to the ``QkTarget`` object or a null pointer.
@@ -156,7 +181,16 @@ pub unsafe extern "C" fn qk_transpiler_pass_optimize_1q_sequences(
     // SAFETY: Per documentation, the pointer is non-null and aligned.
     let dag = unsafe { mut_ptr_as_ref(dag) };
 
+    let state = Optimize1qGatesDecompositionState::new(
+        target
+            .map(|x| {
+                x.num_qubits
+                    .map(|num_qubits| num_qubits as usize)
+                    .unwrap_or(0)
+            })
+            .unwrap_or(0),
+    );
     // Run the pass
-    run_optimize_1q_gates_decomposition(dag, target, None, None)
+    run_optimize_1q_gates_decomposition(dag, &state, target, None, None)
         .expect("Error while running the pass.");
 }

@@ -1,0 +1,6 @@
+---
+features_qasm:
+  - |
+    The OpenQASM 2 importer (:func:`.qasm2.load` and :func:`.qasm2.loads`) can now handle
+    arbitrarily deep classical expressions.  They no longer issue :exc:`RecursionError` based on
+    the system recursion limit (:func:`sys.getrecursionlimit`).

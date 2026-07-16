@@ -43,13 +43,13 @@ jobs:
     env:
       QISKIT_TEST_CAPTURE_STREAMS: 1
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ inputs.python-version }}
         uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python-version }}
       - name: Cache stestr
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           key: 'stestr | "${{ runner.os }}" | "${{ inputs.python-version }}" | "${{ github.run_id }}"'
           restore-keys: |
@@ -118,10 +118,7 @@ jobs:
       - name: Filter stestr history
         if: ${{ !inputs.install-from-sdist }}
         run: |
-          set -e
-          pushd .stestr
-          ls | grep -P "^\d" | xargs -d "\n" rm -f
-          popd
+          test-job/bin/stestr history remove all
       - name: Run Python tests (sdist)
         if: ${{ inputs.install-from-sdist }}
         run: |
@@ -145,8 +142,9 @@ jobs:
         if: ${{ inputs.install-from-sdist }}
         run: |
           set -e
-          pushd /tmp/terra-tests/.stestr
-          ls | grep -P "^\d" | xargs -d "\n" rm -f
+          source test-job/bin/activate
+          pushd /tmp/terra-tests
+          stestr history remove all
           popd
           cp -r /tmp/terra-tests/.stestr .
       - name: Copy and Publish images

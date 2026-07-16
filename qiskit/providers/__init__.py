@@ -717,3 +717,16 @@ from qiskit.providers.exceptions import (
     QiskitBackendNotFoundError,
 )
 from qiskit.providers.jobstatus import JobStatus
+
+__all__ = [
+    "Backend",
+    "BackendV2",
+    "Job",
+    "JobError",
+    "JobStatus",
+    "JobTimeoutError",
+    "JobV1",
+    "Options",
+    "QiskitBackendNotFoundError",
+    "QubitProperties",
+]

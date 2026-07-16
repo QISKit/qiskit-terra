@@ -16,7 +16,7 @@ Circuit synthesis for a QFT circuit.
 from __future__ import annotations
 import warnings
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+from qiskit.circuit import QuantumCircuit
 
 
 def synth_qft_full(

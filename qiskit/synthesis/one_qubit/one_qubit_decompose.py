@@ -18,9 +18,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from qiskit._accelerate import euler_one_qubit_decomposer
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit import Qubit
-from qiskit.circuit.library.standard_gates import (
+from qiskit.circuit import Qubit, QuantumCircuit, Gate
+from qiskit.circuit.library import (
     UGate,
     PhaseGate,
     U3Gate,
@@ -35,8 +34,7 @@ from qiskit.circuit.library.standard_gates import (
 )
 from qiskit.exceptions import QiskitError
 from qiskit.quantum_info.operators.predicates import is_unitary_matrix
-from qiskit.circuit.gate import Gate
-from qiskit.quantum_info.operators.operator import Operator
+from qiskit.quantum_info import Operator
 
 if TYPE_CHECKING:
     from qiskit.dagcircuit import DAGCircuit

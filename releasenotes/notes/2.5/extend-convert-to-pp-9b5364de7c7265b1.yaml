@@ -1,0 +1,6 @@
+---
+features_transpiler:
+  - |
+    Extended the :class:`.ConvertToPauliRotations` transpiler pass to handle circuits
+    with :class:`.PauliProductRotationGate` and :class:`.PauliProductMeasurement` objects.
+    These operations are passed through unchanged during conversion. 

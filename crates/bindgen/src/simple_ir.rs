@@ -16,50 +16,6 @@
 
 use anyhow::bail;
 use cbindgen::bindgen::ir::{self, Item};
-use regex::Regex;
-use std::sync::LazyLock;
-
-/// Public re-definition of `cbindgen`'s `ReprType`, which (as of `cbindgen 0.29.2`) doesn't make
-/// its members public.
-///
-/// Can be removed once https://github.com/mozilla/cbindgen/pull/1161 is in a release.
-#[derive(Clone, Copy, Debug)]
-pub struct ReprType {
-    pub kind: ir::IntKind,
-    pub signed: bool,
-}
-
-impl ReprType {
-    pub fn try_from_cbindgen(ty: &ir::ReprType) -> anyhow::Result<Self> {
-        // Ok, just bear with me here: `cbindgen` doesn't make these fields `pub`, but it _does_
-        // make the struct impl `Debug`...
-        static REPR_KIND_DEBUG: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"ReprType \{ kind: ([^,]+), signed: (\w+) \}"#).unwrap());
-        let repr = format!("{ty:?}");
-        let Some(captures) = REPR_KIND_DEBUG.captures(&repr) else {
-            bail!("failed to parse `ReprKind` debug format: did the `cbindgen` version change?");
-        };
-        let kind = match captures.get(1).unwrap().as_str() {
-            "Short" => ir::IntKind::Short,
-            "Int" => ir::IntKind::Int,
-            "Long" => ir::IntKind::Long,
-            "LongLong" => ir::IntKind::LongLong,
-            "SizeT" => ir::IntKind::SizeT,
-            "Size" => ir::IntKind::Size,
-            "B8" => ir::IntKind::B8,
-            "B16" => ir::IntKind::B16,
-            "B32" => ir::IntKind::B32,
-            "B64" => ir::IntKind::B64,
-            bad => bail!("unhandled `IntKind`: {bad}"),
-        };
-        let signed = match captures.get(2).unwrap().as_str() {
-            "false" => false,
-            "true" => true,
-            bad => bail!("unhandled `bool`: {bad}"),
-        };
-        Ok(Self { kind, signed })
-    }
-}
 
 #[derive(Clone, Copy, Debug)]
 pub enum PtrKind {
@@ -97,22 +53,21 @@ pub struct Enum {
     /// The export name of the enum.
     pub name: String,
     /// The primitive-integer representaiton of the enum.
-    pub repr: ReprType,
+    pub repr: ir::ReprType,
     /// Tuples of `(name, literal)` for each of the variants.
     pub variants: Vec<EnumVariant>,
 }
 impl Enum {
     pub fn try_from_cbindgen(val: &ir::Enum) -> anyhow::Result<Self> {
-        let Some(reprtype) = val.repr.ty.as_ref() else {
+        let Some(repr) = val.repr.ty else {
             bail!("repr type of {} must be a fixed integer-like", val.name())
         };
-        let repr = ReprType::try_from_cbindgen(reprtype)?;
         let variants = val
             .variants
             .iter()
             .map(|variant| -> anyhow::Result<_> {
                 let Some(ir::Literal::Expr(discriminant)) = &variant.discriminant else {
-                    bail!("unhandled discriminant: {:?}", &variant.discriminant);
+                    bail!("unhandled discriminant: {:?}", variant.discriminant);
                 };
                 Ok(EnumVariant {
                     name: variant.name.clone(),
@@ -165,11 +120,21 @@ pub struct Function<T> {
     pub ret: Option<Type<T>>,
 }
 
+/// A union to declare. Unions cannot be opaque.
+#[derive(Clone, Debug)]
+pub struct Union<T> {
+    /// The export name of the union.
+    pub name: String,
+    /// The fields.
+    pub fields: Vec<StructField<T>>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Items<T> {
     pub enums: Vec<Enum>,
     pub structs: Vec<Struct<T>>,
     pub functions: Vec<Function<T>>,
+    pub unions: Vec<Union<T>>,
 }
 impl<T> Default for Items<T> {
     fn default() -> Self {
@@ -177,6 +142,7 @@ impl<T> Default for Items<T> {
             enums: Default::default(),
             structs: Default::default(),
             functions: Default::default(),
+            unions: Default::default(),
         }
     }
 }

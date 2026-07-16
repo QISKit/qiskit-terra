@@ -619,3 +619,19 @@ class TestParameterExpression(QiskitTestCase):
         sympy_sub = res_sub.sympify()
         expected_sub = 2 - sympy.Symbol("a")
         self.assertEqual(sympy_sub, expected_sub)
+
+    def test_simplify_multi_parameter_cancellation(self):
+        """Test that simplify() handles cancellation across multiple parameters."""
+        a = Parameter("a")
+        b = Parameter("b")
+        expr = a + b - a - b
+        simplified = expr.simplify()
+        self.assertEqual(simplified.parameters, set())
+        self.assertEqual(simplified.numeric(), 0)
+
+    def test_simplify_no_cancellation(self):
+        """Test that simplify() leaves non-cancelling expressions intact."""
+        a = Parameter("a")
+        b = Parameter("b")
+        expr = a + b
+        self.assertEqual(expr, expr.simplify())

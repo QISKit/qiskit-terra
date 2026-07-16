@@ -1,6 +1,10 @@
+# SPEC 0: you're free to up the lower bound if you need it, provided it's at
+# least two years old.
+numpy>=2.0,<3
+scipy>=1.14
+
+# Unrestricted, but don't bump unless you have to.
 rustworkx>=0.15.0
-numpy>=1.21,<3
-scipy>=1.5
 dill>=0.3
 stevedore>=3.0.0
 typing-extensions

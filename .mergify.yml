@@ -6,4 +6,9 @@ pull_request_rules:
     actions:
       backport:
         branches:
-          - stable/2.4
+          - stable/2.5
+
+merge_queue:
+  # Disallow Mergify from posting an "add this to the queue?" comment.
+  # We don't use the Mergify queue at all, only the GitHub-native one.
+  queue_controls_comment: false

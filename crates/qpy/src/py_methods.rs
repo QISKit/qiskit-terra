@@ -14,6 +14,7 @@
 use binrw::Endian;
 use numpy::Complex64;
 use pyo3::IntoPyObjectExt;
+use pyo3::exceptions::PyTypeError;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyComplex, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
@@ -24,11 +25,9 @@ use std::sync::Arc;
 use qiskit_circuit::bit::{ClassicalRegister, ShareableClbit};
 use qiskit_circuit::classical;
 use qiskit_circuit::imports;
-use qiskit_circuit::operations::{Operation, OperationRef, PyRange};
+use qiskit_circuit::operations::{Operation, OperationRef, PyInstruction, PyOpKind, PyRange};
 use qiskit_circuit::packed_instruction::PackedOperation;
-use qiskit_circuit::parameter::parameter_expression::{
-    PyParameter, PyParameterExpression, PyParameterVectorElement,
-};
+use qiskit_circuit::parameter::parameter_expression::{PyParameter, PyParameterExpression};
 use qiskit_quantum_info::sparse_observable::PySparseObservable;
 use uuid::Uuid;
 
@@ -51,13 +50,11 @@ fn is_python_gate(
     python_gate: &Bound<PyAny>,
 ) -> Result<bool, QpyError> {
     match op.view() {
-        OperationRef::Gate(pygate) => {
-            if pygate.instruction.bind(py).is_instance(python_gate)? {
-                Ok(true)
-            } else {
-                Ok(false)
-            }
-        }
+        OperationRef::PyCustom(PyInstruction {
+            kind: PyOpKind::Gate,
+            ob,
+            ..
+        }) => ob.bind(py).is_instance(python_gate).map_err(QpyError::from),
         _ => Ok(false),
     }
 }
@@ -84,14 +81,14 @@ pub(crate) fn recognize_custom_operation(
         {
             // Assign a uuid to each instance of a custom operation
             let new_name = if !["ucrx_dg", "ucry_dg", "ucrz_dg"].contains(&op.name()) {
-                format!("{}_{}", &op.name(), Uuid::new_v4().as_simple())
+                format!("{}_{}", op.name(), Uuid::new_v4().as_simple())
             } else {
                 // ucr*_dg gates can have different numbers of parameters,
                 // the uuid is appended to avoid storing a single definition
                 // in circuits with multiple ucr*_dg gates. For legacy reasons
                 // the uuid is stored in a different format as this was done
                 // prior to QPY 11.
-                format!("{}_{}", &op.name(), Uuid::new_v4())
+                format!("{}_{}", op.name(), Uuid::new_v4())
             };
             return Ok(Some(new_name));
         }
@@ -162,24 +159,7 @@ pub(crate) fn serialize_metadata(
     }
 }
 
-// helper method to extract attribute from a py_object
-pub(crate) fn getattr_or_none<'py>(
-    py_object: &'py Bound<'py, PyAny>,
-    name: &str,
-) -> Option<Bound<'py, PyAny>> {
-    match py_object.getattr(name) {
-        Ok(val) => {
-            if val.is_none() {
-                None
-            } else {
-                Some(val)
-            }
-        }
-        Err(_) => None,
-    }
-}
-
-pub(crate) fn py_serialize_numpy_object(py_object: &Py<PyAny>) -> Result<Bytes, QpyError> {
+pub(crate) fn py_serialize_numpy_object(py_object: &Bound<PyAny>) -> Result<Bytes, QpyError> {
     Python::attach(|py| -> Result<Bytes, QpyError> {
         let np = py.import("numpy")?;
         let io = py.import("io")?;
@@ -298,43 +278,28 @@ pub(crate) fn py_pack_pauli_evolution_gate(
 }
 
 pub(crate) fn gate_class_name(op: &PackedOperation) -> Result<String, QpyError> {
-    Python::attach(|py| {
-        let name = match op.view() {
-            // getting __name__ for standard gates and instructions should
-            // eventually be replaced with a Rust-side mapping
-            OperationRef::StandardGate(gate) => Ok(imports::get_std_gate_class_name(&gate)),
-            OperationRef::StandardInstruction(inst) => {
-                Ok(standard_instruction_class_name(&inst).to_string())
-            }
-            OperationRef::Gate(pygate) => pygate
-                .instruction
-                .bind(py)
-                .getattr(intern!(py, "__class__"))?
-                .getattr(intern!(py, "__name__"))?
-                .extract::<String>(),
-            OperationRef::Instruction(pyinst) => pyinst
-                .instruction
-                .bind(py)
-                .getattr(intern!(py, "__class__"))?
-                .getattr(intern!(py, "__name__"))?
-                .extract::<String>(),
-            OperationRef::Unitary(_) => Ok(UNITARY_GATE_CLASS_NAME.to_string()),
-            OperationRef::Operation(py_op) => py_op
-                .instruction
-                .bind(py)
-                .getattr(intern!(py, "__class__"))?
-                .getattr(intern!(py, "__name__"))?
-                .extract::<String>(),
-            OperationRef::PauliProductMeasurement(_) => {
-                Ok(String::from(PAULI_PRODUCT_MEASUREMENT_GATE_CLASS_NAME))
-            }
-            OperationRef::PauliProductRotation(_) => {
-                Ok(String::from(PAULI_PRODUCT_ROTATION_GATE_CLASS_NAME))
-            }
-            OperationRef::ControlFlow(inst) => Ok(inst.name().to_string()),
-        }?;
-        Ok(name)
-    })
+    match op.view() {
+        // getting __name__ for standard gates and instructions should
+        // eventually be replaced with a Rust-side mapping
+        OperationRef::StandardGate(gate) => Ok(imports::get_std_gate_class_name(&gate)),
+        OperationRef::StandardInstruction(inst) => {
+            Ok(standard_instruction_class_name(&inst).to_string())
+        }
+        OperationRef::PyCustom(inst) => {
+            Python::attach(|py| inst.class_name(py).map_err(QpyError::from))
+        }
+        OperationRef::Unitary(_) => Ok(UNITARY_GATE_CLASS_NAME.to_string()),
+        OperationRef::PauliProductMeasurement(_) => {
+            Ok(String::from(PAULI_PRODUCT_MEASUREMENT_GATE_CLASS_NAME))
+        }
+        OperationRef::PauliProductRotation(_) => {
+            Ok(String::from(PAULI_PRODUCT_ROTATION_GATE_CLASS_NAME))
+        }
+        OperationRef::ControlFlow(inst) => Ok(inst.name().to_string()),
+        OperationRef::CustomOperation(_) => {
+            Err(PyTypeError::new_err("Custom gates from rust are not classes.").into())
+        }
+    }
 }
 
 pub(crate) fn py_get_type_key(py_object: &Bound<PyAny>) -> Result<ValueType, QpyError> {
@@ -396,16 +361,18 @@ pub(crate) fn py_convert_to_generic_value(
         ValueType::Null => Ok(GenericValue::Null),
         ValueType::Parameter => Ok(GenericValue::ParameterExpressionSymbol(
             py_object
-                .extract::<PyParameter>()
-                .map_err(|e| QpyError::from(PyErr::from(e)))?
-                .symbol()
+                .cast::<PyParameter>()
+                .map_err(PyErr::from)?
+                .borrow()
+                .0
                 .clone(),
         )),
         ValueType::ParameterVector => Ok(GenericValue::ParameterExpressionVectorSymbol(
             py_object
-                .extract::<PyParameterVectorElement>()
-                .map_err(|e| QpyError::from(PyErr::from(e)))?
-                .symbol()
+                .cast::<PyParameter>()
+                .map_err(PyErr::from)?
+                .borrow()
+                .0
                 .clone(),
         )),
         ValueType::ParameterExpression => Ok(GenericValue::ParameterExpression(Arc::new(
@@ -436,7 +403,9 @@ pub(crate) fn py_convert_to_generic_value(
             Ok(GenericValue::Range(range))
         }
         // the python-managed data types
-        ValueType::NumpyObject => Ok(GenericValue::NumpyObject(py_object.clone().unbind())),
+        ValueType::NumpyObject => Ok(GenericValue::NumpyObject(py_serialize_numpy_object(
+            py_object,
+        )?)),
         ValueType::Modifier => Ok(GenericValue::Modifier(py_object.clone().unbind())),
         ValueType::Register => {
             if let Ok(clbit) = py_object.extract::<ShareableClbit>() {
@@ -465,11 +434,9 @@ pub(crate) fn py_convert_from_generic_value(value: &GenericValue) -> Result<Py<P
             GenericValue::Expression(exp) => Ok(exp.clone().into_py_any(py)?),
             GenericValue::CaseDefault => Ok(imports::CASE_DEFAULT.get(py).clone()),
             GenericValue::Null => Ok(py.None()),
-            GenericValue::ParameterExpressionSymbol(symbol) => {
-                Ok(symbol.clone().into_py_any(py)?)
-            }
-            GenericValue::ParameterExpressionVectorSymbol(symbol) => {
-                Ok(symbol.clone().into_py_any(py)?)
+            GenericValue::ParameterExpressionSymbol(symbol)
+            | GenericValue::ParameterExpressionVectorSymbol(symbol) => {
+                Ok(PyParameter(symbol.clone()).into_py_any(py)?)
             }
             GenericValue::ParameterExpression(exp) => Ok(exp.as_ref().clone().into_py_any(py)?),
             GenericValue::Circuit(py_object) => Ok(py_object.clone()),
@@ -478,7 +445,7 @@ pub(crate) fn py_convert_from_generic_value(value: &GenericValue) -> Result<Py<P
             }
             GenericValue::Modifier(py_object) => Ok(py_object.clone()),
             GenericValue::Range(py_range) => Ok(py_range.into_py_any(py)?),
-            GenericValue::NumpyObject(py_object) => Ok(py_object.clone()),
+            GenericValue::NumpyObject(bytes) => py_deserialize_numpy_object(bytes),
             GenericValue::Tuple(values) => {
                 let elements: Vec<Py<PyAny>> = values
                     .iter()

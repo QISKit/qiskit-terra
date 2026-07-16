@@ -45,7 +45,7 @@ Native bindings to the C API
 ============================
 
 Additionally, this module contains :mod:`ctypes` bindings to all Qiskit C API types and functions.
-These are avaialble as module attributes on :mod:`qiskit.capi` with the same name as they have in
+These are available as module attributes on :mod:`qiskit.capi` with the same name as they have in
 the C API.  For example, ``qiskit.capi.qk_circuit_new`` corresponds to :c:func:`qk_circuit_new`.
 
 .. py:attribute:: LIB
@@ -91,7 +91,7 @@ part of the C API library object.
 from pathlib import Path
 
 from . import _ctypes
-from ._ctypes import *  # noqa: F403 (the names are auto-generated and in `__all__`).
+from ._ctypes import *
 import qiskit._accelerate
 
 __all__ = ["get_include", "get_lib"]

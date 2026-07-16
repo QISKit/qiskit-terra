@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed an issue where running the :class:`.SynthesizeRZRotations` transpiler pass multiple times
+    with different error budgets could produce incorrect results or trigger internal panics.
+
+    See `#16385 <https://github.com/Qiskit/qiskit/issues/16385>`__.

@@ -1,0 +1,7 @@
+---
+features_transpiler:
+  - The :class:`.CommutativeCancellation` transpiler pass will now emit an
+    :class:`.XGate` or :class:`.SXGate` if the tracked X rotation is an angle
+    of $\pi$ or a multiple of $\frac{\pi}{2}$ respectively and either the
+    :class:`.Target` supports class:`.XGate` or :class:`.SXGate`, or the
+    circuit contains the gates.

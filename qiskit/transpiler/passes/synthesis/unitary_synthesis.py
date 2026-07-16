@@ -75,6 +75,12 @@ class UnitarySynthesis(TransformationPass):
         More approximation can be forced by setting a heuristic dial
         ``approximation_degree``.
 
+        This pass is multithreaded when the default synthesis plugin is used
+        and will potentially launch a thread pool with threads equal to the
+        number of CPUs by default. You can tune the number of threads with
+        the ``RAYON_NUM_THREADS`` environment variable. For example, setting
+        ``RAYON_NUM_THREADS=4`` would limit the thread pool to 4 threads.
+
         Args:
             basis_gates: List of gate names to target. If this is
                 not specified the ``target`` argument must be used. If both this

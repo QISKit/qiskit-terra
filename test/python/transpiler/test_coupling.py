@@ -519,6 +519,15 @@ class CouplingTest(QiskitTestCase):
         # additional test for comparison to a non-CouplingMap object
         self.assertNotEqual(coupling0, 1)
 
+    def test_ignores_self_coupling(self):
+        edges = [(0, 1), (1, 1), (1, 2), (2, 3)]
+        with self.assertWarnsRegex(Warning, "qubits cannot be coupled to themselves"):
+            coupling = CouplingMap(edges)
+        self.assertEqual(set(coupling.get_edges()), {(a, b) for (a, b) in edges if a != b})
+        with self.assertWarnsRegex(Warning, "qubits cannot be coupled to themselves"):
+            coupling.add_edge(2, 2)
+        self.assertEqual(set(coupling.get_edges()), {(a, b) for (a, b) in edges if a != b})
+
 
 class CouplingVisualizationTest(QiskitVisualizationTestCase):
     @unittest.skipUnless(optionals.HAS_GRAPHVIZ, "Graphviz not installed")

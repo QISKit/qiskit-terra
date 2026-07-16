@@ -18,7 +18,6 @@ import math
 import typing
 import numpy
 
-from qiskit import _numpy_compat
 from qiskit.circuit.gate import Gate
 from qiskit.circuit.controlledgate import ControlledGate
 from qiskit.circuit.annotated_operation import AnnotatedOperation, ControlModifier
@@ -115,7 +114,7 @@ class UnitaryGate(Gate):
             return False
         return matrix_equal(self.params[0], other.params[0])
 
-    def __array__(self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+    def __array__(self, dtype=None, copy=None):
         """Return matrix for the unitary."""
         dtype = self.params[0].dtype if dtype is None else dtype
         return numpy.array(self.params[0], dtype=dtype, copy=copy)
@@ -212,7 +211,7 @@ class UnitaryGate(Gate):
             try:
                 # The Rust code for Quantum Shannon Decomposition may return QiskitError
                 # when linear algebra methods (e.g. Schur decomposition) fail.
-                cmat_def = qs_decomposition(cmat, opt_a1=True, opt_a2=False)
+                cmat_def = qs_decomposition(cmat)
             except QiskitError:
                 cmat_def = None
 

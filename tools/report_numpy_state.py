@@ -17,8 +17,4 @@
 import numpy as np
 
 np.show_config()
-
-try:  # only available starting numpy 1.24.0
-    np.show_runtime()
-except AttributeError:
-    pass
+np.show_runtime()

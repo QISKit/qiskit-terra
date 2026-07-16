@@ -1,0 +1,12 @@
+---
+features_circuits:
+  - |
+    Added a new :meth:`.ParameterExpression.simplify` method that returns an
+    algebraically simplified copy of the expression using the native symbolic
+    engine. It collapses cancelling terms such as ``a + b - a - b`` to zero.
+build:
+  - |
+    :meth:`.SparsePauliOp.simplify` no longer requires the optional ``sympy``
+    dependency when simplifying operators with :class:`.ParameterExpression`
+    coefficients. It instead relies on Qiskit's internal symbolic engine.
+

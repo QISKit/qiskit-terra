@@ -11,9 +11,9 @@
 // that they have been altered from the originals.
 
 use hashbrown::HashSet;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use qiskit_quantum_info::sparse_observable::SparseTermView;
+use qiskit_util::IndexMap;
 use rustworkx_core::coloring::{ColoringStrategy, greedy_node_color_with_coloring_strategy};
 use rustworkx_core::petgraph::graph::NodeIndex;
 use rustworkx_core::petgraph::{Graph, Undirected};
@@ -82,7 +82,7 @@ pub fn reorder_terms<'a>(
     let callback = |_: NodeIndex| -> Result<Option<usize>, Infallible> { Ok(None) };
     match greedy_node_color_with_coloring_strategy(&graph, callback, ColoringStrategy::Saturation) {
         Ok(colors) => {
-            let mut colors_map: IndexMap<usize, Vec<&NodeIndex>> = IndexMap::new();
+            let mut colors_map: IndexMap<usize, Vec<&NodeIndex>> = IndexMap::default();
 
             for (node_index, color) in colors.iter().sorted() {
                 if !colors_map.contains_key(color) {

@@ -31,9 +31,6 @@ from qiskit.result import Counts, sampled_expectation_value
 from .observables_array import ObservablesArray, ObservablesArrayLike
 from .shape import ShapedMixin, ShapeInput, shape_tuple
 
-# this lookup table tells you how many bits are 1 in each uint8 value
-_WEIGHT_LOOKUP = np.unpackbits(np.arange(256, dtype=np.uint8).reshape(-1, 1), axis=1).sum(axis=1)
-
 
 def _min_num_bytes(num_bits: int) -> int:
     """Return the minimum number of bytes needed to store ``num_bits``."""
@@ -207,7 +204,11 @@ class BitArray(ShapedMixin):
         Returns:
             A ``numpy.uint64``-array with shape ``(*shape, num_shots)``.
         """
-        return _WEIGHT_LOOKUP[self._array].sum(axis=-1)
+        result = np.bitwise_count(self._array).sum(axis=-1)
+        excess = self.num_bits % 8
+        if excess > 0:
+            result -= np.bitwise_count(self._array[..., 0] >> np.uint8(excess))
+        return result
 
     @staticmethod
     def from_bool_array(

@@ -27,9 +27,7 @@ use rustworkx_core::petgraph::visit::NodeIndexable;
 
 use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
 use qiskit_circuit::instruction::Parameters;
-use qiskit_circuit::operations::{
-    Operation, OperationRef, Param, PyOperationTypes, PythonOperation,
-};
+use qiskit_circuit::operations::{Operation, OperationRef, Param, PythonOperation};
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
 use qiskit_circuit::{BlocksMode, Qubit, VarsMode};
 
@@ -286,7 +284,7 @@ fn two_qubit_unitary_peephole_optimize_apply(
 ) -> PyResult<Option<DAGCircuit>> {
     // After we've computed all the sequences to execute now serially build up a new dag.
     let mut processed_runs: Vec<bool> = vec![false; result.run_mapping.len()];
-    let out_dag = dag.copy_empty_like_with_same_capacity(VarsMode::Alike, BlocksMode::Keep)?;
+    let out_dag = dag.copy_empty_like_with_same_capacity(VarsMode::Alike, BlocksMode::Keep);
     let mut out_dag_builder = out_dag.into_builder();
     for node in toposort(dag.dag(), None).expect("DAG has no cycles") {
         if !matches!(dag.dag()[node], NodeType::Operation(_)) {
@@ -334,13 +332,10 @@ fn two_qubit_unitary_peephole_optimize_apply(
                 };
                 let op = match gate.view() {
                     OperationRef::StandardGate(gate) => PackedOperation::from(gate),
-                    OperationRef::Gate(py_gate) => Python::attach(|py| -> PyResult<_> {
+                    OperationRef::PyCustom(py_gate) => Python::attach(|py| -> PyResult<_> {
                         let gate = py_gate.py_copy(py)?;
-                        gate.instruction
-                            .setattr(py, intern!(py, "params"), params)?;
-                        Ok(PackedOperation::from(Box::new(PyOperationTypes::Gate(
-                            gate,
-                        ))))
+                        gate.ob.setattr(py, intern!(py, "params"), params)?;
+                        Ok(PackedOperation::from(gate))
                     })?,
                     _ => {
                         panic!("internal logic error: decomposed sequence contains a non-gate")

@@ -41,7 +41,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_litinski_transformation(
     let dag = DAGCircuit::from_circuit_data(circuit, false, None, None, None, None)
         .expect("Internal Circuit -> DAG conversion failed");
 
-    let maybe_out = run_litinski_transformation(&dag, fix_clifford, false, true)
+    // For now, run Litinski transformation with no approximation (to avoid C API change).
+    let maybe_out = run_litinski_transformation(&dag, fix_clifford, false, true, 1.0)
         .expect("Failed running Litinski transformation");
     // If a DAG is returned, the circuit has been modified. Else just leave it as is.
     if let Some(out) = maybe_out {

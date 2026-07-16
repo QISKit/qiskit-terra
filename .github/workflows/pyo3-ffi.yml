@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Prepare package
         run: make qiskit-pyo3-ffi
       - name: Package

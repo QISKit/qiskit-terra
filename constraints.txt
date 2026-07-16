@@ -1,21 +1,5 @@
-# Scipy 1.11 seems to have caused an instability in the Weyl coordinates
-# eigensystem code for one of the test cases.  See
-# https://github.com/Qiskit/qiskit-terra/issues/10345 for current details.
-scipy<1.11; python_version<'3.12'
-
-# z3-solver from 4.12.3 onwards upped the minimum macOS API version for its
-# wheels to 11.7. The Azure VM images contain pre-built CPythons, of which at
-# least CPython 3.8 was compiled for an older macOS, so does not match a
-# `macos_11_7` platform tag.  This should be purely a CI artefact, and not
-# affect local usage.
-z3-solver==4.12.2.0; platform_system=="Darwin"
-
 # There are minor differences in output between pydot 2, 3 and 4 for
 # things like the pass-manager drawer.  This is totally fine for general
 # usage, but our test suite uses an exact reference file that uses the
 # pydot 4 output, so we need to enforce that during tests.
 pydot>=4.0.0
-
-# Our Sphinx version is not compatible with snowballstemmer>=3.0.0 (and
-# neither is latest Sphinx at this time). See https://github.com/sphinx-doc/sphinx/issues/13533.
-snowballstemmer<3.0.0

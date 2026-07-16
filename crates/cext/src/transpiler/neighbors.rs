@@ -203,10 +203,10 @@ pub unsafe extern "C" fn qk_neighbors_clear(neighbors: *mut CNeighbors) {
 mod test {
     use super::*;
 
-    use indexmap::IndexMap;
     use qiskit_circuit::PhysicalQubit;
     use qiskit_circuit::operations::StandardGate;
     use qiskit_transpiler::target::{Qargs, Target};
+    use qiskit_util::IndexMap;
 
     // This is mostly for Miri.
     #[test]
@@ -224,7 +224,7 @@ mod test {
             None,
         )
         .unwrap();
-        let mut line: IndexMap<_, _, _> = Default::default();
+        let mut line: IndexMap<_, _> = Default::default();
         for qubit in 0..num_qubits - 1 {
             line.insert(Qargs::from([qubit, qubit + 1].map(PhysicalQubit)), None);
         }
@@ -268,7 +268,7 @@ mod test {
             None,
         )
         .unwrap();
-        let mut line: IndexMap<_, _, _> = Default::default();
+        let mut line: IndexMap<_, _> = Default::default();
         line.insert(Qargs::Global, None);
         target
             .add_instruction(StandardGate::CZ.into(), None, None, Some(line))

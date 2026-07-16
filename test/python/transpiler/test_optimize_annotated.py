@@ -14,7 +14,7 @@
 
 from qiskit.circuit import QuantumCircuit, Gate
 from qiskit.circuit.classical import expr, types
-from qiskit.circuit.library import SwapGate, CXGate, HGate
+from qiskit.circuit.library import SwapGate, XGate, CXGate, HGate
 from qiskit.circuit.annotated_operation import (
     AnnotatedOperation,
     ControlModifier,
@@ -76,6 +76,82 @@ class TestOptimizeSwapBeforeMeasure(QiskitTestCase):
         qc_expected.append(gate5_expected, [4, 2])
 
         self.assertEqual(qc_optimized, qc_expected)
+
+    def test_combine_open_control_modifiers(self):
+        """Test recursively combining open-controlled modifiers.
+        Regression test of https://github.com/Qiskit/qiskit/issues/16410.
+        """
+        with self.subTest("control0-control1"):
+            gate = AnnotatedOperation(
+                AnnotatedOperation(XGate(), ControlModifier(1, ctrl_state=0)),
+                ControlModifier(1, ctrl_state=1),
+            )
+
+            qc = QuantumCircuit(3)
+            qc.append(gate, [0, 1, 2])
+
+            qct = OptimizeAnnotated()(qc)
+            self.assertEqual(Operator(qc), Operator(qct))
+
+            expected = QuantumCircuit(3)
+            expected.append(
+                AnnotatedOperation(XGate(), ControlModifier(2, ctrl_state=1)), [0, 1, 2]
+            )
+            self.assertEqual(qct, expected)
+
+        with self.subTest("control0-control11"):
+            gate = AnnotatedOperation(
+                AnnotatedOperation(XGate(), ControlModifier(1, ctrl_state=0)),
+                ControlModifier(2, ctrl_state=3),
+            )
+
+            qc = QuantumCircuit(4)
+            qc.append(gate, [0, 1, 2, 3])
+
+            qct = OptimizeAnnotated()(qc)
+            self.assertEqual(Operator(qc), Operator(qct))
+
+            expected = QuantumCircuit(4)
+            expected.append(
+                AnnotatedOperation(XGate(), ControlModifier(3, ctrl_state=3)), [0, 1, 2, 3]
+            )
+            self.assertEqual(qct, expected)
+
+        with self.subTest("control1-control0"):
+            gate = AnnotatedOperation(
+                AnnotatedOperation(XGate(), ControlModifier(1, ctrl_state=1)),
+                ControlModifier(1, ctrl_state=0),
+            )
+
+            qc = QuantumCircuit(3)
+            qc.append(gate, [0, 1, 2])
+
+            qct = OptimizeAnnotated()(qc)
+            self.assertEqual(Operator(qc), Operator(qct))
+
+            expected = QuantumCircuit(3)
+            expected.append(
+                AnnotatedOperation(XGate(), ControlModifier(2, ctrl_state=2)), [0, 1, 2]
+            )
+            self.assertEqual(qct, expected)
+
+        with self.subTest("control11-control0"):
+            gate = AnnotatedOperation(
+                AnnotatedOperation(XGate(), ControlModifier(2, ctrl_state=3)),
+                ControlModifier(1, ctrl_state=0),
+            )
+
+            qc = QuantumCircuit(4)
+            qc.append(gate, [0, 1, 2, 3])
+
+            qct = OptimizeAnnotated()(qc)
+            self.assertEqual(Operator(qc), Operator(qct))
+
+            expected = QuantumCircuit(4)
+            expected.append(
+                AnnotatedOperation(XGate(), ControlModifier(3, ctrl_state=6)), [0, 1, 2, 3]
+            )
+            self.assertEqual(qct, expected)
 
     def test_optimize_definitions(self):
         """Test that the pass descends into gate definitions when basis_gates are defined."""

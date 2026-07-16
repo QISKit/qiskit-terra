@@ -27,10 +27,13 @@ from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from test import QiskitTestCase, combine
 
 
-BACKENDS = []
-for n in [5, 7, 16, 20, 27, 65, 127]:
-    cmap = CouplingMap.from_ring(n)
-    BACKENDS.append(GenericBackendV2(num_qubits=n, coupling_map=cmap, seed=42))
+BACKEND_NUM_QUBITS = (5, 7, 16, 20, 27, 65, 127)
+
+
+def _generic_backend(num_qubits):
+    return GenericBackendV2(
+        num_qubits=num_qubits, coupling_map=CouplingMap.from_ring(num_qubits), seed=42
+    )
 
 
 @ddt
@@ -231,12 +234,13 @@ class TestGenericBackendV2(QiskitTestCase):
         self.assertEqual(ref_backend.dt * 2, double_dt_backend.dt)
 
     @combine(
-        backend=BACKENDS,
+        num_qubits=BACKEND_NUM_QUBITS,
         optimization_level=[0, 1, 2, 3],
     )
-    def test_circuit_on_generic_backend_v2(self, backend, optimization_level):
+    def test_circuit_on_generic_backend_v2(self, num_qubits, optimization_level):
         """Test run method."""
 
+        backend = _generic_backend(num_qubits)
         if not optionals.HAS_AER and backend.num_qubits > 20:
             self.skipTest(f"Unable to run generic backend {backend.name} without qiskit-aer")
         job = backend.run(
@@ -250,18 +254,20 @@ class TestGenericBackendV2(QiskitTestCase):
         max_count = max(counts.items(), key=operator.itemgetter(1))[0]
         self.assertEqual(max_count, "11")
 
-    @data(*BACKENDS)
-    def test_backend_v2_dt(self, backend):
+    @data(*BACKEND_NUM_QUBITS)
+    def test_backend_v2_dt(self, num_qubits):
         """Test default dt value is consistent with legacy fake backends."""
 
+        backend = _generic_backend(num_qubits)
         target = backend.target
         if target.dt is not None:
             self.assertLess(target.dt, 1e-6)
 
-    @data(*BACKENDS)
-    def test_backend_v2_dtm(self, backend):
+    @data(*BACKEND_NUM_QUBITS)
+    def test_backend_v2_dtm(self, num_qubits):
         """Test default dtm value is consistent with legacy fake backends."""
 
+        backend = _generic_backend(num_qubits)
         if backend.dtm:
             self.assertLess(backend.dtm, 1e-6)
 

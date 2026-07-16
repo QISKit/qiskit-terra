@@ -65,6 +65,50 @@ class TestFixedPointPass(QiskitTestCase):
         self.pass_.run(self.dag)
         self.assertFalse(self.pset["property_fixed_point"])
 
+    def test_fixed_point_tuple_getter(self):
+        """Test correctness of the FixedPoint pass when getter returns a tuple
+        of values from the property set.
+        """
+        pass_ = FixedPoint("xy", lambda pset: (pset["x"], pset["y"]))
+        pset = pass_.property_set
+
+        pset["x"] = 1
+        pset["y"] = 2
+        pass_.run(dag=None)
+        self.assertFalse(pset["xy_fixed_point"])
+
+        pset["x"] = 1
+        pset["y"] = 1
+        pass_.run(dag=None)
+        self.assertFalse(pset["xy_fixed_point"])
+
+        pset["x"] = 1
+        pset["y"] = 1
+        pass_.run(dag=None)
+        self.assertTrue(pset["xy_fixed_point"])
+
+    def test_fixed_point_sum_getter(self):
+        """Test correctness of the FixedPoint pass when getter returns a sum
+        of two values from the property set.
+        """
+        pass_ = FixedPoint("xy", lambda pset: pset["x"] + pset["y"])
+        pset = pass_.property_set
+
+        pset["x"] = 1
+        pset["y"] = 4
+        pass_.run(dag=None)
+        self.assertFalse(pset["xy_fixed_point"])
+
+        pset["x"] = 2
+        pset["y"] = 2
+        pass_.run(dag=None)
+        self.assertFalse(pset["xy_fixed_point"])
+
+        pset["x"] = 1
+        pset["y"] = 3
+        pass_.run(dag=None)
+        self.assertTrue(pset["xy_fixed_point"])
+
 
 if __name__ == "__main__":
     unittest.main()

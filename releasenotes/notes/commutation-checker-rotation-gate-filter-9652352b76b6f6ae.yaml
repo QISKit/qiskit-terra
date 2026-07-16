@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.CommutationChecker` when checking commutativity
+    of parameterized gates, such as :class:`.RXGate`, when the ``gates``
+    argument is specified.
+    Fixed `#16407 <https://github.com/Qiskit/qiskit-terra/pull/16407>`__.
+  - |
+    Fixed a bug in :class:`.CommutationChecker` where passing an empty
+    ``gates`` set now returns ``False`` instead of behaving like no filter
+    was specified.

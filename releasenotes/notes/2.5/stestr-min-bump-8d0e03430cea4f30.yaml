@@ -1,0 +1,7 @@
+---
+build:
+  - The minimum required version of
+    `stestr <https://stestr.readthedocs.io/en/latest/README.html>`__ in the
+    test requirements has been raised from 2.0 to 3.2.0. This was done to
+    leverage new stestr features, mainly the ``stestr history`` command, in
+    continuous integration Python test jobs.

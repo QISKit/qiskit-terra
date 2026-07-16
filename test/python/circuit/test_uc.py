@@ -23,7 +23,7 @@ from scipy.linalg import block_diag
 
 from qiskit.circuit.library.generalized_gates import UCGate
 from qiskit import QuantumCircuit, QuantumRegister
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.compiler import transpile
 from qiskit.quantum_info.operators.predicates import matrix_equal
 from qiskit.quantum_info import Operator

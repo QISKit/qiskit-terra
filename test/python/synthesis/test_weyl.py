@@ -18,7 +18,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 from qiskit._accelerate.two_qubit_decompose import weyl_coordinates
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.synthesis.two_qubit.local_invariance import (
     two_qubit_local_invariants,
     local_equivalence,

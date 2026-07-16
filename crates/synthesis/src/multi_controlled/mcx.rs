@@ -15,7 +15,7 @@ use pyo3::types::PyAnyMethods;
 use pyo3::{PyResult, Python};
 use qiskit_circuit::circuit_data::{CircuitData, CircuitDataError, PyCircuitData};
 use qiskit_circuit::operations::{
-    Operation, OperationRef, Param, PyInstruction, PyOperationTypes, StandardGate, multiply_param,
+    Operation, OperationRef, Param, PyInstruction, PyOpKind, StandardGate, multiply_param,
 };
 use qiskit_circuit::{BlocksMode, imports};
 use qiskit_circuit::{Clbit, Qubit, VarsMode};
@@ -440,16 +440,16 @@ pub fn synth_mcx_noaux_v24(
             .call1((PI, num_controls))
             .map_err(CircuitDataError::ErrorFromPython)?;
 
-        let as_py_gate = PyOperationTypes::Gate(PyInstruction {
+        let inst = PyInstruction {
             qubits: num_qubits,
             clbits: 0,
             params: 1,
             op_name: "mcphase".to_string(),
-            instruction: mcphase_gate.into(),
-        });
-
+            ob: mcphase_gate.into(),
+            kind: PyOpKind::Gate,
+        };
         circuit.push_packed_operation(
-            as_py_gate.into(),
+            inst.into(),
             None,
             &(0..num_qubits).map(Qubit).collect::<Vec<Qubit>>(),
             &[],

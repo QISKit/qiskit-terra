@@ -1,0 +1,10 @@
+---
+features_c:
+  - Added a new function to the C API :c:func:`qk_circuit_estimate_fidelity`
+    that is used to compute the estimated fidelity of running a circuit on a
+    given :c:type:`QkTarget`.
+
+features_circuits:
+  - Added a new method :meth:`.QuantumCircuit.estimate_fidelity` that is used
+    to compute the estimated fidelity of running a circuit on a given
+    :class:`.Target`.

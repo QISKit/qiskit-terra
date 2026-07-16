@@ -198,4 +198,4 @@ class MultiplierGate(Gate):
         # This particular decomposition does not use any ancilla qubits.
         # Note that the transpiler may choose a different decomposition
         # based on the number of ancilla qubits available.
-        self.definition = multiplier_qft_r17(self.num_state_qubits)
+        self.definition = multiplier_qft_r17(self.num_state_qubits, self.num_result_qubits)

@@ -62,6 +62,9 @@ class TestExprConstructors(QiskitTestCase):
         cr = ClassicalRegister(3, "c")
         self.assertEqual(expr.lift(cr), expr.Var(cr, types.Uint(cr.size)))
 
+        big = ClassicalRegister((1 << 32) - 1, "BIG")  # Limit is 32-bit.
+        self.assertEqual(expr.lift(big), expr.Var(big, types.Uint(big.size)))
+
         clbit = Clbit()
         self.assertEqual(expr.lift(clbit), expr.Var(clbit, types.Bool()))
 

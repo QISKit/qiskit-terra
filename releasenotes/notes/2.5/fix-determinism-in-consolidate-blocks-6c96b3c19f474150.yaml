@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a problem in :class:`.ConsolidateBlocks` where basis gate selection was not always
+    deterministic in the case that the basis set contained multiple parametric or multiple
+    non-parametric 2-qubit gates. This could lead to different transpiled circuits across runs.

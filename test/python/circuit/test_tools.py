@@ -41,8 +41,10 @@ class TestPiCheck(QiskitTestCase):
             (-3 * pi, "-3π"),
             (pi / 35, "π/35"),
             (-pi / 35, "-π/35"),
-            (3 * pi / 35, "0.26927937030769655"),
-            (-3 * pi / 35, "-0.26927937030769655"),
+            (3 * pi / 35, "3π/35"),
+            (-3 * pi / 35, "-3π/35"),
+            (17 * pi, "17π"),
+            (-17 * pi, "-17π"),
             (pi**2, "π**2"),
             (-(pi**2), "-π**2"),
             (1e9, "1000000000.0"),
@@ -94,6 +96,15 @@ class TestPiCheck(QiskitTestCase):
         expected_string = "π/2 + x"
         result = pi_check(input_number)
         self.assertEqual(result, expected_string)
+
+    def test_near_pi_over_k_no_redundant_coefficient(self):
+        """Floats near π/k format like π/k, not 1π/k — #16170"""
+        a = 1.5707963276708181
+        self.assertEqual(pi_check(a), "π/2")
+        self.assertEqual(pi_check(a, output="latex"), "\\frac{\\pi}{2}")
+        self.assertEqual(pi_check(a, output="mpl"), "$\\pi$/2")
+        self.assertEqual(pi_check(a, output="qasm"), "pi/2")
+        self.assertEqual(pi_check(-a), "-π/2")
 
 
 if __name__ == "__main__":

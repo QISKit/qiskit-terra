@@ -137,9 +137,9 @@ impl TwoQubitControlledUDecomposer {
                     .unwrap();
                 (res.0.into(), res.1)
             }
-            OperationRef::Gate(gate) => {
+            OperationRef::PyCustom(inst) => {
                 Python::attach(|py: Python| -> PyResult<(PackedOperation, SmallVec<_>)> {
-                    let raw_inverse = gate.instruction.call_method0(py, intern!(py, "inverse"))?;
+                    let raw_inverse = inst.ob.call_method0(py, intern!(py, "inverse"))?;
                     let mut inverse: OperationFromPython<NoBlocks> = raw_inverse.extract(py)?;
                     let params = inverse.take_params().unwrap_or_default();
                     Ok((inverse.operation, params))

@@ -33,7 +33,7 @@ use std::io::{Read, Seek, Write};
 pub(crate) fn pack_expression_type(ty: &Type) -> ExpressionTypePack {
     match ty {
         Type::Bool => ExpressionTypePack::Bool,
-        Type::Uint(width) => ExpressionTypePack::Int(*width as u32),
+        Type::Uint(width) => ExpressionTypePack::Int(*width),
         Type::Duration => ExpressionTypePack::Duration,
         Type::Float => ExpressionTypePack::Float,
     }
@@ -44,7 +44,7 @@ pub(crate) fn unpack_expression_type(type_pack: ExpressionTypePack) -> Type {
         ExpressionTypePack::Bool => Type::Bool,
         ExpressionTypePack::Duration => Type::Duration,
         ExpressionTypePack::Float => Type::Float,
-        ExpressionTypePack::Int(width) => Type::Uint(width as u16),
+        ExpressionTypePack::Int(width) => Type::Uint(width),
     }
 }
 
@@ -132,7 +132,7 @@ pub(crate) fn pack_expression_var(
                 || {
                     QpyError::InvalidParameter(format!(
                         "Could not find standalone variable {:?} in the qpy data",
-                        &name
+                        name
                     ))
                 },
             )?),

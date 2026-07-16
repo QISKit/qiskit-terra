@@ -244,6 +244,23 @@ mod parse {
         })
     }
 
+    pub fn r#union(val: &ir::Union) -> anyhow::Result<simple_ir::Union<Primitive>> {
+        let fields = val
+            .fields
+            .iter()
+            .map(|field| -> anyhow::Result<_> {
+                Ok(simple_ir::StructField {
+                    name: field.name.clone(),
+                    ty: r#type(&field.ty)?,
+                })
+            })
+            .collect::<anyhow::Result<_>>()?;
+        Ok(simple_ir::Union {
+            name: val.export_name.clone(),
+            fields,
+        })
+    }
+
     /// Extract all objects from a set of `cbindgen::Bindings`, adding them to ourselves.
     ///
     /// This fails if the bindings contain any unsupported constructs.
@@ -260,9 +277,9 @@ mod parse {
                     .structs
                     .push(simple_ir::Struct::opaque(item.export_name.clone())),
                 ir::ItemContainer::Struct(item) => items.structs.push(r#struct(item)?),
+                ir::ItemContainer::Union(item) => items.unions.push(r#union(item)?),
                 ir::ItemContainer::Constant(_)
                 | ir::ItemContainer::Static(_)
-                | ir::ItemContainer::Union(_)
                 | ir::ItemContainer::Typedef(_) => {
                     bail!("unhandled item: {item:?}");
                 }
@@ -368,7 +385,6 @@ pub struct {name} {{
         };
         let mut out = format!(
             "
-#[derive(Debug)]
 #[repr(C)]
 pub struct {name} {{"
         );
@@ -380,6 +396,25 @@ pub struct {name} {{"
             out.push(',');
         }
         out.push_str("\n}");
+        out
+    }
+
+    fn r#union(val: &simple_ir::Union<Primitive>) -> String {
+        let name = &val.name;
+        let mut out = format!(
+            "
+#[repr(C)]
+pub union {name} {{"
+        );
+        for field in &val.fields {
+            out.push_str("\n    pub ");
+            out.push_str(&field.name);
+            out.push_str(": ");
+            render_type(&field.ty, &mut out);
+            out.push(',');
+        }
+        out.push_str("\n}");
+
         out
     }
 
@@ -402,6 +437,9 @@ use crate::{FN_MACRO};"
         }
         for item in &items.structs {
             writeln!(out, "{}", r#struct(item))?;
+        }
+        for item in &items.unions {
+            writeln!(out, "{}", r#union(item))?;
         }
         writeln!(out)?;
         let functions = items

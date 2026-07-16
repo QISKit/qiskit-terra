@@ -21,14 +21,25 @@ from functools import lru_cache
 
 import qiskit.circuit.library.standard_gates as stdg
 from qiskit.circuit import CommutationChecker, Gate
-from qiskit.circuit.library import PauliGate
+from qiskit.circuit.library import PauliGate, PauliEvolutionGate
+from qiskit.quantum_info import SparsePauliOp
 from qiskit.dagcircuit import DAGOpNode
 
+# Map a rotation gate to its generator
 SUPPORTED_ROTATIONS = {
-    "rxx": PauliGate("XX"),
-    "ryy": PauliGate("YY"),
-    "rzz": PauliGate("ZZ"),
-    "rzx": PauliGate("XZ"),
+    "rxx": PauliGate("XX"),  # RXX(t) = exp(-i  t/2 XX)
+    "ryy": PauliGate("YY"),  # RYY(t) = exp(-i  t/2 YY)
+    "rzz": PauliGate("ZZ"),  # RZZ(t) = exp(-i  t/2 ZZ)
+    "rzx": PauliGate("XZ"),  # RXX(t) = exp(-i  t/2 ZX)
+    "crx": PauliEvolutionGate(
+        SparsePauliOp(["XZ", "XI"], coeffs=[-1.0, 1.0])
+    ),  # CRX(t) = exp(-i t/4 (-ZX + IX))
+    "cry": PauliEvolutionGate(
+        SparsePauliOp(["YZ", "YI"], coeffs=[-1.0, 1.0])
+    ),  # CRY(t) = exp(-i t/4 (-ZY + IY))
+    "crz": PauliEvolutionGate(
+        SparsePauliOp(["ZZ", "ZI"], coeffs=[-1.0, 1.0])
+    ),  # CRZ(t) = exp(-i t/4 (-ZZ + IZ))
 }
 
 
@@ -184,7 +195,14 @@ def _generate_commutation_dict(considered_gates: list[Gate] | None = None) -> di
                     qargs2 = node1.qargs
                     cargs2 = node1.cargs
                     commutation_relation = cc.commute(
-                        op1, qargs1, cargs1, op2, qargs2, cargs2, max_num_qubits=4
+                        op1,
+                        qargs1,
+                        cargs1,
+                        op2,
+                        qargs2,
+                        cargs2,
+                        max_num_qubits=4,
+                        matrix_max_num_qubits=4,
                     )
 
                     gate_pair_commutation[relative_placement] = commutation_relation

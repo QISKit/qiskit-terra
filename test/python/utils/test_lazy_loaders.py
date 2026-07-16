@@ -400,7 +400,7 @@ class TestLazyDependencyTester(QiskitTestCase):
 
             def exec_module(self, module):
                 del module  # ABC parameter we don't care about.
-                import __qiskit__some_module_that_does_not_exist
+                import __qiskit__some_module_that_does_not_exist  # noqa: F401
 
         dummy = f"{__name__}_{type(self).__name__}_test_warns_on_internal_not_found_error".replace(
             ".", "_"

@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 use num_complex::Complex64;
-use num_complex::ComplexFloat;
 use pyo3::prelude::*;
 use qiskit_circuit::dag_circuit::DAGError;
 use rayon::prelude::*;
@@ -19,6 +18,7 @@ use rustworkx_core::petgraph::visit::NodeIndexable;
 
 use crate::commutation_checker::try_matrix_with_definition;
 use crate::gate_metrics::rotation_trace_and_dim;
+use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
 use crate::target::Target;
 use qiskit_circuit::PhysicalQubit;
 use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
@@ -55,31 +55,6 @@ impl From<RemoveIdentityEquivError> for PyErr {
 // https://github.com/Qiskit/qiskit/pull/14719 it can be tweaked
 // if the performance of this pass changes over time.
 const PARALLEL_THRESHOLD: usize = 50_000;
-
-pub const MINIMUM_TOL: f64 = 1e-12;
-
-/// Fidelity-based computation to check whether an operation `G` is equivalent
-/// to identity up to a global phase.
-///
-/// # Arguments
-///
-/// * `tr_over_dim`: `|Tr(G)| / dim(G)`.
-/// * `dim`: `dim(G)`.
-/// * `tol`: tolerance.
-///
-/// # Returns
-///
-/// * `Some(update to the global phase)` if the operation can be removed.
-/// * `None` if the operation cannot be removed.
-pub fn average_gate_fidelity_below_tol(tr_over_dim: Complex64, dim: f64, tol: f64) -> Option<f64> {
-    let f_pro = tr_over_dim.abs().powi(2);
-    let gate_fidelity = (dim * f_pro + 1.) / (dim + 1.);
-    if (1. - gate_fidelity).abs() < tol {
-        Some(tr_over_dim.arg())
-    } else {
-        None
-    }
-}
 
 /// Fidelity-based computation to check whether an operation `inst` is equivalent
 /// to identity up to a global phase.
@@ -217,11 +192,11 @@ where
 
     // Special handling for pauli evolution gates.
     if view.name() == "PauliEvolution" {
-        if let OperationRef::Gate(py_gate) = view {
+        if let OperationRef::PyCustom(py_gate) = view {
             let result = Python::attach(|py| -> PyResult<Option<(Complex64, usize)>> {
                 let result = imports::PAULI_ROTATION_TRACE_AND_DIM
                     .get_bound(py)
-                    .call1((py_gate.instruction.clone_ref(py),))?
+                    .call1((py_gate.ob.clone_ref(py),))?
                     .extract()?;
                 Ok(result)
             })

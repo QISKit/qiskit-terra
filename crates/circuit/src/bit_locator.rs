@@ -13,15 +13,15 @@
 use std::{fmt::Debug, hash::Hash, sync::OnceLock};
 
 use crate::bit::{BitLocations, Register};
-use indexmap::IndexMap;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict};
+use qiskit_util::IndexMap;
 
 /// Structure that keeps a mapping of bits and their locations within
 /// the circuit.
 #[derive(Debug)]
 pub struct BitLocator<B, R: Register> {
-    bit_locations: IndexMap<B, BitLocations<R>, ::foldhash::fast::RandomState>,
+    bit_locations: IndexMap<B, BitLocations<R>>,
     cached: OnceLock<Py<PyDict>>,
 }
 

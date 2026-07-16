@@ -11,8 +11,8 @@
 // that they have been altered from the originals.
 
 use crate::SlotsLists;
-use indexmap::IndexMap;
-use qiskit_bindgen::fn_attrs;
+use qiskit_bindgen::{EXPORT_PREFIX, EXPORT_RENAME, fn_attrs};
+use qiskit_util::{IndexMap, IndexSet};
 use std::fmt::Write;
 
 /// Tracked failures from the linting of a resolved vtable listing against a set of extracted
@@ -26,12 +26,16 @@ pub struct Failures {
     pub duplicates: IndexMap<String, Vec<(String, usize)>>,
     /// Functions that are marked as "skipped" in the bindings but aren't actually skipped.
     pub skipped_but_exported: IndexMap<String, (String, usize)>,
+    /// Entries in `EXPORT_RENAME` whose source type was never found by cbindgen, meaning the
+    /// rename had no effect and is likely a leftover from a deleted or renamed type.
+    pub dead_renames: Vec<String>,
 }
 impl Failures {
     pub fn is_empty(&self) -> bool {
         self.missing.is_empty()
             && self.duplicates.is_empty()
             && self.skipped_but_exported.is_empty()
+            && self.dead_renames.is_empty()
     }
 
     pub fn explain(&self) -> String {
@@ -57,6 +61,13 @@ impl Failures {
                 write!(explanation, "\n* {fname} at ({api}, {slot})").unwrap();
             }
         }
+        if !self.dead_renames.is_empty() {
+            explanation
+                .push_str("\n\nDead entries in EXPORT_RENAME (source type not found by cbindgen):");
+            for entry in self.dead_renames.iter() {
+                write!(explanation, "\n* {entry}").unwrap();
+            }
+        }
         explanation
     }
 }
@@ -68,8 +79,8 @@ pub fn lint(
     bindings: &cbindgen::Bindings,
     slots: &SlotsLists,
 ) -> anyhow::Result<Result<(), Failures>> {
-    let mut seen = IndexMap::<&str, (&str, usize)>::new();
-    let mut duplicates = IndexMap::<String, Vec<(String, usize)>>::new();
+    let mut seen = IndexMap::<&str, (&str, usize)>::default();
+    let mut duplicates = IndexMap::<String, Vec<(String, usize)>>::default();
     for (api_name, list) in slots.slots.iter() {
         for (slot, export) in list.iter_names() {
             if let Some((prev_api, prev_slot)) = seen.insert(export, (api_name, slot)) {
@@ -82,7 +93,7 @@ pub fn lint(
             }
         }
     }
-    let mut skipped_but_exported = IndexMap::new();
+    let mut skipped_but_exported = IndexMap::default();
     let mut missing = Vec::new();
     for func in bindings.functions.iter() {
         let fname = func.path.name();
@@ -98,10 +109,30 @@ pub fn lint(
             duplicates.swap_remove(fname);
         }
     }
+    // Check for dead entries in EXPORT_RENAME: entries whose source type was never encountered
+    // by cbindgen, meaning the rename silently did nothing.
+    let emitted_names: IndexSet<&str> = bindings
+        .items
+        .iter()
+        .map(|item| item.deref().export_name())
+        .collect();
+    let dead_renames = EXPORT_RENAME
+        .iter()
+        .filter_map(|&(src, dst)| {
+            let expected = format!("{EXPORT_PREFIX}{dst}");
+            if !emitted_names.contains(expected.as_str()) {
+                Some(format!("{src} -> {expected}"))
+            } else {
+                None
+            }
+        })
+        .collect();
+
     let failures = Failures {
         missing,
         duplicates,
         skipped_but_exported,
+        dead_renames,
     };
     if failures.is_empty() {
         Ok(Ok(()))

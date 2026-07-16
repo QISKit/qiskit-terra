@@ -17,7 +17,6 @@
 import argparse
 import itertools
 import random
-import re
 import sys
 
 import numpy as np
@@ -29,7 +28,7 @@ from qiskit.circuit import Clbit
 from qiskit.circuit import Qubit
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.parametervector import ParameterVector
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.quantum_info import Operator
 from qiskit.circuit.library import U1Gate, U2Gate, U3Gate, QFT, DCXGate, PauliGate
 from qiskit.circuit.gate import Gate
@@ -72,7 +71,7 @@ def generate_unitary_gate_circuit():
     return unitary_circuit
 
 
-def generate_random_circuits(version):
+def generate_random_circuits(version, forward_tests):
     """Generate multiple random circuits."""
     random_circuits = []
     for i in range(1, 15):
@@ -84,7 +83,9 @@ def generate_random_circuits(version):
         qc.measure_all()
         for j in range(i):
             qc.reset(j)
-            if version.release >= (2, 0, 0):
+            if (version.release >= (1, 4, 0) and forward_tests) or (
+                version.release >= (2, 0, 0) and not forward_tests
+            ):
                 condition = (qc.cregs[0], i)
                 body = QuantumCircuit([qc.qubits[0]])
                 body.x(0)
@@ -249,14 +250,16 @@ def generate_param_phase():
     return output_circuits
 
 
-def generate_single_clbit_condition_teleportation(version):
+def generate_single_clbit_condition_teleportation(version, forward_tests):
     """Generate single clbit condition teleportation circuit."""
     qr = QuantumRegister(1)
     cr = ClassicalRegister(2, name="name")
     teleport_qc = QuantumCircuit(qr, cr, name="Reset Test")
     teleport_qc.x(0)
     teleport_qc.measure(0, cr[0])
-    if version.release >= (2, 0, 0):
+    if (version.release >= (1, 4, 0) and forward_tests) or (
+        version.release >= (2, 0, 0) and not forward_tests
+    ):
         condition = (cr[0], 1)
         body = QuantumCircuit([teleport_qc.qubits[0]])
         body.x(0)
@@ -366,6 +369,16 @@ def generate_control_flow_circuits():
     qc.append(for_loop_op, [0, 1], [0])
     circuits.append(qc)
     return circuits
+
+
+def generate_for_loop_negative_circuits():
+    """Test qpy serialization with for loop negative list."""
+    # for loop negative list
+    qc = QuantumCircuit(1, name="for_loop_negative_list")
+    body = QuantumCircuit(1)
+    body.x(0)
+    qc.for_loop([-1, 0, 1], None, body, [0], [])
+    return [qc]
 
 
 def generate_control_flow_switch_circuits():
@@ -977,7 +990,31 @@ def generate_delay_stretch():
     return [stretch_expr]
 
 
-def generate_circuits(generating_version, current_version, load_context=False):
+def generate_pauli_product_measurement():
+    """Circuits that contain a Pauli Product Measurement gate"""
+    from qiskit.circuit.library import PauliProductMeasurement
+    from qiskit.quantum_info import Pauli
+
+    ppm = PauliProductMeasurement(Pauli("ZXY"))
+    qc = QuantumCircuit(ppm.num_qubits, ppm.num_clbits)
+    qc.append(ppm, range(ppm.num_qubits), range(ppm.num_clbits))
+    return [qc]
+
+
+def generate_pauli_product_rotation():
+    """Circuits that contain a Pauli Product Rotation gate"""
+    from qiskit.circuit.library import PauliProductRotationGate
+    from qiskit.quantum_info import Pauli
+
+    ppr = PauliProductRotationGate(Pauli("ZXY"), angle=1.2)
+    qc = QuantumCircuit(ppr.num_qubits)
+    qc.append(ppr, range(ppr.num_qubits))
+    return [qc]
+
+
+def generate_circuits(
+    generating_version, current_version, load_context=False, qpy_version=None, forward_tests=False
+):
     """Generate reference circuits.
 
     If load_context is True, avoid generating Pulse-based reference
@@ -987,7 +1024,7 @@ def generate_circuits(generating_version, current_version, load_context=False):
     output_circuits = {
         "full.qpy": [generate_full_circuit()],
         "unitary.qpy": [generate_unitary_gate_circuit()],
-        "multiple.qpy": generate_random_circuits(current_version),
+        "multiple.qpy": generate_random_circuits(current_version, forward_tests),
         "string_parameters.qpy": [generate_string_parameters()],
         "register_edge_cases.qpy": generate_register_edge_cases(),
         "parameterized.qpy": [generate_parameterized_circuit()],
@@ -997,7 +1034,7 @@ def generate_circuits(generating_version, current_version, load_context=False):
     if generating_version.release >= (0, 18, 1):
         output_circuits["qft_circuit.qpy"] = [generate_qft_circuit()]
         output_circuits["teleport.qpy"] = [
-            generate_single_clbit_condition_teleportation(current_version)
+            generate_single_clbit_condition_teleportation(current_version, forward_tests)
         ]
 
     if generating_version.release >= (0, 19, 0):
@@ -1050,10 +1087,42 @@ def generate_circuits(generating_version, current_version, load_context=False):
         if not Version("2.2.0rc1") <= generating_version <= Version("2.4.0rc2"):
             output_circuits["replay_with_cancellations.qpy"] = generate_replay_with_cancellations()
 
-    if generating_version.release >= (2, 0, 0):
+    if (
+        generating_version.release >= (2, 0, 0)
+        and (qpy_version is None or qpy_version > 13)
+        and current_version.release >= (2, 0, 0)
+    ):
         output_circuits["v14_expr.qpy"] = generate_v14_expr()
         output_circuits["box.qpy"] = generate_box()
         output_circuits["delay_stretch.qpy"] = generate_delay_stretch()
+
+    # The Pauli Product Measurement gate was added in 2.3.0, but a bug in 2.4 prevents it from being read correctly
+    if (
+        generating_version.release >= (2, 3, 0)
+        and current_version.release >= (2, 3, 0)
+        and (not forward_tests or current_version.release[1] != 4)
+    ):
+        output_circuits["ppm.qpy"] = generate_pauli_product_measurement()
+
+    # The Pauli Product Rotation gate was added in 2.4.0, but a bug in 2.4 prevents it from being read correctly
+    if (
+        generating_version.release >= (2, 4, 0)
+        and current_version.release >= (2, 4, 0)
+        and (not forward_tests or current_version.release[1] != 4)
+        and (
+            qpy_version is None or qpy_version >= 17
+        )  # PPR gates are not supported in Python QPY, which currently handles qpy versions up to 16
+    ):
+        output_circuits["ppr.qpy"] = generate_pauli_product_rotation()
+
+    # The excluded versions have a bug in the Rust code and couldn't use negative indices.
+    if (
+        Version("0.19.2") < generating_version
+        and (not Version("2.0.0a1") <= generating_version < Version("2.5.0"))
+        and (not Version("2.0.0a1") <= current_version < Version("2.5.0"))
+    ):
+        output_circuits["for_loop_negative.qpy"] = generate_for_loop_negative_circuits()
+
     return output_circuits
 
 
@@ -1076,7 +1145,7 @@ def assert_equal(
     if equivalent:
         if not Operator.from_circuit(reference).equiv(Operator.from_circuit(qpy)):
             msg = (
-                f"For {context}:\n"
+                f"QPY Error: \nFor {context}:\n"
                 f"Reference Circuit {count}:\n{reference}\nis not equivalent to "
                 f"qpy loaded circuit {count}:\n{qpy}\n"
             )
@@ -1084,7 +1153,8 @@ def assert_equal(
             sys.exit(1)
     elif reference != qpy:
         msg = (
-            f"Reference Circuit {count}:\n{reference}\nis not equivalent to "
+            f"QPY Error: \nFor {context}:\n"
+            f"Reference Circuit {count}:\n{reference}\nis not equal to "
             f"qpy loaded circuit {count}:\n{qpy}\n"
         )
         sys.stderr.write(msg)
@@ -1092,8 +1162,9 @@ def assert_equal(
 
     if reference_parameter_names != qpy_parameter_names:
         msg = (
+            f"QPY Error: "
             f"Circuit {count} parameter mismatch:"
-            f" {reference_parameter_names} != {qpy_parameter_names}"
+            f" {reference_parameter_names} != {qpy_parameter_names}\n"
         )
         sys.stderr.write(msg)
         sys.exit(4)
@@ -1106,6 +1177,7 @@ def assert_equal(
         ):
             if ref_bit._register is not None and ref_bit != qpy_bit:
                 msg = (
+                    f"QPY Error: "
                     f"For {context}:\n"
                     f"Reference Circuit {count}:\n"
                     "deprecated bit-level register information mismatch\n"
@@ -1121,6 +1193,7 @@ def assert_equal(
         and reference.layout != qpy.layout
     ):
         msg = (
+            f"QPY Error: "
             f"For {context}:\nCircuit {count} layout mismatch {reference.layout} != {qpy.layout}\n"
         )
         sys.stderr.write(msg)
@@ -1128,20 +1201,23 @@ def assert_equal(
 
     # Don't compare name on bound circuits
     if bind is None and reference.name != qpy.name:
-        msg = f"For {context}:\nCircuit {count} name mismatch {reference.name} != {qpy.name}\n{reference}\n{qpy}"
+        msg = f"QPY Error: \nFor {context}:\nCircuit {count} name mismatch {reference.name} != {qpy.name}\n{reference}\n{qpy}"
         sys.stderr.write(msg)
         sys.exit(2)
     if reference.metadata != qpy.metadata:
-        msg = f"For {context}:\nCircuit {count} metadata mismatch: {reference.metadata} != {qpy.metadata}"
+        msg = f"QPY Error: \nFor {context}:\nCircuit {count} metadata mismatch: {reference.metadata} != {qpy.metadata}"
         sys.stderr.write(msg)
         sys.exit(3)
 
 
-def generate_qpy(qpy_files):
+def generate_qpy(qpy_files, qpy_version=None):
     """Generate qpy files from reference circuits."""
     for path, circuits in qpy_files.items():
         with open(path, "wb") as fd:
-            dump(circuits, fd)
+            if qpy_version is None:  # avoid the version param because it's missing in old qiskit
+                dump(circuits, fd)
+            else:
+                dump(circuits, fd, version=qpy_version)
 
 
 def load_qpy(qpy_files, generating_version):
@@ -1160,8 +1236,13 @@ def load_qpy(qpy_files, generating_version):
             # See https://github.com/Qiskit/qiskit/pull/13814
             continue
         print(f"Loading qpy file: {path}")  # noqa: T201
-        with open(path, "rb") as fd:
-            qpy_circuits = load(fd)
+        try:
+            with open(path, "rb") as fd:
+                qpy_circuits = load(fd)
+        except Exception as ex:
+            msg = f"QPY Error: Failed to load {path} with the exception: {ex}\n"
+            sys.stderr.write(msg)
+            sys.exit(1)
         equivalent = path in {"open_controlled_gates.qpy", "controlled_gates.qpy"}
         for i, circuit in enumerate(circuits):
             bind = None
@@ -1204,7 +1285,7 @@ def load_qpy(qpy_files, generating_version):
                 with open(path, "rb") as fd:
                     load(fd)
             except Exception:
-                msg = "Loading circuit with pulse gates should not raise"
+                msg = "QPY Error:\nLoading circuit with pulse gates should not raise\n"
                 sys.stderr.write(msg)
                 sys.exit(1)
         else:
@@ -1215,14 +1296,14 @@ def load_qpy(qpy_files, generating_version):
             except QpyError:
                 continue
 
-            msg = f"Loading payload {path} didn't raise QpyError"
+            msg = f"QPY Error:\nLoading payload {path} didn't raise QpyError\n"
             sys.stderr.write(msg)
             sys.exit(1)
 
 
 def _main():
     parser = argparse.ArgumentParser(description="Test QPY backwards compatibility")
-    parser.add_argument("command", choices=["generate", "load"])
+    parser.add_argument("command", choices=["generate", "load", "load_forward"])
     parser.add_argument(
         "--version",
         "-v",
@@ -1232,18 +1313,41 @@ def _main():
             "to test generating and loading QPY."
         ),
     )
+    parser.add_argument(
+        "--qpy-version",
+        type=int,
+        default=None,
+        help=(
+            "Optionally specify the QPY format version to use for serialization. "
+            "If not specified, the default (latest) QPY version is used."
+        ),
+    )
     args = parser.parse_args()
 
     current_version = Version(qiskit.__version__)
 
     # Terra 0.18.0 was the first release with QPY, so that's the default.
     generating_version = Version(args.version or "0.18.0")
-
     if args.command == "generate":
-        qpy_files = generate_circuits(generating_version, current_version)
-        generate_qpy(qpy_files)
+        qpy_files = generate_circuits(
+            generating_version, current_version, qpy_version=args.qpy_version
+        )
+        generate_qpy(qpy_files, qpy_version=args.qpy_version)
     else:
-        qpy_files = generate_circuits(generating_version, current_version, load_context=True)
+        forward_tests = args.command == "load_forward"
+        print(  # noqa: T201
+            f"QPY {'forwards' if forward_tests else 'backwards'} compatibility loader tests running\n"
+            f"generating_version={generating_version}\n"
+            f"current_version={current_version}\n"
+            f"QPY version={args.qpy_version if args.qpy_version else 'default'}"
+        )
+        qpy_files = generate_circuits(
+            generating_version,
+            current_version,
+            load_context=True,
+            qpy_version=args.qpy_version,
+            forward_tests=forward_tests,
+        )
         load_qpy(qpy_files, generating_version)
 
 

@@ -71,7 +71,7 @@ impl Primitive {
             Self::I8 => "ctypes.c_int8",
             Self::U8 => "ctypes.c_uint8",
             Self::I16 => "ctypes.c_int16",
-            Self::U16 => "ctypes.c_uin16",
+            Self::U16 => "ctypes.c_uint16",
             Self::I32 => "ctypes.c_int32",
             Self::U32 => "ctypes.c_uint32",
             Self::I64 => "ctypes.c_int64",
@@ -248,6 +248,26 @@ mod parse {
         })
     }
 
+    pub fn r#union(
+        val: &ir::Union,
+        mut override_fn: impl FnMut(&str) -> Option<Primitive>,
+    ) -> anyhow::Result<simple_ir::Union<Primitive>> {
+        let fields = val
+            .fields
+            .iter()
+            .map(|field| -> anyhow::Result<_> {
+                Ok(simple_ir::StructField {
+                    name: field.name.clone(),
+                    ty: r#type(&field.ty, &mut override_fn)?,
+                })
+            })
+            .collect::<anyhow::Result<_>>()?;
+        Ok(simple_ir::Union {
+            name: val.export_name.clone(),
+            fields,
+        })
+    }
+
     /// Extract all objects from a set of `cbindgen::Bindings`, adding them to ourselves.
     ///
     /// This fails if the bindings contain any unsupported constructs.
@@ -256,7 +276,7 @@ mod parse {
         bindings: &cbindgen::Bindings,
     ) -> anyhow::Result<()> {
         let constructor =
-            |repr: &simple_ir::ReprType| Primitive::from_cbindgen_intkind(repr.kind, repr.signed);
+            |repr: &ir::ReprType| Primitive::from_cbindgen_intkind(repr.kind, repr.signed);
         let mut overrides = items
             .enums
             .iter()
@@ -276,9 +296,11 @@ mod parse {
                 ir::ItemContainer::Struct(item) => items
                     .structs
                     .push(r#struct(item, |path| overrides.get(path).copied())?),
+                ir::ItemContainer::Union(item) => items
+                    .unions
+                    .push(r#union(item, |path| overrides.get(path).copied())?),
                 ir::ItemContainer::Constant(_)
                 | ir::ItemContainer::Static(_)
-                | ir::ItemContainer::Union(_)
                 | ir::ItemContainer::Typedef(_) => {
                     bail!("unhandled item: {item:?}");
                 }
@@ -320,7 +342,7 @@ mod export {
     /// the variants for ease of use in Python space, but in actual function interfaces we have to use
     /// the raw `ctypes` backing type to get the ABI correct.
     pub fn r#enum(val: &simple_ir::Enum) -> String {
-        let mut out = format!("\nclass {}(enum.Enum):", &val.name);
+        let mut out = format!("\nclass {}(enum.Enum):", val.name);
         if val.variants.is_empty() {
             out.push_str("\n    pass");
             return out;
@@ -338,8 +360,8 @@ mod export {
     /// If `dllname` name is given, we assume the function is an attribute on an object with that
     /// name.
     pub fn function(val: &simple_ir::Function<Primitive>, dllname: &str) -> String {
-        let prefix = format!("{}.{}", dllname, &val.name);
-        let mut out = format!("\n{}.argtypes = [", &prefix);
+        let prefix = format!("{}.{}", dllname, val.name);
+        let mut out = format!("\n{}.argtypes = [", prefix);
         if let Some((first, rest)) = val.args.split_first() {
             render_type(&first.ty, &mut out);
             for arg in rest {
@@ -367,13 +389,29 @@ mod export {
     pub fn r#struct(val: &simple_ir::Struct<Primitive>) -> String {
         // TODO: this doesn't handle the case of (mutually) recursive `struct` definitions; we
         // assume that all the `_fields_` will refer to fully defined `ctypes` objects.
-        let mut out = format!("\nclass {}(ctypes.Structure):\n", &val.name);
+        let mut out = format!("\nclass {}(ctypes.Structure):\n", val.name);
         let Some(fields) = val.fields.as_ref() else {
             out.push_str("    pass\n");
             return out;
         };
         out.push_str("    _fields_ = [\n");
         for simple_ir::StructField { name, ty } in fields {
+            out.push_str("        (\"");
+            out.push_str(name);
+            out.push_str("\", ");
+            render_type(ty, &mut out);
+            out.push_str("),\n");
+        }
+        out.push_str("    ]");
+        out
+    }
+
+    /// Get a string representing the declaration of this `union`` as a Python `ctypes.Union`.
+    pub fn r#union(val: &simple_ir::Union<Primitive>) -> String {
+        let mut out = format!("\nclass {}(ctypes.Union):\n", val.name);
+        out.push_str("    _fields_ = [\n");
+
+        for simple_ir::StructField { name, ty } in &val.fields {
             out.push_str("        (\"");
             out.push_str(name);
             out.push_str("\", ");
@@ -399,15 +437,15 @@ mod export {
         writeln!(out)?;
 
         writeln!(out, "__all__ = [")?;
-        writeln!(out, "    \"{}\",", &config.dll.name)?;
+        writeln!(out, "    \"{}\",", config.dll.name)?;
         for val in &items.enums {
-            writeln!(out, "    \"{}\",", &val.name)?;
+            writeln!(out, "    \"{}\",", val.name)?;
         }
         for val in &items.structs {
-            writeln!(out, "    \"{}\",", &val.name)?;
+            writeln!(out, "    \"{}\",", val.name)?;
         }
         for val in &items.functions {
-            writeln!(out, "    \"{}\",", &val.name)?;
+            writeln!(out, "    \"{}\",", val.name)?;
         }
         writeln!(out, "]")?;
         writeln!(out)?;
@@ -425,12 +463,15 @@ mod export {
         writeln!(
             out,
             "{} = ctypes.PyDLL({})",
-            &config.dll.name, &config.dll.expr
+            config.dll.name, config.dll.expr
         )?;
 
         writeln!(out)?;
         for item in &items.enums {
             writeln!(out, "{}", r#enum(item))?;
+        }
+        for item in &items.unions {
+            writeln!(out, "{}", r#union(item))?;
         }
         for item in &items.structs {
             writeln!(out, "{}", r#struct(item))?;
@@ -480,6 +521,7 @@ impl Items {
             enums: vec![],
             structs: vec![complex],
             functions: vec![],
+            unions: vec![],
         }
     }
 

@@ -27,10 +27,9 @@ use std::{error::Error, fmt::Display};
 
 use exceptions::CircuitError;
 
-use foldhash::fast::RandomState;
-use indexmap::{IndexMap, IndexSet};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString};
+use qiskit_util::{IndexMap, IndexSet};
 
 use rustworkx_core::petgraph::{
     graph::{EdgeIndex, NodeIndex},
@@ -371,7 +370,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for CircuitFromPython {
 
 // Custom Types
 type GraphType = StableDiGraph<NodeData, Option<EdgeData>>;
-type KTIType = IndexMap<Key, NodeIndex, RandomState>;
+type KTIType = IndexMap<Key, NodeIndex>;
 
 /// A library providing a one-way mapping of gates to their equivalent
 /// implementations as :class:`.QuantumCircuit` instances.
@@ -612,7 +611,7 @@ impl EquivalenceLibrary {
         slf.key_to_node_index = state
             .get_item("key_to_node_index")?
             .unwrap()
-            .extract::<IndexMap<Key, usize, ::foldhash::fast::RandomState>>()?
+            .extract::<IndexMap<Key, usize>>()?
             .into_iter()
             .map(|(key, val)| (key, NodeIndex::new(val)))
             .collect();
@@ -644,7 +643,7 @@ impl EquivalenceLibrary {
         if let Some(node) = self.graph.node_weight_mut(target) {
             node.equivs.push(equiv.clone());
         }
-        let sources: IndexSet<Key, RandomState> = IndexSet::from_iter(
+        let sources: IndexSet<Key> = IndexSet::from_iter(
             equivalent_circuit
                 .iter()
                 .map(|inst| Key::from_operation(&inst.op)),
@@ -793,23 +792,22 @@ fn raise_if_shape_mismatch(
 
 fn rebind_equiv(equiv: Equivalence, query_params: &[Param]) -> PyResult<CircuitData> {
     let (equiv_params, mut equiv_circuit) = (equiv.params, equiv.circuit);
-    let param_mapping: PyResult<IndexMap<ParameterUuid, &Param, ::foldhash::fast::RandomState>> =
-        equiv_params
-            .iter()
-            .zip(query_params.iter())
-            .filter_map(|(param_x, param_y)| match param_x {
-                Param::ParameterExpression(param) => {
-                    // we know this expression represents a symbol
-                    let symbol = match param.try_to_symbol() {
-                        Ok(symbol) => symbol,
-                        Err(e) => return Some(Err(PyErr::from(e))),
-                    };
-                    let uuid = ParameterUuid::from_symbol(&symbol);
-                    Some(Ok((uuid, param_y)))
-                }
-                _ => None,
-            })
-            .collect();
+    let param_mapping: PyResult<IndexMap<ParameterUuid, &Param>> = equiv_params
+        .iter()
+        .zip(query_params.iter())
+        .filter_map(|(param_x, param_y)| match param_x {
+            Param::ParameterExpression(param) => {
+                // we know this expression represents a symbol
+                let symbol = match param.try_to_symbol() {
+                    Ok(symbol) => symbol,
+                    Err(e) => return Some(Err(PyErr::from(e))),
+                };
+                let uuid = ParameterUuid::from_symbol(&symbol);
+                Some(Ok((uuid, param_y)))
+            }
+            _ => None,
+        })
+        .collect();
     equiv_circuit.assign_parameters_from_mapping(param_mapping?)?;
     Ok(equiv_circuit)
 }

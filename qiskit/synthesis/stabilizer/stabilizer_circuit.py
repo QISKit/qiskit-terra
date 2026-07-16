@@ -18,10 +18,9 @@ from collections.abc import Collection
 
 import numpy as np
 
-from qiskit.quantum_info import PauliList
+from qiskit.quantum_info import PauliList, Clifford
 from qiskit.exceptions import QiskitError
 from qiskit.circuit import QuantumCircuit
-from qiskit.quantum_info.operators.symplectic.clifford import Clifford
 
 
 def synth_circuit_from_stabilizers(

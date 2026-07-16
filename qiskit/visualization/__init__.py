@@ -268,8 +268,6 @@ Exceptions
 .. autoexception:: VisualizationError
 """
 
-import os
-import sys
 
 from .array import array_to_latex
 
@@ -297,3 +295,31 @@ from .exceptions import VisualizationError
 # These modules aren't part of the public interface, and were moved in Terra 0.22.  They're
 # re-imported here to allow a backwards compatible path, and should be deprecated in Terra 0.23.
 from .circuit import text, matplotlib, latex
+
+__all__ = [
+    "VisualizationError",
+    "array_to_latex",
+    "circuit_drawer",
+    "dag_drawer",
+    "draw",
+    "latex",
+    "matplotlib",
+    "pass_manager_drawer",
+    "plot_bloch_multivector",
+    "plot_bloch_vector",
+    "plot_circuit_layout",
+    "plot_coupling_map",
+    "plot_distribution",
+    "plot_error_map",
+    "plot_gate_map",
+    "plot_histogram",
+    "plot_state_city",
+    "plot_state_hinton",
+    "plot_state_paulivec",
+    "plot_state_qsphere",
+    "staged_pass_manager_drawer",
+    "state_drawer",
+    "text",
+    "timeline_drawer",
+    "visualize_transition",
+]

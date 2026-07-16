@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 from collections.abc import Iterable
 
 from qiskit.circuit.parameter import Parameter
+from qiskit.circuit.classical import expr
+from qiskit.circuit.classical.types import Uint
 from qiskit.circuit.exceptions import CircuitError
 from qiskit._accelerate.circuit import ControlFlowType
 from .control_flow import ControlFlowOp
@@ -31,6 +33,16 @@ class ForLoopOp(ControlFlowOp):
     """A circuit operation which repeatedly executes a subcircuit
     (``body``) parameterized by a parameter ``loop_parameter`` through
     the set of integer values provided in ``indexset``.
+
+    Data model
+    ----------
+
+    There is exactly one "block" in a for-loop op, which is the body of the loop.  The circuit block
+    may take exactly zero or one ``input`` variable (see :meth:`.QuantumCircuit.add_input_var`).  If
+    the body takes one input variable, then ``loop_parameter`` must be equal to that variable, and
+    it represents the loop variable.  If the body takes zero input variables, ``loop_parameter`` may
+    be either ``None`` (to indicate no binding) or a :class:`.Parameter`.  The :class:`.Parameter`
+    form is a legacy form that should be avoided.
     """
 
     _control_flow_type = ControlFlowType.ForLoop
@@ -38,15 +50,16 @@ class ForLoopOp(ControlFlowOp):
     def __init__(
         self,
         indexset: Iterable[int],
-        loop_parameter: Parameter | None,
+        loop_parameter: Parameter | expr.Var | None,
         body: QuantumCircuit,
         label: str | None = None,
     ):
         """
         Args:
             indexset: A collection of integers to loop over.
-            loop_parameter: The placeholder parameterizing ``body`` to which
-                the values from ``indexset`` will be assigned.
+            loop_parameter: The placeholder parameter to which
+                the values from ``indexset`` will be assigned. Can be a
+                ``Parameter``, ``expr.Var`` of type ``Uint``, or ``None``.
             body: The loop body to be repeatedly executed.
             label: An optional label for identifying the instruction.
         """
@@ -62,16 +75,21 @@ class ForLoopOp(ControlFlowOp):
 
     @params.setter
     def params(self, parameters):
-
         from qiskit.circuit import QuantumCircuit
 
         indexset, loop_parameter, body = parameters
 
-        if not isinstance(loop_parameter, (Parameter, type(None))):
+        if not isinstance(loop_parameter, (Parameter, expr.Var, type(None))):
             raise CircuitError(
-                "ForLoopOp expects a loop_parameter parameter to "
-                "be either of type Parameter or None, but received "
+                "ForLoopOp expects a loop_parameter parameter, to "
+                "be either of type Parameter, Var or None, but received "
                 f"{type(loop_parameter)}."
+            )
+        if isinstance(loop_parameter, expr.Var) and loop_parameter.type.kind is not Uint:
+            raise CircuitError(
+                "ForLoopOp expects a Var loop_parameter parameter to "
+                "be of type Uint, but received "
+                f"{type(loop_parameter.type)}."
             )
 
         if not isinstance(body, QuantumCircuit):
@@ -79,6 +97,18 @@ class ForLoopOp(ControlFlowOp):
                 "ForLoopOp expects a body parameter to be of type "
                 f"QuantumCircuit, but received {type(body)}."
             )
+        match body.num_input_vars:
+            case 0:
+                if isinstance(loop_parameter, expr.Var):
+                    raise CircuitError("loop variable is a `Var`, but body does not contain one")
+            case 1:
+                (expected,) = body.iter_input_vars()
+                if loop_parameter != expected:
+                    raise CircuitError(
+                        f"loop variable ({loop_parameter}) and body ({expected}) disagree"
+                    )
+            case count:
+                raise CircuitError(f"body expects too many input variables ({count})")
 
         if body.num_qubits != self.num_qubits or body.num_clbits != self.num_clbits:
             raise CircuitError(
@@ -90,6 +120,7 @@ class ForLoopOp(ControlFlowOp):
 
         if (
             loop_parameter is not None
+            and isinstance(loop_parameter, Parameter)
             and loop_parameter not in body.parameters
             and loop_parameter.name in (p.name for p in body.parameters)
         ):
@@ -159,6 +190,7 @@ class ForLoopContext:
     # Class-level variable keep track of the number of auto-generated loop variables, so we don't
     # get naming clashes.
     _generated_loop_parameters = 0
+    _generated_loop_vars = 0
 
     __slots__ = (
         "_circuit",
@@ -173,7 +205,7 @@ class ForLoopContext:
         self,
         circuit: QuantumCircuit,
         indexset: Iterable[int],
-        loop_parameter: Parameter | None = None,
+        loop_parameter: Parameter | expr.Var | None = None,
         *,
         label: str | None = None,
     ):
@@ -190,10 +222,12 @@ class ForLoopContext:
         if self._used:
             raise CircuitError("A for-loop context manager cannot be re-entered.")
         self._used = True
-        self._circuit._push_scope()
         if self._generate_loop_parameter:
             self._loop_parameter = Parameter(f"_loop_i_{self._generated_loop_parameters}")
             type(self)._generated_loop_parameters += 1
+        self._circuit._push_scope(
+            loop_var=None if isinstance(self._loop_parameter, Parameter) else self._loop_parameter
+        )
         return self._loop_parameter
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -214,6 +248,7 @@ class ForLoopContext:
             loop_parameter = None
         else:
             loop_parameter = self._loop_parameter
+
         self._circuit.append(
             ForLoopOp(self._indexset, loop_parameter, body, label=self._label),
             tuple(body.qubits),

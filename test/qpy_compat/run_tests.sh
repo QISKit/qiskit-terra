@@ -49,9 +49,9 @@ python -m venv "$qiskit_venv"
 
 # Run all of the tests of cross-Qiskit-version compatibility.
 if $no_docker; then
-    "$qiskit_python" "$our_dir/get_versions.py" --no-docker | parallel -j 2 --colsep=" " bash "$our_dir/process_version_with_venv.sh" -p "$qiskit_python"
+    "$qiskit_python" "$our_dir/get_versions.py" --no-docker | parallel -j 2 --halt soon,fail=1 --colsep=" " bash "$our_dir/process_version_with_venv.sh" -p "$qiskit_python"
 else
-    "$qiskit_python" "$our_dir/get_versions.py" | parallel -j 2 --colsep=" " bash "$our_dir/process_version.sh" -p "$qiskit_python"
+    "$qiskit_python" "$our_dir/get_versions.py" | parallel -j 2 --halt soon,fail=1 --colsep=" " bash "$our_dir/process_version.sh" -p "$qiskit_python"
 fi
 
 # Test dev compatibility with itself.
@@ -103,3 +103,29 @@ for loader_num in "${!symengine_versions[@]}"; do
         popd
     done
 done
+
+# Test forward compatibility: Generate QPY files for all supported QPY format versions
+# using the current Qiskit API, then verify that the current code can load them all.
+# This tests that we can read all supported QPY format versions.
+echo "Testing forward compatibility: generating QPY files for all supported format versions"
+
+# Get supported QPY versions from qiskit/qpy/common.py
+# QPY_VERSION is the latest, QPY_COMPATIBILITY_VERSION is the oldest supported
+qpy_latest=$("$qiskit_python" -c "from qiskit.qpy.common import QPY_VERSION; print(QPY_VERSION)")
+qpy_oldest=$("$qiskit_python" -c "from qiskit.qpy.common import QPY_COMPATIBILITY_VERSION; print(QPY_COMPATIBILITY_VERSION)")
+
+echo "Supported QPY versions: $qpy_oldest to $qpy_latest"
+
+# Generate QPY files for each supported format version
+for qpy_ver in $(seq "$qpy_oldest" "$qpy_latest"); do   
+    files_dir="$(pwd -P)/forward-qpy-files/qpy${qpy_ver}"
+    mkdir -p "$files_dir"
+    pushd "$files_dir"
+    echo "Generating QPY v${qpy_ver} for version ${dev_version}"
+    "$qiskit_python" "$our_dir/test_qpy.py" generate --qpy-version="$qpy_ver" --version="$dev_version"
+    popd
+done
+
+echo "Getting forward compatibility versions..."
+"$qiskit_python" "$our_dir/get_forward_compat_versions.py" | \
+    parallel -j 2 --halt soon,fail=1 --colsep=" " bash "$our_dir/process_forward_version.sh"

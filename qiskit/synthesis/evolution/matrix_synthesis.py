@@ -12,7 +12,8 @@
 
 """Exact synthesis of operator evolution via (exponentially expensive) matrix exponentiation."""
 
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+from qiskit.circuit import QuantumCircuit
+from qiskit.circuit.library import HamiltonianGate
 
 from .evolution_synthesis import EvolutionSynthesis
 
@@ -27,8 +28,6 @@ class MatrixExponential(EvolutionSynthesis):
     """
 
     def synthesize(self, evolution):
-
-        from qiskit.circuit.library.hamiltonian_gate import HamiltonianGate
 
         # get operators and time to evolve
         operators = evolution.operator

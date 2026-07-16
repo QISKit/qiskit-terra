@@ -167,7 +167,10 @@ import stevedore
 
 from qiskit.transpiler.passmanager import PassManager
 from qiskit.transpiler.exceptions import TranspilerError
-from qiskit.transpiler.passmanager_config import PassManagerCliffordTConfig, PassManagerConfig
+from qiskit.transpiler.passmanager_config import (
+    PassManagerCliffordTConfig,
+    PassManagerConfig,
+)
 
 
 class PassManagerStagePlugin(abc.ABC):
@@ -203,8 +206,8 @@ class PassManagerStagePlugin(abc.ABC):
 
 
 class PassManagerCliffordTStagePlugin(abc.ABC):
-    """A ``PassManagerCliffordTStagePlugin`` is a plugin interface object for using
-    custom stages in :func:`~.generate_preset_clifford_t_pass_manager`.
+    """A ``PassManagerCliffordTStagePlugin`` is a plugin interface object for defining
+    stages in :func:`~.generate_preset_clifford_t_pass_manager`.
     """
 
     @abc.abstractmethod
@@ -215,8 +218,8 @@ class PassManagerCliffordTStagePlugin(abc.ABC):
 
         Args:
             pass_manager_config: A configuration object that defines all the target device
-                specifications and any user specified options to :func:`~.transpile` or
-                :func:`~.generate_preset_pass_manager`
+                specifications and any user specified options to
+                :func:`~.generate_preset_clifford_t_pass_manager`.
             optimization_level: The optimization level of the transpilation, if set this
                 should be used to set values for any tunable parameters to trade off runtime
                 for potential optimization. Valid values should be ``0``, ``1``, ``2``, or ``3``

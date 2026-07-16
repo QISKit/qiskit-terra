@@ -13,15 +13,61 @@
 
 """Check if number close to values of PI"""
 
+from fractions import Fraction
+
 import numpy as np
 from qiskit.circuit.parameterexpression import ParameterExpression
 from qiskit.exceptions import QiskitError
 
-MAX_FRAC = 16
-N, D = np.meshgrid(np.arange(1, MAX_FRAC + 1), np.arange(1, MAX_FRAC + 1))
-FRAC_MESH = N / D * np.pi
-RECIP_MESH = N / D / np.pi
+MAX_FRAC = 99
 POW_LIST = np.pi ** np.arange(2, 5)
+
+
+def _format_raw(single_inpt, output, ndigits):
+    if output == "qasm":
+        return f"{single_inpt:#}" if ndigits is None else f"{single_inpt:#.{ndigits}g}"
+    return f"{single_inpt}" if ndigits is None else f"{single_inpt:.{ndigits}g}"
+
+
+def _format_pi_multiple(numer, denom, pi, output, neg_str):
+    """Format (numer * pi) / denom, omitting unit coefficients."""
+    if denom == 1:
+        if numer == 1:
+            return f"{neg_str}{pi}"
+        if output == "qasm":
+            return f"{neg_str}{numer}*{pi}"
+        return f"{neg_str}{numer}{pi}"
+    if output == "latex":
+        if numer == 1:
+            return f"\\frac{{{neg_str}{pi}}}{{{denom}}}"
+        return f"\\frac{{{neg_str}{numer}{pi}}}{{{denom}}}"
+    if output == "qasm":
+        if numer == 1:
+            return f"{neg_str}{pi}/{denom}"
+        return f"{neg_str}{numer}*{pi}/{denom}"
+    if numer == 1:
+        return f"{neg_str}{pi}/{denom}"
+    return f"{neg_str}{numer}{pi}/{denom}"
+
+
+def _format_pi_divisor(numer, denom, pi, output, neg_str):
+    """Format numer / (denom * pi), omitting unit coefficients."""
+    denom_str = "" if denom == 1 and output != "qasm" else str(denom)
+    if output == "latex":
+        return f"\\frac{{{neg_str}{numer}}}{{{denom_str}{pi}}}"
+    if output == "qasm":
+        return f"{neg_str}{numer}/({denom}*{pi})"
+    return f"{neg_str}{numer}/{denom_str}{pi}"
+
+
+def _match_fraction(val, eps, limit):
+    """Return n/d close to val with denominator at most limit, else None."""
+    frac = Fraction(val).limit_denominator(limit)
+    if frac.numerator == 0 or frac.numerator > limit:
+        return None
+    if abs(val - frac) < eps:
+        return frac
+    return None
 
 
 def pi_check(inpt, eps=1e-9, output="text", ndigits=None):
@@ -79,94 +125,28 @@ def pi_check(inpt, eps=1e-9, output="text", ndigits=None):
             raise QiskitError("pi_check parameter output should be text, latex, mpl, or qasm.")
 
         neg_str = "-" if single_inpt < 0 else ""
+        abs_inpt = abs(single_inpt)
 
-        # First check is for whole multiples of pi
-        val = single_inpt / np.pi
-        if abs(val) >= 1 - eps:
-            if abs(abs(val) - abs(round(val))) < eps:
-                val = int(abs(round(val)))
-                if abs(val) == 1:
-                    str_out = f"{neg_str}{pi}"
-                elif output == "qasm":
-                    str_out = f"{neg_str}{val}*{pi}"
-                else:
-                    str_out = f"{neg_str}{val}{pi}"
-                return str_out
-
-        # Second is a check for powers of pi
-        if abs(single_inpt) > np.pi:
-            power = np.where(abs(abs(single_inpt) - POW_LIST) < eps)
+        if abs_inpt > np.pi:
+            power = np.where(abs(abs_inpt - POW_LIST) < eps)
             if power[0].shape[0]:
                 if output == "qasm":
-                    if ndigits is None:
-                        str_out = str(single_inpt)
-                    else:
-                        str_out = f"{single_inpt:.{ndigits}g}"
-                elif output == "latex":
-                    str_out = f"{neg_str}{pi}^{power[0][0] + 2}"
-                elif output == "mpl":
-                    str_out = f"{neg_str}{pi}$^{power[0][0] + 2}$"
-                else:
-                    str_out = f"{neg_str}{pi}**{power[0][0] + 2}"
-                return str_out
+                    return _format_raw(single_inpt, output, ndigits)
+                if output == "latex":
+                    return f"{neg_str}{pi}^{power[0][0] + 2}"
+                if output == "mpl":
+                    return f"{neg_str}{pi}$^{power[0][0] + 2}$"
+                return f"{neg_str}{pi}**{power[0][0] + 2}"
 
-        # Third is a check for a number larger than MAX_FRAC * pi, not a
-        # multiple or power of pi, since no fractions will exceed MAX_FRAC * pi
-        if abs(single_inpt) >= (MAX_FRAC * np.pi):
-            if ndigits is None:
-                str_out = str(single_inpt)
-            else:
-                str_out = f"{single_inpt:.{ndigits}g}"
-            return str_out
+        frac = _match_fraction(abs_inpt / np.pi, eps, MAX_FRAC)
+        if frac is not None:
+            return _format_pi_multiple(frac.numerator, frac.denominator, pi, output, neg_str)
 
-        # Fourth check is for fractions for 1*pi in the numer and any
-        # number in the denom.
-        val = np.pi / single_inpt
-        if abs(abs(val) - abs(round(val))) < eps:
-            val = int(abs(round(val)))
-            if output == "latex":
-                str_out = f"\\frac{{{neg_str}{pi}}}{{{val}}}"
-            else:
-                str_out = f"{neg_str}{pi}/{val}"
-            return str_out
+        frac = _match_fraction(abs_inpt * np.pi, eps, MAX_FRAC)
+        if frac is not None:
+            return _format_pi_divisor(frac.numerator, frac.denominator, pi, output, neg_str)
 
-        # Fifth check is for fractions where the numer > 1*pi and numer
-        # is up to MAX_FRAC*pi and denom is up to MAX_FRAC and all
-        # fractions are reduced. Ex. 15pi/16, 2pi/5, 15pi/2, 16pi/9.
-        frac = np.where(np.abs(abs(single_inpt) - FRAC_MESH) < eps)
-        if frac[0].shape[0]:
-            numer = int(frac[1][0]) + 1
-            denom = int(frac[0][0]) + 1
-            if output == "latex":
-                str_out = f"\\frac{{{neg_str}{numer}{pi}}}{{{denom}}}"
-            elif output == "qasm":
-                str_out = f"{neg_str}{numer}*{pi}/{denom}"
-            else:
-                str_out = f"{neg_str}{numer}{pi}/{denom}"
-            return str_out
-
-        # Sixth check is for fractions where the numer > 1 and numer
-        # is up to MAX_FRAC and denom is up to MAX_FRAC*pi and all
-        # fractions are reduced. Ex. 15/16pi, 2/5pi, 15/2pi, 16/9pi
-        frac = np.where(np.abs(abs(single_inpt) - RECIP_MESH) < eps)
-        if frac[0].shape[0]:
-            numer = int(frac[1][0]) + 1
-            denom = int(frac[0][0]) + 1
-            if denom == 1 and output != "qasm":
-                denom = ""
-            if output == "latex":
-                str_out = f"\\frac{{{neg_str}{numer}}}{{{denom}{pi}}}"
-            elif output == "qasm":
-                str_out = f"{neg_str}{numer}/({denom}*{pi})"
-            else:
-                str_out = f"{neg_str}{numer}/{denom}{pi}"
-            return str_out
-
-        # Nothing found.  The '#' forces a decimal point to be included, which OQ2 needs, but other
-        # formats don't really.
-        if output == "qasm":
-            return f"{single_inpt:#}" if ndigits is None else f"{single_inpt:#.{ndigits}g}"
-        return f"{single_inpt}" if ndigits is None else f"{single_inpt:.{ndigits}g}"
+        return _format_raw(single_inpt, output, ndigits)
 
     complex_inpt = complex(inpt)
     real, imag = map(normalize, [complex_inpt.real, complex_inpt.imag])

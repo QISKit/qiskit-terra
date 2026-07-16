@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    :class:`.ConstrainedReschedule` will no longer raise :exc:`AttributeError`
+    if the optional ``target`` argument is not provided.  See
+    `#16245 <https://github.com/Qiskit/qiskit/issues/16245>`__.

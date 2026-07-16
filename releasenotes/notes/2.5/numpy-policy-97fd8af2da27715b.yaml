@@ -1,0 +1,13 @@
+---
+upgrade_misc:
+  - |
+    Qiskit now has a formal dependency-version policy, tracked in the
+    `repository's contributing documentation
+    <https://github.com/Qiskit/qiskit/blob/main/CONTRIBUTING.md#using-dependencies>`__.
+    This is:
+
+    * NumPy and SciPy follow the scientific Python community's `SPEC 0
+      <https://scientific-python.org/specs/spec-0000/>`__ (two years of support);
+    * All other Python and Rust dependencies have no constraints beyond platform support;
+    * Optional, build-only, and developer-only Python dependencies have no constraints, and do not need
+      to support all runtime versions of Python or host platforms.

@@ -438,7 +438,7 @@ class TestInitialize(QiskitTestCase):
 
     def test_global_phase_random(self):
         """Test global phase preservation with random state vectors"""
-        from qiskit.quantum_info.random import random_statevector
+        from qiskit.quantum_info import random_statevector
 
         repeats = 5
         for n_qubits in [1, 2, 4]:
@@ -521,6 +521,20 @@ class TestInitialize(QiskitTestCase):
         circuit.initialize(0, circuit.qubits)
         with self.assertRaises(CircuitError):
             _ = circuit.inverse()
+
+    def test_gates_to_uncompute_integer_input(self):
+        """Test that gates_to_uncompute works correctly for integer-bitmap inputs.
+        Regression test for https://github.com/Qiskit/qiskit/issues/16413
+        """
+        # Integer-bitmap input: Initialize(1, num_qubits=2) prepares |01>
+        int_init = Initialize(1, num_qubits=2)
+        uncompute_int = int_init.gates_to_uncompute()
+        self.assertEqual(uncompute_int.num_qubits, 2)
+
+        # Verify integer-bitmap uncompute actually maps |01> back to |00...0>
+        result = Statevector.from_label("01").evolve(uncompute_int)
+        zero_state = Statevector.from_label("00")
+        self.assertTrue(result.equiv(zero_state))
 
 
 class TestInstructionParam(QiskitTestCase):

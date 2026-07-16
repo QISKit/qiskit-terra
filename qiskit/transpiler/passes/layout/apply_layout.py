@@ -14,15 +14,10 @@
 
 from __future__ import annotations
 
-import typing
-
 from qiskit._accelerate.apply_layout import apply_layout, update_layout
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.layout import TranspileLayout
-
-if typing.TYPE_CHECKING:
-    from qiskit.transpiler import Target
 
 
 class ApplyLayout(TransformationPass):

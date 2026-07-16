@@ -14,7 +14,7 @@
 """Benchmark utility functions."""
 
 import numpy as np
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.quantum_info import SparseObservable, SparsePauliOp
 from qiskit.circuit import (
     QuantumRegister,

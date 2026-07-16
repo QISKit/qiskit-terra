@@ -16,7 +16,6 @@ High-level-synthesis transpiler pass.
 
 from __future__ import annotations
 
-import typing
 from collections.abc import Callable
 
 import numpy as np
@@ -38,9 +37,6 @@ from qiskit._accelerate.high_level_synthesis import (
 )
 
 from .plugin import HighLevelSynthesisPluginManager
-
-if typing.TYPE_CHECKING:
-    from qiskit.dagcircuit import DAGOpNode
 
 
 class HLSConfig:

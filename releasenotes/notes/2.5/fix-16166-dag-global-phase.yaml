@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed :func:`.dagdependency_to_circuit` to correctly preserve the circuit's
+    global phase during conversion.
+    Fixed `#16166 <https://github.com/Qiskit/qiskit/issues/16166>`__.

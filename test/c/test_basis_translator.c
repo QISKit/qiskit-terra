@@ -152,104 +152,11 @@ cleanup:
     return result;
 }
 
-static int test_dag_in_basis(void) {
-    int result = Ok;
-    QkDag *dag = qk_dag_new();
-    QkQuantumRegister *qr = qk_quantum_register_new(2, "qr");
-    qk_dag_add_quantum_register(dag, qr);
-    qk_dag_apply_gate(dag, QkGate_H, (uint32_t[1]){0}, NULL, false);
-    qk_dag_apply_gate(dag, QkGate_CX, (uint32_t[2]){0, 1}, NULL, false);
-
-    // Create Target already compatible with the DAG.
-    QkTarget *target = qk_target_new(1);
-    qk_target_add_instruction(target, qk_target_entry_new(QkGate_H));
-    qk_target_add_instruction(target, qk_target_entry_new(QkGate_CX));
-
-    // Run pass
-    qk_transpiler_pass_basis_translator(dag, target, 0);
-
-    size_t num_ops = qk_dag_num_op_nodes(dag);
-    if (num_ops != 2) {
-        result = EqualityError;
-        printf(
-            "The number of gates resulting from the translation is incorrect. Expected 2, got %zu",
-            num_ops);
-    }
-
-    qk_dag_free(dag);
-    qk_quantum_register_free(qr);
-    qk_target_free(target);
-    return result;
-}
-
-static int test_basic_dag_basis_translator(void) {
-    int result = Ok;
-    QkDag *dag = qk_dag_new();
-    QkQuantumRegister *qr = qk_quantum_register_new(1, "qr");
-    qk_dag_add_quantum_register(dag, qr);
-    qk_dag_apply_gate(dag, QkGate_H, (uint32_t[1]){0}, NULL, false);
-
-    // Create Target compatible with only U gates, with global props.
-    QkTarget *target = qk_target_new(1);
-    qk_target_add_instruction(target, qk_target_entry_new(QkGate_U));
-
-    // Run pass
-    qk_transpiler_pass_basis_translator(dag, target, 0);
-
-    size_t num_ops = qk_dag_num_op_nodes(dag);
-    if (num_ops != 1) {
-        result = EqualityError;
-        printf(
-            "The number of gates resulting from the translation is incorrect. Expected 1, got %zu",
-            num_ops);
-    }
-
-    qk_dag_free(dag);
-    qk_quantum_register_free(qr);
-    qk_target_free(target);
-    return result;
-}
-
-static int test_toffoli_dag_basis_translator(void) {
-    int result = Ok;
-    QkDag *dag = qk_dag_new();
-    QkQuantumRegister *qr = qk_quantum_register_new(3, "qr");
-    qk_dag_add_quantum_register(dag, qr);
-    qk_dag_apply_gate(dag, QkGate_CCX, (uint32_t[3]){0, 1, 2}, NULL, false);
-
-    // Create Target compatible with H, T, Tdg, CX gates, with global props.
-    QkTarget *target = qk_target_new(3);
-    qk_target_add_instruction(target, qk_target_entry_new(QkGate_H));
-    qk_target_add_instruction(target, qk_target_entry_new(QkGate_T));
-    qk_target_add_instruction(target, qk_target_entry_new(QkGate_Tdg));
-    qk_target_add_instruction(target, qk_target_entry_new(QkGate_CX));
-
-    // Run pass
-    qk_transpiler_pass_basis_translator(dag, target, 0);
-
-    size_t num_ops = qk_dag_num_op_nodes(dag);
-    // CCX decomposes into 6 CX + 4 T + 3 Tdg + 2 H = 15 gates
-    if (num_ops != 15) {
-        result = EqualityError;
-        printf(
-            "The number of gates resulting from the translation is incorrect. Expected 15, got %zu",
-            num_ops);
-    }
-
-    qk_dag_free(dag);
-    qk_quantum_register_free(qr);
-    qk_target_free(target);
-    return result;
-}
-
 int test_basis_translator(void) {
     int num_failed = 0;
     num_failed += RUN_TEST(test_circuit_in_basis);
     num_failed += RUN_TEST(test_basic_basis_translator);
     num_failed += RUN_TEST(test_toffoli_basis_translator);
-    num_failed += RUN_TEST(test_dag_in_basis);
-    num_failed += RUN_TEST(test_basic_dag_basis_translator);
-    num_failed += RUN_TEST(test_toffoli_dag_basis_translator);
 
     fflush(stderr);
     fprintf(stderr, "=== Number of failed subtests: %i\n", num_failed);

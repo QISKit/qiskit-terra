@@ -10,7 +10,9 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "python")]
 use numpy::{PyArray1, PyArrayMethods, PyReadonlyArray1};
+#[cfg(feature = "python")]
 use pyo3::{
     IntoPyObjectExt, PyErr,
     exceptions::{PyTypeError, PyValueError},
@@ -18,18 +20,27 @@ use pyo3::{
     prelude::*,
     types::{PyInt, PyList, PyString, PyTuple, PyType},
 };
+
+#[cfg(feature = "python")]
 use std::{
     collections::btree_map,
     sync::{Arc, RwLock},
 };
 
+#[cfg(feature = "python")]
 use qiskit_util::py::{PySequenceIndex, SequenceIndex};
 
 use super::qubit_sparse_pauli::{
-    ArithmeticError, CoherenceError, InnerReadError, InnerWriteError, LabelError, Pauli,
-    PyQubitSparsePauli, QubitSparsePauli, QubitSparsePauliList, QubitSparsePauliView,
-    raw_parts_from_sparse_list,
+    ArithmeticError, CoherenceError, LabelError, Pauli, QubitSparsePauli, QubitSparsePauliList,
+    QubitSparsePauliView,
 };
+
+#[cfg(feature = "python")]
+use super::qubit_sparse_pauli::{
+    InnerReadError, InnerWriteError, PyQubitSparsePauli, raw_parts_from_sparse_list,
+};
+
+#[cfg(feature = "python")]
 use crate::imports;
 
 /// A list of Pauli operators stored in a qubit-sparse format.
@@ -166,6 +177,7 @@ impl PhasedQubitSparsePauliList {
     }
 
     // Check equality of operators
+    #[cfg(feature = "python")] // Only currently used by python remove if needed from rust
     fn eq(&self, other: &PhasedQubitSparsePauliList) -> bool {
         if self.qubit_sparse_pauli_list != other.qubit_sparse_pauli_list {
             return false;
@@ -387,6 +399,7 @@ impl PhasedQubitSparsePauli {
     }
 
     // Check equality of operators
+    #[cfg(feature = "python")] // Only currently used by python remove if needed from rust
     fn eq(&self, other: &PhasedQubitSparsePauli) -> bool {
         ((self.phase - other.phase).rem_euclid(4) == 0)
             && self.qubit_sparse_pauli == other.qubit_sparse_pauli
@@ -453,6 +466,7 @@ impl PhasedQubitSparsePauli {
 ///     :param int|None num_qubits: Optional number of qubits for the operator.  For most data
 ///         inputs, this can be inferred and need not be passed.  It is only necessary for the
 ///         sparse-label format.  If given unnecessarily, it must match the data input.
+#[cfg(feature = "python")]
 #[pyclass(
     name = "PhasedQubitSparsePauli",
     frozen,
@@ -464,12 +478,14 @@ pub struct PyPhasedQubitSparsePauli {
     inner: PhasedQubitSparsePauli,
 }
 
+#[cfg(feature = "python")]
 impl PyPhasedQubitSparsePauli {
     pub fn inner(&self) -> &PhasedQubitSparsePauli {
         &self.inner
     }
 }
 
+#[cfg(feature = "python")]
 #[pymethods]
 impl PyPhasedQubitSparsePauli {
     #[new]
@@ -997,6 +1013,7 @@ impl PyPhasedQubitSparsePauli {
 ///   :meth:`to_sparse_list`       Express the observable in a sparse list format with elements
 ///                                ``(phase, paulis, indices)``.
 ///   ===========================  =================================================================
+#[cfg(feature = "python")]
 #[pyclass(
     name = "PhasedQubitSparsePauliList",
     module = "qiskit.quantum_info",
@@ -1007,6 +1024,8 @@ pub struct PyPhasedQubitSparsePauliList {
     // This class keeps a pointer to a pure Rust-SparseTerm and serves as interface from Python.
     pub inner: Arc<RwLock<PhasedQubitSparsePauliList>>,
 }
+
+#[cfg(feature = "python")]
 #[pymethods]
 impl PyPhasedQubitSparsePauliList {
     #[pyo3(signature = (data, /, num_qubits=None))]
@@ -1577,11 +1596,14 @@ impl PyPhasedQubitSparsePauliList {
     }
 }
 
+#[cfg(feature = "python")]
 impl From<PhasedQubitSparsePauli> for PyPhasedQubitSparsePauli {
     fn from(val: PhasedQubitSparsePauli) -> PyPhasedQubitSparsePauli {
         PyPhasedQubitSparsePauli { inner: val }
     }
 }
+
+#[cfg(feature = "python")]
 impl<'py> IntoPyObject<'py> for PhasedQubitSparsePauli {
     type Target = PyPhasedQubitSparsePauli;
     type Output = Bound<'py, Self::Target>;
@@ -1591,6 +1613,8 @@ impl<'py> IntoPyObject<'py> for PhasedQubitSparsePauli {
         PyPhasedQubitSparsePauli::from(self).into_pyobject(py)
     }
 }
+
+#[cfg(feature = "python")]
 impl From<PhasedQubitSparsePauliList> for PyPhasedQubitSparsePauliList {
     fn from(val: PhasedQubitSparsePauliList) -> PyPhasedQubitSparsePauliList {
         PyPhasedQubitSparsePauliList {
@@ -1598,6 +1622,8 @@ impl From<PhasedQubitSparsePauliList> for PyPhasedQubitSparsePauliList {
         }
     }
 }
+
+#[cfg(feature = "python")]
 impl<'py> IntoPyObject<'py> for PhasedQubitSparsePauliList {
     type Target = PyPhasedQubitSparsePauliList;
     type Output = Bound<'py, Self::Target>;

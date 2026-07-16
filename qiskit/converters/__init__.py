@@ -51,6 +51,17 @@ from .dagdependency_to_circuit import dagdependency_to_circuit
 from .dag_to_dagdependency import dag_to_dagdependency
 from .dagdependency_to_dag import dagdependency_to_dag
 
+__all__ = [
+    "circuit_to_dag",
+    "circuit_to_dagdependency",
+    "circuit_to_gate",
+    "circuit_to_instruction",
+    "dag_to_circuit",
+    "dag_to_dagdependency",
+    "dagdependency_to_circuit",
+    "dagdependency_to_dag",
+]
+
 
 def isinstanceint(obj):
     """Like isinstance(obj,int), but with casting. Except for strings."""

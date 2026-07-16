@@ -44,8 +44,8 @@ if typing.TYPE_CHECKING:
     from qiskit.circuit.gate import Gate
 
 KAK_GATE_NAMES = {
-    "cx": CXGate(),
     "cz": CZGate(),
+    "cx": CXGate(),
     "iswap": iSwapGate(),
     "ecr": ECRGate(),
 }
@@ -66,19 +66,31 @@ class ConsolidateBlocks(TransformationPass):
     """Replace each block of consecutive gates by a single Unitary node.
 
     Pass to consolidate sequences of uninterrupted gates acting on
-    the same qubits into a Unitary node, to be resynthesized later,
-    to a potentially more optimal subcircuit.
+    the same qubits into a :class:`.UnitaryGate` node, to be resynthesized later,
+    to a potentially more optimal subcircuit. The typical mode of operation of this pass is to run
+    the analysis of the input :class:`.DAGCircuit` to find all the two qubit blocks in the circuit
+    and then determine based on an internal heuristic whether that block should be consolidated to
+    a :class:`.UnitaryGate` or not. However if either ``block_list`` or ``run_list`` are set in the
+    property set then this pass will not do its own analysis of the DAG.
+
+    There are two legacy modes of operation for this pass based on whether either ``block_list`` or
+    ``run_list`` is set in the property set when this pass is run. ``block_list`` should contain a
+    list of lists of node indices where each inner list represents a collection of blocks to be
+    potentially consolidated into a :class:`.UnitaryGate`. These blocks can be any number of qubits
+    but in previous Qiskit releases' preset pass managers it was typically two and set by the
+    :class:`.Collect2qBlocks` pass. There is a also the :class:`.CollectMultiQBlocks` transpiler pass
+    which will set ``blocks_list`` with blocks found for an arbitrary number of qubits. The other property
+    set key ``run_list`` is a list of lists of "runs" which are single qubit blocks to consolidate. This
+    was potentially set by the :class:`.Collect1qRuns` transpiler pass.
+    This functionality for "runs" has been mostly superseded by the :class:`.Optimize1qGatesDecomposition`
+    transpiler pass and that should typically be used instead for a more thorough and performant
+    method of simplifying single qubit runs.
 
     This pass reads the :class:`.PropertySet` key ``ConsolidateBlocks_qubit_map`` which it uses to
     communicate with recursive worker instances of itself for control-flow operations.  The key
     should never be observable in a user-facing :class:`.PassManager` pipeline (it is only set in
     internal :class:`.PassManager` instances), but the pass may return incorrect results or error if
     another pass sets this key.
-
-    Notes:
-        This pass assumes that the 'blocks_list' property that it reads is
-        given such that blocks are in topological order. The blocks are
-        collected by a previous pass, such as `Collect2qBlocks`.
     """
 
     _QUBIT_MAP_KEY = "ConsolidateBlocks_qubit_map"
@@ -117,19 +129,21 @@ class ConsolidateBlocks(TransformationPass):
             self.decomposer = TwoQubitBasisDecomposer(kak_basis_gate)
             self.basis_gate_name = kak_basis_gate.name
         elif basis_gates is not None:
-            kak_gates = KAK_GATE_NAMES.keys() & (basis_gates or [])
-            kak_param_gates = KAK_GATE_PARAM_NAMES.keys() & (basis_gates or [])
-            if kak_param_gates:
+            kak_gate = next((gate for gate in KAK_GATE_NAMES if gate in basis_gates), None)
+            kak_param_gate = next(
+                (gate for gate in KAK_GATE_PARAM_NAMES if gate in basis_gates), None
+            )
+            if kak_param_gate is not None:
                 self.decomposer = TwoQubitControlledUDecomposer(
-                    KAK_GATE_PARAM_NAMES[next(iter(kak_param_gates))]
+                    KAK_GATE_PARAM_NAMES[kak_param_gate]
                 )
-                self.basis_gate_name = next(iter(kak_param_gates))
-            elif kak_gates:
+                self.basis_gate_name = kak_param_gate
+            elif kak_gate is not None:
                 self.decomposer = TwoQubitBasisDecomposer(
-                    KAK_GATE_NAMES[next(iter(kak_gates))],
+                    KAK_GATE_NAMES[kak_gate],
                     basis_fidelity=approximation_degree or 1.0,
                 )
-                self.basis_gate_name = next(iter(kak_gates))
+                self.basis_gate_name = kak_gate
             else:
                 self.decomposer = None
                 self.basis_gate_name = "cx"

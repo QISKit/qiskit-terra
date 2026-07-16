@@ -19,7 +19,6 @@ qiskit-util.workspace = true
 bytemuck.workspace = true
 num-complex.workspace = true
 nalgebra.workspace = true
-foldhash.workspace = true
 itertools.workspace = true
 numpy.workspace = true
 rayon.workspace = true
@@ -31,7 +30,7 @@ faer.workspace = true
 rustworkx-core.workspace = true
 rustiq-core = "0.0.11"
 rsgridsynth = "0.2.0"
-rstar = "0.12.2"
+rstar = "0.13.0"
 thiserror.workspace = true
 fixedbitset.workspace = true
 binrw.workspace = true
@@ -55,10 +54,6 @@ features = ["num-complex"]
 [dependencies.hashbrown]
 workspace = true
 features = ["rayon", "serde"]
-
-[dependencies.indexmap]
-workspace = true
-features = ["rayon"]
 
 [dev-dependencies]
 pyo3 = { workspace = true, features = ["auto-initialize"] }

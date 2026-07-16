@@ -278,7 +278,7 @@ class StarPreRouting(TransformationPass):
         new_layout = Layout({dag.qubits[out]: idx for idx, out in enumerate(qubit_mapping)})
         if current_layout := self.property_set["virtual_permutation_layout"]:
             self.property_set["virtual_permutation_layout"] = new_layout.compose(
-                current_layout.inverse(dag.qubits, dag.qubits), dag.qubits
+                current_layout, dag.qubits
             )
         else:
             self.property_set["virtual_permutation_layout"] = new_layout

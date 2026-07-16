@@ -14,11 +14,18 @@
 Symplectic Operators
 """
 
-from __future__ import annotations
-
 from .clifford import Clifford
 from .clifford_circuits import get_clifford_gate_names
 from .pauli import Pauli
 from .pauli_list import PauliList
 from .pauli_utils import pauli_basis
 from .sparse_pauli_op import SparsePauliOp
+
+__all__ = [
+    "Clifford",
+    "Pauli",
+    "PauliList",
+    "SparsePauliOp",
+    "get_clifford_gate_names",
+    "pauli_basis",
+]

@@ -1,0 +1,9 @@
+---
+performance:
+  - Improved the runtime of :class:`.SubstitutePi4Rotations` in practical scenarios.
+    Typically, only a very small fraction of rotation gates is replaced by fixed equivalent gates,
+    and it is significantly faster to replace the operations in place compared to rebuilding
+    the DAG.  For circuits with a large number of gates this can significantly reduce the runtime, 
+    for example a more than 10x reduction for QSVT circuit with 43 million gates.
+    See `#16217 <https://github.com/Qiskit/qiskit/pull/16217>__` for more details and benchmarks.
+

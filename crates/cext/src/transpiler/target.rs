@@ -17,7 +17,6 @@ use std::sync::Arc;
 use crate::dag::COperationKind;
 use crate::exit_codes::{CInputError, ExitCode};
 use crate::pointers::{check_ptr, const_ptr_as_ref, mut_ptr_as_ref};
-use indexmap::IndexMap;
 use qiskit_circuit::PhysicalQubit;
 use qiskit_circuit::instruction::{Instruction, Parameters};
 use qiskit_circuit::operations::StandardInstruction;
@@ -26,6 +25,7 @@ use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::parameter::parameter_expression::ParameterExpression;
 use qiskit_circuit::parameter::symbol_expr::Symbol;
 use qiskit_transpiler::target::{InstructionProperties, Qargs, Target, TargetOperation};
+use qiskit_util::IndexMap;
 use smallvec::{SmallVec, smallvec};
 
 /// @ingroup QkTarget
@@ -497,7 +497,7 @@ impl From<StandardOperation> for PackedOperation {
 pub struct TargetEntry {
     operation: StandardOperation,
     params: Option<SmallVec<[Param; 3]>>,
-    map: IndexMap<Qargs, Option<InstructionProperties>, foldhash::fast::RandomState>,
+    map: IndexMap<Qargs, Option<InstructionProperties>>,
     name: Option<String>,
 }
 
@@ -509,7 +509,7 @@ impl TargetEntry {
                     .map(|i| {
                         let op_name = operation.name();
                         Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(
-                            Symbol::new(format!("{op_name}_param_{i}").as_str(), None, None),
+                            Symbol::standalone(format!("{op_name}_param_{i}"), None),
                         )))
                     })
                     .collect(),
@@ -1009,8 +1009,8 @@ pub unsafe extern "C" fn qk_target_num_instructions(target: *const Target) -> us
 ///     qk_target_instruction_supported(target, "crx", (uint32_t []){0, 1}, params);
 ///
 ///     // Free the pointers
-///     qk_param_free(params[0]);  
-///     qk_target_free(target);  
+///     qk_param_free(params[0]);
+///     qk_target_free(target);
 /// ```
 ///
 /// # Safety
@@ -1220,8 +1220,8 @@ pub unsafe extern "C" fn qk_target_op_qargs_index(
 /// Retrieve the qargs for the operation by index.
 ///
 /// @param target A pointer to the ``QkTarget``.
-/// @param op_idx The index at which the gate is stored.  
-/// @param qarg_idx The index at which the qargs are stored.  
+/// @param op_idx The index at which the gate is stored.
+/// @param qarg_idx The index at which the qargs are stored.
 /// @param qargs_out An out pointer to an array qubits. If ``op_idx`` refers to a a global
 ///     operation, a null pointer will be written.  The written pointer is borrowed from the
 ///     target and must not be freed.  A zero-qargs instruction will write out a non-null pointer,
@@ -1522,7 +1522,7 @@ pub unsafe extern "C" fn qk_target_op_get(
 ///
 ///     QkTargetOp op;
 ///     qk_target_op_get(target, 0, &op);
-///     
+///
 ///     // Check if the operation is a gate;
 ///     if (op.op_type == QkOperationKind_Gate) {
 ///         QkGate gate = qk_target_op_gate(target, 0);

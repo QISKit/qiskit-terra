@@ -13,27 +13,26 @@
 use super::TimeOps;
 use crate::TranspilerError;
 use crate::passes::schedule_analysis::{NodeDurations, PyNodeDurations};
-use foldhash::fast::RandomState;
 use hashbrown::HashMap;
-use indexmap::IndexMap;
 use pyo3::prelude::*;
 use qiskit_circuit::dag_circuit::{DAGCircuit, Wire};
-use qiskit_circuit::operations::{OperationRef, StandardInstruction};
+use qiskit_circuit::operations::{OperationRef, PyInstruction, PyOpKind, StandardInstruction};
 use qiskit_circuit::{Clbit, Qubit};
+use qiskit_util::IndexMap;
 use rustworkx_core::petgraph::prelude::NodeIndex;
 
 pub fn run_alap_schedule_analysis<T: TimeOps>(
     dag: &DAGCircuit,
     clbit_write_latency: T,
-    node_durations: &IndexMap<NodeIndex, T, RandomState>,
-) -> PyResult<IndexMap<NodeIndex, T, RandomState>> {
+    node_durations: &IndexMap<NodeIndex, T>,
+) -> PyResult<IndexMap<NodeIndex, T>> {
     if dag.qregs().len() != 1 || !dag.qregs_data().contains_key("q") {
         return Err(TranspilerError::new_err(
             "ALAP schedule runs on physical circuits only",
         ));
     }
 
-    let mut node_start_time: IndexMap<NodeIndex, T, RandomState> = IndexMap::default();
+    let mut node_start_time: IndexMap<NodeIndex, T> = IndexMap::default();
     let mut idle_before: HashMap<Wire, T> = HashMap::new();
 
     let zero = T::zero();
@@ -73,8 +72,10 @@ pub fn run_alap_schedule_analysis<T: TimeOps>(
         let op_view = op.op.view();
         let is_gate_or_delay = matches!(
             op_view,
-            OperationRef::Gate(_)
-                | OperationRef::StandardGate(_)
+            OperationRef::PyCustom(PyInstruction {
+                kind: PyOpKind::Gate,
+                ..
+            }) | OperationRef::StandardGate(_)
                 | OperationRef::StandardInstruction(StandardInstruction::Delay(_))
         );
 
@@ -132,7 +133,7 @@ pub fn run_alap_schedule_analysis<T: TimeOps>(
 
     // Note that ALAP pass is inversely scheduled, thus
     // t0 is computed by subtracting t1 from the entire circuit duration.
-    let mut result: IndexMap<NodeIndex, T, RandomState> = IndexMap::default();
+    let mut result: IndexMap<NodeIndex, T> = IndexMap::default();
     for (node_idx, t1) in node_start_time {
         let final_time = *circuit_duration - t1;
         result.insert(node_idx, final_time);

@@ -10,10 +10,9 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use foldhash::fast::RandomState;
 use hashbrown::HashSet;
-use indexmap::IndexMap;
 use pyo3::prelude::*;
+use qiskit_util::IndexMap;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 
 use qiskit_circuit::NoBlocks;
@@ -44,7 +43,7 @@ fn gate_eq(gate_a: &PackedInstruction, gate_b: &OperationFromPython<NoBlocks>) -
 
 fn run_on_self_inverse(
     dag: &mut DAGCircuit,
-    op_counts: &IndexMap<String, usize, RandomState>,
+    op_counts: &IndexMap<String, usize>,
     self_inverse_gate_names: HashSet<String>,
     self_inverse_gates: Vec<OperationFromPython<NoBlocks>>,
 ) -> PyResult<()> {
@@ -108,7 +107,7 @@ fn run_on_self_inverse(
 }
 fn run_on_inverse_pairs(
     dag: &mut DAGCircuit,
-    op_counts: &IndexMap<String, usize, RandomState>,
+    op_counts: &IndexMap<String, usize>,
     inverse_gate_names: HashSet<String>,
     inverse_gates: Vec<[OperationFromPython<NoBlocks>; 2]>,
 ) -> PyResult<()> {

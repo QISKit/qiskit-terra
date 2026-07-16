@@ -342,6 +342,7 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
         "_built",
         "_forbidden_message",
         "_instructions",
+        "_loop_var",
         "_parent",
         "_stretches_capture",
         "_stretches_local",
@@ -360,6 +361,7 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
         registers: Iterable[Register] = (),
         allow_jumps: bool = True,
         forbidden_message: str | None = None,
+        loop_var: expr.Var | None = None,
     ):
         """
         Args:
@@ -385,12 +387,14 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
                 pseudo scopes where the state machine of the builder scopes has changed into a
                 position where no instructions should be accepted, such as when inside a ``switch``
                 but outside any cases.
+            loop_var: If given, a classical var used for the loop counter
         """
         self._instructions = CircuitData(qubits, clbits)
         self.registers = set(registers)
         self.global_phase = 0.0
         self._vars_local = {}
         self._vars_capture = {}
+        self._loop_var = loop_var
         self._stretches_local = {}
         self._stretches_capture = {}
         self._allow_jumps = allow_jumps
@@ -521,6 +525,8 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
     def get_var(self, name: str):
         if name in self._stretches_local:
             return None
+        if self._loop_var is not None and self._loop_var.name == name:
+            return self._loop_var
         if (out := self._vars_local.get(name)) is not None:
             return out
         return self._parent.get_var(name)
@@ -535,6 +541,8 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
     def use_var(self, var: expr.Var):
         if (local := self._stretches_local.get(var.name)) is not None:
             raise CircuitError(f"cannot use '{var}' which is shadowed by the local '{local}'")
+        if self._loop_var is not None and self._loop_var == var:
+            return
         if (local := self._vars_local.get(var.name)) is not None:
             if local == var:
                 return
@@ -679,6 +687,7 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
             self._instructions.clbits,
             *self.registers,
             global_phase=self.global_phase,
+            inputs=() if self._loop_var is None else (self._loop_var,),
             captures=itertools.chain(self._vars_capture.values(), self._stretches_capture.values()),
         )
         for var in self._vars_local.values():
@@ -767,4 +776,5 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
         out._parent = self._parent
         out._allow_jumps = self._allow_jumps
         out._forbidden_message = self._forbidden_message
+        out._loop_var = self._loop_var
         return out

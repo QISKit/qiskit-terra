@@ -1,6 +1,6 @@
 # This code is part of Qiskit.
 #
-# (C) Copyright IBM 2022.
+# (C) Copyright IBM 2026.
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
@@ -10,7 +10,20 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""Utility functions for handling permutations."""
+"""Transpilation into PBC (Pauli Based Computation)."""
 
+from .plugins import (
+    UnrollPassManager,
+    OptimizePassManager,
+    TranslateToPBCPassManager,
+    OptimizePBCPassManager,
+)
+from .pass_manager import generate_preset_pbc_pass_manager
 
-from qiskit._accelerate.synthesis.permutation import _inverse_pattern, _validate_permutation
+__all__ = [
+    "OptimizePBCPassManager",
+    "OptimizePassManager",
+    "TranslateToPBCPassManager",
+    "UnrollPassManager",
+    "generate_preset_pbc_pass_manager",
+]

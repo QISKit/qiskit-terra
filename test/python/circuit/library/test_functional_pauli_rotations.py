@@ -31,7 +31,7 @@ from qiskit.circuit.library import (
     ExactReciprocalGate,
     PiecewiseChebyshevGate,
 )
-from qiskit.quantum_info import Statevector
+from qiskit.quantum_info import Operator, Statevector
 from test import QiskitTestCase
 
 
@@ -99,6 +99,35 @@ class TestFunctionalPauliRotations(QiskitTestCase):
 
             with self.subTest(use_gate=use_gate):
                 self.assertFunctionIsCorrect(polynome, poly, num_ancillas)
+
+    @data(
+        ("X", "rx", "crx"),
+        ("Z", "rz", "crz"),
+    )
+    @unpack
+    def test_polynomial_function_x_z_basis(
+        self, basis, rotation_method, controlled_rotation_method
+    ):
+        """Test polynomial rotations with X and Z bases."""
+        coeffs = [0.2, -0.4]
+
+        expected = QuantumCircuit(2)
+        getattr(expected, rotation_method)(coeffs[0], 1)
+        getattr(expected, controlled_rotation_method)(coeffs[1], 0, 1)
+
+        for use_gate in [True, False]:
+            if use_gate:
+                polynomial = PolynomialPauliRotationsGate(1, coeffs, basis=basis)
+            else:
+                with self.assertWarns(DeprecationWarning):
+                    polynomial = PolynomialPauliRotations(1, coeffs, basis=basis)
+
+            with self.subTest(use_gate=use_gate, basis=basis):
+                np.testing.assert_allclose(
+                    Operator(polynomial).data,
+                    Operator(expected).data,
+                    atol=1e-8,
+                )
 
     def test_polynomial_rotations_mutability(self):
         """Test the mutability of the linear rotations circuit."""

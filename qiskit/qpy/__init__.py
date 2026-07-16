@@ -199,6 +199,9 @@ of QPY in qiskit-terra 0.18.0.
    * - Qiskit (qiskit-terra for < 1.0.0) version
      - :func:`.dump` format(s) output versions
      - :func:`.load` maximum supported version (older format versions can always be read)
+   * - 2.5.0
+     - 13, 14, 15, 16, 17
+     - 17
    * - 2.4.1
      - 13, 14, 15, 16, 17
      - 17
@@ -2237,6 +2240,7 @@ from .exceptions import QpyError, UnsupportedFeatureForVersion, QPYLoadingDeprec
 from .interface import dump, load, get_qpy_version
 
 # For backward compatibility. Provide, Runtime, Experiment call these private functions.
+# ruff: disable[F401]
 from .binary_io import (
     _write_instruction,
     _read_instruction,
@@ -2244,4 +2248,18 @@ from .binary_io import (
     _read_parameter_expression,
     _read_parameter_expression_v3,
 )
+
+# ruff: enable[F401]
+
 from .common import QPY_VERSION, QPY_COMPATIBILITY_VERSION
+
+__all__ = [
+    "QPY_COMPATIBILITY_VERSION",
+    "QPY_VERSION",
+    "QPYLoadingDeprecatedFeatureWarning",
+    "QpyError",
+    "UnsupportedFeatureForVersion",
+    "dump",
+    "get_qpy_version",
+    "load",
+]

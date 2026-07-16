@@ -29,3 +29,31 @@ from .ucry import UCRYGate
 from .ucrz import UCRZGate
 from .unitary import UnitaryGate
 from .mcg_up_to_diagonal import MCGupDiag
+
+__all__ = [
+    "GMS",
+    "GR",
+    "GRX",
+    "GRY",
+    "GRZ",
+    "MCMT",
+    "Diagonal",
+    "DiagonalGate",
+    "Isometry",
+    "LinearFunction",
+    "MCGupDiag",
+    "MCMTGate",
+    "MCMTVChain",
+    "MSGate",
+    "PauliGate",
+    "PauliProductRotationGate",
+    "Permutation",
+    "PermutationGate",
+    "RVGate",
+    "UCGate",
+    "UCPauliRotGate",
+    "UCRXGate",
+    "UCRYGate",
+    "UCRZGate",
+    "UnitaryGate",
+]

@@ -14,7 +14,7 @@
 
 from ddt import ddt, data
 
-from qiskit.circuit import QuantumCircuit, Qubit, QuantumRegister
+from qiskit.circuit import QuantumCircuit, Qubit, QuantumRegister, Parameter, ParameterVector
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.transpiler import PassManager, CouplingMap, Layout, TranspilerError
 from qiskit.circuit.library import PauliEvolutionGate, CXGate
@@ -676,3 +676,74 @@ class TestSwapRouterExceptions(QiskitTestCase):
 
         with self.assertRaises(QiskitError):
             Commuting2qBlock(circuit_to_dag(circ).op_nodes())
+
+    def test_commuting2qblock_preserves_parameters(self):
+        """Test that Commuting2qBlock preserves parameters from parametric gates."""
+
+        c_0 = Parameter("c_0")
+        c_1 = Parameter("c_1")
+        gamma = Parameter("gamma")
+
+        qc = QuantumCircuit(3)
+        qc.rzz(c_0 * gamma, 0, 1)
+        qc.rzz(c_1, 1, 2)
+
+        dag = circuit_to_dag(qc)
+        nodes = list(dag.topological_op_nodes())
+        block = Commuting2qBlock(nodes)
+
+        # Check that both parameters are preserved
+        self.assertEqual(len(block.params), 3)
+        param_names = {p.name for p in block.params}
+        self.assertEqual(param_names, {"c_0", "gamma", "c_1"})
+
+    def test_parameters_when_appending_commuting2qblock_to_a_circuit(self):
+        """Test that a circuit appended with Commuting2qBlock knows about its parameters."""
+
+        theta = ParameterVector("theta", 3)
+        qc = QuantumCircuit(3)
+        qc.rzz(theta[0], 0, 1)
+        qc.rzz(theta[1], 1, 2)
+        qc.rzz(theta[2], 0, 2)
+
+        dag = circuit_to_dag(qc)
+        nodes = list(dag.topological_op_nodes())
+        block = Commuting2qBlock(nodes)
+
+        circuit_with_block = QuantumCircuit(3)
+        self.assertEqual(circuit_with_block.parameters, {})
+        circuit_with_block.append(block, range(3))
+
+        circuit_params = set(circuit_with_block.parameters)
+        expected_params = {theta[0], theta[1], theta[2]}
+        self.assertEqual(circuit_params, expected_params)
+
+        # Assign parameters and verify the circuit has no parameters after assignment
+        param_values = {theta[0]: 0.5, theta[1]: 1.0, theta[2]: 1.5}
+        assigned_circuit = circuit_with_block.assign_parameters(param_values)
+        self.assertEqual(assigned_circuit.parameters, {})
+
+    def test_commuting2qblock_parameter_reuse(self):
+        """Test that reusing the same parameter multiple times within a block works correctly."""
+
+        gamma = Parameter("gamma")
+        c_0 = Parameter("c_0")
+        qc = QuantumCircuit(3)
+        qc.rzz(gamma, 0, 1)
+        qc.rzz(2 * gamma, 1, 2)
+        qc.rzz(gamma + c_0, 0, 2)  # Reuse gamma
+
+        dag = circuit_to_dag(qc)
+        nodes = list(dag.topological_op_nodes())
+        block = Commuting2qBlock(nodes)
+
+        self.assertEqual(len(block.params), 2)
+        self.assertEqual(set(block.params), {c_0, gamma})
+
+        circuit_with_block = QuantumCircuit(3)
+        circuit_with_block.append(block, range(3))
+
+        self.assertEqual(set(circuit_with_block.parameters), {gamma, c_0})
+
+        assigned_circuit = circuit_with_block.assign_parameters({gamma: 0.7})
+        self.assertEqual(len(assigned_circuit.parameters), 1)

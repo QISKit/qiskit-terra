@@ -23,7 +23,7 @@ from qiskit.quantum_info import Operator, get_clifford_gate_names
 from qiskit.synthesis import gridsynth_rz
 from qiskit.transpiler.passes.synthesis import SynthesizeRZRotations
 
-from test import QiskitTestCase, combine
+from test import QiskitTestCase
 
 
 @ddt
@@ -160,6 +160,24 @@ class TestSynthesizeRzRotations(QiskitTestCase):
 
         synthesized = SynthesizeRZRotations()(qc)
         self.assertEqual(synthesized.count_ops().get("t", 0), 1)
+
+    def test_called_with_different_error_budgets(self):
+        """
+        Test SynthesizeRZRotations when called multiple times with different error
+        budgets.
+
+        Regression test of https://github.com/Qiskit/qiskit/issues/16385.
+        """
+        # Each run represents a triple (angle, synthesis error, cache error)
+        runs = [(0.0, 0.5, 0.1), (1.0, 0.1, 0.1), (2.0, 0.5, 0.2), (-1.0, 0.3, 0.4)]
+
+        for angle, synthesis_error, cache_error in runs:
+            qc = QuantumCircuit(1)
+            qc.rz(angle, 0)
+            qct = SynthesizeRZRotations(synthesis_error=synthesis_error, cache_error=cache_error)(
+                qc
+            )
+            self.assertLessEqual(operator_norm_distance(qct, angle), synthesis_error)
 
 
 def operator_norm_distance(circuit, angle):

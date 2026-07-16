@@ -14,3 +14,9 @@
 
 from .stabilizer_decompose import synth_stabilizer_layers, synth_stabilizer_depth_lnn
 from .stabilizer_circuit import synth_circuit_from_stabilizers
+
+__all__ = [
+    "synth_circuit_from_stabilizers",
+    "synth_stabilizer_depth_lnn",
+    "synth_stabilizer_layers",
+]

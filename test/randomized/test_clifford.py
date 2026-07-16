@@ -14,7 +14,7 @@
 import unittest
 from hypothesis import given, strategies, settings
 
-from qiskit.quantum_info.random import random_clifford
+from qiskit.quantum_info import random_clifford
 from qiskit.quantum_info import Clifford
 
 

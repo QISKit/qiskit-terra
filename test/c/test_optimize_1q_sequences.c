@@ -164,12 +164,15 @@ static int run_optimize_h_gates(optimize_h_gates_fn optimize_fn) {
         get_u1_u2_u3_target(), get_rz_rx_target(),           get_rz_sx_target(),
         get_rz_ry_u_target(),  get_rz_ry_u_noerror_target(),
     };
+    // For the rz_ry_u target, RY(pi/2)-RZ(pi) has a lower total error than the single U gate
+    // (~3e-4 vs 5e-4), so the error-aware basis selection picks it; without error rates
+    // (rz_ry_u_noerror) the single U gate still wins on gate count.
     char *gates[5][2] = {{
                              "u2",
                          },
                          {"rz", "rx"},
                          {"rz", "sx"},
-                         {"u"},
+                         {"ry", "rz"},
                          {"u"}};
 
     uint32_t freq[5][2] = {
@@ -178,11 +181,11 @@ static int run_optimize_h_gates(optimize_h_gates_fn optimize_fn) {
         },
         {2, 1},
         {2, 1},
-        {1},
+        {1, 1},
         {1},
     };
 
-    size_t num_gates[5] = {1, 2, 2, 1, 1};
+    size_t num_gates[5] = {1, 2, 2, 2, 1};
     char *names[5] = {"u1_u2_u3", "rz_rx", "rz_sx", "rz_ry_u", "rz_ry_u_noerror"};
     printf("Optimize h gates tests.\n");
     for (int idx = 0; idx < 5; idx++) {

@@ -15,7 +15,6 @@ import copy
 import itertools
 import pickle
 import random
-import unittest
 
 import ddt
 import numpy as np
@@ -999,10 +998,6 @@ class TestSparseObservable(QiskitTestCase):
             strict=True,
         )
 
-    @unittest.skipIf(
-        int(np.__version__.split(".", maxsplit=1)[0]) < 2,
-        "Numpy 1.x did not have a 'copy' keyword parameter to 'numpy.asarray'",
-    )
     def test_attributes_reject_no_copy_array(self):
         obs = SparseObservable.from_list([("XZY", 1.5j), ("+-r", -0.5)])
         with self.assertRaisesRegex(ValueError, "cannot produce a safe view"):

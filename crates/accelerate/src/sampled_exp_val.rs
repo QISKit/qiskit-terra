@@ -120,14 +120,14 @@ pub fn sampled_expval_complex(
     oper_strs: Vec<String>,
     coeff: PyReadonlyArray1<Complex64>,
     dist: HashMap<String, f64>,
-) -> PyResult<f64> {
+) -> PyResult<Complex64> {
     let coeff_arr = coeff.as_slice()?;
     let out: Complex64 = oper_strs
         .into_iter()
         .enumerate()
         .map(|(idx, string)| coeff_arr[idx] * c64(bitstring_expval(&dist, string), 0.))
         .sum::<Complex64>();
-    Ok(out.re)
+    Ok(out)
 }
 
 // Compute the expectation value from a sampled distribution for SparseObservable objects
@@ -136,7 +136,7 @@ pub fn sampled_expval_complex(
 pub fn sampled_expval_sparse_observable(
     sparse_obs: PyRef<PySparseObservable>,
     dist: HashMap<String, f64>,
-) -> PyResult<f64> {
+) -> PyResult<Complex64> {
     // Access the SparseObservable
     let sparse_obs = sparse_obs.as_inner()?;
     let result: PyResult<Complex64> =
@@ -146,7 +146,7 @@ pub fn sampled_expval_sparse_observable(
             .try_fold(Complex64::new(0.0, 0.0), |acc, (_idx, term)| {
                 Ok(acc + term.coeff * Complex64::new(bitstring_expval_bitterm(&dist, &term)?, 0.0))
             });
-    Ok(result?.re)
+    result
 }
 
 pub fn sampled_exp_val(m: &Bound<PyModule>) -> PyResult<()> {

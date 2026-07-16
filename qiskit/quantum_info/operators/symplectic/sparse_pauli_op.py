@@ -43,7 +43,6 @@ from qiskit.quantum_info.operators.symplectic.pauli import BasePauli
 from qiskit.quantum_info.operators.symplectic.pauli_list import PauliList
 from qiskit.quantum_info.operators.symplectic.pauli import Pauli
 
-
 if TYPE_CHECKING:
     from qiskit.transpiler.layout import TranspileLayout
 
@@ -496,10 +495,14 @@ class SparsePauliOp(LinearOp):
         if self.coeffs.dtype == object:
 
             def to_complex(coeff):
-                if not hasattr(coeff, "sympify"):
+                if not hasattr(coeff, "numeric"):
                     return coeff
-                sympified = coeff.sympify()
-                return complex(sympified) if sympified.is_Number else np.nan
+                # simplify() collapses cancellations like a + b - a - b to 0,
+                # so numeric() can evaluate them without needing sympy.
+                try:
+                    return complex(coeff.simplify().numeric(strict=False))
+                except TypeError:
+                    return np.nan
 
             non_zero = np.logical_not(
                 np.isclose([to_complex(x) for x in self.coeffs], 0, atol=atol, rtol=rtol)

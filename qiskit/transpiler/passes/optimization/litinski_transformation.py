@@ -21,9 +21,14 @@ from qiskit._accelerate.litinski_transformation import run_litinski_transformati
 class LitinskiTransformation(TransformationPass):
     r"""Applies Litinski transform to a circuit.
 
-    The transform applies to a circuit containing Clifford, single-qubit :math:`R_Z`-rotation gates
-    (including :math:`T` and :math:`T^\dagger`), and standard :math:`Z`-measurements, and moves
-    Clifford gates to the end of the circuit. In the process, it transforms :math:`R_Z`-rotations to
+    The transform applies to a circuit containing Clifford, single-qubit :math:`R_Z`-rotation,
+    :math:`R_X`-rotation and :math:`R_Y`-rotation gates,
+    (including :math:`Phase`, :math:`T` and :math:`T^\dagger`), Pauli product rotations,
+    Pauli product measurements, and standard :math:`Z`-measurements.
+    The transform moves Clifford gates to the end of the circuit, including single-qubit rotation gates,
+    Pauli product rotations and Pauli product measurements, whose angle is a multiple of :math:`\pi/2`.
+    In the process, it transforms :math:`R_Z`-rotations,
+    :math:`R_X`-rotation and :math:`R_Y`-rotation gates to
     Pauli product rotations, and :math:`Z`-measurements to Pauli product measurements.
 
     The pass supports all of the Clifford gates in the list returned by
@@ -32,9 +37,9 @@ class LitinskiTransformation(TransformationPass):
     ``["id", "x", "y", "z", "h", "s", "sdg", "sx", "sxdg", "cx", "cz", "cy",
     "swap","iswap", "ecr", "dcx"]``
 
-    The list of supported :math:`R_Z`-rotations is:
+    In addition, the rotation gates above with angles that are integral multiples of :math:`\pi/2`
+    within the given tolerance are also considered Clifford.
 
-    ``["t", "tdg", "rz", "p", "u1"]``
 
     Example:
 
@@ -44,6 +49,8 @@ class LitinskiTransformation(TransformationPass):
 
         from qiskit import generate_preset_pass_manager
         from qiskit.circuit import QuantumCircuit
+        from qiskit.circuit.library import PauliProductMeasurement, PauliProductRotationGate
+        from qiskit.quantum_info import Pauli
         from qiskit.transpiler.passes import LitinskiTransformation
 
         litinski = LitinskiTransformation(fix_clifford=False, use_ppr=True)
@@ -57,8 +64,11 @@ class LitinskiTransformation(TransformationPass):
         qc.rz(1.23, 0)
         qc.cx(0, 1)
         qc.t(1)
+        qc.append(PauliProductRotationGate(Pauli("XY"), 0.456), [1, 2])
         qc.cx(1, 2)
+        qc.append(PauliProductMeasurement(Pauli("ZX")), [0, 1], [0])
         qc.measure(2, 0)
+
 
         pbc = pm.run(qc)
 
@@ -74,6 +84,7 @@ class LitinskiTransformation(TransformationPass):
         fix_clifford: bool = True,
         insert_barrier: bool = False,
         use_ppr: bool | None = None,
+        approximation_degree: float = 1.0,
     ):
         """
         Args:
@@ -87,10 +98,14 @@ class LitinskiTransformation(TransformationPass):
             use_ppr: If ``True``, use :class:`.PauliProductRotationGate` to represent
                 the Pauli rotation gates. This is encouraged to improve performance using a fully
                 Rust-backed path. If ``False`` or ``None``, use :class:`.PauliEvolutionGate`.
+            approximation_degree: Used in the tolerance computations,
+                to check how much a PPR or a rotation gate is close to a Clifford.
+                This gives the threshold for the average gate fidelity.
         """
         super().__init__()
         self.fix_clifford = fix_clifford
         self.insert_barrier = insert_barrier
+        self.approximation_degree = approximation_degree
 
         # In Qiskit v2.4 the default is to keep using PauliEvolutionGate as rotation gates, but
         # come v2.5 we can start to warn that in v3.0 the default will be changed to PPR gates
@@ -112,7 +127,7 @@ class LitinskiTransformation(TransformationPass):
             TranspilerError: If the circuit contains gates not supported by the pass.
         """
         new_dag = run_litinski_transformation(
-            dag, self.fix_clifford, self.insert_barrier, self.use_ppr
+            dag, self.fix_clifford, self.insert_barrier, self.use_ppr, self.approximation_degree
         )
 
         # If the pass did not do anything, the result is None

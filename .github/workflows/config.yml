@@ -1,0 +1,43 @@
+---
+
+# This is a no-op job whose only purpose is to centralise some shared configuration values.  It's
+# also possible to specify these in the GitHub web interface, but that separates them from the rest
+# of the configuration logic and means that the changes to the configuration do not appear in the
+# git history.
+
+name: Set CI configuration
+
+on:
+  workflow_call:
+    outputs:
+      python-old:
+        description: Oldest supported version of Python
+        value: '3.10'
+
+      python-new:
+        description: Newest supported version of Python
+        value: '3.14'
+
+      runner-linux-x86_64:
+        description: Runner image for Linux x86_64 jobs
+        value: 'ubuntu-latest'
+
+      runner-linux-arm64:
+        description: Runner image for Linux ARM64 jobs
+        value: 'ubuntu-24.04-arm'
+
+      runner-macos-arm64:
+        description: Runner image for macOS ARM64 jobs
+        value: 'macos-15'
+
+      runner-windows-x86_64:
+        description: Runner image for Windows x86_64 jobs
+        value: 'windows-latest'
+
+jobs:
+  # We have to have _some_ job defined or the workflow isn't valid.
+  noop:
+    name: Configure
+    runs-on: 'ubuntu-latest'
+    steps:
+      - run: ':'

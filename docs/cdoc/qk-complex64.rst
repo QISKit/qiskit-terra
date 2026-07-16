@@ -1,3 +1,5 @@
+.. _capi-complex64:
+
 ===========
 QkComplex64
 ===========

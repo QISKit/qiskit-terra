@@ -10,17 +10,16 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use num_complex::ComplexFloat;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use qiskit_circuit::BlocksMode;
-use qiskit_circuit::Qubit;
-use qiskit_circuit::VarsMode;
+use qiskit_circuit::bit::ShareableQubit;
+use qiskit_circuit::dag_circuit::NodeIndex;
 use qiskit_circuit::operations::Operation;
+use qiskit_circuit::packed_instruction::PackedOperation;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, FRAC_PI_8, PI};
 
-use crate::gate_metrics::rotation_trace_and_dim;
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use crate::passes::common::{MINIMUM_TOL, is_angle_close_to_multiple_of_pi_k};
+use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_circuit::operations::{OperationRef, Param, StandardGate};
 use qiskit_circuit::packed_instruction::PackedInstruction;
 
@@ -30,8 +29,6 @@ static ROTATION_GATE_NAMES: [&str; 14] = [
 
 type SubstituteSequencePi4<'a> = [(&'a [(StandardGate, &'a [u32])], f64); 16];
 type SubstituteSequencePi2<'a> = [(&'a [(StandardGate, &'a [u32])], f64); 8];
-
-const MINIMUM_TOL: f64 = 1e-12;
 
 /// Table for RZ(k * pi / 4) substitutions, with 0 <= k < 16
 static RZ_SUBSTITUTIONS: [(&[StandardGate], f64); 16] = [
@@ -978,36 +975,6 @@ static CRY_SUBSTITUTIONS: SubstituteSequencePi2 = [
     ),
 ];
 
-/// For a given angle, if it is a multiple of PI/k, calculate the multiple mod (4*k),
-/// Otherwise, return `None`.
-/// E.g, if the angle is a multiple m of PI/4 then it returns m, where 0 <= m < 16,
-/// and if the angle is a multiple m of PI/2 then it returns m, where 0 <= m < 8.
-fn is_angle_close_to_multiple_of_pi_k(
-    gate: StandardGate,
-    k: usize,
-    angle: f64,
-    tol: f64,
-) -> Option<usize> {
-    let closest_ratio = angle * (k as f64) / PI;
-    let closest_integer = closest_ratio.round();
-    let closest_angle = closest_integer * PI / (k as f64);
-    let theta = angle - closest_angle;
-
-    // Trace and dimension calculation of rotation matrices
-    let (tr_over_dim, dim) = rotation_trace_and_dim(gate, theta)
-        .expect("Since only supported rotation gates are given, the result is not None");
-
-    // fidelity-based tolerance
-    let f_pro = tr_over_dim.abs().powi(2);
-    let gate_fidelity = (dim * f_pro + 1.) / (dim + 1.);
-    let rem = 4 * k as i64;
-    if (1. - gate_fidelity).abs() < tol {
-        Some((closest_integer as i64).rem_euclid(rem) as usize)
-    } else {
-        None
-    }
-}
-
 /// The following two functions get a rotation gate and outputs an equivalent vector of
 /// standard gates in {Clifford, T, Tdg} and a global phase.
 /// For single-qubit rotation gates (RX, RY, RZ, Phase) and two-qubit rotation gates
@@ -1078,19 +1045,17 @@ fn rotation_to_pi_div(gate: StandardGate) -> usize {
 #[pyfunction]
 #[pyo3(name = "substitute_pi4_rotations")]
 pub fn py_run_substitute_pi4_rotations(
-    dag: &DAGCircuit,
+    dag: &mut DAGCircuit,
     approximation_degree: f64,
-) -> PyResult<Option<DAGCircuit>> {
+) -> PyResult<()> {
     // Skip the pass if there are no rotation gates.
     if dag
         .get_op_counts()
         .keys()
         .all(|k| !ROTATION_GATE_NAMES.contains(&k.as_str()))
     {
-        return Ok(None);
+        return Ok(());
     }
-
-    let mut new_dag = dag.copy_empty_like_with_capacity(0, 0, VarsMode::Alike, BlocksMode::Keep)?;
 
     // Iterate over nodes in the DAG and collect nodes that are rotation gates
     // with an angle that is sufficiently close to a multiple of pi/4
@@ -1098,64 +1063,75 @@ pub fn py_run_substitute_pi4_rotations(
     let tol = MINIMUM_TOL.max(1.0 - approximation_degree);
     let mut global_phase_update: f64 = 0.;
 
-    for node_index in dag.topological_op_nodes(false) {
-        let NodeType::Operation(inst) = &dag[node_index] else {
-            unreachable!("dag.topological_op_nodes only returns Operations");
-        };
-        let gate = if let OperationRef::StandardGate(gate) = inst.op.view() {
-            gate
-        } else {
-            new_dag.push_back(inst.clone())?;
-            continue;
-        };
-
-        if gate.num_params() != 1 {
-            new_dag.push_back(inst.clone())?;
-            continue;
-        }
-
-        let angle = if let Param::Float(angle) = inst.params_view()[0] {
-            angle
-        } else {
-            new_dag.push_back(inst.clone())?;
-            continue;
-        };
-
-        let k = rotation_to_pi_div(gate);
-        let num_qubits = gate.num_qubits();
-
-        if let Some(multiple) = is_angle_close_to_multiple_of_pi_k(gate, k, angle, tol) {
-            let (sequence, phase_update) = if num_qubits == 2 {
-                let (sequence, phase_update) = replace_2q_rotation_by_discrete(gate, multiple);
-                (sequence.to_vec(), phase_update)
-            } else {
-                // num_qubits == 1
-                let (new_gate, phase_update) = replace_1q_rotation_by_discrete(gate, multiple);
-
-                let qubit: &[u32] = &[0];
-                let sequence = new_gate.iter().map(|g| (*g, qubit)).collect();
-                (sequence, phase_update)
+    // We first collect all nodes that need changing and store their pi/4 multiple. Then
+    // we iterate over the DAG to apply these changes.
+    let nodes_to_replace: Vec<(NodeIndex, StandardGate, usize)> = dag
+        .op_nodes(false)
+        .filter_map(|(node_index, inst)| {
+            let OperationRef::StandardGate(gate) = inst.op.view() else {
+                return None;
             };
-            for (new_gate, qubits) in sequence {
-                let original_qubits = dag.get_qargs(inst.qubits);
-                let updated_qubits: Vec<Qubit> = qubits
-                    .iter()
-                    .map(|q| original_qubits[*q as usize])
-                    .collect();
-                let new_qubits = new_dag.add_qargs(&updated_qubits);
-                new_dag.push_back(PackedInstruction::from_standard_gate(
-                    new_gate, None, new_qubits,
-                ))?;
+
+            if gate.num_params() != 1 {
+                return None;
+            };
+
+            let Param::Float(angle) = inst.params_view()[0] else {
+                return None;
+            };
+
+            let k = rotation_to_pi_div(gate);
+            let multiple = is_angle_close_to_multiple_of_pi_k(gate, k, angle, tol)?;
+            Some((node_index, gate, multiple))
+        })
+        .collect();
+
+    for (node_index, gate, multiple) in nodes_to_replace {
+        match gate.num_qubits() {
+            1 => {
+                let (sequence, phase_update) = replace_1q_rotation_by_discrete(gate, multiple);
+                let num_gates = sequence.len();
+                if num_gates == 0 {
+                    // in the special case that we have a 0-length sequence, remove the gate
+                    dag.remove_1q_sequence(&[node_index]);
+                } else {
+                    // add all gates except the last one, and then substitute the existing op
+                    // for the very last gate
+                    for gate in sequence[..num_gates - 1].iter() {
+                        dag.insert_1q_on_incoming_qubit((*gate, &[]), node_index);
+                    }
+                    let last_op = PackedOperation::from_standard_gate(
+                        *sequence.last().expect("sequence has at least 1 element"),
+                    );
+                    dag.substitute_op(node_index, last_op, None, None)?;
+                }
+                global_phase_update += phase_update;
             }
-            global_phase_update += phase_update;
-        } else {
-            new_dag.push_back(inst.clone())?;
-        }
+            2 => {
+                let (sequence, phase_update) = replace_2q_rotation_by_discrete(gate, multiple);
+                let mut local_dag =
+                    DAGCircuit::with_capacity(2, 0, None, Some(sequence.len()), None, None);
+                local_dag.add_qubit_unchecked(ShareableQubit::new_anonymous())?;
+                local_dag.add_qubit_unchecked(ShareableQubit::new_anonymous())?;
+
+                for (gate, qubits) in sequence {
+                    let qargs = ::bytemuck::cast_slice(qubits);
+                    let interned = local_dag.add_qargs(qargs);
+                    let packed = PackedInstruction::from_standard_gate(*gate, None, interned);
+                    local_dag.push_back(packed)?;
+                }
+                dag.substitute_node_with_dag(node_index, &local_dag, None, None, None, None)?;
+                global_phase_update += phase_update;
+            }
+            _ => {
+                // There's no standard rotation gates with more than 2 qubits.
+                continue;
+            }
+        };
     }
+    dag.add_global_phase(&Param::Float(global_phase_update))?;
 
-    new_dag.add_global_phase(&Param::Float(global_phase_update))?;
-
-    Ok(Some(new_dag))
+    Ok(())
 }
 
 pub fn substitute_pi4_rotations_mod(m: &Bound<PyModule>) -> PyResult<()> {

@@ -1090,6 +1090,32 @@ c[1] = measure q[1];
         )
         self.assertEqual(dumps(qc), expected_qasm)
 
+    def test_for_loop_with_var(self):
+        """Test that a for loop with a expr.Var instead of a Parameter outputs the expected result."""
+        qc = QuantumCircuit(1, 1)
+        cr = ClassicalRegister(5, "reps")
+        qc.add_register(cr)
+
+        with qc.for_loop(range(5), expr.Var.new("a", types.Uint(32))) as v:
+            qc.measure(0, 0)
+            qc.store(expr.index(cr, v), qc.clbits[0])
+
+        expected_qasm = "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                "bit[1] c;",
+                "bit[5] reps;",
+                "qubit[1] q;",
+                "for uint[32] a in [0:4] {",
+                "  c[0] = measure q[0];",
+                "  reps[a] = c[0];",
+                "}",
+                "",
+            ]
+        )
+        self.assertEqual(dumps(qc), expected_qasm)
+
     def test_simple_while_loop(self):
         """Test that a simple while loop works correctly."""
         loop_body = QuantumCircuit(1)
@@ -3393,6 +3419,24 @@ class TestQASM3ExporterRust(QiskitTestCase):
             ]
         )
         self.assertEqual(dumps_experimental(qc, allow_aliasing=True), expected_qasm)
+
+    def test_delay_units(self):
+        """Each delay unit should round-trip through ``dumps_experimental`` with the
+        correct label and a numerically correct value.  OpenQASM 3 has no ``ps``
+        unit, so picoseconds are emitted as nanoseconds (1 ps = 0.001 ns)."""
+        cases = [
+            ("ns", 1, r"delay\[1ns\]"),
+            ("us", 1, r"delay\[1us\]"),
+            ("ms", 1, r"delay\[1ms\]"),
+            ("s", 1, r"delay\[1s\]"),
+            ("dt", 1, r"delay\[1dt\]"),
+            ("ps", 1337, r"delay\[1\.337ns\]"),
+        ]
+        for unit, value, expected_pattern in cases:
+            with self.subTest(unit=unit, value=value):
+                qc = QuantumCircuit(1)
+                qc.delay(value, 0, unit=unit)
+                self.assertRegex(dumps_experimental(qc), expected_pattern)
 
     def test_delay_qpy_roundtrip(self):
         qc = QuantumCircuit(1)

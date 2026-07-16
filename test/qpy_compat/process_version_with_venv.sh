@@ -46,10 +46,21 @@ our_dir="$(realpath -- "$(dirname -- "${BASH_SOURCE[0]}")")"
 cache_dir="$(pwd -P)/qpy_cache/$version"
 venv_dir="$(pwd -P)/venvs/$package-$version"
 
+# Use the updated constraints file for qiskit >= 2.5
+constraints_file="qpy_test_constraints.txt"
+
+major=${version%%.*}
+rest=${version#*.}
+minor=${rest%%[^0-9]*}
+
+if (( major > 2 || (major == 2 && minor >= 5) )); then
+    constraints_file="qpy_test_constraints25.txt"
+fi
+
 if [[ ! -d $cache_dir ]] ; then
     echo "Building venv for $package==$version"
     "$python" -m venv "$venv_dir"
-    "$venv_dir/bin/pip" install -c "${our_dir}/qpy_test_constraints.txt" "${package}==${version}" packaging
+    "$venv_dir/bin/pip" install -c "${our_dir}/${constraints_file}" "${package}==${version}" packaging
     mkdir -p "$cache_dir"
     pushd "$cache_dir"
     echo "Generating QPY files with $package==$version"

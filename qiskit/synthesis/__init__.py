@@ -178,86 +178,64 @@ Integer comparators
 
 """
 
-from .evolution import (
-    EvolutionSynthesis,
-    ProductFormula,
-    LieTrotter,
-    SuzukiTrotter,
-    MatrixExponential,
-    QDrift,
-)
 
-from .permutation import (
-    synth_permutation_depth_lnn_kms,
-    synth_permutation_basic,
-    synth_permutation_acg,
-    synth_permutation_reverse_lnn_kms,
-)
-from .linear import (
-    synth_cnot_count_full_pmh,
-    synth_cnot_depth_line_kms,
-)
-from .linear_phase import synth_cz_depth_line_mr, synth_cx_cz_depth_line_my, synth_cnot_phase_aam
-from .clifford import (
-    synth_clifford_full,
-    synth_clifford_ag,
-    synth_clifford_bm,
-    synth_clifford_greedy,
-    synth_clifford_layers,
-    synth_clifford_depth_lnn,
-)
-from .cnotdihedral import (
-    synth_cnotdihedral_full,
-    synth_cnotdihedral_two_qubits,
-    synth_cnotdihedral_general,
-)
-from .stabilizer import (
-    synth_stabilizer_layers,
-    synth_stabilizer_depth_lnn,
-    synth_circuit_from_stabilizers,
-)
-from .discrete_basis import (
-    SolovayKitaevDecomposition,
-    generate_basic_approximations,
-    gridsynth_rz,
-    gridsynth_unitary,
-)
-from .qft import synth_qft_line, synth_qft_full
+from .evolution import *
+from .permutation import *
+from .linear import *
+from .linear_phase import *
+from .clifford import *
+from .cnotdihedral import *
+from .stabilizer import *
+from .discrete_basis import *
+from .qft import *
 from .unitary.qsd import qs_decomposition
 from .unitary import aqc
 from .one_qubit import OneQubitEulerDecomposer
-from .two_qubit.xx_decompose import XXDecomposer
-from .two_qubit.two_qubit_decompose import (
-    TwoQubitBasisDecomposer,
-    two_qubit_cnot_decompose,
-    TwoQubitWeylDecomposition,
-    TwoQubitControlledUDecomposer,
+from .two_qubit import *
+from .multi_controlled import *
+from .arithmetic import *
+
+from . import (
+    evolution,
+    permutation,
+    linear,
+    linear_phase,
+    clifford,
+    cnotdihedral,
+    stabilizer,
+    discrete_basis,
+    qft,
+    two_qubit,
+    multi_controlled,
+    arithmetic,
 )
-from .multi_controlled import (
-    synth_mcmt_vchain,
-    synth_mcmt_xgate,
-    synth_mcx_1_clean_kg24,
-    synth_mcx_1_dirty_kg24,
-    synth_mcx_2_clean_kg24,
-    synth_mcx_2_dirty_kg24,
-    synth_mcx_n_dirty_i15,
-    synth_mcx_n_clean_m15,
-    synth_mcx_1_clean_b95,
-    synth_mcx_noaux_v24,
-    synth_mcx_noaux_hp24,
-    synth_mcx_gray_code,
-    synth_c3x,
-    synth_c4x,
-)
-from .arithmetic import (
-    adder_qft_d00,
-    adder_ripple_c04,
-    adder_ripple_v95,
-    adder_ripple_r25,
-    adder_modular_v17,
-    multiplier_cumulative_h18,
-    multiplier_qft_r17,
-    synth_integer_comparator_greedy,
-    synth_integer_comparator_2s,
-    synth_weighted_sum_carry,
-)
+
+__all__ = [
+    "OneQubitEulerDecomposer",
+    "aqc",
+    "arithmetic",
+    "clifford",
+    "cnotdihedral",
+    "discrete_basis",
+    "evolution",
+    "linear",
+    "linear_phase",
+    "multi_controlled",
+    "permutation",
+    "qft",
+    "qs_decomposition",
+    "stabilizer",
+    "two_qubit",
+]
+__all__ += evolution.__all__
+__all__ += permutation.__all__
+__all__ += linear.__all__
+__all__ += linear_phase.__all__
+__all__ += clifford.__all__
+__all__ += cnotdihedral.__all__
+__all__ += stabilizer.__all__
+__all__ += discrete_basis.__all__
+__all__ += qft.__all__
+__all__ += two_qubit.__all__
+__all__ += multi_controlled.__all__
+__all__ += arithmetic.__all__
