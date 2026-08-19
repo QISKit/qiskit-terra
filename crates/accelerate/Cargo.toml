@@ -22,7 +22,7 @@ num-complex.workspace = true
 rustworkx-core.workspace = true
 num-bigint.workspace = true
 itertools.workspace = true
-qiskit-circuit.workspace = true
+qiskit-circuit = { workspace = true, features = [ "py" ] }
 qiskit-transpiler.workspace = true
 qiskit-quantum-info.workspace = true
 qiskit-util.workspace = true

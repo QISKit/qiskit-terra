@@ -15,7 +15,7 @@ workspace = true
 [dependencies]
 qiskit-util.workspace = true
 hashbrown.workspace = true
-qiskit-circuit.workspace = true
+qiskit-circuit = { workspace = true, features = [ "py" ] }
 qiskit-quantum-info.workspace = true
 num-bigint.workspace = true
 num-complex.workspace = true
