@@ -10,10 +10,15 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::classical::expr::{Expr, ExprKind, PyExpr};
+use crate::classical::expr::Expr;
+#[cfg(feature = "py")]
+use crate::classical::expr::{ExprKind, PyExpr};
 use crate::classical::types::Type;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::PyTuple;
+#[cfg(feature = "py")]
 use pyo3::{IntoPyObjectExt, intern};
 
 /// An indexing expression.
@@ -25,6 +30,7 @@ pub struct Index {
     pub constant: bool,
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for Index {
     type Target = PyAny;
     type Output = Bound<'py, PyAny>;
@@ -35,6 +41,7 @@ impl<'py> IntoPyObject<'py> for Index {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for Index {
     type Error = <PyIndex as FromPyObject<'a, 'py>>::Error;
 
@@ -44,6 +51,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Index {
     }
 }
 
+#[cfg(feature = "py")]
 /// An indexing expression.
 ///
 /// Args:
@@ -60,6 +68,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Index {
 #[derive(PartialEq, Clone, Debug)]
 pub struct PyIndex(Index);
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyIndex {
     #[new]

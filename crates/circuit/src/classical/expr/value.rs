@@ -10,12 +10,16 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "py")]
 use crate::classical::expr::{ExprKind, PyExpr};
 use crate::classical::types::Type;
 use crate::duration::Duration;
 use num_bigint::BigUint;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::PyTuple;
+#[cfg(feature = "py")]
 use pyo3::{IntoPyObjectExt, intern};
 
 /// A single scalar value expression.
@@ -26,6 +30,7 @@ pub enum Value {
     Uint { raw: BigUint, ty: Type },
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for Value {
     type Target = PyAny;
     type Output = Bound<'py, PyAny>;
@@ -36,6 +41,7 @@ impl<'py> IntoPyObject<'py> for Value {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for Value {
     type Error = <PyValue as FromPyObject<'a, 'py>>::Error;
 
@@ -45,6 +51,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Value {
     }
 }
 
+#[cfg(feature = "py")]
 /// A single scalar value.
 #[pyclass(
     eq,
@@ -56,6 +63,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Value {
 #[derive(PartialEq, Clone, Debug)]
 pub struct PyValue(Value);
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyValue {
     #[new]

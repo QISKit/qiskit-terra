@@ -10,8 +10,11 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "py")]
 use pyo3::exceptions::PyValueError;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::PyTuple;
 
 /// A length of time used to express circuit timing.
@@ -30,7 +33,10 @@ use pyo3::types::PyTuple;
 ///          raise ValueError("expected dt or seconds")
 ///
 /// You can also use :meth:`value` and :meth:`unit` to get the information separately.
-#[pyclass(eq, module = "qiskit._accelerate.circuit", from_py_object)]
+#[cfg_attr(
+    feature = "py",
+    pyclass(eq, module = "qiskit._accelerate.circuit", from_py_object)
+)]
 #[derive(PartialEq, Clone, Copy, Debug)]
 #[allow(non_camel_case_types)]
 pub enum Duration {
@@ -42,8 +48,9 @@ pub enum Duration {
     s(f64),
 }
 
-#[pymethods]
+#[cfg_attr(feature = "py", pymethods)]
 impl Duration {
+    #[cfg(feature = "py")]
     #[new]
     fn py_new(unit: &str, value: Bound<PyAny>) -> PyResult<Self> {
         match unit {
@@ -73,6 +80,7 @@ impl Duration {
     ///
     /// This will be a Python ``int`` if the :meth:`~Duration.unit` is ``"dt"``,
     /// else a ``float``.
+    #[cfg(feature = "py")]
     #[pyo3(name = "value")]
     pub fn py_value<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
         match *self {
@@ -91,6 +99,7 @@ impl Duration {
         }
     }
 
+    #[cfg(feature = "py")]
     fn __repr__(&self) -> String {
         match self {
             Duration::ps(t) => format!("Duration.ps({t})"),
@@ -102,6 +111,7 @@ impl Duration {
         }
     }
 
+    #[cfg(feature = "py")]
     fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         (py.get_type::<Duration>(), (self.unit(), self.py_value(py))).into_pyobject(py)
     }

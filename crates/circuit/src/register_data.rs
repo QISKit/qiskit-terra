@@ -10,14 +10,19 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "py")]
 use std::sync::OnceLock;
 use std::{fmt::Debug, marker::PhantomData};
 
 use hashbrown::HashMap;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::{IntoPyDict, PyDict, PyList};
 
-use crate::{bit::Register, circuit_data::CircuitError};
+use crate::bit::Register;
+#[cfg(feature = "py")]
+use crate::circuit_data::CircuitError;
 
 /// Error thrown when adding a register using strict mode
 /// and it's already present.
@@ -25,6 +30,7 @@ use crate::{bit::Register, circuit_data::CircuitError};
 #[error("register name \"{0}\" already exists")]
 pub struct RegisterAlreadyExists(String);
 
+#[cfg(feature = "py")]
 impl From<RegisterAlreadyExists> for PyErr {
     fn from(value: RegisterAlreadyExists) -> Self {
         CircuitError::new_err(value.to_string())
@@ -70,6 +76,7 @@ impl<R: Register> RegisterIndex<R> {
 pub struct RegisterData<R: Register> {
     reg_index: HashMap<String, RegisterIndex<R>>,
     registers: Vec<R>,
+    #[cfg(feature = "py")]
     cached_registers: OnceLock<Py<PyDict>>,
 }
 
@@ -97,6 +104,7 @@ where
         Self {
             reg_index: HashMap::new(),
             registers: Vec::new(),
+            #[cfg(feature = "py")]
             cached_registers: OnceLock::new(),
         }
     }
@@ -107,6 +115,7 @@ where
         Self {
             reg_index: HashMap::with_capacity(capacity),
             registers: Vec::new(),
+            #[cfg(feature = "py")]
             cached_registers: OnceLock::new(),
         }
     }
@@ -126,6 +135,7 @@ where
             .is_ok()
         {
             self.registers.push(register);
+            #[cfg(feature = "py")]
             self.cached_registers.take();
             Ok(true)
         } else if strict {
@@ -172,6 +182,7 @@ where
     ///
     /// __**Note:** This operation is performed at `O(n)` times in the worst case.__
     pub fn remove(&mut self, register: &str) -> Option<R> {
+        #[cfg(feature = "py")]
         self.cached_registers.take();
         if let Some(index) = self.reg_index.remove(register) {
             let bit = self.registers.remove(index.index());
@@ -197,6 +208,7 @@ where
             .filter_map(|i| self.reg_index.get(&i).map(|idx| idx.index()))
             .collect();
         indices_sorted.sort();
+        #[cfg(feature = "py")]
         self.cached_registers.take();
         for index in indices_sorted.into_iter().rev() {
             let bit = self.registers.remove(index);
@@ -219,6 +231,7 @@ where
     pub fn dispose(&mut self) {
         self.reg_index.clear();
         self.registers.clear();
+        #[cfg(feature = "py")]
         self.cached_registers.take();
     }
 
@@ -237,11 +250,13 @@ where
         Self {
             registers,
             reg_index,
+            #[cfg(feature = "py")]
             cached_registers: OnceLock::new(),
         }
     }
 }
 
+#[cfg(feature = "py")]
 impl<R> RegisterData<R>
 where
     R: Debug + Clone + Register + for<'py> IntoPyObject<'py>,

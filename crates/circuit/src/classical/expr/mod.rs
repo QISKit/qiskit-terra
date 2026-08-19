@@ -10,6 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
 
 mod binary;
@@ -34,15 +35,26 @@ pub use var::Var;
 // These aren't "pub use" since we probably shouldn't have a
 // reason to use the Python class types from Rust if we're
 // doing things the right way.
+#[cfg(feature = "py")]
 use crate::classical::expr::binary::PyBinary;
+#[cfg(feature = "py")]
 use crate::classical::expr::cast::PyCast;
-use crate::classical::expr::expr::{ExprKind, PyExpr};
+#[cfg(feature = "py")]
+use crate::classical::expr::expr::ExprKind;
+#[cfg(feature = "py")]
+use crate::classical::expr::expr::PyExpr;
+#[cfg(feature = "py")]
 use crate::classical::expr::index::PyIndex;
+#[cfg(feature = "py")]
 use crate::classical::expr::stretch::PyStretch;
+#[cfg(feature = "py")]
 use crate::classical::expr::unary::PyUnary;
+#[cfg(feature = "py")]
 use crate::classical::expr::value::PyValue;
+#[cfg(feature = "py")]
 use crate::classical::expr::var::PyVar;
 
+#[cfg(feature = "py")]
 pub(crate) fn register_python(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyExpr>()?;
     m.add_class::<PyUnary>()?;

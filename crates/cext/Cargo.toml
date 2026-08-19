@@ -40,7 +40,7 @@ num-traits.workspace = true
 bytemuck.workspace = true
 
 [features]
-python_binding = ["dep:pyo3"]
+python_binding = ["dep:pyo3", "qiskit-circuit/py"]
 cache_pygates = [
     "qiskit-circuit/cache_pygates",
     "qiskit-transpiler/cache_pygates",

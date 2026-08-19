@@ -10,10 +10,14 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::classical::expr::{Expr, ExprKind, PyExpr};
-use crate::classical::types::Type;
+#[cfg(feature = "py")]
+use crate::classical::expr::{ExprKind, PyExpr};
+use crate::classical::{expr::Expr, types::Type};
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::PyTuple;
+#[cfg(feature = "py")]
 use pyo3::{IntoPyObjectExt, intern};
 
 /// A cast from one type to another, implied by the use of an expression in a different
@@ -26,6 +30,7 @@ pub struct Cast {
     pub implicit: bool,
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for Cast {
     type Target = PyAny;
     type Output = Bound<'py, PyAny>;
@@ -36,6 +41,7 @@ impl<'py> IntoPyObject<'py> for Cast {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for Cast {
     type Error = <PyCast as FromPyObject<'a, 'py>>::Error;
 
@@ -45,6 +51,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Cast {
     }
 }
 
+#[cfg(feature = "py")]
 /// A cast from one type to another, implied by the use of an expression in a different
 /// context.
 #[pyclass(
@@ -57,6 +64,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Cast {
 #[derive(PartialEq, Clone, Debug)]
 pub struct PyCast(Cast);
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyCast {
     #[new]

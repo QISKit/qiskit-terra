@@ -10,6 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "py")]
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -20,25 +21,36 @@ use std::sync::Arc;
 use foldhash::fast::RandomState;
 use smallvec::SmallVec;
 
+#[cfg(feature = "py")]
+use crate::TupleLikeArg;
 use crate::bit::{
-    BitLocations, ClassicalRegister, PyClbit, PyQubit, QuantumRegister, Register, ShareableClbit,
-    ShareableQubit,
+    BitLocations, ClassicalRegister, QuantumRegister, Register, ShareableClbit, ShareableQubit,
 };
+#[cfg(feature = "py")]
+use crate::bit::{PyClbit, PyQubit};
 use crate::bit_locator::BitLocator;
 use crate::circuit_data::CircuitData;
+#[cfg(feature = "py")]
 use crate::circuit_instruction::{CircuitInstruction, OperationFromPython};
 use crate::classical::expr;
+#[cfg(feature = "py")]
 use crate::converters::QuantumCircuitData;
+#[cfg(feature = "py")]
 use crate::dag_node::{DAGInNode, DAGNode, DAGOpNode, DAGOutNode};
+#[cfg(feature = "py")]
 use crate::dot_utils::build_dot;
+#[cfg(feature = "py")]
 use crate::error::DAGCircuitError;
 use crate::interner::{Interned, InternedMap, Interner};
 use crate::object_registry::ObjectRegistry;
+#[cfg(feature = "py")]
+use crate::operations::{ArrayType, BoxDuration, LoopParam, StandardInstruction};
 use crate::operations::{
-    ArrayType, BoxDuration, Condition, ControlFlow, ControlFlowInstruction, ControlFlowView,
-    LoopParam, Operation, OperationRef, Param, PyInstruction, PyOpKind, StandardGate,
-    StandardInstruction, SwitchTarget,
+    Condition, ControlFlow, ControlFlowInstruction, ControlFlowView, Operation, OperationRef,
+    Param, StandardGate, SwitchTarget,
 };
+#[cfg(feature = "py")]
+use crate::operations::{PyInstruction, PyOpKind};
 use crate::packed_instruction::{PackedInstruction, PackedOperation};
 use crate::parameter::parameter_expression::ParameterExpression;
 use crate::register_data::{RegisterAlreadyExists, RegisterData};
@@ -46,23 +58,30 @@ use crate::var_stretch_container::{
     StretchType, VarStretchContainer, VarStretchContainerError, VarType,
 };
 use crate::variable_mapper::VariableMapper;
-use crate::{
-    Block, BlockMapper, BlocksMode, Clbit, ControlFlowBlocks, Qubit, Stretch, TupleLikeArg, Var,
-    VarsMode, imports, instruction, vf2,
-};
+use crate::{Block, BlocksMode, Clbit, ControlFlowBlocks, Qubit, Stretch, Var, VarsMode};
+#[cfg(feature = "py")]
+use crate::{BlockMapper, imports, instruction, vf2};
+#[cfg(feature = "py")]
 use qiskit_util::py::{PySequenceIndex, SequenceIndex};
 
 use hashbrown::{HashMap, HashSet};
-use itertools::{EitherOrBoth, Itertools};
+#[cfg(feature = "py")]
+use itertools::EitherOrBoth;
+use itertools::Itertools;
 use qiskit_util::{IndexMap, IndexSet};
 
+#[cfg(feature = "py")]
 use pyo3::IntoPyObjectExt;
+#[cfg(feature = "py")]
 use pyo3::exceptions::{
     PyDeprecationWarning, PyIndexError, PyRuntimeError, PyTypeError, PyValueError,
 };
+#[cfg(feature = "py")]
 use pyo3::intern;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
 
+#[cfg(feature = "py")]
 use pyo3::types::{IntoPyDict, PyDict, PyInt, PyIterator, PyList, PyNone, PySet, PyTuple, PyType};
 
 use rustworkx_core::dag_algo::layers;
@@ -74,9 +93,9 @@ use rustworkx_core::petgraph::prelude::StableDiGraph;
 use rustworkx_core::petgraph::prelude::*;
 use rustworkx_core::petgraph::stable_graph::{EdgeReference, IndexType};
 use rustworkx_core::petgraph::unionfind::UnionFind;
-use rustworkx_core::petgraph::visit::{
-    EdgeIndexable, IntoEdgeReferences, IntoNodeReferences, NodeFiltered, NodeIndexable,
-};
+#[cfg(feature = "py")]
+use rustworkx_core::petgraph::visit::{EdgeIndexable, NodeFiltered};
+use rustworkx_core::petgraph::visit::{IntoEdgeReferences, IntoNodeReferences, NodeIndexable};
 use rustworkx_core::traversal::{
     ancestors as core_ancestors, bfs_predecessors as core_bfs_predecessors,
     bfs_successors as core_bfs_successors, descendants as core_descendants,
@@ -87,15 +106,21 @@ fn dag_compose_width_error(bit_kind: &str, other: usize, dest: usize) -> String 
     format!("Cannot compose onto a DAGCircuit with fewer {bit_kind} ({other} > {dest}).")
 }
 
+#[cfg(feature = "py")]
 use crate::imports::PARAMETER;
 use crate::instruction::Parameters;
+#[cfg(feature = "py")]
 use crate::parameter_table::ParameterUuid;
+#[cfg(feature = "py")]
 use approx::relative_eq;
+#[cfg(feature = "py")]
 use std::collections::{BTreeMap, VecDeque};
 use std::convert::Infallible;
+#[cfg(feature = "py")]
 use std::f64::consts::PI;
 #[cfg(feature = "cache_pygates")]
 use std::sync::OnceLock;
+#[cfg(feature = "py")]
 use uuid::Uuid;
 
 static CONTROL_FLOW_OP_NAMES: [&str; 5] =
@@ -110,6 +135,7 @@ pub use rustworkx_core::petgraph::stable_graph::NodeIndex;
 #[error("Wire {0:?} already exists in circuit")]
 pub struct DuplicateWireError(Wire);
 
+#[cfg(feature = "py")]
 impl From<DuplicateWireError> for PyErr {
     fn from(value: DuplicateWireError) -> Self {
         DAGCircuitError::new_err(value.to_string())
@@ -175,6 +201,7 @@ pub enum DAGError {
     #[error(transparent)]
     Circuit(#[from] crate::circuit_data::CircuitDataError),
     // For special Python cases.
+    #[cfg(feature = "py")]
     #[error(transparent)]
     Python(PyErr),
 }
@@ -197,6 +224,7 @@ impl<T: Debug> From<crate::object_registry::AbsentObject<T>> for DAGError {
     }
 }
 
+#[cfg(feature = "py")]
 impl From<DAGError> for PyErr {
     fn from(value: DAGError) -> Self {
         match value {
@@ -299,6 +327,7 @@ impl From<Var> for Wire {
     }
 }
 
+#[cfg(feature = "py")]
 impl Wire {
     fn to_pickle(self, py: Python) -> PyResult<Py<PyAny>> {
         match self {
@@ -380,12 +409,14 @@ mod passmanager {
     impl qiskit_passmanager::IR for DAGCircuit {}
 }
 
+#[cfg(feature = "py")]
 #[derive(Clone, Debug)]
 struct PyLegacyResources {
     clbits: Py<PyTuple>,
     cregs: Py<PyTuple>,
 }
 
+#[cfg(feature = "py")]
 fn condition_resources(condition: &Bound<PyAny>) -> PyResult<PyLegacyResources> {
     let res = imports::CONTROL_FLOW_CONDITION_RESOURCES
         .get_bound(condition.py())
@@ -400,6 +431,7 @@ fn reject_new_register(reg: &ClassicalRegister) -> Result<(), DAGError> {
     Err(DAGError::RejectNewRegister(reg.bits().collect_vec()))
 }
 
+#[cfg(feature = "py")]
 #[pyclass(name = "BitLocations", module = "qiskit._accelerate.circuit", sequence)]
 #[derive(Clone, Debug)]
 pub struct PyBitLocations {
@@ -409,6 +441,7 @@ pub struct PyBitLocations {
     pub registers: Py<PyList>,
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyBitLocations {
     #[new]
@@ -480,6 +513,7 @@ impl PyBitLocations {
 /// There are 3 types of nodes in the graph: inputs, outputs, and operations.
 /// The nodes are connected by directed edges that correspond to qubits and
 /// bits.
+#[cfg(feature = "py")]
 #[pyclass(
     name = "DAGCircuit",
     module = "qiskit._accelerate.circuit",
@@ -502,6 +536,7 @@ pub struct PyDAGCircuit {
     inner: DAGCircuit,
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyDAGCircuit {
     #[classattr]
@@ -5158,6 +5193,7 @@ impl DAGCircuit {
     /// and condition will not be propagated back.
     ///
     /// Panics if `node` does not refer to an operation.
+    #[cfg(feature = "py")]
     pub fn unpack_py_op<'py>(
         &self,
         py: Python<'py>,
@@ -5978,6 +6014,7 @@ impl DAGCircuit {
                     OperationRef::StandardGate(gate) => {
                         Ok(Some(gate.num_qubits() <= 2 && !inst.is_parameterized()))
                     }
+                    #[cfg(feature = "py")]
                     OperationRef::PyCustom(PyInstruction {
                         kind: PyOpKind::Gate,
                         qubits: ..=2,
@@ -6108,9 +6145,7 @@ impl DAGCircuit {
         dir: Direction,
     ) -> Result<NodeIndex, DAGError> {
         self.track_instruction(&instr);
-        let (all_cbits, vars) = self
-            .get_classical_resources(&instr)
-            .map_err(DAGError::Python)?;
+        let (all_cbits, vars) = self.get_classical_resources(&instr)?;
         let qubits_id = instr.qubits;
         let new_node = self.dag.add_node(NodeType::Operation(instr));
         let terminus_index = match dir {
@@ -6172,7 +6207,7 @@ impl DAGCircuit {
     fn get_classical_resources(
         &self,
         instr: &PackedInstruction,
-    ) -> PyResult<(Vec<Clbit>, Option<Vec<Var>>)> {
+    ) -> Result<(Vec<Clbit>, Option<Vec<Var>>), DAGError> {
         let (all_clbits, vars): (Vec<Clbit>, Option<Vec<Var>>) = {
             if self.may_have_additional_wires(instr) {
                 let mut clbits: IndexSet<Clbit> =
@@ -6323,6 +6358,7 @@ impl DAGCircuit {
             .filter(|node: &NodeIndex| matches!(&self.dag[*node], NodeType::Operation(_)))
     }
 
+    #[cfg(feature = "py")]
     // TODO: Move Python auxiliary method
     fn topological_key_sort(
         &self,
@@ -6356,6 +6392,7 @@ impl DAGCircuit {
             .any(|x| self.op_names.contains_key(&x.to_string()))
     }
 
+    #[cfg(feature = "py")]
     pub fn get_node(&self, py: Python, node: NodeIndex) -> PyResult<Py<PyAny>> {
         self.unpack_into(py, node, self.dag.node_weight(node).unwrap())
     }
@@ -6545,7 +6582,9 @@ impl DAGCircuit {
                 &mut self.global_phase,
                 Param::ParameterExpression(angle),
             )),
-            Param::Obj(_) | Param::Int(_) => Err(DAGError::ObjGlobalPhase),
+            Param::Int(_) => Err(DAGError::ObjGlobalPhase),
+            #[cfg(feature = "py")]
+            Param::Obj(_) => Err(DAGError::ObjGlobalPhase),
         }
     }
 
@@ -6661,6 +6700,7 @@ impl DAGCircuit {
     }
 
     // TODO: Move Python auxiliary method
+    #[cfg(feature = "py")]
     fn pack_into(&mut self, py: Python, b: &Bound<PyAny>) -> Result<NodeType, PyErr> {
         Ok(if let Ok(in_node) = b.cast::<DAGInNode>() {
             let in_node = in_node.borrow();
@@ -6724,6 +6764,7 @@ impl DAGCircuit {
     }
 
     // TODO: Move Python auxiliary method
+    #[cfg(feature = "py")]
     fn unpack_into(&self, py: Python, id: NodeIndex, weight: &NodeType) -> PyResult<Py<PyAny>> {
         let dag_node = match weight {
             NodeType::QubitIn(qubit) => Py::new(
@@ -7619,6 +7660,7 @@ impl DAGCircuit {
 
     pub fn add_global_phase(&mut self, value: &Param) -> Result<(), DAGError> {
         match value {
+            #[cfg(feature = "py")]
             Param::Obj(_) => Err(DAGError::ObjGlobalPhase),
             _ => self
                 .set_global_phase_param(add_global_phase(&self.global_phase, value))
@@ -7822,12 +7864,17 @@ impl DAGCircuit {
         })?;
         new_dag.try_extend(qc_data.iter().map(|instr| -> Result<_, DAGError> {
             Ok(PackedInstruction {
-                op: if copy_op {
-                    instr
-                        .op
-                        .clone_with_py_deepcopy()
-                        .map_err(DAGError::Python)?
-                } else {
+                op: {
+                    #[cfg(feature = "py")]
+                    if copy_op {
+                        instr
+                            .op
+                            .clone_with_py_deepcopy()
+                            .map_err(DAGError::Python)?
+                    } else {
+                        instr.op.clone()
+                    }
+                    #[cfg(not(feature = "py"))]
                     instr.op.clone()
                 },
                 qubits: qarg_map[instr.qubits],
@@ -8273,6 +8320,7 @@ impl DAGCircuit {
     }
 
     /// Substitute a give node in the dag with a new operation from python
+    #[cfg(feature = "py")]
     pub fn substitute_node_with_py_op(
         &mut self,
         node_index: NodeIndex,
@@ -8790,10 +8838,7 @@ impl DAGCircuitBuilder {
     /// Pushes a valid [PackedInstruction] to the back of the circuit.
     pub fn push_back(&mut self, instr: PackedInstruction) -> Result<NodeIndex, DAGError> {
         self.dag.track_instruction(&instr);
-        let (all_cbits, vars) = self
-            .dag
-            .get_classical_resources(&instr)
-            .map_err(DAGError::Python)?;
+        let (all_cbits, vars) = self.dag.get_classical_resources(&instr)?;
         let qubits_id = instr.qubits;
         let new_node = self.dag.dag.add_node(NodeType::Operation(instr));
 
@@ -8980,6 +9025,7 @@ impl ::std::ops::Index<NodeIndex> for DAGCircuit {
     }
 }
 
+#[cfg(feature = "py")]
 impl PyDAGCircuit {
     /// Consume this Python wrapper, returning only the Rust-native parts.
     ///
@@ -9068,6 +9114,7 @@ impl PyDAGCircuit {
     }
 }
 
+#[cfg(feature = "py")]
 impl From<DAGCircuit> for PyDAGCircuit {
     fn from(value: DAGCircuit) -> Self {
         PyDAGCircuit {
@@ -9180,7 +9227,6 @@ mod test {
     use crate::packed_instruction::{PackedInstruction, PackedOperation};
     use crate::{Clbit, Qubit};
     use hashbrown::HashSet;
-    use pyo3::prelude::*;
     use rustworkx_core::petgraph::prelude::*;
     use rustworkx_core::petgraph::stable_graph::DefaultIx;
     use rustworkx_core::petgraph::visit::IntoEdgeReferences;
@@ -9222,7 +9268,7 @@ mod test {
     }
 
     #[test]
-    fn test_push_back() -> PyResult<()> {
+    fn test_push_back() -> Result<(), DAGError> {
         let mut dag = new_dag(2, 2);
 
         // IO nodes.
@@ -9291,7 +9337,7 @@ mod test {
     }
 
     #[test]
-    fn test_push_front() -> PyResult<()> {
+    fn test_push_front() -> Result<(), DAGError> {
         let mut dag = new_dag(2, 2);
 
         // IO nodes.

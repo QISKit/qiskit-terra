@@ -10,11 +10,15 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use std::{fmt::Debug, hash::Hash, sync::OnceLock};
+#[cfg(feature = "py")]
+use std::sync::OnceLock;
+use std::{fmt::Debug, hash::Hash};
 
 use crate::bit::{BitLocations, Register};
 use crate::error::TryReserveError;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::{IntoPyDict, PyDict};
 use qiskit_util::IndexMap;
 
@@ -23,6 +27,7 @@ use qiskit_util::IndexMap;
 #[derive(Debug)]
 pub struct BitLocator<B, R: Register> {
     bit_locations: IndexMap<B, BitLocations<R>>,
+    #[cfg(feature = "py")]
     cached: OnceLock<Py<PyDict>>,
 }
 
@@ -35,6 +40,7 @@ where
     fn clone(&self) -> Self {
         Self {
             bit_locations: self.bit_locations.clone(),
+            #[cfg(feature = "py")]
             cached: OnceLock::new(),
         }
     }
@@ -64,6 +70,7 @@ where
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             bit_locations: IndexMap::with_capacity_and_hasher(capacity, Default::default()),
+            #[cfg(feature = "py")]
             cached: OnceLock::new(),
         }
     }
@@ -84,6 +91,7 @@ where
     /// If the bit was already tracked, its locations are updated with the new ones, and the old
     /// ones are returned.
     pub fn insert(&mut self, bit: B, location: BitLocations<R>) -> Option<BitLocations<R>> {
+        #[cfg(feature = "py")]
         self.cached.take();
         self.bit_locations.insert(bit, location)
     }
@@ -95,6 +103,7 @@ where
 
     /// Get the locations of a bit for mutation, if it is tracked.
     pub fn get_mut(&mut self, bit: &B) -> Option<&mut BitLocations<R>> {
+        #[cfg(feature = "py")]
         self.cached.take();
         self.bit_locations.get_mut(bit)
     }
@@ -108,10 +117,12 @@ where
     /// Note: INVALIDATES THIS INSTANCE.
     pub fn dispose(&mut self) {
         self.bit_locations.clear();
+        #[cfg(feature = "py")]
         self.cached.take();
     }
 }
 
+#[cfg(feature = "py")]
 impl<B, R> BitLocator<B, R>
 where
     B: Debug

@@ -11,6 +11,7 @@
 // that they have been altered from the originals.
 
 use crate::circuit_data::CircuitData;
+#[cfg(feature = "py")]
 use crate::imports::{
     BARRIER, BOX_OP, BREAK_LOOP_OP, CONTINUE_LOOP_OP, DELAY, FOR_LOOP_OP, IF_ELSE_OP, MEASURE,
     PAULI_PRODUCT_MEASUREMENT, PAULI_PRODUCT_ROTATION_GATE, RESET, STORE, SWITCH_CASE_OP,
@@ -18,18 +19,24 @@ use crate::imports::{
 };
 use crate::instruction::Parameters;
 use crate::interner::Interned;
+#[cfg(feature = "py")]
+use crate::operations::ControlFlow;
 use crate::operations::{
-    BoxedCustomOperation, ControlFlow, ControlFlowInstruction, CustomOperation, Operation,
-    OperationRef, Param, PauliBased, PyInstruction, PyOpKind, PythonOperation, StandardGate,
-    StandardInstruction, Store, UnitaryGate,
+    BoxedCustomOperation, ControlFlowInstruction, CustomOperation, Operation, OperationRef, Param,
+    PauliBased, StandardGate, StandardInstruction, Store, UnitaryGate,
 };
+#[cfg(feature = "py")]
+use crate::operations::{PyInstruction, PyOpKind, PythonOperation};
 use crate::{Block, Clbit, Qubit};
 use hashbrown::HashMap;
 use nalgebra::{Matrix2, Matrix4};
 use ndarray::{Array2, CowArray, Ix2};
 use num_complex::Complex64;
+#[cfg(feature = "py")]
 use pyo3::exceptions::PyNotImplementedError;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::{PyDict, PyType};
 use smallvec::SmallVec;
 #[cfg(feature = "cache_pygates")]
@@ -44,6 +51,7 @@ enum PackedOperationType {
     // dereferencing.
     StandardGate = 0,
     StandardInstruction = 1,
+    #[cfg(feature = "py")]
     PyInstruction = 2,
     UnitaryGate = 3,
     PauliBased = 4,
@@ -360,9 +368,9 @@ mod standard_instruction {
 
 /// A private module to encapsulate the encoding of pointer types.
 mod pointer {
-    use crate::operations::{
-        BoxedCustomOperation, ControlFlowInstruction, PyInstruction, Store, UnitaryGate,
-    };
+    #[cfg(feature = "py")]
+    use crate::operations::PyInstruction;
+    use crate::operations::{BoxedCustomOperation, ControlFlowInstruction, Store, UnitaryGate};
     use crate::packed_instruction::{PackedOperation, PackedOperationType, PauliBased};
     use std::ptr::NonNull;
 
@@ -442,6 +450,7 @@ mod pointer {
         };
     }
 
+    #[cfg(feature = "py")]
     impl_packable_pointer!(PyInstruction, PackedOperationType::PyInstruction);
     impl_packable_pointer!(UnitaryGate, PackedOperationType::UnitaryGate);
     impl_packable_pointer!(PauliBased, PackedOperationType::PauliBased);
@@ -505,6 +514,7 @@ impl PackedOperation {
     }
 
     /// View the internal `PyInstruction`, if any.
+    #[cfg(feature = "py")]
     #[inline]
     pub fn try_py_custom(&self) -> Option<&PyInstruction> {
         <&PyInstruction as TryFrom<&Self>>::try_from(self).ok()
@@ -519,6 +529,7 @@ impl PackedOperation {
             PackedOperationType::StandardInstruction => {
                 OperationRef::StandardInstruction(self.standard_instruction())
             }
+            #[cfg(feature = "py")]
             PackedOperationType::PyInstruction => OperationRef::PyCustom(self.try_into().unwrap()),
             PackedOperationType::UnitaryGate => OperationRef::Unitary(self.try_into().unwrap()),
             PackedOperationType::PauliBased => {
@@ -551,6 +562,7 @@ impl PackedOperation {
                 let opaque: &BoxedCustomOperation = self.try_into().unwrap();
                 opaque.is_unitary()
             }
+            #[cfg(feature = "py")]
             PackedOperationType::PyInstruction => {
                 let op: &PyInstruction = self.try_into().unwrap();
                 op.kind == PyOpKind::Gate
@@ -573,6 +585,7 @@ impl PackedOperation {
 
     /// Construct a new `PackedOperation` from an owned heap-allocated `PyInstruction`.
     #[inline]
+    #[cfg(feature = "py")]
     pub fn from_py_instruction(op: Box<PyInstruction>) -> Self {
         op.into()
     }
@@ -608,6 +621,7 @@ impl PackedOperation {
     /// Clone this `PackedOperation`, deepcopying if the internal object is a Python object.
     ///
     /// This is similar to [py_deepcopy], but only attaches to a Python interpreter if it has to.
+    #[cfg(feature = "py")]
     pub fn clone_with_py_deepcopy(&self) -> PyResult<Self> {
         match self.view() {
             OperationRef::PyCustom(inst) => {
@@ -624,6 +638,7 @@ impl PackedOperation {
         }
     }
 
+    #[cfg(feature = "py")]
     pub fn py_deepcopy<'py>(
         &self,
         py: Python<'py>,
@@ -643,6 +658,7 @@ impl PackedOperation {
     }
 
     /// Check equality of the operation, including Python-space checks, if appropriate.
+    #[cfg(feature = "py")]
     pub fn py_eq(&self, py: Python, other: &PackedOperation) -> PyResult<bool> {
         match (self.view(), other.view()) {
             (OperationRef::ControlFlow(left), OperationRef::ControlFlow(right)) => {
@@ -674,6 +690,7 @@ impl PackedOperation {
     /// Whether the Python class that we would use to represent the inner `Operation` object in
     /// Python space would be an instance of the given Python type.  This does not construct the
     /// Python-space `Operator` instance if it can be avoided (i.e. for standard gates).
+    #[cfg(feature = "py")]
     pub fn py_op_is_instance(&self, py_type: &Bound<PyType>) -> PyResult<bool> {
         let py = py_type.py();
         match self.view() {
@@ -752,6 +769,7 @@ impl Operation for PackedOperation {
             OperationRef::ControlFlow(control_flow) => control_flow.name(),
             OperationRef::StandardGate(ref standard) => standard.name(),
             OperationRef::StandardInstruction(ref instruction) => instruction.name(),
+            #[cfg(feature = "py")]
             OperationRef::PyCustom(inst) => inst.name(),
             OperationRef::Unitary(unitary) => unitary.name(),
             OperationRef::PauliProductMeasurement(ppm) => ppm.name(),
@@ -797,6 +815,7 @@ impl Clone for PackedOperation {
             OperationRef::StandardInstruction(instruction) => {
                 Self::from_standard_instruction(instruction)
             }
+            #[cfg(feature = "py")]
             OperationRef::PyCustom(inst) => Self::from_py_instruction(Box::new(inst.clone())),
             OperationRef::Unitary(unitary) => Self::from_unitary(Box::new(unitary.clone())),
             OperationRef::PauliProductMeasurement(ppm) => {
@@ -818,6 +837,7 @@ impl Drop for PackedOperation {
         use crate::packed_instruction::pointer::PackablePointer;
         match self.discriminant() {
             PackedOperationType::StandardGate | PackedOperationType::StandardInstruction => (),
+            #[cfg(feature = "py")]
             PackedOperationType::PyInstruction => PyInstruction::drop_packed(self),
             PackedOperationType::UnitaryGate => UnitaryGate::drop_packed(self),
             PackedOperationType::PauliBased => PauliBased::drop_packed(self),
@@ -988,6 +1008,7 @@ impl PackedInstruction {
         })
     }
 
+    #[cfg(feature = "py")]
     pub fn py_deepcopy_inplace<'py>(
         &mut self,
         py: Python<'py>,
@@ -1015,6 +1036,7 @@ impl PackedInstruction {
         match self.op.view() {
             OperationRef::StandardGate(g) => g.matrix(self.params_view()),
             OperationRef::CustomOperation(g) => g.matrix(self.params_view()).ok().flatten(),
+            #[cfg(feature = "py")]
             OperationRef::PyCustom(p) => p.matrix(),
             OperationRef::Unitary(u) => u.matrix(),
             OperationRef::PauliProductRotation(ppr) => ppr.matrix(),
@@ -1029,6 +1051,7 @@ impl PackedInstruction {
     pub fn try_cow_array(&self) -> Option<CowArray<'_, Complex64, Ix2>> {
         match self.op.view() {
             OperationRef::StandardGate(g) => g.matrix(self.params_view()).map(CowArray::from),
+            #[cfg(feature = "py")]
             OperationRef::PyCustom(p) => p.matrix().map(CowArray::from),
             OperationRef::PauliProductRotation(ppr) => ppr.matrix().map(CowArray::from),
             OperationRef::Unitary(u) => Some(CowArray::from(u.matrix_view())),
@@ -1048,6 +1071,7 @@ impl PackedInstruction {
             OperationRef::StandardGate(standard) => {
                 standard.matrix_as_static_1q(self.params_view())
             }
+            #[cfg(feature = "py")]
             OperationRef::PyCustom(inst) => inst.matrix_as_static_1q(),
             OperationRef::PauliProductRotation(ppr) => ppr.matrix_as_static_1q(),
             OperationRef::Unitary(unitary) => unitary.matrix_as_static_1q(),
@@ -1083,6 +1107,7 @@ impl PackedInstruction {
             OperationRef::StandardGate(standard) => {
                 standard.matrix_as_static_2q(self.params_view())
             }
+            #[cfg(feature = "py")]
             OperationRef::PyCustom(p) => p.matrix_as_static_2q(),
             OperationRef::PauliProductRotation(ppr) => ppr.matrix_as_static_2q(),
             OperationRef::Unitary(unitary) => unitary.matrix_as_static_2q(),
@@ -1108,6 +1133,7 @@ impl PackedInstruction {
     pub fn try_definition(&self) -> Option<CircuitData> {
         match self.op.view() {
             OperationRef::StandardGate(g) => g.definition(self.params_view()),
+            #[cfg(feature = "py")]
             OperationRef::PyCustom(i) => i.definition(),
             OperationRef::CustomOperation(g) => g.definition(self.params_view()),
             _ => None,

@@ -13,9 +13,13 @@
 mod convert;
 pub mod standard_generators;
 
-use crate::circuit_data::{CircuitData, PyCircuitData};
+use crate::circuit_data::CircuitData;
+#[cfg(feature = "py")]
+use crate::circuit_data::PyCircuitData;
 use crate::operations::{Operation, Param, add_param, clone_param, multiply_param, radd_param};
-use crate::{Qubit, gate_matrix, impl_intopyobject_for_copy_pyclass, imports};
+use crate::{Qubit, gate_matrix};
+#[cfg(feature = "py")]
+use crate::{impl_intopyobject_for_copy_pyclass, imports};
 use qiskit_quantum_info::versor_u2::{VersorU2, VersorU2Error};
 
 use ndarray::{Array2, aview2};
@@ -23,15 +27,21 @@ use num_complex::Complex64;
 use smallvec::{SmallVec, smallvec};
 use std::f64::consts::PI;
 
+#[cfg(feature = "py")]
 use numpy::{IntoPyArray, PyArray2};
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::{IntoPyDict, PyList, PyTuple};
 
 const FLOAT_ZERO: Param = Param::Float(0.0);
 
 #[derive(Clone, Debug, Copy, Eq, PartialEq, Hash)]
 #[repr(u8)]
-#[pyclass(module = "qiskit._accelerate.circuit", eq, eq_int, from_py_object)]
+#[cfg_attr(
+    feature = "py",
+    pyclass(module = "qiskit._accelerate.circuit", eq, eq_int, from_py_object)
+)]
 pub enum StandardGate {
     GlobalPhase = 0,
     H = 1,
@@ -88,6 +98,7 @@ pub enum StandardGate {
     // Remember to update StandardGate::is_valid_bit_pattern below
     // if you add or remove this enum's variants!
 }
+#[cfg(feature = "py")]
 impl_intopyobject_for_copy_pyclass!(StandardGate);
 
 unsafe impl ::bytemuck::CheckedBitPattern for StandardGate {
@@ -187,6 +198,7 @@ pub fn get_standard_gate_names() -> &'static [&'static str] {
 }
 
 impl StandardGate {
+    #[cfg(feature = "py")]
     pub fn create_py_op(
         &self,
         py: Python,
@@ -1854,8 +1866,13 @@ impl StandardGate {
     pub fn versor_u2(&self, params: &[Param]) -> Result<VersorU2, VersorU2Error> {
         convert::versor_u2(*self, params)
     }
+
+    pub fn is_controlled_gate(&self) -> bool {
+        self.num_ctrl_qubits() > 0
+    }
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl StandardGate {
     pub fn copy(&self) -> Self {
@@ -1908,9 +1925,9 @@ impl StandardGate {
         self.name()
     }
 
-    #[getter]
-    pub fn is_controlled_gate(&self) -> bool {
-        self.num_ctrl_qubits() > 0
+    #[getter(is_controlled_gate)]
+    pub fn py_is_controlled_gate(&self) -> bool {
+        self.is_controlled_gate()
     }
 
     #[getter]

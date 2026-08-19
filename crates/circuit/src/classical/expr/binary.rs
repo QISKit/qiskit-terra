@@ -10,13 +10,15 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::classical::expr::{Expr, ExprKind, PyExpr};
+
+use crate::classical::expr::Expr;
+#[cfg(feature = "py")]
+use crate::classical::expr::{ExprKind, PyExpr};
 use crate::classical::types::Type;
+#[cfg(feature = "py")]
 use crate::imports;
-use pyo3::exceptions::PyValueError;
-use pyo3::prelude::*;
-use pyo3::types::PyTuple;
-use pyo3::{IntoPyObjectExt, intern};
+#[cfg(feature = "py")]
+use pyo3::{IntoPyObjectExt, exceptions::PyValueError, intern, prelude::*, types::PyTuple};
 
 /// A binary expression.
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +75,7 @@ impl BinaryOp {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for Binary {
     type Target = PyAny;
     type Output = Bound<'py, PyAny>;
@@ -83,6 +86,7 @@ impl<'py> IntoPyObject<'py> for Binary {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for Binary {
     type Error = <PyBinary as FromPyObject<'a, 'py>>::Error;
 
@@ -92,6 +96,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Binary {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for BinaryOp {
     type Target = PyAny;
     type Output = Bound<'py, Self::Target>;
@@ -102,6 +107,7 @@ impl<'py> IntoPyObject<'py> for BinaryOp {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for BinaryOp {
     type Error = PyErr;
 
@@ -112,11 +118,13 @@ impl<'a, 'py> FromPyObject<'a, 'py> for BinaryOp {
     }
 }
 
+#[cfg(feature = "py")]
 /// A Python descriptor to prevent PyO3 from attempting to import the Python-side
 /// enum before we're initialized.
 #[pyclass(module = "qiskit._accelerate.circuit.classical.expr")]
 struct PyBinaryOp;
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyBinaryOp {
     fn __get__(&self, obj: &Bound<PyAny>, _obj_type: &Bound<PyAny>) -> Py<PyAny> {
@@ -124,6 +132,7 @@ impl PyBinaryOp {
     }
 }
 
+#[cfg(feature = "py")]
 /// A binary expression.
 ///
 /// Args:
@@ -141,6 +150,7 @@ impl PyBinaryOp {
 #[derive(PartialEq, Clone, Debug)]
 pub struct PyBinary(Binary);
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyBinary {
     // The docstring for 'Op' is defined in Python (expr.py).

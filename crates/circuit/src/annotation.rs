@@ -15,10 +15,14 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+#[cfg(feature = "py")]
 use pyo3::exceptions::PyValueError;
 
+#[cfg(feature = "py")]
 use pyo3::intern;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::PyString;
 
 use crate::annotation::custom_traits::ComparableAnnotation;
@@ -56,9 +60,11 @@ use crate::annotation::custom_traits::ComparableAnnotation;
 /// :func:`.transpile` or :func:`.generate_preset_pass_manager` to ensure that the compiler passes
 /// selected will not invalidate the annotation.  We expect to have more first-class support for
 /// annotations to declare their validity requirements in the future.
+#[cfg(feature = "py")]
 #[pyclass(module = "qiskit.circuit", name = "Annotation", subclass, frozen)]
 #[derive(Debug)]
 pub struct PyAnnotation;
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyAnnotation {
     #[allow(unused_variables)]
@@ -93,11 +99,13 @@ impl PyAnnotation {
 ///
 /// This subclass will be used natively in Qiskit and abides by the same "namespace" semantics as
 /// its base class.
+#[cfg(feature = "py")]
 #[pyclass(name = "NativeAnnotation", module = "qiskit.circuit", extends = PyAnnotation, frozen)]
 #[derive(Debug)]
 pub struct PyNativeAnnotation {
     inner: Arc<dyn Annotation>,
 }
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyNativeAnnotation {
     /// The namespace the annotation belongs to.
@@ -107,6 +115,7 @@ impl PyNativeAnnotation {
     }
 }
 
+#[cfg(feature = "py")]
 impl PyNativeAnnotation {
     /// Return a new instance.
     ///
@@ -177,11 +186,13 @@ impl dyn Annotation + 'static {
 
 /// Internal representation of a Python annotation.
 #[derive(Debug)]
+#[cfg(feature = "py")]
 pub struct PythonAnnotation {
     annotation: Py<PyAny>,
     namespace: OnceLock<String>,
 }
 
+#[cfg(feature = "py")]
 impl PythonAnnotation {
     pub fn new(annotation: Py<PyAny>) -> Self {
         Self {
@@ -195,6 +206,7 @@ impl PythonAnnotation {
     }
 }
 
+#[cfg(feature = "py")]
 impl Annotation for PythonAnnotation {
     /// Return the namespace of the annotation.
     ///
@@ -212,6 +224,7 @@ impl Annotation for PythonAnnotation {
     }
 }
 
+#[cfg(feature = "py")]
 impl PartialEq for PythonAnnotation {
     fn eq(&self, other: &Self) -> bool {
         self.annotation.is(&other.annotation)
@@ -238,6 +251,7 @@ pub fn iter_namespaces(namespace: &str) -> impl Iterator<Item = &str> {
 ///
 /// For a [PythonAnnotation], returns the underlying [PyAnnotation], while for other annotation types,
 /// creates and returns a [PyNativeAnnotation].
+#[cfg(feature = "py")]
 pub fn create_py_annotation(annotation: &Arc<dyn Annotation>, py: Python) -> PyResult<Py<PyAny>> {
     if let Some(annotation) = annotation.downcast_ref::<PythonAnnotation>() {
         return Ok(annotation.annotation_obj().clone_ref(py));
@@ -249,12 +263,14 @@ pub fn create_py_annotation(annotation: &Arc<dyn Annotation>, py: Python) -> PyR
     Ok(Py::new(py, init)?.into_any())
 }
 
+#[cfg(feature = "py")]
 /// Used to extract an instance of [Annotation].
 pub enum AnnotationFromPython {
     Native(Arc<dyn Annotation>),
     Python(PythonAnnotation),
 }
 
+#[cfg(feature = "py")]
 impl AnnotationFromPython {
     /// Returns the extracted [Annotation].
     ///
@@ -268,6 +284,7 @@ impl AnnotationFromPython {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for AnnotationFromPython {
     type Error = PyErr;
 

@@ -13,7 +13,7 @@ doctest = false
 workspace = true
 
 [dependencies]
-qiskit-util = { workspace = true, features = ["py"] }
+qiskit-util = { workspace = true }
 qiskit-quantum-info = { workspace = true, features = ["python"] }
 qiskit-passmanager = { workspace = true, optional = true }
 rayon.workspace = true
@@ -43,6 +43,7 @@ indexmap.workspace = true
 [dependencies.pyo3]
 workspace = true
 features = ["hashbrown", "indexmap", "num-complex", "num-bigint", "smallvec", "py-clone"]
+optional = true
 
 [dependencies.approx]
 workspace = true
@@ -66,4 +67,5 @@ features = ["nalgebra"]
 
 [features]
 passmanager = ["dep:qiskit-passmanager"]
-cache_pygates = []
+py = ["dep:pyo3", "qiskit-util/py"]
+cache_pygates = ["py"]

@@ -21,7 +21,6 @@ use hashbrown::HashSet;
 use itertools::{Itertools, MinMaxResult};
 use lexical_core::ToLexicalWithOptions;
 use lexical_write_float::{self, format::STANDARD};
-use pyo3::prelude::*;
 use std::f64::consts::PI;
 use std::fmt::Debug;
 use std::ops::Index;
@@ -54,8 +53,8 @@ pub fn draw_circuit(
     fold: Option<usize>,
     barrier_label_len: usize,
     idle_wires: bool,
-) -> PyResult<String> {
-    let vis_mat = VisualizationMatrix::from_circuit(circuit, cregbundle, idle_wires)?;
+) -> String {
+    let vis_mat = VisualizationMatrix::from_circuit(circuit, cregbundle, idle_wires);
 
     let barrier_label_len = if barrier_label_len != 0 {
         barrier_label_len
@@ -106,7 +105,7 @@ pub fn draw_circuit(
     {
         output.pop();
     }
-    Ok(output)
+    output
 }
 
 /// Return a list of layers such that each layer contains a list of op node indices, representing instructions
@@ -607,11 +606,7 @@ struct VisualizationMatrix<'a> {
 }
 
 impl<'a> VisualizationMatrix<'a> {
-    fn from_circuit(
-        circuit: &'a CircuitData,
-        bundle_cregs: bool,
-        idle_wires: bool,
-    ) -> PyResult<Self> {
+    fn from_circuit(circuit: &'a CircuitData, bundle_cregs: bool, idle_wires: bool) -> Self {
         let mut vis_matrix = VisualizationMatrix {
             layers: Vec::new(),
             circuit,
@@ -694,7 +689,7 @@ impl<'a> VisualizationMatrix<'a> {
                 );
             }
         }
-        Ok(vis_matrix)
+        vis_matrix
     }
 
     /// Builds the mapping of qubits to their wire indices.
@@ -1043,6 +1038,7 @@ impl TextDrawer {
                             Param::ParameterExpression(expr) => {
                                 format!("Delay({}[{}])", expr, delay_unit)
                             }
+                            #[cfg(feature = "py")]
                             Param::Obj(obj) => format!("Delay({:?}[{}])", obj, delay_unit), // TODO: extract the int
                         }
                     }
@@ -1089,6 +1085,7 @@ impl TextDrawer {
             OperationRef::PauliProductRotation(ppr) => match &ppr.angle {
                 Param::Float(f) => format!("PPR({})", F64UiFormatter::new(5).format_with_pi(*f)),
                 Param::ParameterExpression(e) => format!("PPR({})", e),
+                #[cfg(feature = "py")]
                 Param::Obj(o) => format!("PPR({:?})", o),
                 Param::Int(u) => format!("PPR({:?})", u),
             },
@@ -1819,7 +1816,7 @@ mod tests {
     #[test]
     fn test_empty_circuit() {
         let circuit = CircuitData::new(None, None, Param::Float(0.5)).unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(80), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(80), 0, true);
 
         assert_eq!("global phase: 0.5", result.trim_end());
     }
@@ -1827,7 +1824,7 @@ mod tests {
     #[test]
     fn test_empty_circuit_zero_phase() {
         let circuit = CircuitData::new(None, None, Param::Float(0.0)).unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(80), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(80), 0, true);
 
         assert_eq!("", result.trim_end());
     }
@@ -1870,7 +1867,7 @@ mod tests {
     fn test_creg_bundle() {
         let circuit = basic_circuit();
 
-        let result = draw_circuit(&circuit, true, false, None, 0, true).unwrap();
+        let result = draw_circuit(&circuit, true, false, None, 0, true);
 
         let expected = "
       ┌───┐
@@ -1893,7 +1890,7 @@ c2: 2/══════════
     fn test_merge_wires() {
         let circuit = basic_circuit();
 
-        let result = draw_circuit(&circuit, false, true, None, 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, true, None, 0, true);
         let expected = "
       ┌───┐
  q_0: ┤ H ├──■──
@@ -1943,7 +1940,7 @@ c2_1: ══════════
         };
         circuit.push(inst).unwrap();
 
-        let result = draw_circuit(&circuit, false, false, Some(100), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 0, true);
         let expected = "
    ┌───┐┌─┐
 q: ┤ H ├┤M├
@@ -1986,7 +1983,7 @@ c: ══════╩═
             .push_standard_gate(StandardGate::H, &[], &[Qubit::new(1)])
             .unwrap();
 
-        let result = draw_circuit(&circuit, false, false, Some(100), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 0, true);
         let expected = "
       ┌───┐
    q: ┤ H ├
@@ -2021,7 +2018,7 @@ cr_1: ═════
             .push_standard_gate(StandardGate::CZ, &[], &[Qubit::new(0), Qubit::new(1)])
             .unwrap();
 
-        let result = draw_circuit(&circuit, false, false, Some(10), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(10), 0, true);
         let expected = "
       ┌───┐     »
  q_0: ┤ H ├──■──»
@@ -2086,7 +2083,7 @@ c2_1: ══════════»
         let mut inst_clone = circuit.data()[0].clone();
         inst_clone.label = Some(Box::new("my_ch".to_string()));
         circuit.push(inst_clone).unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(80), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(80), 0, true);
         let expected = "
           ┌────────────┐┌───────────────┐
 q_0: ──■──┤0           ├┤0              ├────■────
@@ -2215,7 +2212,7 @@ q_1: ┤ H ├┤1           ├┤1              ├┤ my_ch ├
             py_op: OnceLock::new(),
         };
         circuit.push(inst).unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(80), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(80), 0, true);
         let expected = "
           ┌─────────┐                  ┌────────────────────┐┌──────────┐»
 q_0: ─────┤ Unitary ├──────────────────┤0                   ├┤2         ├»
@@ -2269,7 +2266,7 @@ q_3: ──────────────────────┤1     
                 .collect::<Vec<Param>>();
             circuit.push_standard_gate(op, &params, &qubits).unwrap();
         }
-        let result = draw_circuit(&circuit, false, false, Some(80), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(80), 0, true);
         let expected = "
      ┌───┐  ┌───────────┐      ┌─────┐   ┌─────┐ ┌───────────────────────┐          »
 q_0: ┤ Y ├──┤ Rx(3.141) ├──────┤ Sdg ├───┤ Tdg ├─┤ U3(3.141,3.141,3.141) ├──■───────»
@@ -2356,7 +2353,7 @@ q_4: ─────────────────────────
     fn test_global_phase() {
         let mut circuit = basic_circuit();
         circuit.set_global_phase_param(3.14.into()).unwrap();
-        let result = draw_circuit(&circuit, true, false, None, 0, true).unwrap();
+        let result = draw_circuit(&circuit, true, false, None, 0, true);
 
         let expected = "
 global phase: 3.14
@@ -2383,7 +2380,7 @@ c2: 2/══════════
                 ParameterExpression::from_symbol(Symbol::standalone("ϕ".to_owned(), None)),
             )))
             .unwrap();
-        let result = draw_circuit(&circuit, true, false, Some(80), 0, true).unwrap();
+        let result = draw_circuit(&circuit, true, false, Some(80), 0, true);
 
         let expected = "
 global phase: ϕ
@@ -2425,7 +2422,7 @@ c2: 2/══════════
                 &[Qubit(0), Qubit(1)],
             )
             .unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(100), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 0, true);
         let expected = "
      ┌─────────┐┌────────────┐┌─────────┐
 q_0: ┤0        ├┤0           ├┤0        ├
@@ -2512,7 +2509,7 @@ q_1: ┤1        ├┤1           ├┤1        ├
             circuit.push(inst).unwrap();
         }
 
-        let result = draw_circuit(&circuit, false, false, Some(100), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 0, true);
         let expected = "
           ┌────────────────┐┌────────────────┐┌────────────────┐┌────────────────┐┌───────────────┐ ░  ░ »
 q_0: ─|0>─┤ Delay(2.1[ns]) ├┤ Delay(2.1[ps]) ├┤ Delay(2.1[us]) ├┤ Delay(2.1[ms]) ├┤ Delay(2.1[s]) ├─░──░─»
@@ -2589,7 +2586,7 @@ c_3: ═════════════════════════
                 &[Qubit(0), Qubit(1)],
             )
             .unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(100), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 0, true);
         let expected = "
      ┌─────────┐┌─────────────┐┌─────────┐
 q_0: ┤0        ├┤0            ├┤0        ├
@@ -2630,7 +2627,7 @@ q_1: ┤1        ├┤1            ├┤1        ├
                 &[Qubit(0), Qubit(1)],
             )
             .unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(100), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 0, true);
         let expected = "
                ┌──────────┐            ┌───────────┐┌─────────┐
 q_0: ──────────┤0         ├────────────┤0          ├┤0        ├
@@ -2683,7 +2680,7 @@ q_1: ┤ Ry(🎩) ├┤1         ├─┤ 💶🔉(🎩) ├─┤1          �
             )
             .unwrap();
 
-        let result = draw_circuit(&circuit, true, true, None, 0, true).unwrap();
+        let result = draw_circuit(&circuit, true, true, None, 0, true);
         let expected = "
 global phase: 4π/5
       ┌────────────┐ ┌────────────┐ ┌───────────────┐
@@ -2847,7 +2844,7 @@ q_1: ┤ Rz(1.2346e8) ├┤ Rx(0.12346) ├┤ Rx(1.2346e-5) ├┤ Rx(2π/3) �
             )
             .unwrap();
 
-        let result = draw_circuit(&circuit, true, true, Some(80), 0, true).unwrap();
+        let result = draw_circuit(&circuit, true, true, Some(80), 0, true);
         let expected = "
                       ┌────────────┐┌──────────────┐
  q_0: ────────────────┤0 Z         ├┤0  Z          ├
@@ -2930,7 +2927,7 @@ q_10: ────────────────────────�
             )
             .unwrap();
 
-        let result = draw_circuit(&circuit, true, true, Some(80), 0, true).unwrap();
+        let result = draw_circuit(&circuit, true, true, Some(80), 0, true);
         let expected = "
       ┌───────────┐
 qr_0: ┤0 I        ├───────────────────
@@ -2965,7 +2962,7 @@ cr: 3/══════╩══════════╩══════�
 
         build(&mut circuit);
 
-        let result = draw_circuit(&circuit, false, mergewires, Some(100), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, mergewires, Some(100), 0, true);
         assert_eq!(result, expected);
     }
 
@@ -3109,7 +3106,7 @@ q_3: ┤ X ├─■─────────────────┤ X ├
         let circuit = labeled_barrier_circuit();
         // A `barrier_label_len` of 0 selects the default of
         // `DEFAULT_BARRIER_LABEL_LEN` characters.
-        let result = draw_circuit(&circuit, false, false, Some(100), 0, false).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 0, false);
         let expected = "
      ┌───┐ short       a_very_long_barr...
 q_0: ┤ H ├───░─────■────────────░──────────
@@ -3128,7 +3125,7 @@ q_2: ────────░────────────────
     #[test]
     fn test_barrier_label_custom_truncation() {
         let circuit = labeled_barrier_circuit();
-        let result = draw_circuit(&circuit, false, false, Some(100), 5, false).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 5, false);
         let expected = "
      ┌───┐ short       a_ver...
 q_0: ┤ H ├───░─────■──────░─────
@@ -3164,7 +3161,7 @@ q_2: ────────░────────────────
             py_op: OnceLock::new(),
         };
         circuit.push(inst).unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(100), 0, true).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 0, true);
         let expected = "
 
 q_0: ─────────
@@ -3197,7 +3194,7 @@ q_2: ────░────
             py_op: OnceLock::new(),
         };
         circuit.push(inst).unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(100), 16, false).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(100), 16, false);
         let expected = "
       0123456789abcdef
 q_0: ────────░─────────
@@ -3280,7 +3277,7 @@ q_0: ────────░─────────
                 &[Clbit(6)],
             )
             .unwrap();
-        let result = draw_circuit(&circuit, false, false, Some(80), 0, false).unwrap();
+        let result = draw_circuit(&circuit, false, false, Some(80), 0, false);
         let expected = "
                                 ┌─┐         ┌────────┐
 q0_0: ──■────■──────────────────┤M├─■───────┤0 Z     ├
@@ -3305,7 +3302,7 @@ c2_1: ════════════════════════�
 ";
         assert_eq!(result, expected.trim_start_matches("\n"));
 
-        let result_creg_bundle = draw_circuit(&circuit, true, true, Some(80), 0, false).unwrap();
+        let result_creg_bundle = draw_circuit(&circuit, true, true, Some(80), 0, false);
         let expected_creg_bundle = "
                                 ┌─┐         ┌────────┐
 q0_0: ──■────■──────────────────┤M├─■───────┤0 Z     ├
@@ -3350,7 +3347,7 @@ c2: 3/════════════════════════�
             )
             .unwrap();
 
-        let result = draw_circuit(&circuit, true, false, Some(80), 0, false).unwrap();
+        let result = draw_circuit(&circuit, true, false, Some(80), 0, false);
         let expected = "
 global phase: 0.9
      ┌───┐┌─┐

@@ -11,12 +11,18 @@
 // that they have been altered from the originals.
 
 use crate::bit::{ClassicalRegister, ShareableClbit};
+#[cfg(feature = "py")]
 use crate::classical::expr::{ExprKind, PyExpr};
 use crate::classical::types::Type;
+#[cfg(feature = "py")]
 use crate::imports::UUID;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::{IntoPyDict, PyTuple};
+#[cfg(feature = "py")]
 use pyo3::{IntoPyObjectExt, intern};
+#[cfg(feature = "py")]
 use uuid::Uuid;
 
 /// A classical variable expression.
@@ -49,6 +55,7 @@ impl Var {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for Var {
     type Target = PyAny;
     type Output = Bound<'py, PyAny>;
@@ -59,6 +66,7 @@ impl<'py> IntoPyObject<'py> for Var {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for Var {
     type Error = <PyVar as FromPyObject<'a, 'py>>::Error;
 
@@ -68,6 +76,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Var {
     }
 }
 
+#[cfg(feature = "py")]
 /// A classical variable.
 ///
 /// These variables take two forms: a new-style variable that owns its storage location and has an
@@ -89,6 +98,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Var {
 #[derive(PartialEq, Clone, Debug, Hash)]
 pub struct PyVar(Var);
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyVar {
     #[new]

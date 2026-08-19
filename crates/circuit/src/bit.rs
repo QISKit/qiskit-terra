@@ -19,16 +19,22 @@ use std::{
     sync::atomic::{AtomicU32, AtomicU64, Ordering},
 };
 
+#[cfg(feature = "py")]
 use hashbrown::HashSet;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::{
     IntoPyObjectExt, PyTypeInfo,
     exceptions::{PyIndexError, PyTypeError, PyValueError},
     types::{PyList, PyType},
 };
 
+#[cfg(feature = "py")]
 use crate::circuit_data::CircuitError;
+#[cfg(feature = "py")]
 use crate::dag_circuit::PyBitLocations;
+#[cfg(feature = "py")]
 use qiskit_util::py::{PySequenceIndex, SequenceIndex};
 
 /// Describes a relationship between a bit and all the registers it belongs to
@@ -73,6 +79,7 @@ impl<R: Register + PartialEq> BitLocations<R> {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'py, R> IntoPyObject<'py> for BitLocations<R>
 where
     R: Debug + Clone + Register + for<'a> IntoPyObject<'a>,
@@ -93,6 +100,7 @@ where
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py, R> FromPyObject<'a, 'py> for BitLocations<R>
 where
     R: Debug
@@ -159,6 +167,7 @@ trait ManifestableBit: ShareableBit {
 /// .. note::
 ///     This class cannot be instantiated directly. Its only purpose is to allow generic type
 ///     checking for :class:`.Clbit` and :class:`.Qubit`.
+#[cfg(feature = "py")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[pyclass(subclass, name = "Bit", module = "qiskit.circuit", frozen)]
 pub struct PyBit;
@@ -167,6 +176,7 @@ pub struct PyBit;
 /// .. note::
 ///     This class cannot be instantiated directly.  Its only purpose is to allow generic type
 ///     checking for :class:`~.ClassicalRegister` and :class:`~.QuantumRegister`.
+#[cfg(feature = "py")]
 #[pyclass(
     name = "Register",
     module = "qiskit.circuit",
@@ -424,10 +434,12 @@ macro_rules! create_bit_object {
             }
         }
 
+        #[cfg(feature = "py")]
         #[doc = concat!("A ", $bit_desc, ", which can be compared between different circuits.")]
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
         #[pyclass(subclass, name=$pybit_name, module="qiskit.circuit", extends=PyBit, frozen, eq, hash)]
         pub struct $pybit_struct($bit_struct);
+        #[cfg(feature = "py")]
         #[pymethods]
         impl $pybit_struct {
             /// Create a new bit.
@@ -488,7 +500,7 @@ macro_rules! create_bit_object {
                         ty.getattr("_from_owned")?,
                         (register.name.to_owned(), register.size, index),
                     )
-                        .into_bound_py_any(slf.py()),
+                    .into_bound_py_any(slf.py()),
                     // Don't need to examine the subclass, because it's handled by the overrides of
                     // the `_from_anonymous` and `_from_owned` methods.
                     BitInfo::Anonymous { uid, .. } => {
@@ -556,6 +568,7 @@ macro_rules! create_bit_object {
             }
         }
 
+        #[cfg(feature = "py")]
         impl<'a, 'py> FromPyObject<'a, 'py> for $bit_struct {
             type Error = ::pyo3::CastError<'a, 'py>;
 
@@ -563,6 +576,7 @@ macro_rules! create_bit_object {
                 ob.cast::<$pybit_struct>().map(|ob| ob.borrow().0.clone())
             }
         }
+        #[cfg(feature = "py")]
         // The owning impl of `IntoPyObject` needs to be done manually, to better handle
         // subclassing.
         impl<'a, 'py> IntoPyObject<'py> for &'a $bit_struct {
@@ -686,6 +700,7 @@ macro_rules! create_bit_object {
             }
         }
 
+        #[cfg(feature = "py")]
         impl<'a, 'py> FromPyObject<'a, 'py> for $reg_struct {
             type Error = ::pyo3::CastError<'a, 'py>;
 
@@ -693,6 +708,7 @@ macro_rules! create_bit_object {
                 ob.cast::<$pyreg_struct>().map(|ob| ob.borrow().0.clone())
             }
         }
+        #[cfg(feature = "py")]
         // The owning impl of `IntoPyObject` needs to be done manually, to better handle
         // subclassing.
         impl<'a, 'py> IntoPyObject<'py> for &'a $reg_struct {
@@ -705,11 +721,13 @@ macro_rules! create_bit_object {
             }
         }
 
+        #[cfg(feature = "py")]
         /// Implement a register.
         #[pyclass(subclass, name=$pyreg_name, module="qiskit.circuit", extends=PyRegister, frozen, eq, hash, sequence)]
         #[derive(Clone, Debug, PartialEq, Eq, Hash)]
         pub struct $pyreg_struct($reg_struct);
 
+        #[cfg(feature = "py")]
         #[pymethods]
         impl $pyreg_struct {
             /// Create a new register.
@@ -812,8 +830,8 @@ macro_rules! create_bit_object {
             fn __getitem__<'py>(&self, ob: Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
                 let get_inner = |idx| {
                     self.0
-                        .get(idx)
-                        .expect("PySequenceIndex always returns valid indices")
+                    .get(idx)
+                    .expect("PySequenceIndex always returns valid indices")
                 };
                 if let Ok(sequence) = ob.extract::<PySequenceIndex>() {
                     match sequence.with_len(self.0.len())? {
@@ -838,13 +856,13 @@ macro_rules! create_bit_object {
             fn index(&self, bit: Bound<$pybit_struct>) -> PyResult<usize> {
                 let bit_inner = bit.borrow();
                 self.0
-                    .index_of(&bit_inner.0)
-                    .ok_or_else(|| match bit.repr() {
-                        Ok(repr) => {
-                            PyValueError::new_err(format!("Bit {repr} not found in register."))
-                        }
-                        Err(err) => err,
-                    })
+                .index_of(&bit_inner.0)
+                .ok_or_else(|| match bit.repr() {
+                    Ok(repr) => {
+                        PyValueError::new_err(format!("Bit {repr} not found in register."))
+                    }
+                    Err(err) => err,
+                })
             }
 
             /// Allows for the creation of a new register with a temporary prefix and the
@@ -879,6 +897,7 @@ macro_rules! create_bit_object {
             }
         }
 
+        #[cfg(feature = "py")]
         impl ::std::ops::Deref for $pyreg_struct {
             type Target = $reg_struct;
             fn deref(&self) -> &Self::Target {
@@ -929,9 +948,11 @@ impl ShareableQubit {
 }
 
 /// A qubit used as an ancilla.
+#[cfg(feature = "py")]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[pyclass(name="AncillaQubit", module="qiskit.circuit", extends=PyQubit, frozen)]
 pub struct PyAncillaQubit;
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyAncillaQubit {
     /// Create a new anonymous ancilla qubit.
@@ -989,6 +1010,7 @@ impl PyAncillaQubit {
         .into_any())
     }
 }
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for ShareableQubit {
     type Target = PyAny;
     type Output = Bound<'py, PyAny>;
@@ -1043,6 +1065,7 @@ impl QuantumRegister {
 }
 // This isn't intended for use from Rust space.
 /// Implement an ancilla register.
+#[cfg(feature = "py")]
 #[pyclass(
     name = "AncillaRegister",
     module = "qiskit.circuit",
@@ -1051,6 +1074,7 @@ impl QuantumRegister {
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PyAncillaRegister;
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyAncillaRegister {
     // Most of the methods are inherited from `QuantumRegister` in Python space.
@@ -1119,6 +1143,7 @@ impl PyAncillaRegister {
         PyAncillaQubit::type_object(py)
     }
 }
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for QuantumRegister {
     type Target = PyAny;
     type Output = Bound<'py, PyAny>;
@@ -1161,7 +1186,9 @@ create_bit_object!(
     CLBIT_INSTANCES,
     CLASSICAL_REGISTER_INSTANCES
 );
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for ShareableClbit {
+    #[cfg(feature = "py")]
     type Target = PyClbit;
     type Output = Bound<'py, PyClbit>;
     type Error = PyErr;
@@ -1171,6 +1198,7 @@ impl<'py> IntoPyObject<'py> for ShareableClbit {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for ClassicalRegister {
     type Target = PyClassicalRegister;
     type Output = Bound<'py, PyClassicalRegister>;
