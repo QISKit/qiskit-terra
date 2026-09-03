@@ -15,6 +15,7 @@
 import ctypes
 
 import qiskit
+import qiskit.qasm2
 from qiskit import capi
 import numpy
 
@@ -104,7 +105,7 @@ def transpile_from_c(
     ]
     options = capi.QkTranspileOptions(*args)
     result = capi.QkTranspileResult(None, None)
-    error = ctypes.pointer(ctypes.c_char())
+    error = ctypes.POINTER(ctypes.c_char)()
     res = capi.qk_transpile(
         capi.qk_circuit_borrow_from_python(circuit._data),
         target,
@@ -114,10 +115,36 @@ def transpile_from_c(
     )
     if res != 0:
         raise qiskit.transpiler.exceptions.TranspilerError(
-            f"Transpilation failed: {error.contents.value.decode('utf8')}"
+            f"Transpilation failed: {ctypes.cast(error, ctypes.c_char_p).value.decode('utf8')}"
         )
     layout = capi.qk_transpile_layout_to_python(result.layout, result.circuit)
     capi.qk_transpile_layout_free(result.layout)
     out = capi.qk_circuit_to_python_full(result.circuit)
     out._layout = layout
     return out
+
+
+def load_qasm2_from_c(program: str, strict: bool = False) -> qiskit.QuantumCircuit:
+    """Load an OpenQASM 2 program through the C API and return it as a Python circuit.
+
+    This is currently the only way to reach the native Rust importer, since
+    :func:`qiskit.qasm2.loads` still goes through the Python-space bytecode interpreter.
+
+    Raises:
+        QASM2ParseError: if the importer rejected the program, carrying its own message so a
+            parse failure surfaces the same way it would from ``qasm2.loads``.
+    """
+    options = capi.qk_openqasm2_default_options()
+    options.strict = strict
+    error = ctypes.POINTER(ctypes.c_char)()
+    circuit = capi.qk_circuit_from_openqasm2(
+        program.encode("utf-8"),
+        ctypes.byref(options),
+        ctypes.byref(error),
+    )
+    if not circuit:
+        message = ctypes.cast(error, ctypes.c_char_p).value.decode("utf-8")
+        capi.qk_str_free(error)
+        raise qiskit.qasm2.QASM2ParseError(message)
+    # `qk_circuit_to_python_full` takes ownership of the circuit, so it must not be freed here.
+    return capi.qk_circuit_to_python_full(circuit)

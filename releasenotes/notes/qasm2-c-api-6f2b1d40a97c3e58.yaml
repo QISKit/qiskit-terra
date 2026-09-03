@@ -1,0 +1,20 @@
+---
+features_c:
+  - |
+    Added :c:func:`qk_circuit_from_openqasm2`, which loads a :c:type:`QkCircuit` from a string
+    containing an OpenQASM 2 program.  The importer is written natively in Rust and does not call
+    into Python.  Parsing is configured with a :c:type:`QkOpenQasm2Options`, whose defaults are
+    given by :c:func:`qk_openqasm2_default_options`.  A failure returns a null pointer and writes a
+    human-readable description to the ``error`` out-parameter, which the caller releases with
+    :c:func:`qk_str_free`.
+
+    .. code-block:: c
+
+        QkOpenQasm2Options options = qk_openqasm2_default_options();
+        char *error = NULL;
+        QkCircuit *qc = qk_circuit_from_openqasm2(
+            "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0]; cx q[0], q[1];",
+            &options, &error);
+
+    The custom classical functions and custom instructions accepted by ``qiskit.qasm2.loads`` are
+    not yet supported through C; a program relying on those extensions will fail to parse.

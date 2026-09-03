@@ -2356,6 +2356,7 @@ dependencies = [
  "qiskit-circuit-library",
  "qiskit-mir",
  "qiskit-passmanager",
+ "qiskit-qasm2",
  "qiskit-qpy",
  "qiskit-quantum-info",
  "qiskit-transpiler",
