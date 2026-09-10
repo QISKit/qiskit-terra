@@ -49,7 +49,9 @@ from ._tracer import (
 __all__ = [
     "DType",
     "DataTree",
+    "ProgramStepper",
     "QuantumProgram",
+    "Request",
     "TensorType",
     "Tracer",
     "add",
@@ -293,6 +295,10 @@ class Instruction:
     def callee(self) -> ProgramFunction | None:
         """The function this instruction calls, and `None` unless it is a call."""
 
+    @property
+    def callee_id(self) -> int | None:
+        """The function this instruction calls, by its position in definition order."""
+
     def __repr__(self) -> str: ...
 
 class InstructionRole:
@@ -323,6 +329,63 @@ class Value:
     def __hash__(self) -> int: ...
     def __repr__(self) -> str: ...
 
+class ProgramStepper:
+    """Evaluate a :class:`~.QuantumProgram`, requesting an execution for each external function.
+
+    Args:
+        program: The program to step through.
+        external: The program functions, by index, that require external evaluation.
+        inputs: Arguments to the quantum program, anything coercible into an array-valued
+            :class:`~.DataTree`.
+    """
+
+    def __init__(
+        self,
+        program: QuantumProgram,
+        external: Sequence[int],
+        inputs: Any | None = None,
+        /,
+    ) -> None: ...
+    def step(self) -> None:
+        """Run everything the answers in hand allow, stopping when only external work is left."""
+
+    def outstanding(self) -> list[Request]:
+        """Return every request the caller has still to answer."""
+
+    def fulfil(self, request_id: int, outputs: Sequence[ArrayLike], /) -> None:
+        """Answer the request ``request_id`` with one array per result the call declares."""
+
+    @property
+    def outputs(self) -> DataTree | None:
+        """Return the program's outputs, or ``None`` if the evaluation is unfinished."""
+
+    def __repr__(self) -> str: ...
+
+class Request:
+    """One piece of work a :class:`~.ProgramStepper` has handed over."""
+
+    @property
+    def id(self) -> int:
+        """This request's identity within the stepper that raised it."""
+
+    @property
+    def function(self) -> ProgramFunction:
+        """The function to perform."""
+
+    @property
+    def function_id(self) -> int:
+        """The function to perform, by its position in the program's definition order."""
+
+    @property
+    def inputs(self) -> list[np.ndarray]:
+        """One array per parameter of that function, in declaration order."""
+
+    @property
+    def output_types(self) -> list[TensorType]:
+        """The type each array of the answer must satisfy, one per result of that function."""
+
+    def __repr__(self) -> str: ...
+
 bit: DType
 u8: DType
 u16: DType
@@ -338,4 +401,6 @@ c64: DType
 c128: DType
 
 if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import ArrayLike
     from PIL.Image import Image

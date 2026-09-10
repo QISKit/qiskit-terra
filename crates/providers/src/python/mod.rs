@@ -12,9 +12,11 @@
 
 //! Bindings for the `qiskit.quantum_program` Python package.
 
+mod backend;
 mod data_tree;
 mod ops;
 mod program;
+mod stepper;
 mod tensor;
 
 use pyo3::exceptions::{PyIndexError, PyValueError};
@@ -22,6 +24,7 @@ use pyo3::prelude::*;
 
 use crate::program::InstructionRole;
 use crate::tensor::{DType, TensorType};
+//pub use backend::PyBackendV3;
 pub use data_tree::PyDataTree;
 use ops::{
     PyAdd, PyBindParameters, PyBitwiseAnd, PyBitwiseNot, PyBitwiseOr, PyBitwiseXor, PyBroadcastTo,
@@ -29,6 +32,7 @@ use ops::{
     PyShotLoop, PyStd, PySubtract, PyVariance,
 };
 use program::{PyFunctionBuilder, PyInstruction, PyProgramFunction, PyQuantumProgram, PyValue};
+use stepper::{PyProgramStepper, PyRequest};
 use tensor::PyBounded;
 
 /// Return `error` and everything that caused it, as one message.
@@ -69,7 +73,9 @@ pub fn quantum_program(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyFunctionBuilder>()?;
     m.add_class::<PyInstruction>()?;
     m.add_class::<PyProgramFunction>()?;
+    m.add_class::<PyProgramStepper>()?;
     m.add_class::<PyQuantumProgram>()?;
+    m.add_class::<PyRequest>()?;
     m.add_class::<PyValue>()?;
     m.add_class::<InstructionRole>()?;
     m.add_class::<DType>()?;

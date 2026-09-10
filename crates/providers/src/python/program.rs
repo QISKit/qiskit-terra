@@ -27,7 +27,7 @@ use crate::program::{
     FunctionId, InstructionId, InstructionRef, InstructionRole, InstructionView, ProgramFunction,
     QuantumProgram, Value,
 };
-use crate::tensor::TensorType;
+use crate::tensor::{Tensor, TensorType};
 use crate::{partition, render};
 
 /// One tensor value: an output slot of the instruction that produces it.
@@ -122,7 +122,7 @@ impl PyFunctionBuilder {
 /// known before it runs. Calling it supplies one keyword argument per input and gives back a
 /// `DataTree` of results arranged as `output_types()` describes.
 #[pyclass(name = "QuantumProgram", module = "qiskit.quantum_program", frozen)]
-pub struct PyQuantumProgram(QuantumProgram);
+pub struct PyQuantumProgram(pub(super) QuantumProgram);
 
 #[pymethods]
 impl PyQuantumProgram {
@@ -197,14 +197,7 @@ impl PyQuantumProgram {
 
         let mut tree = DataTree::with_capacity(expected.len());
         for ((name, ty), argument) in expected.into_iter().zip(arguments) {
-            let value = tensor(&argument)?;
-            if !value.matches(ty) {
-                return Err(PyValueError::new_err(format!(
-                    "input '{name}': expected {ty}, got {}",
-                    value.tensor_type()
-                )));
-            }
-            tree.insert_leaf(name, value)
+            tree.insert_leaf(name, input(&argument, ty, name)?)
                 .map_err(|err| value_error(&err))?;
         }
 
@@ -343,8 +336,8 @@ impl PyQuantumProgram {
 /// operands always come from earlier in the function.
 #[pyclass(name = "ProgramFunction", module = "qiskit.quantum_program", frozen)]
 pub struct PyProgramFunction {
-    program: Py<PyQuantumProgram>,
-    id: FunctionId,
+    pub(super) program: Py<PyQuantumProgram>,
+    pub(super) id: FunctionId,
 }
 
 impl PyProgramFunction {
@@ -559,6 +552,19 @@ impl PyInstruction {
         }
     }
 
+    /// The function this instruction calls, by its position in the program's definition order, and
+    /// ``None`` unless it is a call.
+    ///
+    /// A ``ProgramStepper`` declares a function external by this position, and a ``Request``
+    /// reports it.
+    #[getter]
+    fn callee_id(&self) -> Option<usize> {
+        match self.read().view() {
+            InstructionView::Call(callee) => Some(callee.index()),
+            _ => None,
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Instruction(@{}, {}, {})",
@@ -567,6 +573,21 @@ impl PyInstruction {
             self.read().full_name()
         )
     }
+}
+
+/// Read `object` as the tensor for the input named `where_`, of declared type `ty`.
+///
+/// A program is monomorphic, so nothing is promoted here: a value that does not match the declared
+/// type is refused, naming both types.
+pub(super) fn input(object: &Bound<'_, PyAny>, ty: &TensorType, where_: &str) -> PyResult<Tensor> {
+    let value = tensor(object)?;
+    if !value.matches(ty) {
+        return Err(PyValueError::new_err(format!(
+            "input '{where_}': expected {ty}, got {}",
+            value.tensor_type()
+        )));
+    }
+    Ok(value)
 }
 
 /// Format `names` as Python renders a list of strings.

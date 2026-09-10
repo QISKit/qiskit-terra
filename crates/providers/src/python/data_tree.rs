@@ -13,6 +13,7 @@
 //! The Python binding of the data tree.
 
 use hashbrown::HashSet;
+use numpy::{PyUntypedArray, PyUntypedArrayMethods};
 use pyo3::exceptions::{PyAttributeError, PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::intern;
 use pyo3::prelude::*;
@@ -304,7 +305,7 @@ fn branch_is_mapping(children: &[(Option<&str>, &ObjectTree)]) -> PyResult<bool>
 }
 
 /// Parse `object` into a data tree, as [`PyDataTree`] documents.
-fn parse(object: &Bound<'_, PyAny>) -> PyResult<ObjectTree> {
+pub(super) fn parse(object: &Bound<'_, PyAny>) -> PyResult<ObjectTree> {
     let py = object.py();
     if let Ok(tree) = object.cast::<PyDataTree>() {
         return Ok(tree.get().0.clone());
@@ -405,6 +406,9 @@ fn trees_equal(py: Python<'_>, left: &ObjectTree, right: &ObjectTree) -> PyResul
     }
 }
 
+/// The largest number of elements an array leaf can hold and still be rendered in full.
+const MAX_RENDERED_ELEMENTS: usize = 10;
+
 /// Render a tree as its skeleton, showing each leaf by its `repr`.
 fn render(py: Python<'_>, tree: &ObjectTree) -> PyResult<String> {
     let DataTree::Leaf(value) = tree else {
@@ -422,5 +426,17 @@ fn render(py: Python<'_>, tree: &ObjectTree) -> PyResult<String> {
         rendered.push(']');
         return Ok(rendered);
     };
-    Ok(value.bind(py).repr()?.to_string())
+    render_leaf(value.bind(py))
+}
+
+/// Render a leaf by its `repr`, or by its dtype and shape if it is an array of more than
+/// [`MAX_RENDERED_ELEMENTS`] elements.
+fn render_leaf(value: &Bound<'_, PyAny>) -> PyResult<String> {
+    if let Ok(array) = value.cast::<PyUntypedArray>()
+        && array.len() > MAX_RENDERED_ELEMENTS
+    {
+        let dims: Vec<String> = array.shape().iter().map(usize::to_string).collect();
+        return Ok(format!("{}[{}]", array.dtype(), dims.join(", ")));
+    }
+    Ok(value.repr()?.to_string())
 }

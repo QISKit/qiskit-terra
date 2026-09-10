@@ -175,7 +175,7 @@ mod test {
     use super::*;
     use crate::DataTree;
     use crate::ops::Mean;
-    use crate::program::{ProgramEvalError, ProgramFunction, QuantumProgram};
+    use crate::program::{ProgramFunction, QuantumProgram, StepperError};
 
     /// Return a circuit taking `parameters` with `registers` as `(name, width)` pairs.
     fn circuit(parameters: usize, registers: &[(&str, u32)]) -> CircuitData {
@@ -443,7 +443,7 @@ mod test {
         assert!(
             matches!(
                 err,
-                ProgramEvalError::NoBuiltinEval { full_name, .. }
+                StepperError::NoBuiltinEval { full_name, .. }
                     if full_name == "qiskit.shot_loop"
             ),
             "the op a backend is needed for is named"

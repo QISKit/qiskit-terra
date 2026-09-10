@@ -15,6 +15,7 @@ use std::fmt;
 use thiserror::Error;
 
 use super::quantum_program::FunctionId;
+use super::stepper::{StepperError, eval_function};
 use crate::ops::{BoxedOpError, BoxedProgramOp, ErasedProgramOp, ProgramOp, QISKIT};
 use crate::tensor::{Tensor, TensorType};
 
@@ -349,56 +350,6 @@ pub enum FunctionError {
     },
 }
 
-/// Why [`ProgramFunction::eval`] could not produce results.
-#[derive(Debug, Error)]
-pub enum FunctionEvalError {
-    /// The argument count does not match the number of declared parameters.
-    #[error("expected {expected} argument(s), got {actual}")]
-    ArgumentArity { expected: usize, actual: usize },
-
-    /// An argument does not satisfy the type this (monomorphic) function declares for that
-    /// parameter.
-    #[error("argument {parameter}: expected {expected}, got {actual}")]
-    ArgumentTypeMismatch {
-        parameter: usize,
-        expected: TensorType,
-        actual: TensorType,
-    },
-
-    /// The function contains an instruction Qiskit has no built-in implementation of.
-    #[error("instruction {instruction} ({full_name}) has no built-in implementation")]
-    NoBuiltinEval {
-        instruction: InstructionId,
-        full_name: String,
-    },
-
-    /// An instruction returned an error from its [`ProgramOp::eval`].
-    #[error("evaluating instruction {instruction} ({full_name})")]
-    InstructionFailed {
-        instruction: InstructionId,
-        full_name: String,
-        #[source]
-        source: BoxedOpError,
-    },
-
-    /// A function reached through a call instruction failed.
-    #[error("evaluating the call at instruction {instruction} to {callee}")]
-    CallFailed {
-        instruction: InstructionId,
-        callee: FunctionId,
-        #[source]
-        source: Box<FunctionEvalError>,
-    },
-
-    /// An instruction's `eval` returned a different number of tensors than its type inference expected.
-    #[error("instruction {instruction} returned {actual} result(s), expected {expected}")]
-    ResultArityMismatch {
-        instruction: InstructionId,
-        expected: usize,
-        actual: usize,
-    },
-}
-
 /// A tensor dataflow of instructions.
 ///
 /// Each instruction can have one of four roles:
@@ -635,153 +586,18 @@ impl ProgramFunction {
 
     /// Return whether every instruction of this function has a built-in implementation.
     pub fn has_builtin_eval(&self) -> bool {
-        self.first_without_builtin_eval().is_none()
+        self.iter_instructions()
+            .all(|instruction| instruction.has_builtin_eval())
     }
 
     /// Evaluate this function against `args`, one per parameter in declaration order.
     ///
-    /// Fails when any instruction has no built-in evaluation implementation.
-    pub fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, FunctionEvalError> {
-        // The function is monomorphic, so its declared parameter types are the only ones its
-        // instructions were built for. Checking them here names the argument the caller supplied.
-        self.check_argument_types(args)?;
-        if let Some(instruction) = self.first_without_builtin_eval() {
-            return Err(FunctionEvalError::NoBuiltinEval {
-                instruction: instruction.id(),
-                full_name: instruction.full_name(),
-            });
-        }
-        self.walk(args, &[])
-    }
-
-    /// Evaluate this function against `args`, resolving each call instruction against `functions`.
-    ///
-    /// The caller establishes that every instruction this may reach has a built-in implementation,
-    /// and that `functions` holds the callee of every call instruction reached, since both are
-    /// properties of the whole program rather than of this function.
-    pub(super) fn eval_in(
-        &self,
-        args: &[Tensor],
-        functions: &[ProgramFunction],
-    ) -> Result<Vec<Tensor>, FunctionEvalError> {
-        self.check_argument_types(args)?;
-        self.walk(args, functions)
-    }
-
-    /// Walk the instructions in storage order over a single dense environment, releasing each intermediate
-    /// once its last consumer has run.
-    fn walk(
-        &self,
-        args: &[Tensor],
-        functions: &[ProgramFunction],
-    ) -> Result<Vec<Tensor>, FunctionEvalError> {
-        let offsets = self.value_offsets();
-        let last_use = self.last_use(&offsets);
-        let flat = |value: Value| offsets[value.instruction.index()] as usize + value.slot();
-
-        // Every operand is present: it was produced by an earlier instruction, and it cannot have
-        // been released, because this instruction's use of it is at or before its last.
-        let gather = |operands: &[Value], env: &[Option<Tensor>]| -> Vec<Tensor> {
-            operands
-                .iter()
-                .map(|&value| {
-                    env[flat(value)]
-                        .clone()
-                        .expect("an operand is produced before its consumer runs")
-                })
-                .collect()
-        };
-
-        let total = *offsets.last().expect("offsets always end with the total");
-        let mut env: Vec<Option<Tensor>> = vec![None; total as usize];
-        let mut outputs: Vec<Option<Tensor>> = vec![None; self.results.len()];
-        let mut next_result = 0;
-
-        for (position, instruction) in self.instructions.iter().enumerate() {
-            let id = InstructionId(position as u32);
-            match &instruction.body {
-                InstructionBody::Parameter => {
-                    // Parameters are the sources of the dataflow: their values come from the caller,
-                    // in the order the parameters were declared.
-                    let parameter = self
-                        .parameters
-                        .iter()
-                        .position(|&declared| declared == id)
-                        .expect("a parameter instruction is always in `parameters`");
-                    env[offsets[position] as usize] = Some(args[parameter].clone());
-                }
-                InstructionBody::Op(op) => {
-                    let operands = gather(&instruction.operands, &env);
-                    let results = op.eval(&operands).map_err(|source| {
-                        FunctionEvalError::InstructionFailed {
-                            instruction: id,
-                            full_name: op.full_name(),
-                            source,
-                        }
-                    })?;
-                    if results.len() != instruction.output_types.len() {
-                        return Err(FunctionEvalError::ResultArityMismatch {
-                            instruction: id,
-                            expected: instruction.output_types.len(),
-                            actual: results.len(),
-                        });
-                    }
-                    for (slot, tensor) in results.into_iter().enumerate() {
-                        env[offsets[position] as usize + slot] = Some(tensor);
-                    }
-                }
-                InstructionBody::Call(callee) => {
-                    // Assembling the program checked this call against the function it names, so
-                    // the callee is present and its results land one per output slot.
-                    let arguments = gather(&instruction.operands, &env);
-                    let function = functions
-                        .get(callee.index())
-                        .expect("a call names a function of the program being evaluated");
-                    let results = function.walk(&arguments, functions).map_err(|source| {
-                        FunctionEvalError::CallFailed {
-                            instruction: id,
-                            callee: *callee,
-                            source: Box::new(source),
-                        }
-                    })?;
-                    for (slot, tensor) in results.into_iter().enumerate() {
-                        env[offsets[position] as usize + slot] = Some(tensor);
-                    }
-                }
-                InstructionBody::Result => {
-                    outputs[next_result] = env[flat(instruction.operands[0])].clone();
-                    next_result += 1;
-                }
-            }
-
-            // A result instruction is an ordinary final consumer, so nothing here has to make an
-            // exception for a value the function returns.
-            for &value in &instruction.operands {
-                if last_use[flat(value)] == Some(position) {
-                    env[flat(value)] = None;
-                }
-            }
-            for slot in 0..instruction.output_types.len() {
-                let index = offsets[position] as usize + slot;
-                if last_use[index] == Some(position) {
-                    env[index] = None;
-                }
-            }
-        }
-
-        Ok(outputs
-            .into_iter()
-            .map(|tensor| tensor.expect("every result instruction runs"))
-            .collect())
-    }
-
-    /// Return the first instruction Qiskit has no in-process implementation of.
-    ///
-    /// [`Self::eval`] consults this before computing anything, so a function that needs a backend
-    /// fails at the top rather than part-way through a walk that has produced intermediates.
-    fn first_without_builtin_eval(&self) -> Option<InstructionRef<'_>> {
-        self.iter_instructions()
-            .find(|instruction| !instruction.has_builtin_eval())
+    /// A function on its own has no callee to resolve and no way to hand work over, so an
+    /// instruction with no built-in implementation is an error. That includes every call
+    /// instruction and the shot loop. [`ProgramStepper`](super::ProgramStepper) is what runs a
+    /// whole program, external work included.
+    pub fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, StepperError> {
+        eval_function(self, args)
     }
 
     /// Return the types of `values`, which must all belong to this function.
@@ -793,55 +609,6 @@ impl ProgramFunction {
                     .clone()
             })
             .collect()
-    }
-
-    /// Validate that every argument satisfies its parameter's declared type.
-    fn check_argument_types(&self, args: &[Tensor]) -> Result<(), FunctionEvalError> {
-        if args.len() != self.parameters.len() {
-            return Err(FunctionEvalError::ArgumentArity {
-                expected: self.parameters.len(),
-                actual: args.len(),
-            });
-        }
-        for (parameter, (arg, value)) in args.iter().zip(self.parameter_values()).enumerate() {
-            let expected = self.type_of(value).expect("a parameter always exists");
-            if !arg.matches(expected) {
-                return Err(FunctionEvalError::ArgumentTypeMismatch {
-                    parameter,
-                    expected: expected.clone(),
-                    actual: arg.tensor_type(),
-                });
-            }
-        }
-        Ok(())
-    }
-
-    /// Return where each instruction's block of values starts in a dense environment.
-    fn value_offsets(&self) -> Vec<u32> {
-        let mut offsets = Vec::with_capacity(self.instructions.len() + 1);
-        let mut total = 0;
-        for instruction in &self.instructions {
-            offsets.push(total);
-            total += instruction.output_types.len() as u32;
-        }
-        offsets.push(total);
-        offsets
-    }
-
-    /// Return, for each value, the instruction position after which it is not used again.
-    fn last_use(&self, offsets: &[u32]) -> Vec<Option<usize>> {
-        let total = *offsets.last().expect("offsets always end with the total");
-        let mut last = vec![None; total as usize];
-        for (position, instruction) in self.instructions.iter().enumerate() {
-            for slot in 0..instruction.output_types.len() {
-                last[offsets[position] as usize + slot] = Some(position);
-            }
-            // A consumer overwrites the producer's own position, which is strictly later.
-            for &value in &instruction.operands {
-                last[offsets[value.instruction.index()] as usize + value.slot()] = Some(position);
-            }
-        }
-        last
     }
 }
 
@@ -1299,7 +1066,7 @@ mod test {
         };
         assert!(matches!(
             err,
-            FunctionEvalError::NoBuiltinEval { full_name, .. } if full_name == "qiskit.call"
+            StepperError::NoBuiltinEval { full_name, .. } if full_name == "qiskit.call"
         ));
     }
 
@@ -1593,7 +1360,7 @@ mod test {
         };
         assert!(matches!(
             err,
-            FunctionEvalError::ArgumentArity {
+            StepperError::ArgumentArity {
                 expected: 2,
                 actual: 1
             }
@@ -1611,7 +1378,7 @@ mod test {
         assert!(
             matches!(
                 err,
-                FunctionEvalError::ArgumentTypeMismatch {
+                StepperError::ArgumentTypeMismatch {
                     parameter: 0,
                     expected,
                     actual,
@@ -1638,7 +1405,7 @@ mod test {
             assert!(
                 matches!(
                     function.eval(&[arg]),
-                    Err(FunctionEvalError::NoBuiltinEval { .. })
+                    Err(StepperError::NoBuiltinEval { .. })
                 ),
                 "an argument of length {len} is within the bound of 4"
             );
@@ -1649,7 +1416,7 @@ mod test {
         };
         assert!(matches!(
             err,
-            FunctionEvalError::ArgumentTypeMismatch {
+            StepperError::ArgumentTypeMismatch {
                 parameter: 0,
                 expected,
                 actual,
@@ -1733,9 +1500,10 @@ mod test {
         let Err(err) = function.eval(&[Tensor::from([1.0_f64])]) else {
             panic!("a function with no built-in implementation cannot be evaluated")
         };
-        let FunctionEvalError::NoBuiltinEval {
+        let StepperError::NoBuiltinEval {
             instruction,
             full_name,
+            ..
         } = &err
         else {
             panic!("expected a locality error, got {err}")
@@ -1797,7 +1565,7 @@ mod test {
 
         assert!(matches!(
             function.eval(&[Tensor::from([1.0_f64])]),
-            Err(FunctionEvalError::NoBuiltinEval { .. })
+            Err(StepperError::NoBuiltinEval { .. })
         ));
         assert_eq!(
             evaluations.load(Ordering::Relaxed),

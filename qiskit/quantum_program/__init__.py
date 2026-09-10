@@ -54,10 +54,12 @@ register values from each circuit for that number of shots::
     outcomes[0]["meas"].type      # TensorType(Bit[1024, 5])
 
 A shot loop produces one value per classical register of each circuit, addressed by circuit and
-register name. Each is a :class:`Tracer`, which stands for a value the program will produce rather
-than one in hand. The arithmetic operators, the bitwise operators and the reductions all build
-another tracer, so post-processing is written as ordinary arithmetic, and each operation reports the
-type it produces as it is written, so a dtype or shape mistake is raised at the line that made it::
+register name, whose trailing axis is that register's own bits in order, so element ``i`` of it is
+bit ``i`` of the register. Each value is a :class:`Tracer`, which stands for a value the program
+will produce rather than one in hand. The arithmetic operators, the bitwise operators and the
+reductions all build another tracer, so post-processing is written as ordinary arithmetic, and each
+operation reports the type it produces as it is written, so a dtype or shape mistake is raised at
+the line that made it::
 
     excited = outcomes[0]["meas"].mean(axis=0)
     excited.type                  # TensorType(F64[5])
@@ -174,9 +176,29 @@ back an equivalent program, plus the resource each of its functions belongs to::
 
 An op no resource declares stays in the entry point, where Qiskit evaluates it in process, so here
 the mean is left where it was and only the multiplication is handed anywhere. Each function the
-partition produces is called once from the entry point and can be run as a whole. The table holds one
-entry per function other than the entry point, which is the last, so ``zip(resources, parts)`` pairs
-each function with the resource that handles it.
+partition produces is called once from the entry point and can be run as a whole. The table holds
+one entry per function other than the entry point, which is the last, so ``zip(resources, parts)``
+pairs each function with the resource that handles it.
+
+Stepping a program
+==================
+
+Once each resource's work is in a function of its own, a :class:`ProgramStepper` runs the program
+against a caller who performs that work. Each step runs everything Qiskit can and hands over a
+:class:`Request` per function whose operands have arrived, and :attr:`~ProgramStepper.outputs` is
+not ``None`` once the program has finished::
+
+    stepper = ProgramStepper(parts, range(len(resources)), {"x": numpy.array([1.0, 2.0, 3.0])})
+    while (outputs := stepper.outputs) is None:
+        stepper.step()
+        for request in stepper.outstanding():
+            stepper.fulfil(request.id, sample(request.function, request.inputs))
+
+One step surfaces every ready request at once, so work that does not depend on other work is handed
+over together. A stepper holds no callbacks and never gives up control, so a caller may fulfil a
+request however it likes, including by submitting it and coming back to the stepper later.
+:class:`~qiskit.providers.basic_provider.BasicProgramSimulator` drives one this way, answering each
+request with a state-vector simulation.
 
 Operations
 ==========
@@ -245,7 +267,9 @@ Classes
    Instruction
    InstructionRole
    ProgramFunction
+   ProgramStepper
    QuantumProgram
+   Request
    TensorType
    Tracer
    Value
@@ -266,7 +290,9 @@ from qiskit._accelerate.quantum_program import (
     Instruction,
     InstructionRole,
     ProgramFunction,
+    ProgramStepper,
     QuantumProgram,
+    Request,
     TensorType,
     Value,
     bounded,
@@ -319,7 +345,9 @@ __all__ = [
     "Instruction",
     "InstructionRole",
     "ProgramFunction",
+    "ProgramStepper",
     "QuantumProgram",
+    "Request",
     "TensorType",
     "Tracer",
     "Value",

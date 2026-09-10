@@ -16,10 +16,12 @@
 mod partition;
 mod program_function;
 mod quantum_program;
+mod stepper;
 
 pub use partition::{PartitionError, partition};
 pub use program_function::{
-    FunctionError, FunctionEvalError, InstructionId, InstructionRef, InstructionRole,
-    InstructionView, ProgramFunction, Signature, Value,
+    FunctionError, InstructionId, InstructionRef, InstructionRole, InstructionView,
+    ProgramFunction, Signature, Value,
 };
-pub use quantum_program::{FunctionId, ProgramError, ProgramEvalError, QuantumProgram};
+pub use quantum_program::{FunctionId, ProgramError, QuantumProgram};
+pub use stepper::{ProgramStepper, Request, RequestId, StepperError};

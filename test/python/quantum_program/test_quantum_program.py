@@ -378,6 +378,13 @@ class TestDataTree(QiskitTestCase):
             "DataTree([counts: [3, 4], shots: 100])",
         )
 
+    def test_repr_summarizes_a_big_array(self):
+        """Test that repr gives the dtype and shape of an array leaf that is not small."""
+        self.assertEqual(
+            repr(DataTree({"small": np.zeros(3), "big": np.zeros((4, 8), dtype=np.uint8)})),
+            "DataTree([small: array([0., 0., 0.]), big: uint8[4, 8]])",
+        )
+
 
 class TestTensorTypes(QiskitTestCase):
     """Tests for dtypes and the tensor types they build."""

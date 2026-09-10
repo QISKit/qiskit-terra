@@ -26,6 +26,7 @@
 //! - [`render`] writes a program out for a person to read, as a listing or as a drawing.
 //! - [`python`] binds the parts of all this that `qiskit.quantum_program` exposes, behind the
 //!   `python` feature.
+pub mod backend_v3;
 pub mod data_tree;
 pub mod ops;
 pub mod program;
@@ -34,10 +35,11 @@ pub mod python;
 pub mod render;
 pub mod tensor;
 
+pub use backend_v3::{BackendV3, Job, RunResult};
 pub use data_tree::{ArityMismatch, DataTree, InvalidName, PathEntry, TreeMatchError};
 pub use ops::{BoxedOpError, BoxedProgramOp, Constant, ErasedProgramOp, ProgramOp};
 pub use program::{
-    FunctionError, FunctionEvalError, FunctionId, InstructionId, InstructionRef, InstructionRole,
-    InstructionView, PartitionError, ProgramError, ProgramEvalError, ProgramFunction,
-    QuantumProgram, Signature, Value, partition,
+    FunctionError, FunctionId, InstructionId, InstructionRef, InstructionRole, InstructionView,
+    PartitionError, ProgramError, ProgramFunction, ProgramStepper, QuantumProgram, Request,
+    RequestId, Signature, StepperError, Value, partition,
 };

@@ -14,12 +14,13 @@
 
 use std::fmt;
 
+use hashbrown::HashSet;
 use thiserror::Error;
 
 use super::program_function::{
-    FunctionEvalError, InstructionId, InstructionRef, InstructionRole, InstructionView,
-    ProgramFunction, Signature,
+    InstructionId, InstructionRef, InstructionView, ProgramFunction, Signature,
 };
+use super::stepper::{ProgramStepper, StepperError, first_without_builtin_eval};
 use crate::data_tree::DataTree;
 use crate::tensor::{Tensor, TensorType};
 
@@ -129,29 +130,6 @@ pub enum ProgramError {
         result: TensorType,
         output: TensorType,
     },
-}
-
-/// Why [`QuantumProgram::eval`] could not produce results.
-#[derive(Debug, Error)]
-pub enum ProgramEvalError {
-    /// The inputs are arranged differently than the program declares.
-    #[error("inputs are structured {actual} but the program declares {expected}")]
-    InputStructureMismatch {
-        expected: Box<DataTree<()>>,
-        actual: Box<DataTree<()>>,
-    },
-
-    /// A function contains an instruction Qiskit has no in-process implementation of.
-    #[error("{function} instruction {instruction} ({full_name}) has no built-in implementation")]
-    NoBuiltinEval {
-        function: FunctionId,
-        instruction: InstructionId,
-        full_name: String,
-    },
-
-    /// The entry point failed.
-    #[error(transparent)]
-    Function(#[from] FunctionEvalError),
 }
 
 /// A program describing a quantum computation.
@@ -295,49 +273,23 @@ impl QuantumProgram {
     /// Return whether every instruction in every function has a built-in evaluation; whether
     /// [`eval`](Self::eval) can run.
     pub fn has_builtin_eval(&self) -> bool {
-        self.first_without_builtin_eval().is_none()
+        first_without_builtin_eval(&self.functions, &HashSet::new()).is_none()
     }
 
     /// Evaluate the program on a tree of inputs, returning a tree of outputs.
     ///
-    /// `inputs` must be arranged as [`input_structure`](Self::input_structure), checked
-    /// before evaluation. The results are arranged as [`output_structure`](Self::output_structure).
-    pub fn eval(&self, inputs: DataTree<Tensor>) -> Result<DataTree<Tensor>, ProgramEvalError> {
-        let actual = inputs.structure();
-        if actual != self.input_structure {
-            return Err(ProgramEvalError::InputStructureMismatch {
-                expected: Box::new(self.input_structure.clone()),
-                actual: Box::new(actual),
-            });
-        }
-        // Every function is checked before anything runs, so a program that needs a backend
-        // produces no intermediates.
-        if let Some((function, instruction)) = self.first_without_builtin_eval() {
-            return Err(ProgramEvalError::NoBuiltinEval {
-                function,
-                instruction: instruction.id(),
-                full_name: instruction.full_name(),
-            });
-        }
-        let arguments: Vec<Tensor> = inputs.into_leaves().collect();
-        let results = self.entry_function().eval_in(&arguments, &self.functions)?;
-        Ok(arrange(&self.output_structure, results))
-    }
-
-    /// Return the first instruction of any function that has no built-in evaluation.
-    fn first_without_builtin_eval(&self) -> Option<(FunctionId, InstructionRef<'_>)> {
-        self.functions
-            .iter()
-            .enumerate()
-            .find_map(|(index, function)| {
-                function
-                    .iter_instructions()
-                    .find(|instruction| {
-                        instruction.role() != InstructionRole::Call
-                            && !instruction.has_builtin_eval()
-                    })
-                    .map(|instruction| (FunctionId::from_index(index), instruction))
-            })
+    /// `inputs` must be arranged as [`input_structure`](Self::input_structure) dictates, which is
+    /// checked before anything is evaluated, and the results are formatted according to
+    /// [`output_structure`](Self::output_structure).
+    ///
+    /// This is the degenerate case of a [`ProgramStepper`] with nothing external: no call can
+    /// block, so one step finishes the program.
+    pub fn eval(&self, inputs: DataTree<Tensor>) -> Result<DataTree<Tensor>, StepperError> {
+        let mut stepper = ProgramStepper::new(self, inputs, [])?;
+        stepper.step(self)?;
+        Ok(stepper
+            .outputs(self)
+            .expect("a program with nothing external cannot block"))
     }
 }
 
@@ -355,7 +307,7 @@ impl std::fmt::Debug for QuantumProgram {
 }
 
 /// Arrange one value per slot into `structure`, which describes exactly that many slots.
-fn arrange<T>(structure: &DataTree<()>, values: Vec<T>) -> DataTree<T> {
+pub(super) fn arrange<T>(structure: &DataTree<()>, values: Vec<T>) -> DataTree<T> {
     structure
         .unflatten(values)
         .expect("a structure describes as many slots as the entry point it was checked against")
@@ -1069,7 +1021,7 @@ mod test {
     }
 
     // ---------------------------------------------------------------------------
-    // Evaluation rejections
+    // Stepping rejections
     // ---------------------------------------------------------------------------
 
     #[test]
@@ -1087,7 +1039,7 @@ mod test {
         assert!(
             matches!(
                 err,
-                ProgramEvalError::InputStructureMismatch { expected, actual }
+                StepperError::InputStructureMismatch { expected, actual }
                     if *expected == named_inputs()
                         && *actual == DataTree::sequence([DataTree::Leaf(()), DataTree::Leaf(())])
             ),
@@ -1114,7 +1066,7 @@ mod test {
         assert!(
             matches!(
                 err,
-                ProgramEvalError::InputStructureMismatch { expected, actual }
+                StepperError::InputStructureMismatch { expected, actual }
                     if *expected == nested_inputs() && *actual == named_inputs()
             ),
             "the surrounding structure is reported, not the subtree that differs"
@@ -1135,11 +1087,11 @@ mod test {
 
         assert!(matches!(
             err,
-            ProgramEvalError::Function(FunctionEvalError::ArgumentTypeMismatch {
+            StepperError::ArgumentTypeMismatch {
                 parameter: 1,
                 expected,
                 actual,
-            }) if expected.dtype == DType::F64 && actual.dtype == DType::I64
+            } if expected.dtype == DType::F64 && actual.dtype == DType::I64
         ));
     }
 
@@ -1230,7 +1182,7 @@ mod test {
         assert!(
             matches!(
                 err,
-                ProgramEvalError::NoBuiltinEval {
+                StepperError::NoBuiltinEval {
                     function,
                     full_name,
                     ..
@@ -1260,21 +1212,20 @@ mod test {
             panic!("@0 fails as it runs")
         };
 
-        let ProgramEvalError::Function(FunctionEvalError::CallFailed { callee, source, .. }) = &err
+        let StepperError::InstructionFailed {
+            function,
+            full_name,
+            source,
+            ..
+        } = &err
         else {
-            panic!("expected a failed call, got {err}")
+            panic!("expected a failed instruction, got {err}")
         };
-        assert_eq!(*callee, FunctionId::from_index(0));
-        let FunctionEvalError::InstructionFailed {
-            full_name, source, ..
-        } = source.as_ref()
-        else {
-            panic!("the call's source is the instruction that failed")
-        };
+        assert_eq!(*function, FunctionId::from_index(0));
         assert_eq!(full_name, "vendor.elsewhere");
         assert!(
             source.downcast_ref::<NoImplementation>().is_some(),
-            "the chain leads from the call to the instruction that failed"
+            "the op's own error is the source"
         );
     }
 }
