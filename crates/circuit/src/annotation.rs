@@ -12,7 +12,9 @@
 
 use std::any::Any;
 use std::fmt::Debug;
+#[cfg(feature = "py")]
 use std::sync::Arc;
+#[cfg(feature = "py")]
 use std::sync::OnceLock;
 
 #[cfg(feature = "py")]

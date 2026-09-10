@@ -14,7 +14,9 @@
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
+#[cfg(feature = "py")]
 use std::iter::zip;
+#[cfg(feature = "py")]
 use std::ops::Deref;
 use std::sync::Arc;
 

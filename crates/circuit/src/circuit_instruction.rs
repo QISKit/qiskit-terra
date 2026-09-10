@@ -31,9 +31,9 @@ use pyo3::{PyResult, intern};
 
 #[cfg(feature = "py")]
 use crate::annotation::AnnotationFromPython;
-use crate::circuit_data::CircuitData;
 #[cfg(feature = "py")]
-use crate::circuit_data::PyCircuitData;
+use crate::circuit_data::{CircuitData, PyCircuitData};
+#[cfg(feature = "py")]
 use crate::classical::expr;
 #[cfg(feature = "py")]
 use crate::dag_circuit::DAGCircuit;
