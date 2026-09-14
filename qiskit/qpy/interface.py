@@ -278,6 +278,7 @@ def load(
     file_obj: BinaryIO,
     metadata_deserializer: type[JSONDecoder] | None = None,
     annotation_factories: Mapping[str, Callable[[], annotation.QPYSerializer]] | None = None,
+    parallel: bool = True,
 ) -> list[QPY_SUPPORTED_TYPES]:
     """Load a QPY binary file
 
@@ -318,6 +319,8 @@ def load(
         annotation_factories: Mapping of namespaces to functions that create new instances of
             :class:`.annotation.QPUSerializer`, for handling the loading of custom
             :class:`.Annotation` objects.
+        parallel: If ``True`` (default), circuits are deserialized concurrently across
+            multiple threads.
 
     Returns:
         The list of Qiskit programs contained in the QPY data.
@@ -351,7 +354,7 @@ def load(
         )
     use_rust = version >= common.QPY_RUST_READ_MIN_VERSION
     if use_rust:
-        return _qpy.load(file_obj, metadata_deserializer, annotation_factories)
+        return _qpy.load(file_obj, metadata_deserializer, annotation_factories, parallel)
 
     if version < 10:
         data = formats.FILE_HEADER._make(

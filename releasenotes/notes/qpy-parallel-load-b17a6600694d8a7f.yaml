@@ -1,0 +1,5 @@
+---
+
+features_qpy:
+  - Added ``parallel`` parameter to :func:`.qpy.load` (default True). For QPY version >=17, circuites are deserialized over multiple threads. 
+    Setting ``parallel=False`` force sequantial loading. 
