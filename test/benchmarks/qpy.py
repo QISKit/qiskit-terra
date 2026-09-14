@@ -48,6 +48,37 @@ class RandomBenchmarks:
         qpy.load(qpy_file)
 
 
+class ParallelLoadBenchmarks:
+
+    params = ([1, 10, 50], [20], [50])
+
+    param_names = ["num_circuits", "n_qubits", "depth"]
+    timeout = 300
+
+    def setup(self, num_circuits, n_qubits, depth):
+        circuits = [
+            random_circuit(
+                n_qubits,
+                depth,
+                measure=True,
+                conditional=True,
+                reset=True,
+                seed=seed,
+                max_operands=3,
+            )
+            for seed in range(num_circuits)
+        ]
+        qpy_file = io.BytesIO()
+        qpy.dump(circuits, qpy_file)
+        self.qpy_bytes = qpy_file.getvalue()
+
+    def time_load_sequential(self, _, __, ___):
+        qpy.load(io.BytesIO(self.qpy_bytes), parallel=False)
+
+    def time_load_parallel(self, _, __, ___):
+        qpy.load(io.BytesIO(self.qpy_bytes), parallel=True)
+
+
 class CustomGateBenchmarks:
 
     params = ([200], [100])
