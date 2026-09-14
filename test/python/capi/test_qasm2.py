@@ -42,6 +42,8 @@ STANDARD_PROGRAMS = [
     "qreg q[2];\ncreg c[2];\ncreg d[1];\n"
     "if (c == 2) measure q[0] -> d[0];\nif (d == 1) reset q[1];\n",
     "qreg q[2];\ncreg c[1];\nmeasure q[0] -> c[0];\nif (c == 1) x q[1];\n",
+    "qreg q[1];\ncreg c[2];\nif (c == 1) measure q[0] -> c[0];\n",
+    "qreg q[1];\ncreg c[2];\nif (c == 2) measure q[0] -> c[1];\n",
 ]
 
 # Programs with `gate` declarations.  The native builder keeps the declared gate as a single Rust
