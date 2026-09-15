@@ -204,7 +204,7 @@ impl Param {
             }
             [Self::Int(int), Self::ParameterExpression(expr)]
             | [Self::ParameterExpression(expr), Self::Int(int)] => {
-                Ok(ParameterExpression::try_from(*int).map(|i_expr| i_expr == **expr)?)
+                Ok(ParameterExpression::from(Value::from(*int)) == **expr)
             }
         }
     }

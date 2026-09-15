@@ -82,6 +82,7 @@ where
         bit_locations.try_reserve(capacity)?;
         Ok(Self {
             bit_locations,
+            #[cfg(feature = "py")]
             cached: OnceLock::new(),
         })
     }

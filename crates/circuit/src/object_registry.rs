@@ -242,6 +242,7 @@ where
         Ok(ObjectRegistry {
             objects,
             indices,
+            #[cfg(feature = "py")]
             cached: OnceLock::new(),
         })
     }

@@ -26,7 +26,6 @@ pub mod dag_node;
 #[cfg(feature = "py")]
 mod dot_utils;
 pub mod duration;
-#[cfg(feature = "py")]
 pub mod error;
 pub mod gate_matrix;
 #[cfg(feature = "py")]
