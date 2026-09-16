@@ -38,6 +38,8 @@ STANDARD_PROGRAMS = [
     "qreg q[2];\nbarrier q;\nh q[0];\nbarrier q[0], q[1];\n",
     "qreg q[1];\ncreg c[1];\nx q[0];\nmeasure q[0] -> c[0];\nreset q[0];\n",
     "qreg q[1];\nrx(sin(0.5) + cos(0.25) * 2) q[0];\nrz(sqrt(2.0) / ln(3.0)) q[0];\n",
+    "qreg q[2];\nid q[0];\ny q[0];\nz q[0];\ns q[0];\nsdg q[0];\nt q[0];\ntdg q[0];\n"
+    "cz q[0], q[1];\ncy q[0], q[1];\nch q[0], q[1];\n",
     "qreg q[2];\ncreg c[2];\nif (c == 1) cx q[0], q[1];\n",
     "qreg q[2];\ncreg c[2];\ncreg d[1];\n"
     "if (c == 2) measure q[0] -> d[0];\nif (d == 1) reset q[1];\n",
