@@ -30,7 +30,6 @@ use crate::pointers::{const_ptr_as_ref, try_slice_from_ptr};
 /// valid for ``num_include_paths`` reads of `char *`, or ``num_include_paths`` must be zero.
 #[repr(C)]
 pub struct OpenQasm2Options {
-    /// The number of entries in ``include_path``.
     pub num_include_paths: usize,
     /// The directories searched, in order, to resolve an `include` statement.  Qiskit's built-in
     /// `qelib1.inc` is handled without consulting this, so a program that includes only that file
@@ -128,7 +127,8 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
     error: *mut *mut c_char,
 ) -> *mut CircuitData {
     if program.is_null() {
-        // SAFETY: per documentation, `error` is null or valid for a pointer write.
+        // SAFETY: `error` is null or valid for a pointer write, per this function's own safety
+        // documentation above; every `set_error` call below relies on that same guarantee.
         unsafe { set_error(error, "`program` must not be null") };
         return ptr::null_mut();
     }
@@ -143,7 +143,6 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
 
     // SAFETY: per documentation, `program` points to a nul-terminated string.
     let Ok(program) = unsafe { CStr::from_ptr(program) }.to_str() else {
-        // SAFETY: per documentation, `error` is null or valid for a pointer write.
         unsafe { set_error(error, "the OpenQASM 2 program was not valid UTF-8") };
         return ptr::null_mut();
     };
@@ -154,7 +153,6 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
         match unsafe { try_slice_from_ptr(options.include_path, options.num_include_paths) } {
             Ok(raw_include_path) => raw_include_path,
             Err(_) => {
-                // SAFETY: per documentation, `error` is null or valid for a pointer write.
                 unsafe {
                     set_error(
                         error,
@@ -167,13 +165,11 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
     let mut include_path = Vec::with_capacity(raw_include_path.len());
     for &entry in raw_include_path {
         if entry.is_null() {
-            // SAFETY: per documentation, `error` is null or valid for a pointer write.
             unsafe { set_error(error, "an include path entry was null") };
             return ptr::null_mut();
         }
         // SAFETY: per the documentation on `QkOpenQasm2Options`, each entry is nul-terminated.
         let Ok(entry) = unsafe { CStr::from_ptr(entry) }.to_str() else {
-            // SAFETY: per documentation, `error` is null or valid for a pointer write.
             unsafe { set_error(error, "an include path entry was not valid UTF-8") };
             return ptr::null_mut();
         };
@@ -189,7 +185,6 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
     ) {
         Ok(built) => Box::into_raw(Box::new(built)),
         Err(err) => {
-            // SAFETY: per documentation, `error` is null or valid for a pointer write.
             unsafe { set_error(error, &err.message) };
             ptr::null_mut()
         }
