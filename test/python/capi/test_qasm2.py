@@ -38,7 +38,7 @@ STANDARD_PROGRAMS = [
     "qreg q[2];\nbarrier q;\nh q[0];\nbarrier q[0], q[1];\n",
     "qreg q[1];\ncreg c[1];\nx q[0];\nmeasure q[0] -> c[0];\nreset q[0];\n",
     "qreg q[1];\nrx(sin(0.5) + cos(0.25) * 2) q[0];\nrz(sqrt(2.0) / ln(3.0)) q[0];\n",
-    "qreg q[2];\nid q[0];\ny q[0];\nz q[0];\ns q[0];\nsdg q[0];\nt q[0];\ntdg q[0];\n"
+    "qreg q[2];\ny q[0];\nz q[0];\ns q[0];\nsdg q[0];\nt q[0];\ntdg q[0];\n"
     "cz q[0], q[1];\ncy q[0], q[1];\nch q[0], q[1];\n",
     "qreg q[2];\ncreg c[2];\nif (c == 1) cx q[0], q[1];\n",
     "qreg q[2];\ncreg c[2];\ncreg d[1];\n"
@@ -64,6 +64,22 @@ class TestQasm2CParity(QiskitTestCase):
         """Standard-gate programs must import identically through both paths."""
         program = HEADER + body
         self.assertEqual(qiskit.qasm2.loads(program), ffi.load_qasm2_from_c(program))
+
+    def test_id_gate_diverges_from_python_loader(self):
+        """`qelib1.inc`'s `id` is a known, intentional exception to the parity guarantee.
+
+        ``qiskit.qasm2.loads`` still maps it to ``UGate(0, 0, 0)``, a workaround for Terra
+        versions before 0.24 where ``IGate`` was a single-cycle delay rather than a true
+        identity (see the ``QELIB1`` table in ``qasm2/parse.py``).  The native importer has no
+        such legacy baggage and maps it directly to :class:`.IGate`.  The two forms are
+        unitarily equivalent, so this checks that instead of exact circuit equality.
+        """
+        program = HEADER + "qreg q[1];\nid q[0];\n"
+        from_python = qiskit.qasm2.loads(program)
+        from_c = ffi.load_qasm2_from_c(program)
+        self.assertEqual(from_python.data[0].operation.name, "u")
+        self.assertEqual(from_c.data[0].operation.name, "id")
+        self.assertEqual(Operator(from_python), Operator(from_c))
 
     @ddt.idata(DEFINED_GATE_PROGRAMS)
     @unittest.expectedFailure
