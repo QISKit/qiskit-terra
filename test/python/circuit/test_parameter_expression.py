@@ -1149,3 +1149,14 @@ class TestParameterExpression(QiskitTestCase):
                 expected = coeff * param_x + const
 
                 self.assertStructurallyEqual(expression, expected)
+
+    def test_deep_parameter_expression(self):
+        a = Parameter("a")
+        param_expr = a
+        for _ in range(10_000):
+            param_expr = param_expr.sin()
+        grad = param_expr.gradient(a)
+        subs = param_expr.subs({a: Parameter("b")})
+        conjugate = param_expr.conjugate()
+        final_expr = grad + subs + subs - conjugate
+        self.assertIsInstance(final_expr, ParameterExpression)

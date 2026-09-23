@@ -1,0 +1,9 @@
+---
+security:
+  - |
+    Fixed a potential local denial-of-service when calling :func:`.qpy.load`,
+    :c:func:`.qk_qpy_load_file`, or :c:func:`.qk_qpy_load_buffer` to load
+    untrusted input caused by a stack overflow from unbound recursion in the
+    deserialization. See the
+    `advisory <https://github.com/Qiskit/qiskit/security/advisories/GHSA-9g9r-qpqr-c8fr>`__
+    for more details.
