@@ -34,7 +34,7 @@ use crate::value::{
     ProgramType, QpyCaller, SymbolicEncoding, deserialize, deserialize_with_args, serialize,
     serialize_with_args,
 };
-use crate::{QPY_READ_MIN_VERSION, QPY_WRITE_MIN_VERSION};
+use crate::{NATIVE_QPY_RECURSION_DEPTH, QPY_READ_MIN_VERSION, QPY_WRITE_MIN_VERSION};
 
 use std::io::{Cursor, Seek};
 
@@ -321,6 +321,7 @@ pub fn load_qpy(
     data: &Bytes,
     annotation_handler: Option<AnnotationHandler>,
     caller: Option<QpyCaller>,
+    max_depth: usize,
 ) -> Result<Vec<LoadedCircuit>, QpyError> {
     // Every QPY file begins with "QISKIT" followed by a version byte.
     // Since the header might be effected by the version, we begin by explicitly extracting the version.
@@ -367,9 +368,9 @@ pub fn load_qpy(
     if qpy_file_header.qpy_version >= 16 {
         let qpy_raw_circuits = read_raw_circuits(&mut cursor, num_programs)?;
         for raw_circuit in &qpy_raw_circuits {
-            let (packed_circuit, _) = deserialize_with_args::<QPYCircuit, (u8,)>(
+            let (packed_circuit, _) = deserialize_with_args::<QPYCircuit, (u8, usize)>(
                 raw_circuit,
-                (qpy_file_header.qpy_version,),
+                (qpy_file_header.qpy_version, max_depth),
             )?;
             let circuit_data = unpack_circuit(
                 &packed_circuit,
@@ -377,6 +378,7 @@ pub fn load_qpy(
                 use_symengine,
                 annotation_handler.child()?,
                 caller,
+                max_depth,
             )?;
             circuits.push(LoadedCircuit {
                 circuit_data,
@@ -390,7 +392,7 @@ pub fn load_qpy(
             Endian::Big,
             VecArgs {
                 count: num_programs,
-                inner: (qpy_file_header.qpy_version,),
+                inner: (qpy_file_header.qpy_version, max_depth),
             },
         )?;
         for packed_circuit in packed_qpy_circuits {
@@ -400,6 +402,7 @@ pub fn load_qpy(
                 use_symengine,
                 annotation_handler.child()?,
                 caller,
+                max_depth,
             )?;
             circuits.push(LoadedCircuit {
                 circuit_data,
@@ -432,28 +435,40 @@ pub fn py_load_qpy(
     file_obj: &Bound<PyAny>,
     metadata_deserializer: Option<Bound<PyAny>>,
     annotation_factories: Option<Bound<PyDict>>,
+    max_depth: usize,
 ) -> Result<Vec<Py<PyAny>>, QpyError> {
     let annotation_factories = annotation_factories.unwrap_or(PyDict::new(py));
     // Read all data from file object
     let data: Bytes = file_obj.call_method0("read")?.extract()?;
 
     let annotation_handler = AnnotationHandler::python(&annotation_factories.clone().unbind())?;
-    load_qpy(&data, Some(annotation_handler), Some(QpyCaller::Python))?
-        .into_iter()
-        .map(|loaded| {
-            py_circuit_data_to_quantum_circuit(
-                py,
-                loaded.circuit_data,
-                &loaded.packed_circuit,
-                metadata_deserializer.as_ref().map(Bound::as_ref),
-            )
-        })
-        .collect()
+    load_qpy(
+        &data,
+        Some(annotation_handler),
+        Some(QpyCaller::Python),
+        max_depth,
+    )?
+    .into_iter()
+    .map(|loaded| {
+        py_circuit_data_to_quantum_circuit(
+            py,
+            loaded.circuit_data,
+            &loaded.packed_circuit,
+            metadata_deserializer.as_ref().map(Bound::as_ref),
+        )
+    })
+    .collect()
 }
 
 /// Deserialize native circuits from a complete QPY payload.
 pub fn native_load_qpy(data: &[u8]) -> Result<Vec<CircuitData>, QpyError> {
-    load_qpy(&Bytes::from(data), None, Some(QpyCaller::Native)).map(|loaded| {
+    load_qpy(
+        &Bytes::from(data),
+        None,
+        Some(QpyCaller::Native),
+        NATIVE_QPY_RECURSION_DEPTH,
+    )
+    .map(|loaded| {
         loaded
             .into_iter()
             .map(|loaded| loaded.circuit_data)
@@ -508,8 +523,7 @@ mod tests {
         // Round trip through the native QPY dump/load entry points.
         let extra = native_extra_data(&circuit, "delay_dt_circuit", version);
         let payload = dump_qpy([circuit].iter(), vec![extra], version, None, None).unwrap();
-        let loaded = load_qpy(&payload, None, None).unwrap();
-
+        let loaded = load_qpy(&payload, None, None, NATIVE_QPY_RECURSION_DEPTH).unwrap();
         // Exactly one circuit, with exactly one instruction.
         assert_eq!(loaded.len(), 1);
         let loaded_circuit = &loaded[0].circuit_data;
