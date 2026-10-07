@@ -1312,7 +1312,9 @@ pub unsafe extern "C" fn qk_circuit_unitary(
 /// @ingroup QkCircuit
 /// Copy out the unitary matrix for a given instruction in the circuit.
 ///
-/// Panics if the instruction at the given index is not a unitary.
+/// After this function, `out` will always point to initialized data.  However, if the Qiskit
+/// instruction is in an inconsistent state (e.g. the matrix parameter does not match the stated
+/// instruction size), then the buffer will be filled with `nan`.
 ///
 /// @param circuit A pointer to the circuit to get the unitary from.
 /// @param index The index of the instruction to get the unitary for.
@@ -1336,8 +1338,27 @@ pub unsafe extern "C" fn qk_circuit_inst_unitary(
     let OperationRef::Unitary(unitary) = instr.op.view() else {
         panic!("Instruction at index {index} is not a unitary");
     };
+
+    // It is possible in safe Rust to create a `PackedInstruction` whose array object is
+    // inconsistent with the stated number of qubits.  Our `unsafe` code must not overwrite a buffer
+    // if so, but we can write nonsense, because clearly there is a bug in Qiskit if that happens.
+    // This `num_qubits` is what the user expects.
+    let num_qubits = circuit.get_qargs(instr.qubits).len();
+    // If `usize` overflows or saturates, then the caller can't possibly have allocated the matrix
+    // safely anyway, so it'd be UB from their side.
+    let size = 1usize.unbounded_shl(num_qubits.saturating_mul(2) as u32);
+    let poison = || {
+        const POISON: Complex64 = Complex64::new(f64::NAN, f64::NAN);
+        for i in 0..size {
+            // SAFETY: per documentation, `out` is valid for `4 ** num_qubits` (= `size`) writes.
+            unsafe { out.add(i).write(POISON) };
+        }
+    };
     match &unitary.array {
         ArrayType::OneQ(array) => {
+            if num_qubits != 1 {
+                return poison();
+            }
             let dim = 2;
             for row in 0..dim {
                 for col in 0..dim {
@@ -1347,6 +1368,9 @@ pub unsafe extern "C" fn qk_circuit_inst_unitary(
             }
         }
         ArrayType::TwoQ(array) => {
+            if num_qubits != 2 {
+                return poison();
+            }
             let dim = 4;
             for row in 0..dim {
                 for col in 0..dim {
@@ -1356,8 +1380,12 @@ pub unsafe extern "C" fn qk_circuit_inst_unitary(
             }
         }
         ArrayType::NDArray(array) => {
+            if array.len() != size {
+                return poison();
+            }
             for (i, val) in array.iter().enumerate() {
-                // SAFETY: per documentation, `out` is aligned and valid for `array.size()` writes.
+                // SAFETY: per documentation, `out` is aligned and valid for `4 ** num_qubits` ( =
+                // `size` consecutive writes.
                 unsafe { out.add(i).write(*val) };
             }
         }
@@ -3187,5 +3215,56 @@ mod test {
     fn test_free_control_flow_instruction_null() {
         // A null pointer must be a no-op, not undefined behavior.
         unsafe { qk_control_flow_instruction_free(std::ptr::null_mut()) };
+    }
+
+    #[test]
+    fn unitary_must_not_overwrite_from_safe_input() {
+        fn case(matrix_qubits: u32, instr_qubits: u32) -> Result<(), ()> {
+            let mut qc = CircuitData::with_capacity(5, 0, 1, Param::Float(0.0)).unwrap();
+            // The safety guarantees are based on `instr_qubits`, so writes must not exceed this.
+            let valid_size = 1usize << (2 * instr_qubits);
+            let qubits = (0..instr_qubits).map(Qubit).collect::<Vec<_>>();
+            let qubits = qc.add_qargs(&qubits);
+            let array = match matrix_qubits {
+                1 => ArrayType::OneQ(Matrix2::identity()),
+                2 => ArrayType::TwoQ(Matrix4::identity()),
+                n => ArrayType::NDArray(Array2::eye(n as usize)),
+            };
+            // If we change the safe interfaces to make the mismatched array/qubits impossible to
+            // represent in a circuit (without `unsafe`), then the test can be removed as it is
+            // trivially satisfied.
+            qc.push(PackedInstruction {
+                op: UnitaryGate { array }.into(),
+                qubits,
+                clbits: Default::default(),
+                params: None,
+                label: None,
+                #[cfg(feature = "cache_pygates")]
+                py_op: Default::default(),
+            })
+            .unwrap();
+
+            // In order for the test not to invoke UB, we need to ensure the pointer we use is
+            // aligned the same as `Complex64`.  Miri will (correctly) complain if not.
+            #[repr(align(8))]
+            #[repr(C)]
+            #[derive(Copy, Clone, PartialEq, Eq)]
+            struct AlignedU8(u8);
+            // Any byte that doesn't appear in 1.0, 0.0, or the implementation-detail poison.
+            const SENTINEL: AlignedU8 = AlignedU8(0b1010_1010);
+            let mut buf = vec![SENTINEL; 16 * 4096];
+            unsafe { qk_circuit_inst_unitary(&mut qc, 0, buf.as_mut_ptr().cast()) };
+            if buf[16 * valid_size..].iter().all(|&v| v == SENTINEL) {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+
+        let failures = (0..4)
+            .flat_map(|i| (0..4).map(move |j| (i, j)))
+            .filter(|&(i, j)| case(i, j).is_err())
+            .collect::<Vec<_>>();
+        assert_eq!(failures, vec![], "no case should overwrite the vector")
     }
 }
