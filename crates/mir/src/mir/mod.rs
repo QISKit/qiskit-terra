@@ -12,10 +12,12 @@
 
 //! Definition of the Qiskit Middle IR.
 
-use crate::instruction::MirInstruction;
+use crate::instruction::{InstructionVerificationError, MirInstruction};
 use crate::line_graph::LineGraph;
 use crate::qid::{QidSpace, ResourceTable};
 use crate::symbol_table::SymbolTable;
+
+use thiserror::Error;
 
 /// The Qiskit Middle IR
 ///
@@ -72,12 +74,26 @@ impl Mir {
     pub fn symbol_table_mut(&mut self) -> &mut SymbolTable {
         &mut self.symbol_table
     }
+
+    pub fn verify(&self) -> Result<(), InstructionVerificationError> {
+        self.instructions
+            .iter_main()
+            .try_for_each(|instr| instr.weight().verify(&self.resource_table))
+    }
 }
 
 impl Default for Mir {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Debug, Error)]
+pub enum MirVerificationError {
+    #[error("Instruction List Error: {0}")]
+    InstructionList(#[from] InstructionVerificationError),
+    // This can be expanded to include other types of verification errors (e.g.,
+    // SymbolTable, ResourceTable, etc)
 }
 
 #[cfg(test)]
@@ -144,5 +160,28 @@ mod tests {
             .add_qid(QidInfo::new(BitLayout::Base(1)))
             .unwrap();
         assert_eq!(qid.space(), QidSpace::Physical);
+    }
+
+    #[test]
+    fn test_bad_instruction() {
+        let mut mir = Mir::new();
+        let qid = mir
+            .resource_table_mut()
+            .add_qid(QidInfo::new(BitLayout::Base(1)))
+            .unwrap();
+        mir.instructions_mut().push_back(MirInstruction::new(
+            MirOp::PauliRotation(PauliRotation::new(
+                PauliString::new(vec![Pauli::X; 2]),
+                AngleType::new(0.5),
+            )),
+            QidList::new(vec![qid; 2]), // passing same Qid to a pauli rotation is illegal
+            SymbolIdList::default(),
+            SymbolIdList::default(),
+        ));
+
+        assert!(matches!(
+            mir.verify(),
+            Err(InstructionVerificationError::AliasedQids)
+        ));
     }
 }
