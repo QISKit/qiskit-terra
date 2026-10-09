@@ -1538,6 +1538,13 @@ def state_drawer(state, output=None, **drawer_args):
 
     **paulivec**: Matplotlib figure, rendering of statevector using `plot_state_paulivec()`.
 
+    .. warning::
+
+       Using this method with ``"latex"`` or ``"latex_source"`` output modes
+       relies on SymPy internally which is inherently unsafe as SymPy heavily
+       relies on Python's :func:`.eval` function. This method is not safe to
+       use with untrusted input.
+
     Args:
         state: State to be drawn
         output (str): Select the output method to use for drawing the
