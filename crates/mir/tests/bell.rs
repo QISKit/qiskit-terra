@@ -129,6 +129,5 @@ fn construct_bell_mir() {
     //
     // Measures go here -- Not Defined Yet
 
-    // TODO: Add back when verify implemented.
-    //instr_list.verify().unwrap();
+    mir.verify().unwrap();
 }

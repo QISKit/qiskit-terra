@@ -13,10 +13,14 @@
 //! Definition of Instruction and InstructionList used in Qiskit Middle IR.
 
 use crate::line_graph;
-use crate::ops::MirOp;
-use crate::qid::QidList;
+use crate::ops::{
+    MirOp,
+    MirOp::{PauliMeasure, PauliRotation},
+};
+use crate::qid::{Qid, QidList, table::ResourceTable};
 use crate::symbol_table::SymbolIdList;
 use std::fmt;
+use thiserror::Error;
 
 /// Instruction in Qiskit Middle IR
 ///
@@ -61,6 +65,47 @@ impl MirInstruction {
     pub fn returns(&self) -> &SymbolIdList {
         &self.returns
     }
+
+    pub fn verify(
+        &self,
+        resource_table: &ResourceTable,
+    ) -> Result<(), InstructionVerificationError> {
+        match &self.op {
+            PauliRotation(pauli_rotation) => {
+                // Number of Qids on the instruction must match the number of
+                // paulis on the PauliRotation operation.
+                // This will also detect Qids that are not in the resource table
+                // as well as Qids that have unknown width (i.e., abstract Qids)
+                // which cannot be used in a PauliRotation.
+                let mut num_qids = 0;
+                for q in self.qids().inner().iter() {
+                    num_qids += resource_table
+                        .info(*q)
+                        .ok_or(InstructionVerificationError::QidNotFound { qid: *q })?
+                        .width()
+                        .ok_or(InstructionVerificationError::AbstractQidNotAllowed { qid: *q })?;
+                }
+                if num_qids != pauli_rotation.paulis().len() as u32 {
+                    return Err(InstructionVerificationError::MismatchedOperands {
+                        len1: num_qids,
+                        len2: pauli_rotation.paulis().len() as u32,
+                    });
+                }
+
+                // Confirm that none of the Qids are aliased to each other.
+                // Overlap is safe to use here because the previous check
+                // confirms that all Qids are found in the table. If this gets
+                // reordered wrt the previous check, this should be changed to
+                // `try_overlap` to prevent a possible panic.
+                if resource_table.overlap(self.qids().inner().iter().copied()) {
+                    // TODO: It would be good if we could include the aliased Qids in the error.
+                    return Err(InstructionVerificationError::AliasedQids);
+                }
+            }
+            PauliMeasure(_) => todo!(),
+        }
+        Ok(())
+    }
 }
 
 impl fmt::Display for MirInstruction {
@@ -71,6 +116,18 @@ impl fmt::Display for MirInstruction {
             self.op, self.qids, self.args, self.returns
         )
     }
+}
+
+#[derive(Error, Debug)]
+pub enum InstructionVerificationError {
+    #[error("Mismatch operand lengths: {} != {}", len1, len2)]
+    MismatchedOperands { len1: u32, len2: u32 },
+    #[error("Qid {} not found in resource table.", qid)]
+    QidNotFound { qid: Qid },
+    #[error("Abstract Qid {} not allowed (no width specified)", qid)]
+    AbstractQidNotAllowed { qid: Qid },
+    #[error("Overlapping Qids")]
+    AliasedQids,
 }
 
 pub struct MirInstructionIndex(line_graph::Index);
@@ -84,9 +141,9 @@ impl MirInstructionIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::line_graph::LineGraph;
+    use crate::mir::Mir;
     use crate::ops::pbc::{AngleType, Pauli, PauliMeasure, PauliRotation, PauliString};
-    use crate::qid::Qid;
+    use crate::qid::{BitLayout, Qid, QidInfo, QidSpace};
     use crate::symbol_table::{Symbol, SymbolTable, SymbolType};
 
     fn create_pauli_rotation_op(pauli: Pauli, size: usize, angle: f64) -> MirOp {
@@ -136,25 +193,41 @@ mod tests {
 
     #[test]
     fn test_instruction_list() {
-        let mut instr_list = LineGraph::<MirInstruction>::new();
+        let mut mir = Mir::new();
+
+        // Borrow resource table first and add all necessary Qids
+        let resource_table = mir.resource_table_mut();
+        let qids = (0..8)
+            .map(|_| {
+                resource_table
+                    .add_qid(QidInfo::new(BitLayout::Base(1)))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        // Borrow instructions next.
+        // Note that resource_table is no longer needed (as mutable), so the
+        // above borrow is now essentially done, allowing this mutable borrow to
+        // occur.
+        let instr_list = mir.instructions_mut();
 
         let instr1 = MirInstruction {
             op: create_pauli_rotation_op(Pauli::X, 8, 0.5),
-            qids: QidList::new(vec![Qid::virt(0); 8]),
+            qids: QidList::new(qids.clone()),
             args: SymbolIdList::default(),
             returns: SymbolIdList::default(),
         };
 
         let instr2 = MirInstruction {
             op: create_pauli_rotation_op(Pauli::Y, 8, 0.5),
-            qids: QidList::new(vec![Qid::virt(0); 8]),
+            qids: QidList::new(qids.clone()),
             args: SymbolIdList::default(),
             returns: SymbolIdList::default(),
         };
 
         let instr3 = MirInstruction {
             op: create_pauli_rotation_op(Pauli::Z, 8, 0.5),
-            qids: QidList::new(vec![Qid::virt(0); 8]),
+            qids: QidList::new(qids),
             args: SymbolIdList::default(),
             returns: SymbolIdList::default(),
         };
@@ -171,25 +244,198 @@ mod tests {
             assert_eq!(*instr.weight(), check_list[index])
         }
 
-        // TODO: Add back when verify implemented.
-        //instr_list.verify().unwrap();
+        mir.verify().unwrap();
     }
 
-    // TODO: Add back when verify implemented.
-    // #[test]
-    // fn test_invalid_pauli_instruction() {
-    //     let instr = MirInstruction {
-    //         op: create_pauli_rotation_op(Pauli::X, 4, 0.5),
-    //         qids: QidList::new(vec![Qid::virt(0); 8]),
-    //         args: SymbolIdList::default(),
-    //         returns: SymbolIdList::default(),
-    //     };
+    #[test]
+    fn test_invalid_pauli_instruction() {
+        let mut resource_table = ResourceTable::new(QidSpace::Virtual);
+        let qids = (0..8)
+            .map(|_| {
+                resource_table
+                    .add_qid(QidInfo::new(BitLayout::Base(1)))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::X, 4, 0.5),
+            qids: QidList::new(qids),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
 
-    //     let result = instr.verify();
+        let result = instr.verify(&resource_table);
 
-    //     assert!(matches!(
-    //         result,
-    //         Err(MirVerifierError::MismatchedOperands { len1: 8, len2: 4 })
-    //     ));
-    // }
+        assert!(matches!(
+            result,
+            Err(InstructionVerificationError::MismatchedOperands { len1: 8, len2: 4 })
+        ));
+    }
+    #[test]
+    fn test_missing_qid() {
+        let resource_table = ResourceTable::new(QidSpace::Virtual);
+        let qid = Qid::virt(0);
+        let instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::X, 1, 0.5),
+            qids: QidList::new(vec![qid; 1]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
+
+        let result = instr.verify(&resource_table);
+
+        assert!(matches!(
+            result,
+            Err(InstructionVerificationError::QidNotFound { qid: _ })
+        ));
+    }
+
+    #[test]
+    fn test_abstract_qid() {
+        let mut resource_table = ResourceTable::new(QidSpace::Virtual);
+        // Qid with Abstract layout cannot be used in instructions because they
+        // have no width associated with them
+        let qid = resource_table
+            .add_qid(QidInfo::new(BitLayout::Abstract))
+            .unwrap();
+
+        let bad_instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::X, 1, 0.5),
+            qids: QidList::new(vec![qid]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
+
+        assert!(
+            matches!(
+                bad_instr.verify(&resource_table),
+                Err(InstructionVerificationError::AbstractQidNotAllowed { qid: _ })
+            ),
+            "Missed identifying abstract Qid in instruction"
+        );
+    }
+
+    #[test]
+    fn test_wide_qids() {
+        let mut resource_table = ResourceTable::new(QidSpace::Virtual);
+        let qid_container = resource_table
+            .add_qid(QidInfo::new(BitLayout::Base(2)))
+            .unwrap();
+
+        let qid_member1 = resource_table
+            .add_qid(QidInfo::new(BitLayout::Base(1)))
+            .unwrap();
+        let qid_member2 = resource_table
+            .add_qid(QidInfo::new(BitLayout::Base(1)))
+            .unwrap();
+
+        resource_table
+            .mark_contains(qid_container, qid_member1)
+            .unwrap();
+        resource_table
+            .mark_contains(qid_container, qid_member2)
+            .unwrap();
+
+        let mut good_instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::X, 2, 0.5),
+            qids: QidList::new(vec![qid_container]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
+
+        good_instr.verify(&resource_table).unwrap();
+
+        good_instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::Y, 2, 0.5),
+            qids: QidList::new(vec![qid_member1, qid_member2]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
+
+        good_instr.verify(&resource_table).unwrap();
+
+        let mut bad_instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::Z, 3, 0.5),
+            qids: QidList::new(vec![qid_member1, qid_member2]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
+
+        assert!(
+            matches!(
+                bad_instr.verify(&resource_table),
+                Err(InstructionVerificationError::MismatchedOperands { len1: 2, len2: 3 })
+            ),
+            "Mismatched operand lengths"
+        );
+
+        bad_instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::I, 1, 0.5),
+            qids: QidList::new(vec![qid_container]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
+
+        assert!(
+            matches!(
+                bad_instr.verify(&resource_table),
+                Err(InstructionVerificationError::MismatchedOperands { len1: 2, len2: 1 }),
+            ),
+            "Mismatched operand lengths",
+        );
+    }
+
+    #[test]
+    fn test_aliased_qids() {
+        let mut resource_table = ResourceTable::new(QidSpace::Virtual);
+        let qid_container = resource_table
+            .add_qid(QidInfo::new(BitLayout::Base(2)))
+            .unwrap();
+        let qid_member1 = resource_table
+            .add_qid(QidInfo::new(BitLayout::Base(1)))
+            .unwrap();
+        let qid_member2 = resource_table
+            .add_qid(QidInfo::new(BitLayout::Base(1)))
+            .unwrap();
+
+        resource_table
+            .mark_contains(qid_container, qid_member1)
+            .unwrap();
+        resource_table
+            .mark_contains(qid_container, qid_member2)
+            .unwrap();
+
+        let good_instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::X, 2, 0.5),
+            qids: QidList::new(vec![qid_member1, qid_member2]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
+
+        // This should pass verification because Qids do not overlap
+        good_instr.verify(&resource_table).unwrap();
+
+        let bad_instr = MirInstruction {
+            op: create_pauli_rotation_op(Pauli::X, 3, 0.5),
+            qids: QidList::new(vec![qid_container, qid_member1]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::default(),
+        };
+
+        assert!(
+            matches!(
+                bad_instr.verify(&resource_table),
+                Err(InstructionVerificationError::AliasedQids)
+            ),
+            "Missed identifying aliased qids"
+        );
+
+        assert!(
+            matches!(
+                bad_instr.verify(&resource_table),
+                Err(InstructionVerificationError::AliasedQids)
+            ),
+            "Missed identifying aliased qids"
+        );
+    }
 }
