@@ -13,6 +13,8 @@
 """FFI to call qiskit C API."""
 
 import ctypes
+import os
+from collections.abc import Iterable
 
 import qiskit
 import qiskit.qasm2
@@ -124,7 +126,11 @@ def transpile_from_c(
     return out
 
 
-def load_qasm2_from_c(program: str, strict: bool = False) -> qiskit.QuantumCircuit:
+def load_qasm2_from_c(
+    program: str,
+    strict: bool = False,
+    include_path: Iterable[str | os.PathLike] = (),
+) -> qiskit.QuantumCircuit:
     """Load an OpenQASM 2 program through the C API and return it as a Python circuit.
 
     This is currently the only way to reach the native Rust importer, since
@@ -136,6 +142,12 @@ def load_qasm2_from_c(program: str, strict: bool = False) -> qiskit.QuantumCircu
     """
     options = capi.qk_openqasm2_default_options()
     options.strict = strict
+    encoded_paths = [os.fspath(path).encode("utf-8") for path in include_path]
+    path_array = (ctypes.c_char_p * len(encoded_paths))(*encoded_paths)
+    options.num_include_paths = len(encoded_paths)
+    options.include_path = ctypes.cast(
+        path_array, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))
+    )
     error = ctypes.POINTER(ctypes.c_char)()
     circuit = capi.qk_circuit_from_openqasm2(
         program.encode("utf-8"),
