@@ -13,6 +13,7 @@
 use std::ptr;
 
 use crate::util;
+
 use num_bigint::BigUint;
 use num_traits::{ToPrimitive, Zero};
 use qiskit_circuit::{
@@ -23,7 +24,7 @@ use qiskit_circuit::{
     },
     duration::Duration,
 };
-use std::ffi::c_char;
+use std::ffi::{CStr, c_char};
 use uuid::Uuid;
 
 /// The different types of expression nodes that can appear in a classical expression tree.
@@ -136,6 +137,272 @@ impl From<&Type> for CExprTypeInfo {
             },
         }
     }
+}
+
+/// @ingroup QkClassicalExpressions
+/// Construct a new standalone classical variable.
+///
+/// Each call creates a distinct variable, even if ``name`` and ``ty`` match those of an
+/// existing variable.
+///
+/// @param name The name of the variable, as a null-terminated string. Invalid UTF-8 sequences
+///     are replaced with the Unicode replacement character.
+/// @param ty The type of the variable. ``ty.width`` is the bit width when ``ty.ty`` is
+///     ``QkExprType_Uint``, and must not be 0. It is ignored otherwise.
+///
+/// @return A pointer to the new variable, or ``NULL`` if ``name`` is ``NULL`` or ``ty`` is a
+///     ``QkExprType_Uint`` with a width of 0. The caller owns the variable and must free it with
+///     ``qk_var_free``.
+///
+/// # Example
+/// ```c
+/// QkExprTypeInfo ty = {QkExprType_Uint, 8};
+/// QkVar *var = qk_var_new("a", ty);
+/// // Use the variable...
+/// qk_var_free(var);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``name`` is not ``NULL`` and is not a pointer to a valid
+/// null-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_var_new(name: *const c_char, ty: CExprTypeInfo) -> *mut Var {
+    if name.is_null() {
+        return ptr::null_mut();
+    }
+    let name = unsafe { CStr::from_ptr(name) };
+    let ty: Type = ty.into();
+    if ty == Type::Uint(0) {
+        return ptr::null_mut();
+    }
+    let var = Var::Standalone {
+        uuid: Uuid::new_v4().as_u128(),
+        name: name.to_string_lossy().to_string(),
+        ty,
+    };
+    Box::into_raw(Box::new(var))
+}
+
+/// @ingroup QkClassicalExpressions
+/// Free a variable created by ``qk_var_new``.
+///
+/// @param var A pointer to the variable to free.
+///
+/// # Safety
+///
+/// Behavior is undefined if ``var`` is not either null or a valid pointer to a ``QkVar``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_var_free(var: *mut Var) {
+    if var.is_null() {
+        return;
+    }
+    drop(unsafe { Box::from_raw(var) });
+}
+
+/// @ingroup QkClassicalExpressions
+/// Construct a new stretch.
+///
+/// Each call creates a distinct stretch, even if ``name`` matches that of an existing stretch.
+///
+/// @param name The name of the stretch, as a null-terminated string. Invalid UTF-8 sequences
+///     are replaced with the Unicode replacement character.
+///
+/// @return A pointer to the new stretch, or ``NULL`` if ``name`` is ``NULL``. The caller owns
+///     the stretch and must free it with ``qk_stretch_free``.
+///
+/// # Example
+/// ```c
+/// QkStretch *stretch = qk_stretch_new("s");
+/// // Use the stretch...
+/// qk_stretch_free(stretch);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``name`` is not ``NULL`` and is not a pointer to a valid
+/// null-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_stretch_new(name: *const c_char) -> *mut Stretch {
+    if name.is_null() {
+        return ptr::null_mut();
+    }
+    let name = unsafe { CStr::from_ptr(name) };
+    let stretch = Stretch {
+        uuid: Uuid::new_v4().as_u128(),
+        name: name.to_string_lossy().to_string(),
+    };
+    Box::into_raw(Box::new(stretch))
+}
+
+/// @ingroup QkClassicalExpressions
+/// Free a stretch created by ``qk_stretch_new``.
+///
+/// @param stretch A pointer to the stretch to free.
+///
+/// # Safety
+///
+/// Behavior is undefined if ``stretch`` is not either null or a valid pointer to a ``QkStretch``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_stretch_free(stretch: *mut Stretch) {
+    if stretch.is_null() {
+        return;
+    }
+    drop(unsafe { Box::from_raw(stretch) });
+}
+
+/// @ingroup QkClassicalExpressions
+/// Construct a new duration value.
+///
+/// @param duration The duration. ``duration.value.dt`` is read when ``duration.ty`` is
+///     ``QkDurationType_Dt``, and ``duration.value.time`` is read otherwise.
+///
+/// @return A pointer to the new value. The caller owns the value and must free it with
+///     ``qk_value_free``.
+///
+/// # Example
+/// ```c
+/// QkDurationInfo duration = {QkDurationType_Ns, {.time = 100.0}};
+/// QkValue *value = qk_value_new_duration(duration);
+/// // Use the value...
+/// qk_value_free(value);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``duration.ty`` is not a valid ``QkDurationType``, or if the member
+/// of ``duration.value`` selected by ``duration.ty`` is not initialized.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_value_new_duration(duration: CDurationInfo) -> *mut Value {
+    let duration = Duration::from(duration);
+    let value = Value::Duration(duration);
+    Box::into_raw(Box::new(value))
+}
+
+/// @ingroup QkClassicalExpressions
+/// Construct a new floating-point value.
+///
+/// @param val The ``double`` to store.
+///
+/// @return A pointer to the new value, of type ``QkExprType_Float``. The caller owns the value
+///     and must free it with ``qk_value_free``.
+///
+/// # Example
+/// ```c
+/// QkValue *value = qk_value_new_float(1.5);
+/// // Use the value...
+/// qk_value_free(value);
+/// ```
+#[unsafe(no_mangle)]
+pub extern "C" fn qk_value_new_float(val: f64) -> *mut Value {
+    let value = Value::Float {
+        raw: val,
+        ty: Type::Float,
+    };
+    Box::into_raw(Box::new(value))
+}
+
+/// @ingroup QkClassicalExpressions
+/// Construct a new unsigned integer value from a ``uint64_t``.
+///
+/// To construct a value that does not fit in ``uint64_t``, use ``qk_value_new_biguint``.
+///
+/// @param uint The integer to store.
+/// @param bit_width The bit width of the value's ``QkExprType_Uint`` type, which must be large
+///     enough to hold ``uint``. Pass ``0`` to use a bit width of 64.
+///
+/// @return A pointer to the new value, or ``NULL`` if ``uint`` does not fit in ``bit_width``
+///     bits. The caller owns the value and must free it with ``qk_value_free``.
+///
+/// # Example
+/// ```c
+/// QkValue *value = qk_value_new_uint(5, 8);
+/// // Use the value...
+/// qk_value_free(value);
+/// ```
+#[unsafe(no_mangle)]
+pub extern "C" fn qk_value_new_uint(uint: u64, bit_width: u32) -> *mut Value {
+    let bit_width = match bit_width {
+        0 => 64,
+        _ => bit_width,
+    };
+    if u64::BITS - uint.leading_zeros() > bit_width {
+        return ptr::null_mut();
+    }
+    let value = Value::Uint {
+        raw: BigUint::from(uint),
+        ty: Type::Uint(bit_width),
+    };
+    Box::into_raw(Box::new(value))
+}
+
+/// @ingroup QkClassicalExpressions
+/// Construct a new unsigned integer value from a ``QkBigUint``.
+///
+/// The limbs of ``uint`` are copied, so ``uint`` is only borrowed and remains owned by the
+/// caller.
+///
+/// @param uint A pointer to the integer to store.
+/// @param bit_width The bit width of the value's ``QkExprType_Uint`` type, which must be large
+///     enough to hold ``uint``. Pass ``0`` to use a bit width of ``64 * uint->num_limbs`` (or 64 if
+///     ``uint->num_limbs`` is 0).
+///
+/// @return A pointer to the new value, or ``NULL`` if ``uint`` does not fit in ``bit_width``
+///     bits. The caller owns the value and must free it with ``qk_value_free``.
+///
+/// # Example
+/// ```c
+/// uint64_t limbs[3] = {7, 8, 9};
+/// QkBigUint uint = {limbs, 3};
+/// QkValue *value = qk_value_new_biguint(&uint, 0); // Has a bit width of 192.
+/// // Use the value...
+/// qk_value_free(value);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``uint`` is not a valid, non-null pointer to a valid ``QkBigUint``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_value_new_biguint(uint: *const CBigUint, bit_width: u32) -> *mut Value {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let uint = unsafe { &*uint };
+    // SAFETY: Per documentation, the `QkBigUint` is valid.
+    let uint_slice = unsafe { uint.as_slice() };
+    // NOTE: there is no constructor from `&[u64]`? weird.
+    let biguint = BigUint::new(
+        uint_slice
+            .iter()
+            .flat_map(|&d| [d as u32, (d >> 32) as u32])
+            .collect(),
+    );
+    let bit_width: u32 = match bit_width {
+        0 => u64::BITS * u32::try_from(uint_slice.len().max(1)).expect("QkBigUint is too big"),
+        _ => bit_width,
+    };
+    if biguint.bits() > u64::from(bit_width) {
+        return ptr::null_mut();
+    }
+    let value = Value::Uint {
+        raw: biguint,
+        ty: Type::Uint(bit_width),
+    };
+    Box::into_raw(Box::new(value))
+}
+
+/// @ingroup QkClassicalExpressions
+/// Free a value created by one of the ``qk_value_new_*`` functions.
+///
+/// @param value A pointer to the value to free.
+///
+/// # Safety
+///
+/// Behavior is undefined if ``value`` is not either null or a valid pointer to a ``QkValue``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_value_free(value: *mut Value) {
+    if value.is_null() {
+        return;
+    }
+    drop(unsafe { Box::from_raw(value) });
 }
 
 /// The operation types a unary expression can hold.
@@ -855,6 +1122,15 @@ impl CBigUint {
         let slice = ptr::slice_from_raw_parts_mut(self.limbs, self.num_limbs);
         // SAFETY: Caller must pass a valid allocation.
         drop(unsafe { Box::from_raw(slice) });
+    }
+
+    /// View the limbs as a slice.
+    pub(crate) unsafe fn as_slice(&self) -> &[u64] {
+        if self.num_limbs == 0 {
+            return &[];
+        }
+        // SAFETY: Non-empty, and pointer validity is guaranteed by the caller.
+        unsafe { std::slice::from_raw_parts(self.limbs, self.num_limbs) }
     }
 }
 
