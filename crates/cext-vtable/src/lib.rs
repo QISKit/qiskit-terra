@@ -580,6 +580,15 @@ mod classical_expr {
             export_fn!(qk_stretch_name),
             export_fn!(qk_value_biguint),
             export_fn!(qk_biguint_clear),
+            export_fn!(qk_var_new),
+            export_fn!(qk_var_free),
+            export_fn!(qk_stretch_new),
+            export_fn!(qk_stretch_free),
+            export_fn!(qk_value_new_duration),
+            export_fn!(qk_value_new_float),
+            export_fn!(qk_value_new_uint),
+            export_fn!(qk_value_new_biguint),
+            export_fn!(qk_value_free),
         ]
     });
 }
