@@ -155,7 +155,6 @@ impl fmt::Display for ParameterExpression {
     }
 }
 
-#[cfg(feature = "py")]
 impl ParameterExpression {
     /// Exact structural equality of two expressions.
     ///
@@ -349,7 +348,6 @@ impl ParameterExpression {
     }
 
     /// Load from a sequence of [OPReplay]s. Used in serialization.
-    // #[cfg(feature = "py")]
     pub fn from_qpy(replay: &[OPReplay]) -> Result<Self, ParameterError> {
         // the stack contains the latest lhs and rhs values
         let mut stack: Vec<ParameterExpression> = Vec::new();
