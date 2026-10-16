@@ -32,7 +32,7 @@ qiskit-cext-vtable = { workspace = true, features = ["python_binding"] }
 anyhow.workspace = true
 pyo3.workspace = true
 qiskit-accelerate.workspace = true
-qiskit-circuit = { workspace = true, features = ["passmanager", "py] }
+qiskit-circuit = { workspace = true, features = ["passmanager", "py"] }
 qiskit-circuit-library.workspace = true
 qiskit-mir.workspace = true
 qiskit-passmanager.workspace = true
