@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 qiskit-util = { workspace = true }
-qiskit-quantum-info = { workspace = true, features = ["python"] }
+qiskit-quantum-info = { workspace = true }
 qiskit-passmanager = { workspace = true, optional = true }
 rayon.workspace = true
 foldhash.workspace = true
@@ -64,8 +64,9 @@ features = ["union", "const_generics"]
 [dependencies.numpy]
 workspace = true
 features = ["nalgebra"]
+optional = true
 
 [features]
 passmanager = ["dep:qiskit-passmanager"]
-py = ["dep:pyo3", "qiskit-util/py"]
+py = ["dep:pyo3", "dep:numpy", "qiskit-util/py", "qiskit-quantum-info/python"]
 cache_pygates = ["py"]
