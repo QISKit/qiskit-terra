@@ -1406,13 +1406,23 @@ pub(crate) fn unpack_circuit(
     annotation_handler: AnnotationHandler,
     caller: QpyCaller,
 ) -> Result<CircuitData, QpyError> {
-    unpack_circuit_v18(
-        packed_circuit,
-        version,
-        use_symengine,
-        annotation_handler,
-        caller,
-    )
+    if version <= 18 {
+        unpack_circuit_v18(
+            packed_circuit,
+            version,
+            use_symengine,
+            annotation_handler,
+            caller,
+        )
+    } else {
+        crate::circuit_reader_19::unpack_circuit_v19(
+            packed_circuit,
+            version,
+            use_symengine,
+            annotation_handler,
+            caller,
+        )
+    }
 }
 
 fn unpack_circuit_v18(

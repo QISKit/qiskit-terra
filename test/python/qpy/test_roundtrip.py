@@ -18,7 +18,7 @@ import uuid
 from ddt import ddt, idata, unpack
 
 from qiskit.circuit import QuantumCircuit, QuantumRegister, ClassicalRegister, Duration
-from qiskit.circuit.library import PauliEvolutionGate
+from qiskit.circuit.library import MCXVChain, PauliEvolutionGate
 from qiskit.circuit.random import random_circuit
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.parametervector import ParameterVector
@@ -94,6 +94,25 @@ class TestQPYRoundtrip(QiskitTestCase):
         qc.cx(1, 2)
         qc.measure_all()
         self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+    @all_qpy_combinations(19)
+    def test_python_gate_initialization_parameters(self, version, write_with, read_with):
+        """Constructor state outside ``Instruction.params`` survives round trip."""
+        with self.assertWarns(DeprecationWarning):
+            gate = MCXVChain(
+                3,
+                ctrl_state=0,
+                dirty_ancillas=True,
+                relative_phase=True,
+                action_only=True,
+            )
+        qc = QuantumCircuit(gate.num_qubits)
+        qc.append(gate, qc.qubits)
+
+        with self.assertWarns(DeprecationWarning):
+            self.assert_roundtrip_equal(
+                qc, version=version, read_with=read_with, write_with=write_with
+            )
 
     @all_qpy_combinations(QPY_RUST_READ_MIN_VERSION)
     def test_ifelse(self, version, write_with, read_with):

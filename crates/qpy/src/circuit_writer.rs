@@ -1431,7 +1431,17 @@ pub(crate) fn pack_circuit(
     annotation_handler: AnnotationHandler,
     caller: QpyCaller,
 ) -> Result<formats::QPYCircuit, QpyError> {
-    pack_circuit_v18(circuit_data, extra, version, annotation_handler, caller)
+    if version <= 18 {
+        pack_circuit_v18(circuit_data, extra, version, annotation_handler, caller)
+    } else {
+        crate::circuit_writer_19::pack_circuit_v19(
+            circuit_data,
+            extra,
+            version,
+            annotation_handler,
+            caller,
+        )
+    }
 }
 
 fn pack_circuit_v18(

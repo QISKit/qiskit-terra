@@ -2061,7 +2061,7 @@ class TestLoadFromQPY(QiskitTestCase):
             self.assertDeprecatedBitProperties(old, new)
 
     def test_register_condition(self):
-        """Test that using register condition passes as long as the register index is not too large"""
+        """Test register conditions with values larger than a signed 64-bit integer."""
         n_qubits = 2
         cr0 = ClassicalRegister(n_qubits)
         cr1 = ClassicalRegister(n_qubits)
@@ -2084,9 +2084,15 @@ class TestLoadFromQPY(QiskitTestCase):
         with qc.if_test((cr0, 7342574385754343653453453453533935345)):
             qc.x(qr)
         qc.measure(qr, cr1)
+        with io.BytesIO() as fptr:
+            dump(qc, fptr)
+            fptr.seek(0)
+            new_qc = load(fptr)[0]
+            self.assertEqual(qc, new_qc)
+
         with self.assertRaisesRegex(QpyError, "exceeds i64::MAX"):
             with io.BytesIO() as fptr:
-                dump(qc, fptr)
+                dump(qc, fptr, version=18)
 
     def test_load_empty_vars_while(self):
         """Test loading circuit with vars in while closures."""
