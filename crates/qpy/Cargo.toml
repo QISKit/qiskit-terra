@@ -24,6 +24,7 @@ bytemuck.workspace = true
 binrw.workspace = true
 npyz.workspace = true
 ndarray.workspace = true
+nalgebra.workspace = true
 uuid = {version = "1", features = ["v4"]}
 thiserror.workspace = true
 

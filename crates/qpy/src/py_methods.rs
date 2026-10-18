@@ -19,7 +19,7 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{
-    IntoPyDict, PyAny, PyComplex, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple, PyType,
+    IntoPyDict, PyAny, PyBool, PyComplex, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple, PyType,
 };
 use qiskit_circuit::classical::expr::Expr;
 use std::num::NonZero;
@@ -250,6 +250,22 @@ pub(crate) fn py_pack_pauli_evolution_gate(
     evolution_gate: &Bound<PyAny>,
     qpy_data: &mut QPYWriteData,
 ) -> Result<formats::PauliEvolutionDefPack, QpyError> {
+    let packed_operation = py_pack_pauli_evolution_operation(evolution_gate, qpy_data)?;
+    let time_value = py_convert_to_generic_value(&evolution_gate.getattr("time")?)?;
+    let (time_type, time_data) = serialize_generic_value(&time_value, qpy_data)?;
+    Ok(formats::PauliEvolutionDefPack {
+        standalone_op: packed_operation.standalone_op,
+        time_type,
+        pauli_data: packed_operation.pauli_data,
+        time_data,
+        synth_data: packed_operation.synth_data,
+    })
+}
+
+pub(crate) fn py_pack_pauli_evolution_operation(
+    evolution_gate: &Bound<PyAny>,
+    qpy_data: &mut QPYWriteData,
+) -> Result<formats::PauliEvolutionGatePack, QpyError> {
     let py = evolution_gate.py();
     let operators = evolution_gate.getattr("operator")?;
     let mut standalone = false;
@@ -267,8 +283,6 @@ pub(crate) fn py_pack_pauli_evolution_gate(
         .map(|operator| pack_sparse_pauli_op(&operator, qpy_data))
         .collect::<Result<_, QpyError>>()?;
 
-    let time_value = py_convert_to_generic_value(&evolution_gate.getattr("time")?)?;
-    let (time_type, time_data) = serialize_generic_value(&time_value, qpy_data)?;
     let synth_class = evolution_gate
         .getattr("synthesis")?
         .get_type()
@@ -284,11 +298,9 @@ pub(crate) fn py_pack_pauli_evolution_gate(
         .into();
 
     let standalone_op = standalone as u8;
-    Ok(formats::PauliEvolutionDefPack {
+    Ok(formats::PauliEvolutionGatePack {
         standalone_op,
-        time_type,
         pauli_data,
-        time_data,
         synth_data,
     })
 }
@@ -319,7 +331,9 @@ pub(crate) fn gate_class_name(py: Python, op: &PackedOperation) -> Result<String
 
 pub(crate) fn py_get_type_key(py_object: &Bound<PyAny>) -> Result<ValueType, QpyError> {
     let py: Python<'_> = py_object.py();
-    if py_object.is_instance(imports::PARAMETER_VECTOR_ELEMENT.get_bound(py))? {
+    if py_object.is_instance_of::<PyBool>() {
+        return Ok(ValueType::Bool);
+    } else if py_object.is_instance(imports::PARAMETER_VECTOR_ELEMENT.get_bound(py))? {
         return Ok(ValueType::ParameterVector);
     } else if py_object.is_instance(imports::PARAMETER.get_bound(py))? {
         return Ok(ValueType::Parameter);
@@ -592,12 +606,12 @@ pub(crate) fn py_circuit_data_to_quantum_circuit<'py>(
     let py_circuit_data: PyCircuitData = circuit_data.into();
     let unpacked_layout = unpack_layout(py, &packed_circuit.layout, &py_circuit_data)?;
     let metadata =
-        deserialize_metadata(py, &packed_circuit.header.metadata, metadata_deserializer)?;
+        deserialize_metadata(py, packed_circuit.header.metadata(), metadata_deserializer)?;
     let circuit = imports::QUANTUM_CIRCUIT
         .get_bound(py)
         .call_method1(intern!(py, "_from_circuit_data"), (py_circuit_data,))?;
     circuit.setattr("metadata", metadata)?;
-    circuit.setattr("name", &packed_circuit.header.circuit_name)?;
+    circuit.setattr("name", packed_circuit.header.circuit_name())?;
     if let Some(layout) = unpacked_layout {
         circuit.setattr("_layout", layout)?;
     }
@@ -911,13 +925,36 @@ pub fn deserialize_pauli_evolution_gate(
     data: &Bytes,
     qpy_data: &mut QPYReadData,
 ) -> Result<Py<PyAny>, QpyError> {
-    let json = py.import("json")?;
-    let evo_synth_library = py.import("qiskit.synthesis.evolution")?;
     let (packed_data, _) =
         deserialize_with_args::<formats::PauliEvolutionDefPack, (u8,)>(data, (qpy_data.version,))?;
+    let time = load_value(
+        packed_data.time_type,
+        &packed_data.time_data,
+        qpy_data,
+        ValueEndian::Big,
+    )?;
+    deserialize_pauli_evolution_operation(
+        py,
+        &packed_data.pauli_data,
+        packed_data.standalone_op,
+        &packed_data.synth_data,
+        time,
+        qpy_data,
+    )
+}
+
+pub(crate) fn deserialize_pauli_evolution_operation(
+    py: Python,
+    pauli_data: &[formats::PauliDataPack],
+    standalone_op: u8,
+    synth_data: &Bytes,
+    time: GenericValue,
+    qpy_data: &mut QPYReadData,
+) -> Result<Py<PyAny>, QpyError> {
+    let json = py.import("json")?;
+    let evo_synth_library = py.import("qiskit.synthesis.evolution")?;
     // operators as stored as a numpy dump that can be loaded into Python's SparsePauliOp.from_list
-    let operators: Vec<Py<PyAny>> = packed_data
-        .pauli_data
+    let operators: Vec<Py<PyAny>> = pauli_data
         .iter()
         .map(|elem| match elem {
             formats::PauliDataPack::V17(formats::PauliDataPackV17::SparseObservable(
@@ -991,19 +1028,13 @@ pub fn deserialize_pauli_evolution_gate(
         })
         .collect::<Result<_, QpyError>>()?;
 
-    let py_operators = if packed_data.standalone_op != 0 {
+    let py_operators = if standalone_op != 0 {
         operators[0].clone()
     } else {
         PyList::new(py, operators)?.into_py_any(py)?
     };
     // time is of type ParameterValueType = Union[ParameterExpression, float]
     // we don't have a rust PauliEvolutionGate so we'll convert the time to python
-    let time = load_value(
-        packed_data.time_type,
-        &packed_data.time_data,
-        qpy_data,
-        ValueEndian::Big,
-    )?;
     let py_time: Py<PyAny> = match time {
         GenericValue::Float64(value) => value.into_py_any(py)?,
         GenericValue::ParameterExpression(exp) => exp.as_ref().clone().into_py_any(py)?,
@@ -1014,7 +1045,7 @@ pub fn deserialize_pauli_evolution_gate(
                 .to_string(),
         )),
     };
-    let synth_data = json.call_method1("loads", (packed_data.synth_data,))?;
+    let synth_data = json.call_method1("loads", (synth_data.clone(),))?;
     let synth_data = synth_data
         .cast::<PyDict>()
         .map_err(|_| QpyError::InvalidPythonType {

@@ -584,24 +584,7 @@ pub(crate) fn pack_param_expression(
     exp: &ParameterExpression,
     qpy_data: &mut QPYWriteData,
 ) -> Result<formats::GenericDataPack, QpyError> {
-    // if the parameter expression is a single symbol, we should treat it like a parameter
-    // or a parameter vector, depending on whether the `vector` field exists
-    if let Ok(symbol) = exp.try_to_symbol().map(Arc::new) {
-        match &*symbol {
-            Symbol::Standalone { .. } => {
-                pack_generic_value(&GenericValue::ParameterExpressionSymbol(symbol), qpy_data)
-            }
-            Symbol::Element { .. } => pack_generic_value(
-                &GenericValue::ParameterExpressionVectorSymbol(symbol),
-                qpy_data,
-            ),
-        }
-    } else {
-        pack_generic_value(
-            &GenericValue::ParameterExpression(Arc::new(exp.clone())),
-            qpy_data,
-        )
-    }
+    pack_generic_value(&GenericValue::from_parameter_expression(exp), qpy_data)
 }
 
 pub(crate) fn pack_param_obj(

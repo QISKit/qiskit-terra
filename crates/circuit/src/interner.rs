@@ -41,6 +41,12 @@ impl<T: ?Sized> Clone for Interned<T> {
     }
 }
 impl<T: ?Sized> Copy for Interned<T> {}
+impl<T: ?Sized> Interned<T> {
+    /// Return the integer representation of this interner key.
+    pub const fn index(self) -> u32 {
+        self.index
+    }
+}
 impl<T: ?Sized> Default for Interned<T>
 where
     T: ToOwned<Owned: Default>,
@@ -591,11 +597,13 @@ mod test {
     #[test]
     fn default_key_exists() {
         let mut interner = Interner::<[u32]>::new();
+        assert_eq!(interner.get_default().index(), 0);
         assert_eq!(interner.get_default(), interner.get_default());
         let res: &[u32] = &[];
         assert_eq!(interner.get(interner.get_default()), res);
         assert_eq!(interner.insert_owned(Vec::new()), interner.get_default());
         assert_eq!(interner.insert(&[]), interner.get_default());
+        assert_eq!(interner.insert(&[1]).index(), 1);
 
         let capacity = Interner::<str>::with_capacity(4);
         assert_eq!(capacity.get_default(), capacity.get_default());

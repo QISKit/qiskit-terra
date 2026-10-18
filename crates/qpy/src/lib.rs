@@ -23,6 +23,7 @@ mod annotations;
 mod bytes;
 mod circuit_reader;
 mod circuit_writer;
+mod circuit_writer_19;
 mod consts;
 mod error;
 mod expr;
