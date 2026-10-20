@@ -48,9 +48,9 @@ pub enum Duration {
     s(f64),
 }
 
-#[cfg_attr(feature = "py", pymethods)]
+#[cfg(feature = "py")]
+#[pymethods]
 impl Duration {
-    #[cfg(feature = "py")]
     #[new]
     fn py_new(unit: &str, value: Bound<PyAny>) -> PyResult<Self> {
         match unit {
@@ -65,22 +65,15 @@ impl Duration {
     }
 
     /// The corresponding ``unit`` of the duration.
-    pub fn unit(&self) -> &'static str {
-        match self {
-            Duration::dt(_) => "dt",
-            Duration::ps(_) => "ps",
-            Duration::us(_) => "us",
-            Duration::ns(_) => "ns",
-            Duration::ms(_) => "ms",
-            Duration::s(_) => "s",
-        }
+    #[pyo3(name = "unit")]
+    pub fn py_unit(&self) -> &'static str {
+        self.unit()
     }
 
     /// The ``value`` of the duration.
     ///
     /// This will be a Python ``int`` if the :meth:`~Duration.unit` is ``"dt"``,
     /// else a ``float``.
-    #[cfg(feature = "py")]
     #[pyo3(name = "value")]
     pub fn py_value<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
         match *self {
@@ -99,7 +92,6 @@ impl Duration {
         }
     }
 
-    #[cfg(feature = "py")]
     fn __repr__(&self) -> String {
         match self {
             Duration::ps(t) => format!("Duration.ps({t})"),
@@ -111,8 +103,21 @@ impl Duration {
         }
     }
 
-    #[cfg(feature = "py")]
     fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         (py.get_type::<Duration>(), (self.unit(), self.py_value(py))).into_pyobject(py)
+    }
+}
+
+impl Duration {
+    /// The corresponding ``unit`` of the duration.
+    pub fn unit(&self) -> &'static str {
+        match self {
+            Duration::dt(_) => "dt",
+            Duration::ps(_) => "ps",
+            Duration::us(_) => "us",
+            Duration::ns(_) => "ns",
+            Duration::ms(_) => "ms",
+            Duration::s(_) => "s",
+        }
     }
 }
