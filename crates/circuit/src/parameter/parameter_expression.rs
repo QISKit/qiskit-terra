@@ -163,6 +163,7 @@ impl ParameterExpression {
         (self.name_map == other.name_map) && self.expr.eq_exact(&other.expr)
     }
 
+    #[cfg(feature = "py")]
     pub fn qpy_replay(&self) -> Vec<OPReplay> {
         let mut replay = Vec::new();
         let mut unused: IndexSet<_> = self.name_map.values().cloned().collect();

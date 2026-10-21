@@ -56,8 +56,7 @@ use crate::{
     Block, BlocksMode, CapacityError, Clbit, ControlFlowBlocks, Qubit, Stretch, Var, VarsMode,
 };
 #[cfg(feature = "py")]
-use qiskit_util::py::PySequenceIndex;
-use qiskit_util::py::SequenceIndex;
+use qiskit_util::py::{PySequenceIndex, SequenceIndex};
 
 use ndarray::ArrayView1;
 #[cfg(feature = "py")]
@@ -1075,6 +1074,7 @@ impl CircuitData {
     /// Native internal driver of `__delitem__` that uses a Rust-space version of the
     /// `SequenceIndex`.  This assumes that the `SequenceIndex` contains only in-bounds indices, and
     /// panics if not.
+    #[cfg(feature = "py")]
     fn delitem(&mut self, indices: SequenceIndex) -> Result<(), CircuitDataError> {
         // We need to delete in reverse order so we don't invalidate higher indices with a deletion.
         for index in indices.descending() {
