@@ -28,6 +28,9 @@ pub struct Mir {
     symbol_table: SymbolTable,
 }
 
+qiskit_util::dyn_types::static_dyn_typed!(Mir);
+impl qiskit_passmanager::IR for Mir {}
+
 impl Mir {
     /// Create an empty `Mir` with virtual qubits; use [`Mir::with_space`] for physical qubits.
     pub fn new() -> Self {

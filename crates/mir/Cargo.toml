@@ -13,8 +13,11 @@ doctest = false
 workspace = true
 
 [dependencies]
+anyhow.workspace = true
 bytemuck.workspace = true
 hashbrown.workspace = true
+qiskit-circuit = {workspace = true, features = ["passmanager"]}
+qiskit-passmanager.workspace = true
 qiskit-util.workspace = true
 rustworkx-core.workspace = true
 thiserror.workspace = true

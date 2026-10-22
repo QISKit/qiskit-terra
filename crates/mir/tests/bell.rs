@@ -41,6 +41,14 @@
 //! meas_1: ═══════════════════════════════════════════════════════════════╡0        ╞
 //!                                                                        └─────────┘
 
+use qiskit_circuit::{
+    Clbit, Qubit,
+    bit::{ShareableClbit, ShareableQubit},
+    circuit_data::CircuitData,
+    dag_circuit::DAGCircuit,
+    operations::{Param, PauliBased, PauliProductMeasurement, PauliProductRotation},
+    packed_instruction::PackedOperation,
+};
 use qiskit_mir::{
     instruction::MirInstruction,
     mir::Mir,
@@ -48,10 +56,100 @@ use qiskit_mir::{
         MirOp,
         pbc::{AngleType, Pauli, PauliRotation, PauliString},
     },
+    passes::lowering::lower,
     qid::{BitLayout, QidInfo, QidList},
     symbol_table::SymbolIdList,
 };
-use std::f64::consts::PI;
+use std::{assert_eq, f64::consts::PI, vec};
+
+// Build the Bell equivalent PBC circuit.
+fn build_bell_pbc_dag() -> DAGCircuit {
+    let qubits = (0..2).map(|_| ShareableQubit::new_anonymous()).collect();
+    let clbits = (0..2).map(|_| ShareableClbit::new_anonymous()).collect();
+    let mut circuit = CircuitData::new(Some(qubits), Some(clbits), Param::Float(0.0)).unwrap();
+    let rotation = |x: Vec<bool>, z: Vec<bool>, angle: f64| {
+        PackedOperation::from_pauli_based(Box::new(PauliBased::PauliProductRotation(
+            PauliProductRotation {
+                x,
+                z,
+                angle: angle.into(),
+            },
+        )))
+    };
+    let measure = |x: Vec<bool>, z: Vec<bool>| {
+        PackedOperation::from_pauli_based(Box::new(PauliBased::PauliProductMeasurement(
+            PauliProductMeasurement { x, z, neg: false },
+        )))
+    };
+    circuit
+        .push_packed_operation(
+            rotation(vec![false], vec![true], PI / 2.0),
+            None,
+            &[Qubit(0)],
+            &[],
+        )
+        .unwrap();
+    circuit
+        .push_packed_operation(
+            rotation(vec![true], vec![false], PI),
+            None,
+            &[Qubit(0)],
+            &[],
+        )
+        .unwrap();
+    circuit
+        .push_packed_operation(
+            rotation(vec![true, false], vec![false, true], PI / 2.0),
+            None,
+            &[Qubit(0), Qubit(1)],
+            &[],
+        )
+        .unwrap();
+    circuit
+        .push_packed_operation(
+            rotation(vec![false], vec![true], -PI / 2.0),
+            None,
+            &[Qubit(0)],
+            &[],
+        )
+        .unwrap();
+    circuit
+        .push_packed_operation(
+            rotation(vec![true], vec![false], -PI / 2.0),
+            None,
+            &[Qubit(1)],
+            &[],
+        )
+        .unwrap();
+
+    circuit
+        .push_packed_operation(
+            measure(vec![false], vec![true]),
+            None,
+            &[Qubit(0)],
+            &[Clbit(0)],
+        )
+        .unwrap();
+    circuit
+        .push_packed_operation(
+            measure(vec![false], vec![true]),
+            None,
+            &[Qubit(1)],
+            &[Clbit(1)],
+        )
+        .unwrap();
+
+    DAGCircuit::from_circuit_data(&circuit, false, None, None).unwrap()
+}
+
+#[test]
+fn lower_bell_pbc() {
+    let dag = build_bell_pbc_dag();
+    let mir = lower(&dag);
+
+    assert_eq!(mir.instructions().node_count(), 7);
+    assert_eq!(mir.resource_table().iter_qids().len(), 2);
+}
 
 #[test]
 fn construct_bell_mir() {
