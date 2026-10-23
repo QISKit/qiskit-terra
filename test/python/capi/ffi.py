@@ -145,9 +145,7 @@ def load_qasm2_from_c(
     encoded_paths = [os.fspath(path).encode("utf-8") for path in include_path]
     path_array = (ctypes.c_char_p * len(encoded_paths))(*encoded_paths)
     options.num_include_paths = len(encoded_paths)
-    options.include_path = ctypes.cast(
-        path_array, ctypes.POINTER(ctypes.POINTER(ctypes.c_char))
-    )
+    options.include_path = ctypes.cast(path_array, ctypes.POINTER(ctypes.POINTER(ctypes.c_char)))
     error = ctypes.POINTER(ctypes.c_char)()
     circuit = capi.qk_circuit_from_openqasm2(
         program.encode("utf-8"),
