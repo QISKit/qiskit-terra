@@ -4,8 +4,9 @@
 QkOpenQasm2
 ===========
 
-Functionality for building a :c:type:`QkCircuit` from an OpenQASM 2 program, using the same
-native Rust importer as :func:`qiskit.qasm2.loads`.
+Functionality for building a :c:type:`QkCircuit` from an OpenQASM 2 program.  The importer is
+written natively in Rust and does not call into Python; unlike :func:`qiskit.qasm2.loads`, which
+parses in Rust but builds the circuit in Python.
 
 .. code-block:: c
 
