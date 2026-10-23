@@ -30,6 +30,7 @@ use crate::pointers::{const_ptr_as_ref, try_slice_from_ptr};
 /// valid for ``num_include_paths`` reads of `char *`, or ``num_include_paths`` must be zero.
 #[repr(C)]
 pub struct OpenQasm2Options {
+    /// The number of entries in ``include_path``.  This must be zero if ``include_path`` is null.
     pub num_include_paths: usize,
     /// The directories searched, in order, to resolve an `include` statement.  Qiskit's built-in
     /// `qelib1.inc` is handled without consulting this, so a program that includes only that file
