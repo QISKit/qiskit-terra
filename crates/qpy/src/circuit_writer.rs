@@ -1219,22 +1219,28 @@ fn pack_custom_instruction(
             base_gate = gate.getattr("base_gate")?.clone();
             let definition: QuantumCircuitData = gate.getattr("_definition")?.extract()?;
             let metadata = serialize_metadata(&definition.metadata, None)?;
-            let layout = serialize(&pack_layout(
-                definition.transpile_layout.clone(),
-                &definition.data,
-                qpy_data.version,
-            )?)?;
-            Some(serialize(&pack_circuit(
-                &definition.data,
-                ExtraCircuitData {
-                    name: definition.name,
-                    metadata,
-                    layout,
-                },
-                qpy_data.version,
-                qpy_data.annotation_handler.child()?,
-                qpy_data.caller,
-            )?)?)
+            let layout = serialize_with_args::<formats::LayoutV2Pack, (u8,)>(
+                &pack_layout(
+                    definition.transpile_layout.clone(),
+                    &definition.data,
+                    qpy_data.version,
+                )?,
+                (qpy_data.version,),
+            )?;
+            Some(serialize_with_args::<formats::QPYCircuit, (u8,)>(
+                &pack_circuit(
+                    &definition.data,
+                    ExtraCircuitData {
+                        name: definition.name,
+                        metadata,
+                        layout,
+                    },
+                    qpy_data.version,
+                    qpy_data.annotation_handler.child()?,
+                    qpy_data.caller,
+                )?,
+                (qpy_data.version,),
+            )?)
         }
         CircuitInstructionType::AnnotatedOperation => {
             base_gate = inst.ob.bind(py).getattr("base_op")?.clone();
@@ -1244,11 +1250,10 @@ fn pack_custom_instruction(
             .py_definition(py)?
             .map(|defn| {
                 let metadata = serialize_metadata(&defn.metadata, None)?;
-                let layout = serialize(&pack_layout(
-                    defn.transpile_layout.clone(),
-                    &defn.data,
-                    qpy_data.version,
-                )?)?;
+                let layout = serialize_with_args::<formats::LayoutV2Pack, (u8,)>(
+                    &pack_layout(defn.transpile_layout.clone(), &defn.data, qpy_data.version)?,
+                    (qpy_data.version,),
+                )?;
                 pack_circuit(
                     &defn.data,
                     ExtraCircuitData {
@@ -1260,7 +1265,9 @@ fn pack_custom_instruction(
                     qpy_data.annotation_handler.child()?,
                     qpy_data.caller,
                 )
-                .and_then(|fmt| serialize(&fmt))
+                .and_then(|fmt| {
+                    serialize_with_args::<formats::QPYCircuit, (u8,)>(&fmt, (qpy_data.version,))
+                })
             })
             .transpose()?,
     };

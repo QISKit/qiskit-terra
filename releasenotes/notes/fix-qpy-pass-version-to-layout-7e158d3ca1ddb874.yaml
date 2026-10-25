@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed an issue in the QPY component where custom layouts
+    were packed according to an older QPY version than what
+    used in the file.
