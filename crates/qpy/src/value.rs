@@ -263,7 +263,6 @@ pub(crate) fn unpack_biguint(big_int_pack: BigIntPack) -> BigUint {
 }
 
 impl formats::GlobalPhasePack {
-    #[allow(dead_code)] // Used by the QPY 19 reader.
     pub(crate) fn to_param(&self, qpy_data: &mut QPYReadData) -> Result<Param, QpyError> {
         let expression = match self {
             Self::Float(value) => return Ok(Param::Float(*value)),
@@ -600,7 +599,6 @@ impl GenericValue {
         }
     }
 
-    #[allow(dead_code)] // Used by the QPY 19 writer.
     pub(crate) fn pack_global_phase(
         &self,
         qpy_data: &mut QPYWriteData,
@@ -1368,7 +1366,6 @@ pub(crate) fn creg_by_name(
         })
 }
 
-#[allow(dead_code)] // Used by the QPY 19 writer.
 pub fn pack_array_type(array: &ArrayType) -> Result<Complex64MatrixPack, QpyError> {
     match array {
         ArrayType::OneQ(matrix) => {
@@ -1417,7 +1414,6 @@ pub fn pack_array_type(array: &ArrayType) -> Result<Complex64MatrixPack, QpyErro
     }
 }
 
-#[allow(dead_code)] // Used by the QPY 19 reader.
 pub fn unpack_array_type(matrix: Complex64MatrixPack) -> Result<ArrayType, QpyError> {
     match matrix {
         Complex64MatrixPack::OneQubit(values) => {

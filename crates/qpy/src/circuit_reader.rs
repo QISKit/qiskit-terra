@@ -81,9 +81,7 @@ pub struct CustomCircuitInstructionData {
     pub gate_type: CircuitInstructionType,
     pub num_qubits: u32,
     pub num_clbits: u32,
-    #[allow(dead_code)] // Used by the QPY 19 reader.
     pub num_ctrl_qubits: u32,
-    #[allow(dead_code)] // Used by the QPY 19 reader.
     pub ctrl_state: u32,
     pub definition_circuit: Option<Py<PyAny>>,
     pub base_gate_raw: Bytes,

@@ -18,8 +18,6 @@
 // 3. "Write": To write to a file obj the serialization of the original data
 // Ideally, serialization is done by packing in a binrw-enhanced struct and using the
 // `write` method into a `Cursor` buffer, but there might be exceptions.
-#![allow(dead_code)] // The QPY 19 writer is enabled in a later branch.
-
 use hashbrown::{HashMap, HashSet};
 
 use pyo3::prelude::*;

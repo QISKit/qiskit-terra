@@ -212,9 +212,15 @@ fn unpack_instruction_v19(
                 0 => StandardInstruction::Barrier(
                     qpy_data.circuit_data.get_qargs(qubits).len() as u32
                 ),
-                1 => StandardInstruction::Delay(data.delay_unit.ok_or_else(|| {
-                    QpyError::InvalidInstruction("delay instruction has no unit".to_string())
-                })?),
+                1 => StandardInstruction::Delay(
+                    data.delay_unit
+                        .ok_or_else(|| {
+                            QpyError::InvalidInstruction(
+                                "delay instruction has no unit".to_string(),
+                            )
+                        })?
+                        .into(),
+                ),
                 2 => StandardInstruction::Measure,
                 3 => StandardInstruction::Reset,
                 value => {

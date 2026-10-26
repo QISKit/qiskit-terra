@@ -10,8 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-#![allow(dead_code)] // These definitions are used when QPY 19 support is enabled.
-
 use crate::bytes::Bytes;
 use crate::value::{
     Complex64MatrixPack, Complex64Pack, StringU16Pack, pack_biguint, unpack_biguint,
