@@ -502,28 +502,7 @@ fn pack_from_python_v19(
         .attach("pack Python-defined operation", |py| {
             let object = instruction.ob.bind(py);
             let class_name = instruction.class_name(py)?;
-            let init_values = match class_name.as_str() {
-                "MCXVChain" => vec![
-                    ("dirty_ancillas", object.getattr("_dirty_ancillas")?),
-                    ("relative_phase", object.getattr("_relative_phase")?),
-                    ("action_only", object.getattr("_action_only")?),
-                ],
-                _ => Vec::new(),
-            };
-            let init_params = init_values
-                .into_iter()
-                .map(|(name, value)| {
-                    Ok(formats::NamedParamDataPack {
-                        name: StringU16Pack {
-                            value: name.to_string(),
-                        },
-                        value: generic_value_to_param_data_pack(
-                            &py_convert_to_generic_value(&value)?,
-                            qpy_data,
-                        )?,
-                    })
-                })
-                .collect::<Result<Vec<_>, QpyError>>()?;
+            let init_params = pack_init_params_v19(object, &class_name, qpy_data)?;
             Ok(formats::FromPythonPack {
                 class_name: StringU16Pack { value: class_name },
                 op_name: StringU16Pack {
@@ -532,6 +511,40 @@ fn pack_from_python_v19(
                 init_params,
             })
         })
+}
+
+fn pack_init_params_v19(
+    object: &Bound<PyAny>,
+    class_name: &str,
+    qpy_data: &mut QPYWriteData,
+) -> Result<Vec<formats::NamedParamDataPack>, QpyError> {
+    let init_attributes = match class_name {
+        "MCXVChain" => vec![
+            ("dirty_ancillas", "_dirty_ancillas"),
+            ("relative_phase", "_relative_phase"),
+            ("action_only", "_action_only"),
+        ],
+        _ => Vec::new(),
+    };
+    let init_values = init_attributes
+        .into_iter()
+        .map(|(name, attribute)| Ok((name, object.getattr(attribute)?)))
+        .collect::<Result<Vec<_>, QpyError>>()?;
+
+    init_values
+        .into_iter()
+        .map(|(name, value)| {
+            Ok(formats::NamedParamDataPack {
+                name: StringU16Pack {
+                    value: name.to_string(),
+                },
+                value: generic_value_to_param_data_pack(
+                    &py_convert_to_generic_value(&value)?,
+                    qpy_data,
+                )?,
+            })
+        })
+        .collect()
 }
 
 fn pack_bool_vector(values: &[bool]) -> Result<formats::BoolVectorPack, QpyError> {
