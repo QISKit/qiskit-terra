@@ -516,7 +516,15 @@ fn pack_init_params_v19(
     qpy_data: &mut QPYWriteData,
 ) -> Result<Vec<formats::NamedParamDataPack>, QpyError> {
     let init_attributes = match class_name {
+        "QFTGate" => vec![("num_qubits", "num_qubits")],
+        "DiagonalGate" => vec![("diag", "params")],
+        "MCXGate" | "MCXGrayCode" | "MCXRecursive" => vec![
+            ("num_ctrl_qubits", "num_ctrl_qubits"),
+            ("ctrl_state", "ctrl_state"),
+        ],
         "MCXVChain" => vec![
+            ("num_ctrl_qubits", "num_ctrl_qubits"),
+            ("ctrl_state", "ctrl_state"),
             ("dirty_ancillas", "_dirty_ancillas"),
             ("relative_phase", "_relative_phase"),
             ("action_only", "_action_only"),

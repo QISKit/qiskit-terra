@@ -513,23 +513,13 @@ fn unpack_from_python_v19(
             py_convert_from_generic_value(py, &value)?,
         )?;
     }
-    if let Some((num_ctrl_qubits, ctrl_state)) = control {
-        // Most standard controlled gates have a fixed number of controls, so their Python
-        // constructors do not accept `num_ctrl_qubits` (for example, `CXGate`).  The multi-
-        // controlled families below are the exceptions and need the serialized count in order
-        // to construct an object of the right size.
-        if matches!(
-            data.class_name.value.as_str(),
-            "MCPhaseGate" | "MCU1Gate" | "MCXGrayCode" | "MCXGate" | "MCXRecursive" | "MCXVChain"
-        ) {
-            kwargs.set_item("num_ctrl_qubits", num_ctrl_qubits)?;
-        }
-        kwargs.set_item("ctrl_state", ctrl_state)?;
-    }
 
     let object = if !kwargs.is_empty() {
-        gate_class.call(PyTuple::new(py, py_params)?, Some(&kwargs))?
+        gate_class.call((), Some(&kwargs))?
     } else {
+        // handling of special cases which cannot be handled by the current generic packing logic
+        // The solution is probably adding specialized getters to the python classes themselves
+        // and should be done in a future PR.
         match data.class_name.value.as_str() {
             "Initialize" | "StatePreparation" => {
                 if py_params
@@ -549,11 +539,24 @@ fn unpack_from_python_v19(
                     gate_class.call1((py_params,))?
                 }
             }
-            "QFTGate" => gate_class.call1((num_qubits,))?,
-            "UCRXGate" | "UCRYGate" | "UCRZGate" | "DiagonalGate" => {
-                gate_class.call1((py_params,))?
+            "UCRXGate" | "UCRYGate" | "UCRZGate" => gate_class.call1((py_params,))?,
+            "MCPhaseGate" | "MCU1Gate" => {
+                let Some((num_ctrl_qubits, ctrl_state)) = control else {
+                    return Err(QpyError::MissingData(format!(
+                        "{} requires controlled-gate data",
+                        data.class_name.value
+                    )));
+                };
+                kwargs.set_item("num_ctrl_qubits", num_ctrl_qubits)?;
+                kwargs.set_item("ctrl_state", ctrl_state)?;
+                gate_class.call(PyTuple::new(py, py_params)?, Some(&kwargs))?
             }
-            _ => gate_class.call1(PyTuple::new(py, py_params)?)?,
+            _ => {
+                if let Some((_, ctrl_state)) = control {
+                    kwargs.set_item("ctrl_state", ctrl_state)?;
+                }
+                gate_class.call(PyTuple::new(py, py_params)?, Some(&kwargs))?
+            }
         }
     };
     if object.getattr("name")?.extract::<String>()? != data.op_name.value {
