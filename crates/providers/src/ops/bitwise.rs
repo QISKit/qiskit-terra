@@ -14,7 +14,6 @@ use super::error::{MathOpError, check_axis, check_dtype};
 use super::inference::{elementwise_binary, elementwise_unary, reduce};
 use super::{ProgramOp, QISKIT};
 use crate::tensor::{DType, Tensor, TensorType};
-use ndarray::Axis;
 
 /// Return whether a dtype is `Bit`.
 #[inline]
@@ -97,7 +96,7 @@ impl ProgramOp for BitwiseNot {
         let Tensor::Bit(arr) = x else {
             unreachable!("dtype checked above")
         };
-        Ok(vec![Tensor::Bit(arr.mapv(|b| b ^ 1).into_shared())])
+        Ok(vec![Tensor::Bit(arr.not())])
     }
 }
 
@@ -140,21 +139,23 @@ impl ProgramOp for Parity {
         let Tensor::Bit(arr) = x else {
             unreachable!("dtype checked above")
         };
-        Ok(vec![Tensor::Bit(
-            arr.fold_axis(Axis(self.axis), 0u8, |&acc, &b| acc ^ b)
-                .into_shared(),
-        )])
+        Ok(vec![Tensor::Bit(arr.parity(self.axis))])
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::{Dim, TensorError};
-    use ndarray::{arr1, arr2};
+    use crate::tensor::{BitTensor, Dim, TensorError};
 
-    fn bit(data: &[u8]) -> Tensor {
-        Tensor::Bit(arr1(data).into_dyn().into_shared())
+    /// Return a `Bit` tensor of logical shape `shape` over `values`, taken in row-major order.
+    fn bits(values: &[u8], shape: &[usize]) -> Tensor {
+        Tensor::Bit(BitTensor::from_bools(values.iter().map(|&v| v == 1), shape).unwrap())
+    }
+
+    /// Return a one-dimensional `Bit` tensor over `values`.
+    fn bit(values: &[u8]) -> Tensor {
+        bits(values, &[values.len()])
     }
 
     fn bit_1d(len: usize) -> TensorType {
@@ -197,10 +198,13 @@ mod tests {
     #[test]
     fn test_parity_axis0() {
         // [[1,0,1],[0,1,1],[0,0,0]] axis 0 → [1, 1, 0]
-        let x = Tensor::Bit(
-            arr2(&[[1u8, 0, 1], [0, 1, 1], [0, 0, 0]])
-                .into_dyn()
-                .into_shared(),
+        let x = bits(
+            &[
+                1, 0, 1, //
+                0, 1, 1, //
+                0, 0, 0,
+            ],
+            &[3, 3],
         );
         let result = Parity::new(0).eval(&[x]).unwrap();
         assert_eq!(result, vec![bit(&[1, 1, 0])]);
