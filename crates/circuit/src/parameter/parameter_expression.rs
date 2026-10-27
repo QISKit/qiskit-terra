@@ -51,6 +51,7 @@ use crate::parameter::symbol_expr::SymbolVector;
 use crate::parameter::symbol_expr::{self, SymbolExpr};
 #[cfg(feature = "py")]
 use crate::parameter::symbol_parser::parse_expression;
+#[cfg(feature = "py")]
 use qiskit_util::IndexSet;
 
 #[cfg(feature = "py")]
@@ -2023,6 +2024,7 @@ pub enum ParameterValueType {
     Parameter(PyParameter),
 }
 
+#[cfg(feature = "py")]
 impl ParameterValueType {
     fn extract_from_expr(expr: &SymbolExpr) -> Option<ParameterValueType> {
         if let Some(value) = expr.eval(true) {
@@ -2033,7 +2035,7 @@ impl ParameterValueType {
             }
         } else if let SymbolExpr::Symbol(_symbol) = expr {
             #[cfg(feature = "py")]
-            return Some(Self::Parameter(PyParameter(_symbol.clone())));
+            return Some(ParameterValueType::Parameter(PyParameter(_symbol.clone())));
             #[cfg(not(feature = "py"))]
             return None;
         } else {
@@ -2205,6 +2207,7 @@ impl OPReplay {
 /// Args:
 ///     - joint_parameter_expr: The full expression, e.g. expr1 + expr2.
 ///     - sub_expr: The sub expression, on whose symbols we restrict the name map.
+#[cfg(feature = "py")]
 fn filter_name_map(
     sub_expr: &SymbolExpr,
     name_map: &HashMap<String, Symbol>,
@@ -2222,6 +2225,7 @@ fn filter_name_map(
     }
 }
 
+#[cfg(feature = "py")]
 fn qpy_replay_inner(
     expr: &ParameterExpression,
     name_map: &HashMap<String, Symbol>,

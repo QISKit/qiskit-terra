@@ -431,6 +431,7 @@ impl PyExpr {
 
 /// The expression's kind, used internally during Python instance extraction to avoid
 /// `isinstance` checks.
+#[cfg(feature = "py")]
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ExprKind {

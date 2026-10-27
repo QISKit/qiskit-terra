@@ -127,6 +127,7 @@ impl PyType {
     }
 }
 
+#[cfg(feature = "py")]
 #[repr(u8)]
 #[derive(PartialEq, Clone, Copy, Debug, Hash)]
 enum TypeKind {

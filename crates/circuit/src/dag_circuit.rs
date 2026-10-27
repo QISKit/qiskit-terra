@@ -94,10 +94,11 @@ use rustworkx_core::petgraph::Incoming;
 use rustworkx_core::petgraph::prelude::StableDiGraph;
 use rustworkx_core::petgraph::prelude::*;
 use rustworkx_core::petgraph::stable_graph::{EdgeReference, IndexType};
+#[cfg(feature = "py")]
 use rustworkx_core::petgraph::unionfind::UnionFind;
 #[cfg(feature = "py")]
-use rustworkx_core::petgraph::visit::{EdgeIndexable, NodeFiltered};
-use rustworkx_core::petgraph::visit::{IntoEdgeReferences, IntoNodeReferences, NodeIndexable};
+use rustworkx_core::petgraph::visit::{EdgeIndexable, NodeFiltered, NodeIndexable};
+use rustworkx_core::petgraph::visit::{IntoEdgeReferences, IntoNodeReferences};
 use rustworkx_core::traversal::{
     ancestors as core_ancestors, bfs_predecessors as core_bfs_predecessors,
     bfs_successors as core_bfs_successors, descendants as core_descendants,
@@ -127,6 +128,7 @@ use uuid::Uuid;
 
 static CONTROL_FLOW_OP_NAMES: [&str; 5] =
     ["for_loop", "while_loop", "if_else", "switch_case", "box"];
+#[cfg(feature = "py")]
 static SEMANTIC_EQ_SYMMETRIC: [&str; 4] = ["barrier", "swap", "break_loop", "continue_loop"];
 
 pub use rustworkx_core::petgraph::stable_graph::NodeIndex;
@@ -5135,6 +5137,7 @@ impl DAGCircuit {
     /// Extract the blocks from a Python-space `CircuitInstruction` and add them to this DAG.
     ///
     /// The inverse of this is [unpack_blocks_to_circuit_parameters].
+    #[cfg(feature = "py")]
     fn extract_blocks_from_circuit_parameters(
         &mut self,
         params: Option<&Parameters<CircuitData>>,
@@ -5156,6 +5159,7 @@ impl DAGCircuit {
     /// space.
     ///
     /// The inverse of this is [extract_blocks_from_circuit_parameters].
+    #[cfg(feature = "py")]
     fn unpack_blocks_to_circuit_parameters(
         &self,
         params: Option<&Parameters<Block>>,
@@ -7445,6 +7449,7 @@ impl DAGCircuit {
         Ok(())
     }
 
+    #[cfg(feature = "py")]
     fn check_op_addition(&self, inst: &PackedInstruction) -> Result<(), DAGError> {
         for b in self.qargs_interner.get(inst.qubits) {
             if self.qubit_io_map.len() - 1 < b.index() {
@@ -8531,6 +8536,7 @@ impl DAGCircuit {
     }
 
     /// Compute how many components the circuit can decompose into.
+    #[cfg(feature = "py")]
     fn num_tensor_factors(&self) -> usize {
         // This function was forked from rustworkx's
         // number_weekly_connected_components() function as of 0.15.0:
@@ -8684,6 +8690,7 @@ impl DAGCircuit {
         }
     }
 
+    #[cfg(feature = "py")]
     fn idle_wires(&self, ignore: Option<HashSet<&str>>) -> impl Iterator<Item = Wire> {
         (0..self.qubit_io_map.len())
             .map(|idx| Wire::Qubit(Qubit::new(idx)))
@@ -9129,6 +9136,7 @@ impl From<DAGCircuit> for PyDAGCircuit {
     }
 }
 
+#[cfg(feature = "py")]
 fn native_idle_wires(
     dag: &DAGCircuit,
     ignore: Option<HashSet<&str>>,

@@ -524,6 +524,7 @@ impl CircuitData {
     /// to this circuit.
     ///
     /// Returns the parameters in terms of block references.
+    #[cfg(feature = "py")]
     fn take_parameter_blocks(
         &mut self,
         params: Option<Parameters<CircuitData>>,
@@ -969,6 +970,7 @@ impl CircuitData {
             .iter()
             .for_each(|block| self.blocks.increment(*block))
     }
+    #[cfg(feature = "py")]
     #[inline]
     fn untrack_instruction_blocks(&mut self, index: usize) {
         self.data[index]
@@ -1016,6 +1018,7 @@ impl CircuitData {
 
     /// Remove the entries from the `PackedInstruction` at the given index from the internal
     /// parameter table.
+    #[cfg(feature = "py")]
     fn untrack_instruction_parameters(
         &mut self,
         instruction_index: usize,
@@ -1881,6 +1884,7 @@ impl CircuitData {
         ops_count
     }
 
+    #[cfg(feature = "py")]
     fn clear_all(&mut self) {
         // Clear anything that could have a reference cycle.
         self.data.clear();

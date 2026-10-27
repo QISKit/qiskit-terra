@@ -13,13 +13,13 @@
 use std::num::TryFromIntError;
 
 #[cfg(feature = "py")]
+use hashbrown::HashMap;
+#[cfg(feature = "py")]
 use pyo3::IntoPyObjectExt;
 #[cfg(feature = "py")]
 use pyo3::prelude::*;
 #[cfg(feature = "py")]
 use pyo3::types::PyList;
-
-use hashbrown::HashMap;
 
 /// A newtype for the different categories of qubits used within layouts.  This is to enforce
 /// significantly more type safety when dealing with mixtures of physical and virtual qubits, as we
@@ -223,6 +223,7 @@ impl NLayout {
 }
 
 impl NLayout {
+    #[cfg(feature = "py")]
     fn new(
         qubit_indices: HashMap<VirtualQubit, PhysicalQubit>,
         virtual_qubits: usize,
