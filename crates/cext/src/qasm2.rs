@@ -10,13 +10,14 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, c_char};
 use std::path::PathBuf;
 use std::ptr;
 
 use qiskit_circuit::circuit_data::CircuitData;
 
 use crate::pointers::{const_ptr_as_ref, try_slice_from_ptr};
+use crate::util;
 
 /// Options for the OpenQASM 2 importer.
 ///
@@ -73,12 +74,8 @@ unsafe fn set_error(error: *mut *mut c_char, message: &str) {
     if error.is_null() {
         return;
     }
-    // An interior nul would make `CString::new` fail; none of our messages should contain one, but
-    // losing the whole diagnostic to that would be worse than mangling it.
-    let owned = CString::new(message.replace('\0', "\\0"))
-        .expect("interior nul bytes were already removed");
     // SAFETY: per documentation, `error` is non-null and valid for a pointer write.
-    unsafe { *error = owned.into_raw() };
+    unsafe { *error = util::cstring_from_utf8_lossy(message).into_raw() };
 }
 
 /// @ingroup QkOpenQasm2
