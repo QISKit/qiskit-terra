@@ -19,6 +19,7 @@
 // Ideally, serialization is done by packing in a binrw-enhanced struct and using the
 // `write` method into a `Cursor` buffer, but there might be exceptions.
 use hashbrown::{HashMap, HashSet};
+use pyo3::exceptions::PyUserWarning;
 
 use pyo3::prelude::*;
 use qiskit_circuit::circuit_data::CircuitData;
@@ -465,13 +466,35 @@ fn pack_instructions_v19(qpy_data: &mut QPYWriteData) -> Result<PackedInstructio
                 .map(|param| pack_param_v19(param, qpy_data))
                 .collect::<Result<_, _>>()?
         };
-        let label = instruction
+        let mut label = instruction
             .label
             .as_deref()
             .filter(|label| !label.is_empty())
-            .map(|label| StringU16Pack {
-                value: label.clone(),
-            });
+            .cloned();
+        if let Some(label) = &mut label
+            && label.len() > u16::MAX as usize
+        {
+            if matches!(qpy_data.caller, QpyCaller::Python) {
+                qpy_data.caller.attach(
+                    "warn about truncated label",
+                    |py| -> Result<_, QpyError> {
+                        imports::WARNINGS_WARN.get_bound(py).call1((
+                            "Label exceeded maximum length and was truncated.",
+                            py.get_type::<PyUserWarning>(),
+                            1,
+                        ))?;
+                        Ok(())
+                    },
+                )?;
+            }
+            let mut boundary = u16::MAX as usize - 3;
+            while !label.is_char_boundary(boundary) {
+                boundary -= 1;
+            }
+            label.truncate(boundary);
+            label.push_str("...");
+        }
+        let label = label.map(|value| StringU16Pack { value });
         packed_instructions.push(formats::CircuitInstructionV19Pack {
             operation,
             qargs,

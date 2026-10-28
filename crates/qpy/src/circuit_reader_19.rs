@@ -21,7 +21,7 @@
 
 use hashbrown::HashMap;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyString, PyTuple};
+use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::circuit_instruction::OperationFromPython;
 use qiskit_circuit::imports;
@@ -359,6 +359,7 @@ fn unpack_instruction_v19(
                         &parameter_values,
                         qpy_data.circuit_data.get_qargs(qubits).len(),
                         None,
+                        instruction.label.as_ref().map(|label| label.value.as_str()),
                         qpy_data,
                     )
                 })?
@@ -373,6 +374,7 @@ fn unpack_instruction_v19(
                         &parameter_values,
                         qpy_data.circuit_data.get_qargs(qubits).len(),
                         Some((data.num_ctrl_qubits, data.ctrl_state)),
+                        instruction.label.as_ref().map(|label| label.value.as_str()),
                         qpy_data,
                     )
                 })?
@@ -498,6 +500,7 @@ fn unpack_from_python_v19(
     parameter_values: &[GenericValue],
     num_qubits: usize,
     control: Option<(u32, u32)>,
+    label: Option<&str>,
     qpy_data: &mut QPYReadData,
 ) -> Result<PackedOperation, QpyError> {
     let gate_class = crate::py_methods::get_python_gate_class(py, &data.class_name.value)?;
@@ -508,10 +511,20 @@ fn unpack_from_python_v19(
     let kwargs = PyDict::new(py);
     for init_param in &data.init_params {
         let value = unpack_param_data_v19(&init_param.value, qpy_data)?;
-        kwargs.set_item(
-            &init_param.name.value,
-            py_convert_from_generic_value(py, &value)?,
-        )?;
+        let value = py_convert_from_generic_value(py, &value)?;
+        // ``DiagonalGate`` deliberately only accepts a list or ndarray, while generic QPY
+        // sequences are represented as tuples.
+        let value = if data.class_name.value == "DiagonalGate" && init_param.name.value == "diag" {
+            PyList::new(
+                py,
+                value.bind(py).try_iter()?.collect::<PyResult<Vec<_>>>()?,
+            )?
+            .into_any()
+            .unbind()
+        } else {
+            value
+        };
+        kwargs.set_item(&init_param.name.value, value)?;
     }
 
     let object = if !kwargs.is_empty() {
@@ -561,6 +574,9 @@ fn unpack_from_python_v19(
     };
     if object.getattr("name")?.extract::<String>()? != data.op_name.value {
         object.setattr("_name", &data.op_name.value)?;
+    }
+    if let Some(label) = label {
+        object.setattr("label", label)?;
     }
     let operation = object
         .extract::<OperationFromPython<CircuitData>>()?
