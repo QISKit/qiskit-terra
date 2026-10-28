@@ -114,7 +114,7 @@ class TestQasm2CParity(QiskitTestCase):
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "not_a_gate"):
             qiskit.qasm2.loads(program)
 
-    def test_strict_mode_is_honoured(self):
+    def test_strict_mode_is_honored(self):
         """Strict mode demands the version statement; the default tolerates its absence."""
         # `U` is a language builtin, so this needs no `include`; the only thing strict mode can
         # object to here is the missing version statement.
