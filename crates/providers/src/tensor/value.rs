@@ -510,6 +510,76 @@ impl_tensor_bitop!(bitand_tensor, and, "bitand");
 impl_tensor_bitop!(bitor_tensor, or, "bitor");
 impl_tensor_bitop!(bitxor_tensor, xor, "bitxor");
 
+/// Compare two broadcast operands element-wise, packing the answers into a `Bit` tensor.
+fn compare_into_bits<T, F>(a: &ArcArrayD<T>, b: &ArcArrayD<T>, op: F) -> Result<Tensor, TensorError>
+where
+    T: Clone,
+    F: Fn(&T, &T) -> bool,
+{
+    let answers = broadcast_elementwise(a, b, op)?;
+    let shape = answers.shape().to_vec();
+    // `map_collect` builds a standard-layout array, so iterating it is row-major, which is the
+    // order `from_bools` packs in.
+    let bits: Vec<bool> = answers.iter().copied().collect();
+    BitTensor::from_bools(bits, &shape).map(Tensor::Bit)
+}
+
+/// Generate an element-wise comparison of two tensors of the same dtype, producing `Bit`.
+/// Callers promote both operands to a common dtype first, which is what the comparison ops do.
+macro_rules! impl_tensor_compare {
+    ($method:ident, $op:tt, $op_name:literal, [$($variant:ident),+ $(,)?]) => {
+        impl Tensor {
+            #[doc = concat!(
+                "Compare two tensors element-wise with `",
+                $op_name,
+                "`, with NumPy-style broadcasting.\n\n",
+                "Both operands must already share a dtype, and the result is always `Bit`. ",
+                "Returns [`TensorError::DTypeMismatch`] if the dtypes differ, ",
+                "[`TensorError::UnsupportedDType`] if they share a dtype this comparison does ",
+                "not apply to, and [`TensorError::ShapeMismatch`] if the shapes are not ",
+                "broadcast-compatible."
+            )]
+            pub fn $method(&self, rhs: &Tensor) -> Result<Tensor, TensorError> {
+                broadcast_shape(self.shape(), rhs.shape())?;
+                match (self, rhs) {
+                    (Tensor::Bit(a), Tensor::Bit(b)) => compare_into_bits(
+                        &unpack(a).into_shared(),
+                        &unpack(b).into_shared(),
+                        |x, y| x $op y,
+                    ),
+                    $((Tensor::$variant(a), Tensor::$variant(b)) => {
+                        compare_into_bits(a, b, |x, y| x $op y)
+                    })+
+                    _ => Err(dtype_error($op_name, self.dtype(), rhs.dtype())),
+                }
+            }
+        }
+    };
+}
+
+impl_tensor_compare!(
+    eq_tensor, ==, "equal",
+    [C128, C64, F64, F32, I64, I32, I16, I8, U64, U32, U16, U8]
+);
+impl_tensor_compare!(
+    ne_tensor, !=, "not_equal",
+    [C128, C64, F64, F32, I64, I32, I16, I8, U64, U32, U16, U8]
+);
+// An ordering is not defined for the complex dtypes.
+impl_tensor_compare!(lt_tensor, <, "less", [F64, F32, I64, I32, I16, I8, U64, U32, U16, U8]);
+impl_tensor_compare!(
+    le_tensor, <=, "less_equal",
+    [F64, F32, I64, I32, I16, I8, U64, U32, U16, U8]
+);
+impl_tensor_compare!(
+    gt_tensor, >, "greater",
+    [F64, F32, I64, I32, I16, I8, U64, U32, U16, U8]
+);
+impl_tensor_compare!(
+    ge_tensor, >=, "greater_equal",
+    [F64, F32, I64, I32, I16, I8, U64, U32, U16, U8]
+);
+
 #[cfg(test)]
 mod test {
     use super::*;
