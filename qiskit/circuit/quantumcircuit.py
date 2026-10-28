@@ -4359,6 +4359,28 @@ class QuantumCircuit(IR):
         ops_dict = self._data.count_ops()
         return OrderedDict(ops_dict)
 
+    def count_ops_per_qubit(self) -> list[dict[str, int]]:
+        """Counts the number of times each operation is used, broken down by qubit.
+
+        Returns:
+            A list of dictionaries, one per qubit, mapping operation names to counts. Multi-qubit operations contribute a count to every qubit they touch.
+
+        Example:
+
+            .. code-block:: python
+
+                from qiskit.circuit import QuantumCircuit
+
+                qc = QuantumCircuit(3)
+                qc.h(0)
+                qc.cx(0, 1)
+                qc.x(2)
+                qc.x(2)
+                
+                print(counts)
+        """
+        return self._data.count_ops_per_qubit()
+
     def num_nonlocal_gates(self) -> int:
         """Return number of non-local gates (i.e. involving 2+ qubits).
 

@@ -1819,7 +1819,7 @@ impl CircuitData {
         self.param_table.clear();
     }
 
-    /// Counts the number of times each operation is used in the circuit.
+    /// Counts the number of operations acting on the circuit.
     ///
     /// # Parameters
     /// - `self` - A mutable reference to the CircuitData struct.
@@ -1833,6 +1833,22 @@ impl CircuitData {
         }
         ops_count.par_sort_by(|_k1, v1, _k2, v2| v2.cmp(v1));
         ops_count
+    }
+
+    /// Counts the number of operations acting on each qubit.
+    ///
+    /// # Returns
+    /// Per-qubit operation counts as a list indexed by qubit position.
+    /// Multi-qubit operations are counted for each qubit they affect.
+    pub fn count_ops_per_qubit(&self) -> Vec<IndexMap<&str, usize>> {
+        let mut ops_per_qubit = vec![IndexMap::default(); self.num_qubits()];
+        for instruction in &self.data {
+            let name = instruction.op.name();
+            for qubit in self.qargs_interner.get(instruction.qubits) {
+                *ops_per_qubit[qubit.index()].entry(name).or_insert(0) += 1;
+            }
+        }
+        ops_per_qubit
     }
 
     fn clear_all(&mut self) {
@@ -2949,6 +2965,15 @@ impl PyCircuitData {
     /// An IndexMap containing the operation names as keys and their respective counts as values.
     pub fn count_ops(&self) -> IndexMap<&str, usize> {
         self.inner.count_ops()
+    }
+    
+    /// Counts the number of operations acting on each qubit.
+    ///
+    /// # Returns
+    /// Per-qubit operation counts as a list indexed by qubit position.
+    /// Multi-qubit operations are counted for each qubit they affect.
+    pub fn count_ops_per_qubit(&self) -> Vec<IndexMap<&str, usize>> {
+        self.inner.count_ops_per_qubit()
     }
 
     // Marks this pyclass as NOT hashable.

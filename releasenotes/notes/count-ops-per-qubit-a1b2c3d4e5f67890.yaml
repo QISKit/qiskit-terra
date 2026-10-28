@@ -1,0 +1,8 @@
+---
+features_circuits:
+  - |
+    Added :meth:`.QuantumCircuit.count_ops_per_qubit`, a per-qubit variant of
+    :meth:`~.QuantumCircuit.count_ops`. It returns a list of dictionaries, one
+    per qubit, mapping operation names to how many times that operation appears
+    on the qubit. Multi-qubit operations contribute a count to every qubit they
+    touch.
