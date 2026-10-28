@@ -25,29 +25,6 @@ from . import ffi
 
 HEADER = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n'
 
-# Programs built only from `qelib1.inc` and the language builtins, which both importers lower to
-# the same standard gates, so the circuits must compare exactly equal.
-STANDARD_PROGRAMS = [
-    "qreg q[1];\nh q[0];\n",
-    "qreg q[2];\nh q[0];\ncx q[0], q[1];\n",
-    "qreg q[2];\ncreg c[2];\nh q[0];\ncx q[0], q[1];\nmeasure q -> c;\n",
-    "qreg q[1];\nrx(0.5) q[0];\nry(-1.25) q[0];\nrz(pi / 4) q[0];\n",
-    "qreg q[1];\nu3(0.1, 0.2, 0.3) q[0];\nu2(0.4, 0.5) q[0];\nu1(0.6) q[0];\n",
-    "qreg q[3];\nccx q[0], q[1], q[2];\n",
-    "qreg q[2];\ncrz(0.5) q[0], q[1];\ncu1(0.25) q[0], q[1];\ncu3(0.1, 0.2, 0.3) q[0], q[1];\n",
-    "qreg q[2];\nbarrier q;\nh q[0];\nbarrier q[0], q[1];\n",
-    "qreg q[1];\ncreg c[1];\nx q[0];\nmeasure q[0] -> c[0];\nreset q[0];\n",
-    "qreg q[1];\nrx(sin(0.5) + cos(0.25) * 2) q[0];\nrz(sqrt(2.0) / ln(3.0)) q[0];\n",
-    "qreg q[2];\ny q[0];\nz q[0];\ns q[0];\nsdg q[0];\nt q[0];\ntdg q[0];\n"
-    "cz q[0], q[1];\ncy q[0], q[1];\nch q[0], q[1];\n",
-    "qreg q[2];\ncreg c[2];\nif (c == 1) cx q[0], q[1];\n",
-    "qreg q[2];\ncreg c[2];\ncreg d[1];\n"
-    "if (c == 2) measure q[0] -> d[0];\nif (d == 1) reset q[1];\n",
-    "qreg q[2];\ncreg c[1];\nmeasure q[0] -> c[0];\nif (c == 1) x q[1];\n",
-    "qreg q[1];\ncreg c[2];\nif (c == 1) measure q[0] -> c[0];\n",
-    "qreg q[1];\ncreg c[2];\nif (c == 2) measure q[0] -> c[1];\n",
-]
-
 # Programs with `gate` declarations.  The native builder keeps the declared gate as a single Rust
 # custom operation, where the Python interpreter builds a `_DefinedGate`.
 DEFINED_GATE_PROGRAMS = [
@@ -59,7 +36,28 @@ DEFINED_GATE_PROGRAMS = [
 
 @ddt.ddt
 class TestQasm2CParity(QiskitTestCase):
-    @ddt.idata(STANDARD_PROGRAMS)
+    @ddt.idata(
+        [
+            "qreg q[1];\nh q[0];\n",
+            "qreg q[2];\nh q[0];\ncx q[0], q[1];\n",
+            "qreg q[2];\ncreg c[2];\nh q[0];\ncx q[0], q[1];\nmeasure q -> c;\n",
+            "qreg q[1];\nrx(0.5) q[0];\nry(-1.25) q[0];\nrz(pi / 4) q[0];\n",
+            "qreg q[1];\nu3(0.1, 0.2, 0.3) q[0];\nu2(0.4, 0.5) q[0];\nu1(0.6) q[0];\n",
+            "qreg q[3];\nccx q[0], q[1], q[2];\n",
+            "qreg q[2];\ncrz(0.5) q[0], q[1];\ncu1(0.25) q[0], q[1];\ncu3(0.1, 0.2, 0.3) q[0], q[1];\n",
+            "qreg q[2];\nbarrier q;\nh q[0];\nbarrier q[0], q[1];\n",
+            "qreg q[1];\ncreg c[1];\nx q[0];\nmeasure q[0] -> c[0];\nreset q[0];\n",
+            "qreg q[1];\nrx(sin(0.5) + cos(0.25) * 2) q[0];\nrz(sqrt(2.0) / ln(3.0)) q[0];\n",
+            "qreg q[2];\ny q[0];\nz q[0];\ns q[0];\nsdg q[0];\nt q[0];\ntdg q[0];\n"
+            "cz q[0], q[1];\ncy q[0], q[1];\nch q[0], q[1];\n",
+            "qreg q[2];\ncreg c[2];\nif (c == 1) cx q[0], q[1];\n",
+            "qreg q[2];\ncreg c[2];\ncreg d[1];\n"
+            "if (c == 2) measure q[0] -> d[0];\nif (d == 1) reset q[1];\n",
+            "qreg q[2];\ncreg c[1];\nmeasure q[0] -> c[0];\nif (c == 1) x q[1];\n",
+            "qreg q[1];\ncreg c[2];\nif (c == 1) measure q[0] -> c[0];\n",
+            "qreg q[1];\ncreg c[2];\nif (c == 2) measure q[0] -> c[1];\n",
+        ]
+    )
     def test_matches_python_loader_exactly(self, body):
         """Standard-gate programs must import identically through both paths."""
         program = HEADER + body
