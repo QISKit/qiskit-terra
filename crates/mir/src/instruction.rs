@@ -82,17 +82,40 @@ impl MirInstructionIndex {
 
 #[cfg(test)]
 mod tests {
+    use std::{assert_eq, vec};
+
     use super::*;
     use crate::line_graph::LineGraph;
-    use crate::ops::pbc::{AngleType, Pauli, PauliRotation, PauliString};
+    use crate::ops::pbc::{AngleType, Pauli, PauliMeasure, PauliRotation, PauliString};
     use crate::qid::Qid;
-    use crate::symbol_table::SymbolIdList;
+    use crate::symbol_table::{Symbol, SymbolTable, SymbolType};
 
     fn create_pauli_rotation_op(pauli: Pauli, size: usize, angle: f64) -> MirOp {
         MirOp::PauliRotation(PauliRotation::new(
             PauliString::new(vec![pauli; size]),
             AngleType::new(angle),
         ))
+    }
+
+    #[test]
+    fn test_create_measurement_instruction_with_bool_symbol() {
+        let mut symbol_table = SymbolTable::default();
+        let sym_id = symbol_table
+            .add(Symbol::new("c0".to_string(), SymbolType::Bool))
+            .unwrap();
+        let op = MirOp::PauliMeasure(PauliMeasure::new(PauliString::new(vec![Pauli::I]), true));
+        let instr = MirInstruction {
+            op: op.clone(),
+            qids: QidList::new(vec![Qid::virt(0)]),
+            args: SymbolIdList::default(),
+            returns: SymbolIdList::new(vec![sym_id]),
+        };
+
+        assert_eq!(*instr.op(), op);
+        assert_eq!(instr.returns().inner(), &vec![sym_id]);
+        let symbol = symbol_table.get(sym_id).unwrap();
+        assert_eq!(symbol.name(), "c0");
+        assert_eq!(symbol.symbol_type(), SymbolType::Bool);
     }
 
     #[test]
