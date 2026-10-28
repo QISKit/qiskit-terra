@@ -28,8 +28,8 @@ pub static FUNCTIONS_CIRCUIT: ExportedFunctions =
         .add_child(205, &param::FUNCTIONS)
         .add_child(255, &circuit_library::FUNCTIONS)
         .add_child(305, &classical_expr::FUNCTIONS)
-        .add_child(355, &qasm2::FUNCTIONS)
-        .add_child(380, &operations::FUNCTIONS);
+        .add_child(380, &operations::FUNCTIONS)
+        .add_child(430, &qasm2::FUNCTIONS);
 pub static FUNCTIONS_QI: ExportedFunctions =
     ExportedFunctions::empty().add_child(0, &sparse_observable::FUNCTIONS);
 pub static FUNCTIONS_QPY: ExportedFunctions = ExportedFunctions::leaves(20, || {
