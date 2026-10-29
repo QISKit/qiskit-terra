@@ -29,6 +29,15 @@ pub enum MirOp {
     PauliMeasure(PauliMeasure),
 }
 
+impl std::fmt::Display for MirOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MirOp::PauliRotation(rotation) => write!(f, "{rotation}"),
+            MirOp::PauliMeasure(measurement) => write!(f, "{measurement}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ops::MirOp;

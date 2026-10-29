@@ -23,6 +23,7 @@ use pyo3::{PyTraverseError, import_exception, intern};
 use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::operations::Param;
+use qiskit_mir::{mir::Mir, py::PyMir};
 use qiskit_passmanager::{IR, PassContext, Task};
 use qiskit_util::dyn_types::*;
 use qiskit_util::py::ImportOnceCell;
@@ -67,6 +68,29 @@ impl PyIrExposer for PyDagExposer {
         let dag =
             mem::replace(&mut *py_dag, PyDAGCircuit::from(DAGCircuit::default())).into_inner();
         Ok(Box::new(dag))
+    }
+    fn gc_traverse(&self, _visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
+        Ok(())
+    }
+}
+
+struct PyMirExposer;
+impl PyIrExposer for PyMirExposer {
+    fn object_dyn_type_id(&self) -> DynTypeId<'_> {
+        DynTypeId::of::<Mir>()
+    }
+    fn to_py<'py>(&self, py: Python<'py>, ob: Box<dyn IR>) -> PyResult<Bound<'py, PyAny>> {
+        let owned = (ob as Box<dyn Any>)
+            .downcast::<Mir>()
+            .expect("caller should ensure typing");
+        PyMir(*owned).into_pyobject(py).map(|ob| ob.into_any())
+    }
+    fn steal_from_py<'py>(&self, ob: Bound<'py, PyAny>) -> PyResult<Box<dyn IR>> {
+        let py_mir = ob.cast_into::<PyMir>()?;
+        let mut py_mir = py_mir.try_borrow_mut()?;
+        // Per documentation, we're not required to leave `ob`'s data intact.
+        let mir = mem::take(&mut *py_mir).0;
+        Ok(Box::new(mir))
     }
     fn gc_traverse(&self, _visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         Ok(())
@@ -159,6 +183,9 @@ fn ir_exposer(mut ty: Bound<PyType>) -> PyResult<Box<dyn PyIrExposer>> {
         }
         if ty.is_subclass_of::<PyDAGCircuit>()? {
             return Ok(Box::new(PyDagExposer));
+        }
+        if ty.is_subclass_of::<PyMir>()? {
+            return Ok(Box::new(PyMirExposer));
         }
         return Err(PyTypeError::new_err(format!(
             "{} declares it is a builtin IR type, but it is not handled",
@@ -464,6 +491,8 @@ impl PyPassManager {
                     PyCircuitExposer.to_py(py, ir)
                 } else if base_id == DynTypeId::of::<DAGCircuit>() {
                     PyDagExposer.to_py(py, ir)
+                } else if base_id == DynTypeId::of::<Mir>() {
+                    PyMirExposer.to_py(py, ir)
                 } else if base_id == DynTypeId::of::<PyIr>() {
                     Ok((ir as Box<dyn Any>)
                         .downcast::<PyIr>()
