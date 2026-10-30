@@ -350,6 +350,125 @@ impl ProgramOp for Split {
     }
 }
 
+/// Draw uniformly distributed bits from a key into a specific dtype.
+#[derive(Clone)]
+pub struct RandomBits {
+    dtype: DType,
+    shape: Vec<usize>,
+}
+
+impl RandomBits {
+    /// Construct a `RandomBits` op producing `shape` values of `dtype` per key.
+    ///
+    /// Returns [`RandomOpError::NotBits`] unless `dtype` is [`DType::Bit`] or an unsigned integer.
+    pub fn new(dtype: DType, shape: Vec<usize>) -> Result<Self, RandomOpError> {
+        if bits_per_value(dtype).is_none() {
+            return Err(RandomOpError::NotBits { dtype });
+        }
+        Ok(Self { dtype, shape })
+    }
+
+    /// Return the dtype of the values drawn.
+    pub fn dtype(&self) -> DType {
+        self.dtype
+    }
+}
+
+/// Return how many bits one value of `dtype` takes, or `None` if it does not hold raw bits.
+fn bits_per_value(dtype: DType) -> Option<usize> {
+    match dtype {
+        DType::Bit => Some(1),
+        DType::U8 => Some(8),
+        DType::U16 => Some(16),
+        DType::U32 => Some(32),
+        DType::U64 => Some(64),
+        _ => None,
+    }
+}
+
+impl ProgramOp for RandomBits {
+    type Error = RandomOpError;
+
+    fn name(&self) -> &str {
+        "random_bits"
+    }
+    fn namespace(&self) -> &str {
+        QISKIT
+    }
+    fn arity(&self) -> usize {
+        1
+    }
+    fn has_builtin_eval(&self) -> bool {
+        true
+    }
+    fn infer_output_types(&self, inputs: &[TensorType]) -> Result<Vec<TensorType>, Self::Error> {
+        crate::unpack_operands!(self, inputs, [x]);
+        let (kind, batch) = key_type(x)?;
+        let bits = bits_per_value(self.dtype).expect("the constructor checked the dtype");
+        check_blocks(kind, &self.shape, bits)?;
+        Ok(vec![TensorType {
+            dtype: self.dtype,
+            shape: output_shape(batch, &self.shape)?,
+        }])
+    }
+    fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
+        crate::unpack_operands!(self, args, [x]);
+        let keys = key_operand(x)?;
+        let layout = Layout::new(keys, &self.shape)?;
+        let bits = bits_per_value(self.dtype).expect("the constructor checked the dtype");
+        let width = keys.kind().key_words();
+        let source = flat_key_words(keys);
+        // How many values one block holds, and so how far one block advances the payload index. A
+        // value never straddles a block, since every width divides a block.
+        let per_block = (32 * keys.kind().block_words()) / bits;
+
+        /// Draw each key's values, then gather them in output order.
+        ///
+        /// `$value` reads value `i` out of the block of words a key drew.
+        macro_rules! draw {
+            ($variant:ident, $t:ty, $value:expr) => {{
+                let mut block = vec![0u32; keys.kind().block_words()];
+                let mut cached: Option<(usize, usize)> = None;
+                let values: Vec<$t> = layout
+                    .sources()
+                    .map(|(key, payload)| {
+                        let wanted = (key, payload / per_block);
+                        if cached != Some(wanted) {
+                            let words = &source[key * width..][..width];
+                            Stream::at_block(keys.kind(), words, wanted.1).fill(&mut block);
+                            cached = Some(wanted);
+                        }
+                        $value(&block, payload % per_block)
+                    })
+                    .collect();
+                Tensor::$variant(
+                    ndarray::ArrayD::from_shape_vec(IxDyn(&layout.shape), values)
+                        .expect("one value per output position")
+                        .into_shared(),
+                )
+            }};
+        }
+
+        // A value takes the next `bits` bits of its key's stream, least significant first.
+        Ok(vec![match self.dtype {
+            DType::U64 => draw!(U64, u64, |b: &[u32], i: usize| (b[2 * i] as u64)
+                | ((b[2 * i + 1] as u64) << 32)),
+            DType::U32 => draw!(U32, u32, |b: &[u32], i: usize| b[i]),
+            DType::U16 => {
+                draw!(U16, u16, |b: &[u32], i: usize| (b[i / 2] >> (16 * (i % 2)))
+                    as u16)
+            }
+            DType::U8 => draw!(U8, u8, |b: &[u32], i: usize| (b[i / 4] >> (8 * (i % 4)))
+                as u8),
+            DType::Bit => {
+                draw!(Bit, u8, |b: &[u32], i: usize| ((b[i / 32] >> (i % 32)) & 1)
+                    as u8)
+            }
+            dtype => unreachable!("the constructor refuses {dtype}"),
+        }])
+    }
+}
+
 /// What a [`RandomOpError::CounterExhausted`] count is measured in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CounterUnit {
@@ -373,6 +492,9 @@ pub enum RandomOpError {
     #[error("expected a key operand, got {actual}")]
     KeyType { actual: TensorType },
     /// The dtype does not hold raw bits.
+    #[error("{dtype} does not hold raw bits: expected Bit or an unsigned integer")]
+    NotBits { dtype: DType },
+    /// The range holds no values.
     #[error("{kind} affords {afforded} {unit}, and this payload needs {needed}")]
     CounterExhausted {
         kind: PrngKind,
@@ -389,10 +511,84 @@ pub enum RandomOpError {
 mod test {
     use super::*;
 
+    /// Return a shape of fixed axes.
+    fn fixed(sizes: &[usize]) -> Vec<Dim> {
+        sizes.iter().copied().map(Dim::Fixed).collect()
+    }
+
     /// Return a tensor of `shape` keys laid out row-major.
     fn keys_of(shape: &[usize], key_words: Vec<u32>) -> Tensor {
         let kind = PrngKind::Philox4x32;
         Tensor::Key(KeyTensor::new(kind, key_words_array(shape, kind, key_words)).unwrap())
+    }
+
+    /// Return a tensor of `shape` distinct keys, numbered from `first`.
+    fn numbered_keys(shape: &[usize], first: u32) -> Tensor {
+        let count: usize = shape.iter().product();
+        let key_words = (0..count as u32)
+            .flat_map(|i| [first + 2 * i, first + 2 * i + 1])
+            .collect();
+        keys_of(shape, key_words)
+    }
+
+    /// Return a single key, distinct for each `label`.
+    fn key_from(label: u32) -> Tensor {
+        keys_of(&[], vec![label, label.wrapping_mul(2_654_435_761)])
+    }
+
+    /// Return the `U32` words a tensor holds.
+    fn words_of(tensor: &Tensor) -> Vec<u32> {
+        let Tensor::U32(array) = tensor else {
+            panic!("expected U32, got {}", tensor.dtype())
+        };
+        array.iter().copied().collect()
+    }
+
+    #[test]
+    fn test_a_word_is_addressed_by_its_flat_position() {
+        // The word at flat index i is lane i % 4 of block i / 4, whatever shape it sits in. This
+        // is checked against the library's own block function rather than against our output.
+        let key = key_from(11);
+        let flat = words_of(
+            &RandomBits::new(DType::U32, vec![8])
+                .unwrap()
+                .eval(std::slice::from_ref(&key))
+                .unwrap()[0],
+        );
+        let nested = words_of(
+            &RandomBits::new(DType::U32, vec![2, 4])
+                .unwrap()
+                .eval(std::slice::from_ref(&key))
+                .unwrap()[0],
+        );
+        assert_eq!(flat, nested, "the shape does not move a word");
+
+        let key_words: Vec<u32> = key.keys().unwrap().keys().iter().copied().collect();
+        let key_pair = [key_words[0], key_words[1]];
+        for (index, &word) in flat.iter().enumerate() {
+            // A draw starts at block zero, and the block counter maps to Philox's four counter
+            // words little-endian.
+            let block = rand_philox::philox4x32_10([(index / 4) as u32, 0, 0, 0], key_pair);
+            assert_eq!(word, block[index % 4], "at flat index {index}");
+        }
+    }
+
+    #[test]
+    fn test_distinct_keys_give_distinct_words_and_equal_keys_agree() {
+        // A [3, 1] batch of keys against a [4] payload gives each key its own row of four words.
+        let op = RandomBits::new(DType::U32, vec![4]).unwrap();
+        let rows_of = |keys: Tensor| words_of(&op.eval(&[keys]).unwrap()[0]);
+
+        let distinct = rows_of(numbered_keys(&[3, 1], 100));
+        let rows: Vec<&[u32]> = distinct.chunks(4).collect();
+        assert_ne!(rows[0], rows[1]);
+        assert_ne!(rows[1], rows[2]);
+
+        // Equal keys produce identical rows, which is what makes an extent-1 axis mean "shared".
+        let equal = rows_of(keys_of(&[3, 1], vec![5, 6, 5, 6, 5, 6]));
+        let rows: Vec<&[u32]> = equal.chunks(4).collect();
+        assert_eq!(rows[0], rows[1]);
+        assert_eq!(rows[1], rows[2]);
     }
 
     /// Known-answer vectors for philox4x32-10, from Random123's `tests/kat_vectors`.
@@ -430,6 +626,316 @@ mod test {
     }
 
     #[test]
+    fn test_every_dtype_reads_the_same_bits() {
+        // One stream, read at five widths. A U64 is two words low-first, a U16 or U8 is a slice of
+        // one word from its low end, and a Bit is one bit, so every narrower dtype has to agree
+        // with U32 on the bits they share.
+        let key = key_from(55);
+        let draw = |dtype: DType, count: usize| {
+            RandomBits::new(dtype, vec![count])
+                .unwrap()
+                .eval(std::slice::from_ref(&key))
+                .unwrap()
+                .remove(0)
+        };
+
+        let words = words_of(&draw(DType::U32, 4));
+
+        let Tensor::U64(wide) = draw(DType::U64, 2) else {
+            panic!("expected U64")
+        };
+        for (i, &value) in wide.iter().enumerate() {
+            let expected = (words[2 * i] as u64) | ((words[2 * i + 1] as u64) << 32);
+            assert_eq!(value, expected, "U64 {i} is two words, low word first");
+        }
+
+        let Tensor::U16(narrow) = draw(DType::U16, 4) else {
+            panic!("expected U16")
+        };
+        for (i, &value) in narrow.iter().enumerate() {
+            let expected = (words[i / 2] >> (16 * (i % 2))) as u16;
+            assert_eq!(value, expected, "U16 {i} is half a word");
+        }
+
+        let Tensor::U8(bytes) = draw(DType::U8, 8) else {
+            panic!("expected U8")
+        };
+        for (i, &value) in bytes.iter().enumerate() {
+            let expected = (words[i / 4] >> (8 * (i % 4))) as u8;
+            assert_eq!(value, expected, "U8 {i} is a byte, low byte first");
+        }
+
+        let Tensor::Bit(bits) = draw(DType::Bit, 64) else {
+            panic!("expected Bit")
+        };
+        for (i, &value) in bits.iter().enumerate() {
+            let expected = ((words[i / 32] >> (i % 32)) & 1) as u8;
+            assert_eq!(value, expected, "bit {i} is LSB-first within a word");
+            assert!(value <= 1, "a Bit holds 0 or 1");
+        }
+    }
+
+    #[test]
+    fn test_random_bits_refuses_a_dtype_that_is_not_bits() {
+        // A signed or floating draw is a distribution, not raw bits, so it is not this op's job.
+        for dtype in [DType::I32, DType::I64, DType::F64, DType::C64] {
+            let Err(error) = RandomBits::new(dtype, vec![2]) else {
+                panic!("{dtype} is not raw bits")
+            };
+            assert!(matches!(
+                error,
+                RandomOpError::NotBits { dtype: reported } if reported == dtype
+            ));
+        }
+    }
+
+    #[test]
+    fn test_the_dtype_reaches_the_output_type() {
+        let key_type = TensorType {
+            dtype: DType::Key(PrngKind::Philox4x32),
+            shape: vec![],
+        };
+        for dtype in [DType::Bit, DType::U8, DType::U16, DType::U32, DType::U64] {
+            assert_eq!(
+                RandomBits::new(dtype, vec![3])
+                    .unwrap()
+                    .infer_output_types(std::slice::from_ref(&key_type))
+                    .unwrap(),
+                vec![TensorType {
+                    dtype,
+                    shape: fixed(&[3]),
+                }]
+            );
+        }
+    }
+
+    #[test]
+    fn test_a_shared_key_axis_gives_every_output_the_same_value() {
+        // An extent-one batch axis means the key is shared along it, so a [1] key against a [4]
+        // payload draws four values from one stream, and a [4] batch against a [1] payload draws
+        // one value from each of four streams.
+        let shared = words_of(
+            &RandomBits::new(DType::U32, vec![4])
+                .unwrap()
+                .eval(&[keys_of(&[1], vec![3, 4])])
+                .unwrap()[0],
+        );
+        assert_eq!(shared.len(), 4);
+        assert_eq!(
+            shared,
+            words_of(
+                &RandomBits::new(DType::U32, vec![4])
+                    .unwrap()
+                    .eval(&[keys_of(&[], vec![3, 4])])
+                    .unwrap()[0]
+            ),
+            "a batch of one is the same as no batch"
+        );
+
+        let per_key = words_of(
+            &RandomBits::new(DType::U32, vec![1])
+                .unwrap()
+                .eval(&[numbered_keys(&[4], 50)])
+                .unwrap()[0],
+        );
+        assert_eq!(per_key.len(), 4);
+        assert_eq!(
+            per_key.iter().collect::<hashbrown::HashSet<_>>().len(),
+            4,
+            "four distinct keys give four distinct values"
+        );
+    }
+
+    /// Project a flat output index onto `shape`'s axes, as the module documentation defines it.
+    ///
+    /// Written out independently of [`Layout`], so that the two agreeing is evidence rather than a
+    /// restatement.
+    fn project(out: &[usize], position: usize, shape: &[usize]) -> usize {
+        let offset = out.len() - shape.len();
+        let mut strides = vec![0usize; out.len()];
+        let mut stride = 1;
+        for axis in (0..shape.len()).rev() {
+            strides[offset + axis] = if shape[axis] == 1 { 0 } else { stride };
+            stride *= shape[axis];
+        }
+        let mut remaining = position;
+        let mut index = 0;
+        for axis in (0..out.len()).rev() {
+            index += (remaining % out[axis]) * strides[axis];
+            remaining /= out[axis];
+        }
+        index
+    }
+
+    #[test]
+    fn test_a_draw_follows_the_documented_semantics() {
+        // The module documents three properties, and this checks all of them against a reference
+        // written from the prose: the output shape, the two projections, and where the payload
+        // index sits in the counter. The diagonal cases are the ones a per-key draw gets wrong.
+        let kind = PrngKind::Philox4x32;
+        for (batch, payload) in [
+            (vec![], vec![8]),
+            (vec![1], vec![4]),
+            (vec![3, 1], vec![4]),
+            (vec![2, 1], vec![2]),
+            (vec![4], vec![4]),
+            (vec![6], vec![6]),
+        ] {
+            let count = batch.iter().product::<usize>().max(1);
+            let words: Vec<u32> = (0..(2 * count) as u32).map(|w| w + 100).collect();
+            let keys = Tensor::Key(
+                KeyTensor::new(kind, key_words_array(&batch, kind, words.clone())).unwrap(),
+            );
+            let op = RandomBits::new(DType::U32, payload.clone()).unwrap();
+
+            // Property 1: the output shape is the broadcast of the two.
+            let out = broadcast_shape(&batch, &payload).unwrap();
+            let drawn = words_of(&op.eval(std::slice::from_ref(&keys)).unwrap()[0]);
+            assert_eq!(drawn.len(), out.iter().product::<usize>());
+
+            for (position, &word) in drawn.iter().enumerate() {
+                // Property 2: the value depends on exactly these two indices.
+                let key_index = project(&out, position, &batch);
+                let payload_index = project(&out, position, &payload);
+                // Property 3: the key index picks the key, and the payload index picks the
+                // counter position.
+                let key = [words[key_index * 2], words[key_index * 2 + 1]];
+                let counter = [(payload_index / 4) as u32, 0, 0, 0];
+                assert_eq!(
+                    word,
+                    rand_philox::philox4x32_10(counter, key)[payload_index % 4],
+                    "B={batch:?} S={payload:?} at output {position}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_a_bounded_key_batch_flows_through() {
+        // A key operand's axis may be bounded, since its true size arrives with the operand. The
+        // result carries the bound, and evaluation reads the size the keys actually have. A
+        // payload axis is never bounded, because an op holds its payload shape as sizes.
+        let shots = Dim::Bounded { max: 8 };
+        let op = RandomBits::new(DType::U32, vec![4]).unwrap();
+        let operand = TensorType {
+            dtype: DType::Key(PrngKind::Philox4x32),
+            shape: vec![shots, Dim::Fixed(1)],
+        };
+        assert_eq!(
+            op.infer_output_types(std::slice::from_ref(&operand))
+                .unwrap(),
+            vec![TensorType {
+                dtype: DType::U32,
+                shape: vec![shots, Dim::Fixed(4)],
+            }]
+        );
+
+        let drawn = op.eval(&[numbered_keys(&[3, 1], 0)]).unwrap();
+        assert_eq!(
+            drawn[0].shape(),
+            &[3, 4],
+            "three keys within a bound of eight"
+        );
+        assert!(drawn[0].matches(&op.infer_output_types(&[operand]).unwrap()[0]));
+    }
+
+    #[test]
+    fn test_a_key_is_single_use() {
+        // A value is a function of its key and its position, so two ops drawing from one key
+        // read the same blocks.
+        let key = key_from(7);
+        let children: Vec<u32> = Split::new(vec![3])
+            .eval(std::slice::from_ref(&key))
+            .unwrap()[0]
+            .keys()
+            .unwrap()
+            .keys()
+            .iter()
+            .copied()
+            .collect();
+        let drawn = words_of(
+            &RandomBits::new(DType::U32, vec![6])
+                .unwrap()
+                .eval(std::slice::from_ref(&key))
+                .unwrap()[0],
+        );
+        assert_eq!(
+            children, drawn,
+            "a split and a draw from one key read the same words"
+        );
+
+        // Each op addresses from block zero.
+        let key_pair = {
+            let words: Vec<u32> = key.keys().unwrap().keys().iter().copied().collect();
+            [words[0], words[1]]
+        };
+        let mut stream = Philox::new(key_pair, 0);
+        let mut first = [0u32; 4];
+        stream.fill_u32(&mut first);
+        assert_eq!(&drawn[..4], &first, "a draw starts at block zero");
+
+        // A derived key drives a stream independent of the parent's and of its siblings'.
+        let derived = Split::new(vec![2])
+            .eval(std::slice::from_ref(&key))
+            .unwrap();
+        let from_child = |index: usize| {
+            let kind = PrngKind::Philox4x32;
+            let words: Vec<u32> = derived[0].keys().unwrap().keys().iter().copied().collect();
+            let one = Tensor::Key(
+                KeyTensor::new(
+                    kind,
+                    key_words_array(&[], kind, words[index * 2..index * 2 + 2].to_vec()),
+                )
+                .unwrap(),
+            );
+            words_of(
+                &RandomBits::new(DType::U32, vec![4])
+                    .unwrap()
+                    .eval(&[one])
+                    .unwrap()[0],
+            )
+        };
+        assert_ne!(from_child(0), from_child(1));
+        assert_ne!(from_child(0), drawn[..4].to_vec());
+    }
+
+    #[test]
+    fn test_a_block_holds_every_value_that_fits_in_it() {
+        // The capacity count is what a draw actually consumes, so it has to agree with the
+        // packing `eval` uses. Counting a word per value instead would charge a Bit payload 32
+        // blocks where it takes one, which no Philox payload is large enough to expose.
+        let kind = PrngKind::Philox4x32;
+        let block_bits = 32 * kind.block_words();
+        for dtype in [DType::Bit, DType::U8, DType::U16, DType::U32, DType::U64] {
+            let bits = bits_per_value(dtype).unwrap();
+            let per_block = block_bits / bits;
+
+            // A payload filling one block exactly takes one, and one value more takes two.
+            assert_eq!(
+                blocks_needed(kind, &[per_block], bits),
+                1,
+                "{per_block} {dtype} values are one block"
+            );
+            assert_eq!(
+                blocks_needed(kind, &[per_block + 1], bits),
+                2,
+                "{dtype} past a block boundary"
+            );
+        }
+
+        // A derived key is whole words, so a Philox key is two of the four in a block.
+        assert_eq!(blocks_needed(kind, &[2], 32 * kind.key_words()), 1);
+        assert_eq!(blocks_needed(kind, &[3], 32 * kind.key_words()), 2);
+
+        // The product saturates rather than wrapping, so a huge payload stays huge. Two
+        // `usize::MAX` axes still fit in a `u128`, so it takes three to reach the ceiling.
+        assert_eq!(
+            blocks_needed(kind, &[usize::MAX; 3], 1),
+            u128::MAX.div_ceil(block_bits as u128)
+        );
+    }
+
+    #[test]
     fn test_a_stream_is_addressed_by_block_and_by_substream() {
         // A block index and a substream index are the only two ways a stream is opened, and each
         // protocol widens them to its own counter. Both are checked against the block function,
@@ -451,6 +957,65 @@ mod test {
         }
     }
 
+    #[test]
+    fn test_a_split_key_drives_an_independent_stream() {
+        let split = Split::new(vec![3]).eval(&[key_from(99)]).unwrap();
+        let keys = split[0].keys().unwrap();
+        assert_eq!(keys.shape(), &[3]);
+
+        // Each derived key is usable as a key, and the three streams differ.
+        let source = flat_key_words(keys);
+        let draws: Vec<Vec<u32>> = source
+            .chunks(keys.kind().key_words())
+            .map(|key_words| {
+                let one = Tensor::Key(
+                    KeyTensor::new(
+                        keys.kind(),
+                        key_words_array(&[], keys.kind(), key_words.to_vec()),
+                    )
+                    .unwrap(),
+                );
+                words_of(
+                    &RandomBits::new(DType::U32, vec![4])
+                        .unwrap()
+                        .eval(&[one])
+                        .unwrap()[0],
+                )
+            })
+            .collect();
+        assert_ne!(draws[0], draws[1]);
+        assert_ne!(draws[1], draws[2]);
+        assert_ne!(draws[0], draws[2]);
+    }
+
+    #[test]
+    fn test_entropy_gives_fresh_keys_of_the_payload_shape() {
+        let op = Entropy::new(PrngKind::Philox4x32, vec![2, 3]);
+        assert_eq!(
+            op.infer_output_types(&[]).unwrap(),
+            vec![TensorType {
+                dtype: DType::Key(PrngKind::Philox4x32),
+                shape: fixed(&[2, 3]),
+            }]
+        );
+
+        let first = op.eval(&[]).unwrap().remove(0);
+        assert_eq!(first.shape(), &[2, 3]);
+        assert_eq!(first.dtype(), DType::Key(PrngKind::Philox4x32));
+        // Two evaluations differ, so no particular value is asserted.
+        assert_ne!(first, op.eval(&[]).unwrap().remove(0));
+
+        // The keys need no conversion to be drawn from, and each opens its own stream.
+        let draws = words_of(
+            &RandomBits::new(DType::U32, vec![1])
+                .unwrap()
+                .eval(&[first])
+                .unwrap()[0],
+        );
+        let distinct: hashbrown::HashSet<u32> = draws.iter().copied().collect();
+        assert_eq!(distinct.len(), 6, "each of the six keys differs");
+    }
+
     /// A key whose words are arbitrary, used by the golden-value tests below.
     fn golden_key() -> Tensor {
         keys_of(&[], vec![0xdead_beef, 0x1234_5678])
@@ -459,6 +1024,110 @@ mod test {
     /// Three keys in a `[3, 1]` batch, used by the golden-value tests below.
     fn golden_batch() -> Tensor {
         keys_of(&[3, 1], vec![1, 2, 3, 4, 5, 6])
+    }
+
+    #[test]
+    fn test_random_bits_matches_its_recorded_output() {
+        // Every value an op produces is recorded here, so a change to the composition of key,
+        // counter and dtype is caught even where it keeps the documented semantics self
+        // consistent. The all-zero key anchors the numbers to the published vectors: the first
+        // four words below are `PHILOX4X32_10_KAT[0]`, which is what makes these more than a
+        // record of whatever the code did when they were written.
+        assert_eq!(
+            words_of(
+                &RandomBits::new(DType::U32, vec![8])
+                    .unwrap()
+                    .eval(&[keys_of(&[], vec![0, 0])])
+                    .unwrap()[0]
+            ),
+            [
+                0x6627e8d5, 0xe169c58d, 0xbc57ac4c, 0x9b00dbd8, 0xf8e4cca4, 0x5cb200db, 0xb1a574eb,
+                0x097eff67,
+            ]
+        );
+        assert_eq!(
+            &words_of(
+                &RandomBits::new(DType::U32, vec![8])
+                    .unwrap()
+                    .eval(&[keys_of(&[], vec![0, 0])])
+                    .unwrap()[0]
+            )[..4],
+            PHILOX4X32_10_KAT[0].2,
+            "the first block of the zero key is the published vector"
+        );
+
+        let key = golden_key();
+        assert_eq!(
+            words_of(
+                &RandomBits::new(DType::U32, vec![8])
+                    .unwrap()
+                    .eval(std::slice::from_ref(&key))
+                    .unwrap()[0]
+            ),
+            [
+                0xd8830217, 0xd18bb386, 0x0cb1c71d, 0xbdd96e0b, 0xeb24d1e9, 0x57890589, 0x4c52e006,
+                0x94d7f26b,
+            ]
+        );
+
+        // The narrower dtypes read those same words, so each recorded value is also a check on
+        // the packing: a U64 is two words low first, a U8 is a byte of one word from its low end,
+        // and a Bit is one bit.
+        let Tensor::U64(wide) = &RandomBits::new(DType::U64, vec![4])
+            .unwrap()
+            .eval(std::slice::from_ref(&key))
+            .unwrap()[0]
+        else {
+            panic!("expected U64")
+        };
+        assert_eq!(
+            wide.iter().copied().collect::<Vec<u64>>(),
+            [
+                0xd18bb386_d8830217,
+                0xbdd96e0b_0cb1c71d,
+                0x57890589_eb24d1e9,
+                0x94d7f26b_4c52e006,
+            ]
+        );
+
+        let Tensor::U8(bytes) = &RandomBits::new(DType::U8, vec![8])
+            .unwrap()
+            .eval(std::slice::from_ref(&key))
+            .unwrap()[0]
+        else {
+            panic!("expected U8")
+        };
+        assert_eq!(
+            bytes.iter().copied().collect::<Vec<u8>>(),
+            [0x17, 0x02, 0x83, 0xd8, 0x86, 0xb3, 0x8b, 0xd1]
+        );
+
+        let Tensor::Bit(bits) = &RandomBits::new(DType::Bit, vec![16])
+            .unwrap()
+            .eval(std::slice::from_ref(&key))
+            .unwrap()[0]
+        else {
+            panic!("expected Bit")
+        };
+        assert_eq!(
+            bits.iter().copied().collect::<Vec<u8>>(),
+            [1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+            "the low 16 bits of 0xd8830217, least significant first"
+        );
+
+        // A batch of keys against a payload, where each output reads its own key.
+        assert_eq!(
+            words_of(
+                &RandomBits::new(DType::U32, vec![2])
+                    .unwrap()
+                    .eval(&[golden_batch()])
+                    .unwrap()[0]
+            ),
+            [
+                0x0598de3a, 0x98d2802e, 0x1955b60c, 0x46814a70, 0xa82aad38, 0xf48e6bfb,
+            ],
+            "output (i, j) is word j of key i's stream"
+        );
     }
 
     #[test]
@@ -495,5 +1164,45 @@ mod test {
                 0x30193e3c, 0xa82aad38, 0xf48e6bfb, 0xab96c3d4, 0xc9bd190e,
             ]
         );
+    }
+
+    #[test]
+    fn test_a_key_reaches_an_op_from_every_origin() {
+        // A key needs no op of its own to construct: a parameter declares one, a constant holds
+        // one, and entropy mints one. All three feed the drawing ops directly.
+        use crate::ops::Constant;
+        use crate::program::ProgramFunction;
+
+        let kind = PrngKind::Philox4x32;
+        let key = key_from(1234);
+        let draw = RandomBits::new(DType::U32, vec![4]).unwrap();
+
+        // A caller supplies the key as an argument.
+        let mut function = ProgramFunction::default();
+        let parameter = function.add_parameter(TensorType {
+            dtype: DType::Key(kind),
+            shape: vec![],
+        });
+        let drawn = function.add_op(draw.clone(), &[parameter]).unwrap();
+        function.add_result(drawn[0]).unwrap();
+        let from_parameter = function.eval(std::slice::from_ref(&key)).unwrap();
+
+        // The program holds the key itself.
+        let mut function = ProgramFunction::default();
+        let constant = function.add_op(Constant::new(key.clone()), &[]).unwrap();
+        let drawn = function.add_op(draw.clone(), &[constant[0]]).unwrap();
+        function.add_result(drawn[0]).unwrap();
+        let from_constant = function.eval(&[]).unwrap();
+
+        // The same key by either route gives the same variates.
+        assert_eq!(from_parameter, from_constant);
+        assert_eq!(from_parameter[0].dtype(), DType::U32);
+
+        // Entropy mints its own, so it differs and is not asserted against a value.
+        let mut function = ProgramFunction::default();
+        let entropy = function.add_op(Entropy::new(kind, vec![]), &[]).unwrap();
+        let drawn = function.add_op(draw, &[entropy[0]]).unwrap();
+        function.add_result(drawn[0]).unwrap();
+        assert_eq!(function.eval(&[]).unwrap()[0].dtype(), DType::U32);
     }
 }
