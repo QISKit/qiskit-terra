@@ -591,6 +591,9 @@ mod qasm2 {
         vec![
             export_fn!(qk_circuit_from_openqasm2),
             export_fn!(qk_openqasm2_default_options),
+            export_fn!(qk_openqasm2_options_free),
+            export_fn!(qk_openqasm2_options_set_strict),
+            export_fn!(qk_openqasm2_options_append_include_path),
         ]
     });
 }

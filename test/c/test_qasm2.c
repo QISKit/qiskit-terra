@@ -19,9 +19,10 @@
  * Load a program with the default options, reporting any error message before discarding it.
  */
 static QkCircuit *load(const char *program) {
-    QkOpenQasm2Options options = qk_openqasm2_default_options();
+    QkOpenQasm2Options *options = qk_openqasm2_default_options();
     char *error = NULL;
-    QkCircuit *circuit = qk_circuit_from_openqasm2(program, &options, &error);
+    QkCircuit *circuit = qk_circuit_from_openqasm2(program, options, &error);
+    qk_openqasm2_options_free(options);
     if (error != NULL) {
         fprintf(stderr, "parse error: %s\n", error);
         qk_str_free(error);
@@ -92,9 +93,10 @@ static int test_defined_gate(void) {
  * A malformed program returns a null pointer and describes the parse failure.
  */
 static int test_parse_error(void) {
-    QkOpenQasm2Options options = qk_openqasm2_default_options();
+    QkOpenQasm2Options *options = qk_openqasm2_default_options();
     char *error = NULL;
-    QkCircuit *parsed = qk_circuit_from_openqasm2("qreg q[2]; not_a_gate q[0];", &options, &error);
+    QkCircuit *parsed = qk_circuit_from_openqasm2("qreg q[2]; not_a_gate q[0];", options, &error);
+    qk_openqasm2_options_free(options);
     if (parsed != NULL) {
         fprintf(stderr, "%s: a circuit was returned despite the failure\n", __func__);
         qk_circuit_free(parsed);
@@ -113,11 +115,12 @@ static int test_parse_error(void) {
  * The caller can decline the error message, and strict mode is honoured.
  */
 static int test_strict_requires_version(void) {
-    QkOpenQasm2Options options = qk_openqasm2_default_options();
-    options.strict = true;
+    QkOpenQasm2Options *options = qk_openqasm2_default_options();
+    qk_openqasm2_options_set_strict(options, true);
     // No `OPENQASM 2.0;` header, which only strict mode objects to.  Passing `NULL` for `error`
     // must be accepted.
-    QkCircuit *parsed = qk_circuit_from_openqasm2("qreg q[1];", &options, NULL);
+    QkCircuit *parsed = qk_circuit_from_openqasm2("qreg q[1];", options, NULL);
+    qk_openqasm2_options_free(options);
     if (parsed != NULL) {
         fprintf(stderr, "%s: strict mode accepted a program with no version statement\n", __func__);
         qk_circuit_free(parsed);

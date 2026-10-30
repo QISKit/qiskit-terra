@@ -16,53 +16,23 @@ use std::ptr;
 
 use qiskit_circuit::circuit_data::CircuitData;
 
-use crate::pointers::{ExposesOwnedPointers, const_ptr_as_ref, try_slice_from_ptr};
+use crate::pointers::{ExposesOwnedPointers, const_ptr_as_ref, mut_ptr_as_ref};
 use crate::util;
 
 /// Options for the OpenQASM 2 importer.
 ///
-/// Use ``qk_openqasm2_default_options`` to get a value with the defaults filled in, then override
-/// the fields you care about.
+/// Create a set with ``qk_openqasm2_default_options``, configure it with the setter functions, and
+/// release it with ``qk_openqasm2_options_free``.
 ///
-/// # Safety
-///
-/// Each entry of ``include_path`` must be a pointer to memory containing a valid nul terminator,
-/// and be valid for reads up to and including that terminator.  ``include_path`` itself must be
-/// valid for ``num_include_paths`` reads of `char *`, or ``num_include_paths`` must be zero.
-#[repr(C)]
+/// The type is deliberately opaque: the setters are the only supported way to change an option,
+/// so fields can be added later without changing the layout that programs compiled against an
+/// older header expect.
+#[derive(Default)]
 pub struct OpenQasm2Options {
-    /// The number of entries in ``include_path``.  This must be zero if ``include_path`` is null.
-    pub num_include_paths: usize,
-    /// The directories searched, in order, to resolve an `include` statement.  Qiskit's built-in
-    /// `qelib1.inc` is handled without consulting this, so a program that includes only that file
-    /// needs no search path at all.
-    pub include_path: *const *const c_char,
-    /// Whether to run the parser in strict mode.  The default (``false``) accepts the same
-    /// deviations from the specification that Qiskit has historically tolerated; ``true`` demands a
-    /// leading `OPENQASM 2.0;` statement and is stricter throughout.
-    pub strict: bool,
-}
-
-impl Default for OpenQasm2Options {
-    fn default() -> Self {
-        Self {
-            num_include_paths: 0,
-            include_path: std::ptr::null(),
-            strict: false,
-        }
-    }
-}
-
-/// @ingroup QkOpenQasm2
-///
-/// Generate the default OpenQASM 2 importer options.
-///
-/// The defaults are an empty include path and non-strict parsing.
-///
-/// @return A ``QkOpenQasm2Options`` with the default settings.
-#[unsafe(no_mangle)]
-pub extern "C" fn qk_openqasm2_default_options() -> OpenQasm2Options {
-    OpenQasm2Options::default()
+    /// Directories searched, in order, to resolve an `include` statement.
+    include_path: Vec<PathBuf>,
+    /// Whether to run the parser in strict mode.
+    strict: bool,
 }
 
 /// Write an owned copy of `message` through `error`, if the caller asked for one.
@@ -80,6 +50,91 @@ unsafe fn set_error(error: *mut *mut c_char, message: &str) {
 
 /// @ingroup QkOpenQasm2
 ///
+/// Create importer options with the defaults filled in: an empty include path and non-strict
+/// parsing.
+///
+/// @return A handle, never null, to be released with ``qk_openqasm2_options_free``.
+#[unsafe(no_mangle)]
+pub extern "C" fn qk_openqasm2_default_options() -> *mut OpenQasm2Options {
+    Box::into_raw(Box::new(OpenQasm2Options::default()))
+}
+
+/// @ingroup QkOpenQasm2
+///
+/// Release a set of importer options.  A null pointer is accepted and ignored.
+///
+/// @param options A handle from ``qk_openqasm2_default_options``.
+///
+/// # Safety
+///
+/// ``options`` must not have been released already.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_openqasm2_options_free(options: *mut OpenQasm2Options) {
+    if options.is_null() {
+        return;
+    }
+    // SAFETY: per documentation, `options` is a live handle from `qk_openqasm2_default_options`.
+    drop(unsafe { Box::from_raw(options) });
+}
+
+/// @ingroup QkOpenQasm2
+///
+/// Set whether the importer runs in strict mode.  The default (``false``) accepts the same
+/// deviations from the specification that Qiskit has historically tolerated; ``true`` demands a
+/// leading `OPENQASM 2.0;` statement and is stricter throughout.
+///
+/// @param options A handle to the options to modify.
+/// @param strict Whether to run in strict mode.
+///
+/// # Safety
+///
+/// ``options`` must be a valid handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_openqasm2_options_set_strict(
+    options: *mut OpenQasm2Options,
+    strict: bool,
+) {
+    // SAFETY: per documentation, `options` is a valid handle.
+    unsafe { mut_ptr_as_ref(options) }.strict = strict;
+}
+
+/// @ingroup QkOpenQasm2
+///
+/// Append a directory to search when resolving an `include` statement.  Directories are searched
+/// in the order they are appended.  Qiskit's built-in `qelib1.inc` is handled without consulting
+/// the search path.
+///
+/// @param options A handle to the options to modify.
+/// @param path A nul-terminated string giving the directory to search.
+/// @param error Receives a description on failure, released with ``qk_str_free``.  As for
+///     ``qk_circuit_from_openqasm2``, this may be null and is untouched on success.
+///
+/// @returns ``true`` if the directory was appended, or ``false`` if ``path`` was not valid UTF-8.
+///
+/// # Safety
+///
+/// ``options`` must be a valid handle, ``path`` a valid pointer to a nul-terminated string, and
+/// ``error`` null or valid for a pointer write.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_openqasm2_options_append_include_path(
+    options: *mut OpenQasm2Options,
+    path: *const c_char,
+    error: *mut *mut c_char,
+) -> bool {
+    // SAFETY: per documentation, `path` points to a nul-terminated string.
+    let Ok(path) = unsafe { CStr::from_ptr(path) }.to_str() else {
+        unsafe { set_error(error, "the include path was not valid UTF-8") };
+        return false;
+    };
+    // SAFETY: per documentation, `options` is a valid handle.
+    unsafe { mut_ptr_as_ref(options) }
+        .include_path
+        .push(PathBuf::from(path));
+    true
+}
+
+/// @ingroup QkOpenQasm2
+///
 /// Load a circuit from an OpenQASM 2 program.
 ///
 /// This is a native importer; it does not go through Python.  It does not yet support the custom
@@ -87,8 +142,8 @@ unsafe fn set_error(error: *mut *mut c_char, message: &str) {
 /// relying on those extensions will fail to parse.
 ///
 /// @param program A nul-terminated string containing the OpenQASM 2 program.
-/// @param options A pointer to the importer options.  If this is a null pointer, the defaults from
-///     ``qk_openqasm2_default_options`` are used.
+/// @param options A handle to the importer options, which is borrowed only for the duration of the
+///     call.  If this is a null pointer, the default options are used.
 /// @param error A pointer to a pointer to a nul-terminated string.  On failure, a pointer to a
 ///     string describing the failure is written here, and must be released with ``qk_str_free``.
 ///     This can be a null pointer, in which case the description is discarded.  Nothing is written
@@ -99,11 +154,12 @@ unsafe fn set_error(error: *mut *mut c_char, message: &str) {
 ///
 /// # Example
 /// ```c
-///     QkOpenQasm2Options options = qk_openqasm2_default_options();
+///     QkOpenQasm2Options *options = qk_openqasm2_default_options();
 ///     char *error = NULL;
 ///     QkCircuit *qc = qk_circuit_from_openqasm2(
 ///         "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0]; cx q[0], q[1];",
-///         &options, &error);
+///         options, &error);
+///     qk_openqasm2_options_free(options);
 ///     if (qc == NULL) {
 ///         printf("failed to load: %s\n", error);
 ///         qk_str_free(error);
@@ -114,10 +170,9 @@ unsafe fn set_error(error: *mut *mut c_char, message: &str) {
 ///
 /// # Safety
 ///
-/// Behavior is undefined if ``program`` is not a valid pointer to a nul-terminated string.
-/// ``options`` must be null or a valid pointer to a ``QkOpenQasm2Options`` satisfying that struct's
-/// own safety requirements.  ``error`` must be null or a valid pointer to write a ``char *`` to; any
-/// value already pointed to by it is overwritten without being released.
+/// ``program`` must be a valid pointer to a nul-terminated string, and ``options`` null or a valid
+/// handle.  ``error`` must be null or valid for a pointer write; any value it already points to is
+/// overwritten without being released.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_circuit_from_openqasm2(
     program: *const c_char,
@@ -145,38 +200,9 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
         return ptr::null_mut();
     };
 
-    // SAFETY: per the documentation on `QkOpenQasm2Options`, `include_path` is valid for
-    // `num_include_paths` reads.
-    let raw_include_path =
-        match unsafe { try_slice_from_ptr(options.include_path, options.num_include_paths) } {
-            Ok(raw_include_path) => raw_include_path,
-            Err(_) => {
-                unsafe {
-                    set_error(
-                        error,
-                        "`include_path` was not valid for `num_include_paths`",
-                    )
-                };
-                return ptr::null_mut();
-            }
-        };
-    let mut include_path = Vec::with_capacity(raw_include_path.len());
-    for &entry in raw_include_path {
-        if entry.is_null() {
-            unsafe { set_error(error, "an include path entry was null") };
-            return ptr::null_mut();
-        }
-        // SAFETY: per the documentation on `QkOpenQasm2Options`, each entry is nul-terminated.
-        let Ok(entry) = unsafe { CStr::from_ptr(entry) }.to_str() else {
-            unsafe { set_error(error, "an include path entry was not valid UTF-8") };
-            return ptr::null_mut();
-        };
-        include_path.push(PathBuf::from(entry));
-    }
-
     match qiskit_qasm2::circuit_from_string(
         program.to_owned(),
-        include_path,
+        options.include_path.clone(),
         &[],
         &[],
         options.strict,

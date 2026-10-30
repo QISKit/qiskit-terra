@@ -141,17 +141,20 @@ def load_qasm2_from_c(
             parse failure surfaces the same way it would from ``qasm2.loads``.
     """
     options = capi.qk_openqasm2_default_options()
-    options.strict = strict
-    encoded_paths = [os.fspath(path).encode("utf-8") for path in include_path]
-    path_array = (ctypes.c_char_p * len(encoded_paths))(*encoded_paths)
-    options.num_include_paths = len(encoded_paths)
-    options.include_path = ctypes.cast(path_array, ctypes.POINTER(ctypes.POINTER(ctypes.c_char)))
+    capi.qk_openqasm2_options_set_strict(options, strict)
+    for path in include_path:
+        if not capi.qk_openqasm2_options_append_include_path(
+            options, os.fspath(path).encode("utf-8"), None
+        ):
+            capi.qk_openqasm2_options_free(options)
+            raise ValueError(f"include path is not valid UTF-8: {path!r}")
     error = ctypes.POINTER(ctypes.c_char)()
     circuit = capi.qk_circuit_from_openqasm2(
         program.encode("utf-8"),
-        ctypes.byref(options),
+        options,
         ctypes.byref(error),
     )
+    capi.qk_openqasm2_options_free(options)
     if not circuit:
         message = ctypes.cast(error, ctypes.c_char_p).value.decode("utf-8")
         capi.qk_str_free(error)
