@@ -16,7 +16,7 @@ use std::ptr;
 
 use qiskit_circuit::circuit_data::CircuitData;
 
-use crate::pointers::{const_ptr_as_ref, try_slice_from_ptr};
+use crate::pointers::{ExposesOwnedPointers, const_ptr_as_ref, try_slice_from_ptr};
 use crate::util;
 
 /// Options for the OpenQASM 2 importer.
@@ -181,7 +181,7 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
         &[],
         options.strict,
     ) {
-        Ok(built) => Box::into_raw(Box::new(built)),
+        Ok(built) => built.into_leaked(),
         Err(err) => {
             unsafe { set_error(error, &err.message) };
             ptr::null_mut()
