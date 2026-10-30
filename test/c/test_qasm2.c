@@ -135,6 +135,40 @@ static int test_strict_requires_version(void) {
 }
 
 /**
+ * A valid include path is accepted and leaves `error` untouched, while a path that is not valid
+ * UTF-8 is rejected with a description rather than being silently mangled.
+ */
+static int test_append_include_path(void) {
+    QkOpenQasm2Options *options = qk_openqasm2_options_new();
+    char *error = NULL;
+    if (!qk_openqasm2_options_append_include_path(options, ".", &error)) {
+        fprintf(stderr, "%s: a valid include path was rejected\n", __func__);
+        qk_openqasm2_options_free(options);
+        return EqualityError;
+    }
+    if (error != NULL) {
+        fprintf(stderr, "%s: a successful call wrote an error description\n", __func__);
+        qk_str_free(error);
+        qk_openqasm2_options_free(options);
+        return EqualityError;
+    }
+    // 0xff never appears in well-formed UTF-8, so this path can only be reported as an error.
+    if (qk_openqasm2_options_append_include_path(options, "\xff", &error)) {
+        fprintf(stderr, "%s: a path that is not valid UTF-8 was accepted\n", __func__);
+        qk_openqasm2_options_free(options);
+        return EqualityError;
+    }
+    if (error == NULL) {
+        fprintf(stderr, "%s: a rejected path left no description in `error`\n", __func__);
+        qk_openqasm2_options_free(options);
+        return EqualityError;
+    }
+    qk_str_free(error);
+    qk_openqasm2_options_free(options);
+    return Ok;
+}
+
+/**
  * A null `program` is rejected rather than dereferenced, and a null `options` means the defaults.
  */
 static int test_null_arguments(void) {
@@ -170,6 +204,7 @@ int test_qasm2(void) {
     num_failed += RUN_TEST(test_defined_gate);
     num_failed += RUN_TEST(test_parse_error);
     num_failed += RUN_TEST(test_strict_requires_version);
+    num_failed += RUN_TEST(test_append_include_path);
     num_failed += RUN_TEST(test_null_arguments);
 
     fprintf(stderr, "=== Number of failed subtests: %i\n", num_failed);
