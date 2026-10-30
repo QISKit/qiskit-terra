@@ -21,7 +21,7 @@ use crate::util;
 
 /// Options for the OpenQASM 2 importer.
 ///
-/// Create a set with ``qk_openqasm2_default_options``, configure it with the setter functions, and
+/// Create a set with ``qk_openqasm2_options_new``, configure it with the setter functions, and
 /// release it with ``qk_openqasm2_options_free``.
 ///
 /// The type is deliberately opaque: the setters are the only supported way to change an option,
@@ -55,7 +55,7 @@ unsafe fn set_error(error: *mut *mut c_char, message: &str) {
 ///
 /// @return A handle, never null, to be released with ``qk_openqasm2_options_free``.
 #[unsafe(no_mangle)]
-pub extern "C" fn qk_openqasm2_default_options() -> *mut OpenQasm2Options {
+pub extern "C" fn qk_openqasm2_options_new() -> *mut OpenQasm2Options {
     Box::into_raw(Box::new(OpenQasm2Options::default()))
 }
 
@@ -63,7 +63,7 @@ pub extern "C" fn qk_openqasm2_default_options() -> *mut OpenQasm2Options {
 ///
 /// Release a set of importer options.  A null pointer is accepted and ignored.
 ///
-/// @param options A handle from ``qk_openqasm2_default_options``.
+/// @param options A handle from ``qk_openqasm2_options_new``.
 ///
 /// # Safety
 ///
@@ -73,7 +73,7 @@ pub unsafe extern "C" fn qk_openqasm2_options_free(options: *mut OpenQasm2Option
     if options.is_null() {
         return;
     }
-    // SAFETY: per documentation, `options` is a live handle from `qk_openqasm2_default_options`.
+    // SAFETY: per documentation, `options` is a live handle from `qk_openqasm2_options_new`.
     drop(unsafe { Box::from_raw(options) });
 }
 
@@ -154,7 +154,7 @@ pub unsafe extern "C" fn qk_openqasm2_options_append_include_path(
 ///
 /// # Example
 /// ```c
-///     QkOpenQasm2Options *options = qk_openqasm2_default_options();
+///     QkOpenQasm2Options *options = qk_openqasm2_options_new();
 ///     char *error = NULL;
 ///     QkCircuit *qc = qk_circuit_from_openqasm2(
 ///         "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0]; cx q[0], q[1];",

@@ -19,7 +19,7 @@
  * Load a program with the default options, reporting any error message before discarding it.
  */
 static QkCircuit *load(const char *program) {
-    QkOpenQasm2Options *options = qk_openqasm2_default_options();
+    QkOpenQasm2Options *options = qk_openqasm2_options_new();
     char *error = NULL;
     QkCircuit *circuit = qk_circuit_from_openqasm2(program, options, &error);
     qk_openqasm2_options_free(options);
@@ -93,7 +93,7 @@ static int test_defined_gate(void) {
  * A malformed program returns a null pointer and describes the parse failure.
  */
 static int test_parse_error(void) {
-    QkOpenQasm2Options *options = qk_openqasm2_default_options();
+    QkOpenQasm2Options *options = qk_openqasm2_options_new();
     char *error = NULL;
     QkCircuit *parsed = qk_circuit_from_openqasm2("qreg q[2]; not_a_gate q[0];", options, &error);
     qk_openqasm2_options_free(options);
@@ -115,7 +115,7 @@ static int test_parse_error(void) {
  * The caller can decline the error message, and strict mode is honoured.
  */
 static int test_strict_requires_version(void) {
-    QkOpenQasm2Options *options = qk_openqasm2_default_options();
+    QkOpenQasm2Options *options = qk_openqasm2_options_new();
     qk_openqasm2_options_set_strict(options, true);
     // No `OPENQASM 2.0;` header, which only strict mode objects to.  Passing `NULL` for `error`
     // must be accepted.

@@ -12,7 +12,7 @@ parses in Rust but builds the circuit in Python.
 
     #include <qiskit.h>
 
-    QkOpenQasm2Options *options = qk_openqasm2_default_options();
+    QkOpenQasm2Options *options = qk_openqasm2_options_new();
     char *error = NULL;
     QkCircuit *qc = qk_circuit_from_openqasm2(
         "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0]; cx q[0], q[1];",

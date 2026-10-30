@@ -140,7 +140,7 @@ def load_qasm2_from_c(
         QASM2ParseError: if the importer rejected the program, carrying its own message so a
             parse failure surfaces the same way it would from ``qasm2.loads``.
     """
-    options = capi.qk_openqasm2_default_options()
+    options = capi.qk_openqasm2_options_new()
     capi.qk_openqasm2_options_set_strict(options, strict)
     for path in include_path:
         if not capi.qk_openqasm2_options_append_include_path(
