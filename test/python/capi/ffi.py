@@ -143,21 +143,26 @@ def load_qasm2_from_c(
     options = capi.qk_openqasm2_options_new()
     capi.qk_openqasm2_options_set_strict(options, strict)
     for path in include_path:
-        if not capi.qk_openqasm2_options_append_include_path(
+        code = capi.qk_openqasm2_options_append_include_path(
             options, os.fspath(path).encode("utf-8"), None
-        ):
+        )
+        if code != capi.QkExitCode.Success.value.value:
             capi.qk_openqasm2_options_free(options)
             raise ValueError(f"include path is not valid UTF-8: {path!r}")
     error = ctypes.POINTER(ctypes.c_char)()
-    circuit = capi.qk_circuit_from_openqasm2(
+    circuit = ctypes.POINTER(capi.QkCircuit)()
+    code = capi.qk_circuit_from_openqasm2(
         program.encode("utf-8"),
         options,
+        ctypes.byref(circuit),
         ctypes.byref(error),
     )
     capi.qk_openqasm2_options_free(options)
-    if not circuit:
-        message = ctypes.cast(error, ctypes.c_char_p).value.decode("utf-8")
+    if code != capi.QkExitCode.Success.value.value:
+        message = ctypes.cast(error, ctypes.c_char_p).value if error else None
         capi.qk_str_free(error)
-        raise qiskit.qasm2.QASM2ParseError(message)
+        raise qiskit.qasm2.QASM2ParseError(
+            message.decode("utf-8") if message else f"failed to load the program (code {code})"
+        )
     # `qk_circuit_to_python_full` takes ownership of the circuit, so it must not be freed here.
     return capi.qk_circuit_to_python_full(circuit)

@@ -20,11 +20,12 @@
  */
 static QkCircuit *load(const char *program) {
     QkOpenQasm2Options *options = qk_openqasm2_options_new();
+    QkCircuit *circuit = NULL;
     char *error = NULL;
-    QkCircuit *circuit = qk_circuit_from_openqasm2(program, options, &error);
+    QkExitCode code = qk_circuit_from_openqasm2(program, options, &circuit, &error);
     qk_openqasm2_options_free(options);
-    if (error != NULL) {
-        fprintf(stderr, "parse error: %s\n", error);
+    if (code != QkExitCode_Success) {
+        fprintf(stderr, "parse error: %s\n", error != NULL ? error : "(no description)");
         qk_str_free(error);
     }
     return circuit;
@@ -90,13 +91,22 @@ static int test_defined_gate(void) {
 }
 
 /**
- * A malformed program returns a null pointer and describes the parse failure.
+ * A malformed program is reported as bad input, with a description and no circuit.
  */
 static int test_parse_error(void) {
     QkOpenQasm2Options *options = qk_openqasm2_options_new();
+    QkCircuit *parsed = NULL;
     char *error = NULL;
-    QkCircuit *parsed = qk_circuit_from_openqasm2("qreg q[2]; not_a_gate q[0];", options, &error);
+    QkExitCode code =
+        qk_circuit_from_openqasm2("qreg q[2]; not_a_gate q[0];", options, &parsed, &error);
     qk_openqasm2_options_free(options);
+    if (code != QkExitCode_CInputError) {
+        fprintf(stderr, "%s: expected an input error, got exit code %u\n", __func__,
+                (unsigned)code);
+        qk_circuit_free(parsed);
+        qk_str_free(error);
+        return EqualityError;
+    }
     if (parsed != NULL) {
         fprintf(stderr, "%s: a circuit was returned despite the failure\n", __func__);
         qk_circuit_free(parsed);
@@ -119,9 +129,10 @@ static int test_strict_requires_version(void) {
     qk_openqasm2_options_set_strict(options, true);
     // No `OPENQASM 2.0;` header, which only strict mode objects to.  Passing `NULL` for `error`
     // must be accepted.
-    QkCircuit *parsed = qk_circuit_from_openqasm2("qreg q[1];", options, NULL);
+    QkCircuit *parsed = NULL;
+    QkExitCode code = qk_circuit_from_openqasm2("qreg q[1];", options, &parsed, NULL);
     qk_openqasm2_options_free(options);
-    if (parsed != NULL) {
+    if (code != QkExitCode_CInputError) {
         fprintf(stderr, "%s: strict mode accepted a program with no version statement\n", __func__);
         qk_circuit_free(parsed);
         return EqualityError;
@@ -141,7 +152,7 @@ static int test_strict_requires_version(void) {
 static int test_append_include_path(void) {
     QkOpenQasm2Options *options = qk_openqasm2_options_new();
     char *error = NULL;
-    if (!qk_openqasm2_options_append_include_path(options, ".", &error)) {
+    if (qk_openqasm2_options_append_include_path(options, ".", &error) != QkExitCode_Success) {
         fprintf(stderr, "%s: a valid include path was rejected\n", __func__);
         qk_openqasm2_options_free(options);
         return EqualityError;
@@ -153,8 +164,9 @@ static int test_append_include_path(void) {
         return EqualityError;
     }
     // 0xff never appears in well-formed UTF-8, so this path can only be reported as an error.
-    if (qk_openqasm2_options_append_include_path(options, "\xff", &error)) {
-        fprintf(stderr, "%s: a path that is not valid UTF-8 was accepted\n", __func__);
+    if (qk_openqasm2_options_append_include_path(options, "\xff", &error) !=
+        QkExitCode_CInputError) {
+        fprintf(stderr, "%s: a path that is not valid UTF-8 was not an input error\n", __func__);
         qk_openqasm2_options_free(options);
         return EqualityError;
     }
@@ -169,28 +181,31 @@ static int test_append_include_path(void) {
 }
 
 /**
- * A null `program` is rejected rather than dereferenced, and a null `options` means the defaults.
+ * Null arguments are reported by exit code rather than dereferenced, and a null `options` means
+ * the defaults.
  */
 static int test_null_arguments(void) {
-    // A null `error` is allowed, and the description is simply discarded.
-    if (qk_circuit_from_openqasm2(NULL, NULL, NULL) != NULL) {
-        fprintf(stderr, "%s: a null program was not rejected\n", __func__);
-        return EqualityError;
-    }
-    // When `error` is given, every failure path must describe itself, not just the parse errors.
+    QkCircuit *parsed = NULL;
     char *error = NULL;
-    if (qk_circuit_from_openqasm2(NULL, NULL, &error) != NULL) {
+    // A null `program` is a null-pointer error, which carries no description of its own.
+    if (qk_circuit_from_openqasm2(NULL, NULL, &parsed, &error) != QkExitCode_NullPointerError) {
         fprintf(stderr, "%s: a null program was not rejected\n", __func__);
         return EqualityError;
     }
-    if (error == NULL) {
-        fprintf(stderr, "%s: a null program left no description in `error`\n", __func__);
+    if (error != NULL) {
+        fprintf(stderr, "%s: a null program wrote an error description\n", __func__);
+        qk_str_free(error);
         return EqualityError;
     }
-    qk_str_free(error);
+    // A null `circuit` slot is rejected before anything is written through it.
+    QkExitCode code = qk_circuit_from_openqasm2("qreg q[1];", NULL, NULL, NULL);
+    if (code != QkExitCode_NullPointerError) {
+        fprintf(stderr, "%s: a null circuit slot was not rejected\n", __func__);
+        return EqualityError;
+    }
     // Null `options` selects the defaults.
-    QkCircuit *parsed = qk_circuit_from_openqasm2("qreg q[1];", NULL, NULL);
-    if (parsed == NULL) {
+    code = qk_circuit_from_openqasm2("qreg q[1];", NULL, &parsed, NULL);
+    if (code != QkExitCode_Success || parsed == NULL) {
         fprintf(stderr, "%s: null options were not treated as the defaults\n", __func__);
         return RuntimeError;
     }

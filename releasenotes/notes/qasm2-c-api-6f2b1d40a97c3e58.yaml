@@ -7,8 +7,8 @@ features_c:
     created by :c:func:`qk_openqasm2_options_new` and configured with
     :c:func:`qk_openqasm2_options_set_strict` and
     :c:func:`qk_openqasm2_options_append_include_path`; it is released with
-    :c:func:`qk_openqasm2_options_free`.  A failure returns a null pointer and writes a
-    human-readable description to the ``error`` out-parameter, which the caller releases with
-    :c:func:`qk_str_free`.  The custom classical functions and custom instructions accepted by
-    ``qiskit.qasm2.loads`` are not yet supported through C; a program relying on those extensions
-    will fail to parse.
+    :c:func:`qk_openqasm2_options_free`.  The circuit is written through an out-parameter and
+    a :c:type:`QkExitCode` reports success or the kind of failure, with a human-readable
+    description written to the ``error`` out-parameter and released with :c:func:`qk_str_free`.
+    The custom classical functions and custom instructions accepted by ``qiskit.qasm2.loads``
+    are not yet supported through C; a program relying on those extensions will fail to parse.

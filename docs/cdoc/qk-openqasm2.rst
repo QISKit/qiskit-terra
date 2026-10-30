@@ -13,11 +13,18 @@ parses in Rust but builds the circuit in Python.
     #include <qiskit.h>
 
     QkOpenQasm2Options *options = qk_openqasm2_options_new();
+    QkCircuit *qc = NULL;
     char *error = NULL;
-    QkCircuit *qc = qk_circuit_from_openqasm2(
+    QkExitCode code = qk_circuit_from_openqasm2(
         "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0]; cx q[0], q[1];",
-        options, &error);
+        options, &qc, &error);
     qk_openqasm2_options_free(options);
+    if (code != QkExitCode_Success) {
+        printf("failed to load: %s\n", error);
+        qk_str_free(error);
+    } else {
+        qk_circuit_free(qc);
+    }
 
 Data Types
 ==========

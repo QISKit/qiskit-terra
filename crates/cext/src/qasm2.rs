@@ -12,11 +12,11 @@
 
 use std::ffi::{CStr, c_char};
 use std::path::PathBuf;
-use std::ptr;
 
 use qiskit_circuit::circuit_data::CircuitData;
 
-use crate::pointers::{ExposesOwnedPointers, const_ptr_as_ref, mut_ptr_as_ref};
+use crate::exit_codes::ExitCode;
+use crate::pointers::{ExposesOwnedPointers, check_ptr, const_ptr_as_ref, mut_ptr_as_ref};
 use crate::util;
 
 /// Options for the OpenQASM 2 importer.
@@ -35,17 +35,18 @@ pub struct OpenQasm2Options {
     strict: bool,
 }
 
-/// Write an owned copy of `message` through `error`, if the caller asked for one.
+/// Write an owned copy of `message` through `error`, if the caller asked for one, and return
+/// `code`.
 ///
 /// # Safety
 ///
 /// `error` must be null, or a valid pointer to write a `char *` to.
-unsafe fn set_error(error: *mut *mut c_char, message: &str) {
-    if error.is_null() {
-        return;
+unsafe fn return_error(error: *mut *mut c_char, code: ExitCode, message: &str) -> ExitCode {
+    if !error.is_null() {
+        // SAFETY: per documentation, `error` is non-null and valid for a pointer write.
+        unsafe { error.write(util::cstring_from_utf8_lossy(message).into_raw()) };
     }
-    // SAFETY: per documentation, `error` is non-null and valid for a pointer write.
-    unsafe { *error = util::cstring_from_utf8_lossy(message).into_raw() };
+    code
 }
 
 /// @ingroup QkOpenQasm2
@@ -106,31 +107,41 @@ pub unsafe extern "C" fn qk_openqasm2_options_set_strict(
 ///
 /// @param options A handle to the options to modify.
 /// @param path A nul-terminated string giving the directory to search.
-/// @param error Receives a description on failure, released with ``qk_str_free``.  As for
-///     ``qk_circuit_from_openqasm2``, this may be null and is untouched on success.
+/// @param error Receives a description on failure, released with ``qk_str_free``.  This may be a
+///     null pointer, in which case the description is discarded.
 ///
-/// @returns ``true`` if the directory was appended, or ``false`` if ``path`` was not valid UTF-8.
+/// @return ``QkExitCode_Success`` if the directory was appended,
+///     ``QkExitCode_NullPointerError`` if ``path`` is null, or ``QkExitCode_CInputError`` if
+///     ``path`` is not valid UTF-8.
 ///
 /// # Safety
 ///
-/// ``options`` must be a valid handle, ``path`` a valid pointer to a nul-terminated string, and
-/// ``error`` null or valid for a pointer write.
+/// ``options`` must be a valid handle, ``path`` null or a valid pointer to a nul-terminated
+/// string, and ``error`` null or valid for a pointer write.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_openqasm2_options_append_include_path(
     options: *mut OpenQasm2Options,
     path: *const c_char,
     error: *mut *mut c_char,
-) -> bool {
+) -> ExitCode {
+    if path.is_null() {
+        return ExitCode::NullPointerError;
+    }
     // SAFETY: per documentation, `path` points to a nul-terminated string.
     let Ok(path) = unsafe { CStr::from_ptr(path) }.to_str() else {
-        unsafe { set_error(error, "the include path was not valid UTF-8") };
-        return false;
+        return unsafe {
+            return_error(
+                error,
+                ExitCode::CInputError,
+                "the include path was not valid UTF-8",
+            )
+        };
     };
     // SAFETY: per documentation, `options` is a valid handle.
     unsafe { mut_ptr_as_ref(options) }
         .include_path
         .push(PathBuf::from(path));
-    true
+    ExitCode::Success
 }
 
 /// @ingroup QkOpenQasm2
@@ -144,23 +155,26 @@ pub unsafe extern "C" fn qk_openqasm2_options_append_include_path(
 /// @param program A nul-terminated string containing the OpenQASM 2 program.
 /// @param options A handle to the importer options, which is borrowed only for the duration of the
 ///     call.  If this is a null pointer, the default options are used.
-/// @param error A pointer to a pointer to a nul-terminated string.  On failure, a pointer to a
-///     string describing the failure is written here, and must be released with ``qk_str_free``.
-///     This can be a null pointer, in which case the description is discarded.  Nothing is written
-///     here on success.
+/// @param circuit On success, receives a newly built circuit, to be released with
+///     ``qk_circuit_free``.  It is not written to on failure.
+/// @param error Receives a description on failure, released with ``qk_str_free``.  This may be a
+///     null pointer, in which case the description is discarded.  Not every failure describes
+///     itself.
 ///
-/// @returns A pointer to the newly built circuit, which it becomes the caller's responsibility to
-///     release with ``qk_circuit_free``, or a null pointer if the program could not be loaded.
+/// @return ``QkExitCode_Success`` on success, ``QkExitCode_NullPointerError`` if ``program`` or
+///     ``circuit`` is null, ``QkExitCode_AlignmentError`` if ``circuit`` is misaligned, or
+///     ``QkExitCode_CInputError`` if the program could not be imported.
 ///
 /// # Example
 /// ```c
 ///     QkOpenQasm2Options *options = qk_openqasm2_options_new();
+///     QkCircuit *qc = NULL;
 ///     char *error = NULL;
-///     QkCircuit *qc = qk_circuit_from_openqasm2(
+///     QkExitCode code = qk_circuit_from_openqasm2(
 ///         "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0]; cx q[0], q[1];",
-///         options, &error);
+///         options, &qc, &error);
 ///     qk_openqasm2_options_free(options);
-///     if (qc == NULL) {
+///     if (code != QkExitCode_Success) {
 ///         printf("failed to load: %s\n", error);
 ///         qk_str_free(error);
 ///     } else {
@@ -170,20 +184,22 @@ pub unsafe extern "C" fn qk_openqasm2_options_append_include_path(
 ///
 /// # Safety
 ///
-/// ``program`` must be a valid pointer to a nul-terminated string, and ``options`` null or a valid
-/// handle.  ``error`` must be null or valid for a pointer write; any value it already points to is
-/// overwritten without being released.
+/// ``program`` must be null or a valid pointer to a nul-terminated string, ``options`` null or a
+/// valid handle, and ``error`` null or valid for a pointer write; any value ``error`` already
+/// points to is overwritten without being released.  ``circuit`` must point to a writable
+/// ``QkCircuit *`` slot.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_circuit_from_openqasm2(
     program: *const c_char,
     options: *const OpenQasm2Options,
+    circuit: *mut *mut CircuitData,
     error: *mut *mut c_char,
-) -> *mut CircuitData {
+) -> ExitCode {
     if program.is_null() {
-        // SAFETY: `error` is null or valid for a pointer write, per this function's own safety
-        // documentation above; every `set_error` call below relies on that same guarantee.
-        unsafe { set_error(error, "`program` must not be null") };
-        return ptr::null_mut();
+        return ExitCode::NullPointerError;
+    }
+    if let Err(err) = check_ptr(circuit) {
+        return err.into();
     }
     let defaults = OpenQasm2Options::default();
     let options = if options.is_null() {
@@ -196,8 +212,13 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
 
     // SAFETY: per documentation, `program` points to a nul-terminated string.
     let Ok(program) = unsafe { CStr::from_ptr(program) }.to_str() else {
-        unsafe { set_error(error, "the OpenQASM 2 program was not valid UTF-8") };
-        return ptr::null_mut();
+        return unsafe {
+            return_error(
+                error,
+                ExitCode::CInputError,
+                "the OpenQASM 2 program was not valid UTF-8",
+            )
+        };
     };
 
     match qiskit_qasm2::circuit_from_string(
@@ -207,10 +228,12 @@ pub unsafe extern "C" fn qk_circuit_from_openqasm2(
         &[],
         options.strict,
     ) {
-        Ok(built) => built.into_leaked(),
-        Err(err) => {
-            unsafe { set_error(error, &err.message) };
-            ptr::null_mut()
+        Ok(built) => {
+            // SAFETY: checked non-null and aligned above, and, per documentation, otherwise valid
+            // for one pointer write.
+            unsafe { circuit.write(built.into_leaked()) };
+            ExitCode::Success
         }
+        Err(err) => unsafe { return_error(error, ExitCode::CInputError, &err.message) },
     }
 }
