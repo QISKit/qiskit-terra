@@ -24,6 +24,7 @@
 //!
 
 use ndarray::{ArcArrayD, IxDyn};
+use rand::distr::{Distribution, Uniform};
 use rand_philox::Philox;
 use thiserror::Error;
 
@@ -56,10 +57,41 @@ impl Stream {
         }
     }
 
+    /// Open the stream of `kind` for `key_words` at the start of `output`'s substream.
+    ///
+    /// A *substream* is a run of `stride` consecutive blocks, and substream `output` begins at
+    /// block `output * stride`.
+    ///
+    /// A common use for substreams is rejection sampling. For example, drawing a uniform
+    /// random integers between two values separated by a value that is not a multiple of 2 typically
+    /// use rejection sampling, where rejection consumes words in geometrically distributed runs: an
+    /// attempt takes a fixed few
+    /// words and is retried with some probability `p < 1`, so a draw exceeds `n` attempts with
+    /// probability `p^n`. [`Uniform`] and the other [`rand`](https://docs.rs/rand) integer
+    /// distributions use Lemire's method over a 32-bit word, where `p < 1/2` and an attempt takes
+    /// two words. A stride of `n` blocks therefore holds `n * w / 2` attempts, for `w` words per
+    /// block from [`PrngKind::block_words`], and is overrun with probability under
+    /// `2^(-n * w / 2)`. A draw that does overrun continues into the next output's substream, and
+    /// the two variates are then correlated. This is a risk we accept.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `key_words` is [`PrngKind::key_words`] long.
+    fn at_substream(kind: PrngKind, key_words: &[u32], output: usize, stride: usize) -> Self {
+        Self::at_block(kind, key_words, output.wrapping_mul(stride))
+    }
+
     /// Fill `dest` with the words at the stream's position.
     fn fill(&mut self, dest: &mut [u32]) {
         match self {
             Stream::Philox4x32(philox) => philox.fill_u32(dest),
+        }
+    }
+
+    /// Return the stream as an [`rand::Rng`], so that a distribution can sample from it.
+    fn as_rng(&mut self) -> &mut dyn rand::Rng {
+        match self {
+            Stream::Philox4x32(philox) => philox,
         }
     }
 }
@@ -68,6 +100,26 @@ impl Stream {
 fn word_block(kind: PrngKind, word: usize) -> (usize, usize) {
     let per_block = kind.block_words();
     (word / per_block, word % per_block)
+}
+
+/// Return how many substreams of `stride` blocks a key affords, or `None` if more than
+/// `usize::MAX`.
+fn substreams(kind: PrngKind, stride: usize) -> Option<usize> {
+    Some(kind.blocks()? / stride)
+}
+
+/// Check that we will not run out of substreams given a `stride` size and sample shape.
+fn check_substreams(kind: PrngKind, shape: &[usize], stride: usize) -> Result<(), RandomOpError> {
+    let needed = positions(shape);
+    match substreams(kind, stride) {
+        Some(afforded) if needed > afforded as u128 => Err(RandomOpError::CounterExhausted {
+            kind,
+            unit: CounterUnit::Substreams,
+            needed,
+            afforded: afforded as u128,
+        }),
+        _ => Ok(()),
+    }
 }
 
 /// Return how many blocks a payload of `shape` takes at `bits_per_position` bits each.
@@ -469,6 +521,83 @@ impl ProgramOp for RandomBits {
     }
 }
 
+/// How many blocks [`UniformInt`] reserves for each value it draws.
+///
+/// See [`Stream::at_substream`] for how a stride is chosen. At four words per block this holds
+/// 256 attempts, so it is overrun with probability under `2^-256`. The measured rejection rate
+/// of `Uniform<i64>` over its worst range is 1/4, which gives `4^-256`.
+const UNIFORM_INT_STRIDE: usize = 1 << 8;
+
+/// Draw integers uniformly from an inclusive range.
+#[derive(Clone)]
+pub struct UniformInt {
+    shape: Vec<usize>,
+    low: i64,
+    high: i64,
+}
+
+impl UniformInt {
+    /// Construct a `UniformInt` op drawing `shape` values from `low..=high` per key.
+    ///
+    /// Returns [`RandomOpError::EmptyRange`] if `low` exceeds `high`.
+    pub fn new(shape: Vec<usize>, low: i64, high: i64) -> Result<Self, RandomOpError> {
+        if low > high {
+            return Err(RandomOpError::EmptyRange { low, high });
+        }
+        Ok(Self { shape, low, high })
+    }
+
+    /// Return the inclusive bounds values are drawn from.
+    pub fn range(&self) -> (i64, i64) {
+        (self.low, self.high)
+    }
+}
+
+impl ProgramOp for UniformInt {
+    type Error = RandomOpError;
+
+    fn name(&self) -> &str {
+        "uniform_int"
+    }
+    fn namespace(&self) -> &str {
+        QISKIT
+    }
+    fn arity(&self) -> usize {
+        1
+    }
+    fn has_builtin_eval(&self) -> bool {
+        true
+    }
+    fn infer_output_types(&self, inputs: &[TensorType]) -> Result<Vec<TensorType>, Self::Error> {
+        crate::unpack_operands!(self, inputs, [x]);
+        let (kind, batch) = key_type(x)?;
+        check_substreams(kind, &self.shape, UNIFORM_INT_STRIDE)?;
+        Ok(vec![TensorType {
+            dtype: DType::I64,
+            shape: output_shape(batch, &self.shape)?,
+        }])
+    }
+    fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
+        crate::unpack_operands!(self, args, [x]);
+        let keys = key_operand(x)?;
+        let layout = Layout::new(keys, &self.shape)?;
+        let range = Uniform::new_inclusive(self.low, self.high)
+            .expect("low <= high is checked in the constructor");
+
+        let width = keys.kind().key_words();
+        let source = flat_key_words(keys);
+        let mut values = Vec::with_capacity(layout.len());
+        for (which, position) in layout.sources() {
+            let key = &source[which * width..][..width];
+            let mut stream = Stream::at_substream(keys.kind(), key, position, UNIFORM_INT_STRIDE);
+            values.push(range.sample(stream.as_rng()));
+        }
+        let array = ndarray::ArrayD::from_shape_vec(IxDyn(&layout.shape), values)
+            .expect("one value per output position");
+        Ok(vec![Tensor::I64(array.into_shared())])
+    }
+}
+
 /// What a [`RandomOpError::CounterExhausted`] count is measured in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CounterUnit {
@@ -495,6 +624,9 @@ pub enum RandomOpError {
     #[error("{dtype} does not hold raw bits: expected Bit or an unsigned integer")]
     NotBits { dtype: DType },
     /// The range holds no values.
+    #[error("the range {low}..={high} is empty")]
+    EmptyRange { low: i64, high: i64 },
+    /// The generator's counter is too narrow for the payload shape.
     #[error("{kind} affords {afforded} {unit}, and this payload needs {needed}")]
     CounterExhausted {
         kind: PrngKind,
@@ -542,6 +674,100 @@ mod test {
             panic!("expected U32, got {}", tensor.dtype())
         };
         array.iter().copied().collect()
+    }
+
+    /// Return the `I64` values a tensor holds.
+    fn ints_of(tensor: &Tensor) -> Vec<i64> {
+        let Tensor::I64(array) = tensor else {
+            panic!("expected I64, got {}", tensor.dtype())
+        };
+        array.iter().copied().collect()
+    }
+
+    #[test]
+    fn test_names_arities_and_builtin_eval() {
+        for (op, name, arity) in [
+            (
+                &Entropy::new(PrngKind::Philox4x32, vec![])
+                    as &dyn ProgramOp<Error = RandomOpError>,
+                "qiskit.entropy",
+                0,
+            ),
+            (&Split::new(vec![]), "qiskit.split", 1),
+            (
+                &RandomBits::new(DType::U32, vec![]).unwrap(),
+                "qiskit.random_bits",
+                1,
+            ),
+            (
+                &UniformInt::new(vec![], 0, 9).unwrap(),
+                "qiskit.uniform_int",
+                1,
+            ),
+        ] {
+            assert_eq!(op.full_name(), name);
+            assert_eq!(op.arity(), arity, "for {name}");
+            assert!(op.has_builtin_eval(), "for {name}");
+        }
+    }
+
+    #[test]
+    fn test_infer_broadcasts_the_batch_against_the_payload_shape() {
+        let key_type = |shape: Vec<Dim>| TensorType {
+            dtype: DType::Key(PrngKind::Philox4x32),
+            shape,
+        };
+
+        // A batch of keys and a payload shape broadcast, right-aligned.
+        assert_eq!(
+            RandomBits::new(DType::U32, vec![4])
+                .unwrap()
+                .infer_output_types(&[key_type(fixed(&[3, 1]))])
+                .unwrap(),
+            vec![TensorType {
+                dtype: DType::U32,
+                shape: fixed(&[3, 4]),
+            }]
+        );
+        // A split keeps the key dtype, and uniform_int produces I64.
+        assert_eq!(
+            Split::new(vec![3])
+                .infer_output_types(&[key_type(vec![])])
+                .unwrap(),
+            vec![key_type(fixed(&[3]))]
+        );
+        assert_eq!(
+            UniformInt::new(vec![2], 0, 5)
+                .unwrap()
+                .infer_output_types(&[key_type(vec![])])
+                .unwrap(),
+            vec![TensorType {
+                dtype: DType::I64,
+                shape: fixed(&[2]),
+            }]
+        );
+    }
+
+    #[test]
+    fn test_infer_rejects_an_operand_that_is_not_a_key() {
+        let not_a_key = TensorType {
+            dtype: DType::U32,
+            shape: fixed(&[2]),
+        };
+        for op in [
+            &Split::new(vec![2]) as &dyn ProgramOp<Error = RandomOpError>,
+            &RandomBits::new(DType::U32, vec![2]).unwrap(),
+            &UniformInt::new(vec![2], 0, 5).unwrap(),
+        ] {
+            assert!(
+                matches!(
+                    op.infer_output_types(std::slice::from_ref(&not_a_key)).unwrap_err(),
+                    RandomOpError::KeyType { actual } if actual == not_a_key
+                ),
+                "for {}",
+                op.full_name()
+            );
+        }
     }
 
     #[test]
@@ -705,6 +931,52 @@ mod test {
                     dtype,
                     shape: fixed(&[3]),
                 }]
+            );
+        }
+    }
+
+    #[test]
+    fn test_the_batch_and_the_payload_shape_broadcast() {
+        // The key batch and the payload shape broadcast against each other, so the two may share
+        // axes. A [2] batch against a payload of [2] gives two outputs, not four.
+        let keys = keys_of(&[2], vec![10, 11, 20, 21]);
+        let draw = RandomBits::new(DType::U32, vec![2]).unwrap();
+        assert_eq!(
+            draw.infer_output_types(&[keys.tensor_type()]).unwrap()[0].shape,
+            fixed(&[2])
+        );
+        let drawn = draw.eval(std::slice::from_ref(&keys)).unwrap();
+        assert_eq!(drawn[0].shape(), &[2], "eval agrees with inference");
+
+        // On the diagonal, output i reads key i at payload index i, so it is not key i's first
+        // value. `test_a_draw_follows_the_documented_semantics` pins the rule itself; this only
+        // records that the two indices move together here.
+        let first_values = words_of(
+            &RandomBits::new(DType::U32, vec![1])
+                .unwrap()
+                .eval(&[keys_of(&[2], vec![10, 11, 20, 21])])
+                .unwrap()[0],
+        );
+        let diagonal = words_of(&drawn[0].clone());
+        assert_eq!(diagonal[0], first_values[0], "output 0 is payload index 0");
+        assert_ne!(diagonal[1], first_values[1], "output 1 is payload index 1");
+
+        // Every op agrees on the layout.
+        for op in [
+            &Split::new(vec![2]) as &dyn ProgramOp<Error = RandomOpError>,
+            &RandomBits::new(DType::Bit, vec![2]).unwrap(),
+            &UniformInt::new(vec![2], 0, 7).unwrap(),
+        ] {
+            let inferred = op
+                .infer_output_types(&[keys.tensor_type()])
+                .unwrap()
+                .remove(0);
+            let evaluated = op.eval(std::slice::from_ref(&keys)).unwrap().remove(0);
+            assert!(
+                evaluated.matches(&inferred),
+                "{} inferred {inferred} and produced {}",
+                op.full_name(),
+                evaluated.tensor_type()
             );
         }
     }
@@ -900,6 +1172,40 @@ mod test {
     }
 
     #[test]
+    fn test_a_counter_too_narrow_for_the_payload_is_refused_at_inference() {
+        // A payload shape is fixed when the program is built, and the key's batch shape never
+        // enters the counter, so a payload a key cannot afford is refused during inference.
+        let kind = PrngKind::Philox4x32;
+
+        // Philox's counter affords more positions than `usize` holds, so no payload exhausts it.
+        assert_eq!(
+            substreams(kind, UNIFORM_INT_STRIDE),
+            None,
+            "2^128 / 2^12 exceeds usize"
+        );
+        assert_eq!(kind.blocks(), None, "2^128 blocks exceeds usize");
+
+        // So the largest payload a shape can express is admitted.
+        let operand = TensorType {
+            dtype: DType::Key(kind),
+            shape: vec![],
+        };
+        let huge = vec![usize::MAX];
+        for op in [
+            &UniformInt::new(huge.clone(), 0, 5).unwrap() as &dyn ProgramOp<Error = RandomOpError>,
+            &RandomBits::new(DType::U64, huge.clone()).unwrap(),
+            &Split::new(huge),
+        ] {
+            assert!(
+                op.infer_output_types(std::slice::from_ref(&operand))
+                    .is_ok(),
+                "{} refused a payload Philox affords",
+                op.full_name()
+            );
+        }
+    }
+
+    #[test]
     fn test_a_block_holds_every_value_that_fits_in_it() {
         // The capacity count is what a draw actually consumes, so it has to agree with the
         // packing `eval` uses. Counting a word per value instead would charge a Bit payload 32
@@ -955,6 +1261,18 @@ mod test {
                 "at block {block}"
             );
         }
+
+        // An output's substream starts a stride of blocks past the previous one's, for whatever
+        // stride its sampler chose.
+        for stride in [1usize, 8, UNIFORM_INT_STRIDE] {
+            for output in [0usize, 1, 2] {
+                assert_eq!(
+                    block_of(&mut Stream::at_substream(kind, &key, output, stride)),
+                    block_of(&mut Stream::at_block(kind, &key, output * stride)),
+                    "substream {output} of stride {stride}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -986,6 +1304,71 @@ mod test {
         assert_ne!(draws[0], draws[1]);
         assert_ne!(draws[1], draws[2]);
         assert_ne!(draws[0], draws[2]);
+    }
+
+    #[test]
+    fn test_uniform_int_honours_its_range() {
+        // The bounds are inclusive, and a single-value range is constant.
+        let key = key_from(3);
+        let drawn = |low, high| {
+            ints_of(
+                &UniformInt::new(vec![64], low, high)
+                    .unwrap()
+                    .eval(std::slice::from_ref(&key))
+                    .unwrap()[0],
+            )
+        };
+        let samples = drawn(-5, 5);
+        assert!(samples.iter().all(|&v| (-5..=5).contains(&v)));
+        assert!(
+            samples.contains(&-5) || samples.contains(&5),
+            "the bounds are reachable"
+        );
+        assert_eq!(drawn(7, 7), vec![7; 64]);
+
+        // An empty range is refused. `unwrap_err` would need UniformInt to be Debug, which no op
+        // in the catalogue is.
+        let Err(error) = UniformInt::new(vec![2], 5, 4) else {
+            panic!("an empty range is refused")
+        };
+        assert!(matches!(
+            error,
+            RandomOpError::EmptyRange { low: 5, high: 4 }
+        ));
+    }
+
+    #[test]
+    fn test_a_uniform_sample_reads_its_own_substream() {
+        // Each sample comes from the substream its own position opens. Were positions adjacent
+        // blocks instead, a sample would read words belonging to its neighbour, so this compares
+        // the op's output against substreams opened independently of it.
+        let key = key_from(41);
+        let key_words: Vec<u32> = key.keys().unwrap().keys().iter().copied().collect();
+        let key_pair = [key_words[0], key_words[1]];
+
+        let samples = ints_of(
+            &UniformInt::new(vec![6], 0, 2)
+                .unwrap()
+                .eval(std::slice::from_ref(&key))
+                .unwrap()[0],
+        );
+        let range = Uniform::new_inclusive(0i64, 2).unwrap();
+        for (position, &sample) in samples.iter().enumerate() {
+            // Spelled out rather than taken from `UNIFORM_INT_STRIDE`, so that a change to the
+            // stride has to be made here too rather than passing silently.
+            let counter = (position as u128) * (1 << 8);
+            assert_eq!(UNIFORM_INT_STRIDE, 1 << 8, "the stride this test assumes");
+            let mut substream = Philox::new(key_pair, counter);
+            assert_eq!(
+                sample,
+                range.sample(&mut substream),
+                "at position {position}"
+            );
+        }
+        assert!(
+            samples.windows(2).any(|w| w[0] != w[1]),
+            "every position reading one substream would give one repeated value"
+        );
     }
 
     #[test]
@@ -1163,6 +1546,40 @@ mod test {
                 0x0598de3a, 0x98d2802e, 0x270f8f9e, 0xeab709d3, 0x1955b60c, 0x46814a70, 0x682e0b3d,
                 0x30193e3c, 0xa82aad38, 0xf48e6bfb, 0xab96c3d4, 0xc9bd190e,
             ]
+        );
+    }
+
+    #[test]
+    fn test_uniform_int_matches_its_recorded_output() {
+        // These pin the substream addressing and the distribution together, so a change to the
+        // stride, to the counter layout, or to how `Uniform` is driven shows up here.
+        let key = golden_key();
+        assert_eq!(
+            ints_of(
+                &UniformInt::new(vec![8], 0, 99)
+                    .unwrap()
+                    .eval(std::slice::from_ref(&key))
+                    .unwrap()[0]
+            ),
+            [81, 6, 66, 28, 83, 21, 51, 59]
+        );
+        assert_eq!(
+            ints_of(
+                &UniformInt::new(vec![8], -1000, 1000)
+                    .unwrap()
+                    .eval(std::slice::from_ref(&key))
+                    .unwrap()[0]
+            ),
+            [637, -873, 336, -438, 662, -565, 28, 195]
+        );
+        assert_eq!(
+            ints_of(
+                &UniformInt::new(vec![2], 0, 7)
+                    .unwrap()
+                    .eval(&[golden_batch()])
+                    .unwrap()[0]
+            ),
+            [4, 6, 2, 0, 7, 0]
         );
     }
 
