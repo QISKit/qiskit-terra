@@ -75,10 +75,11 @@ impl Mir {
         &mut self.symbol_table
     }
 
-    pub fn verify(&self) -> Result<(), InstructionVerificationError> {
-        self.instructions
+    pub fn verify(&self) -> Result<(), MirVerificationError> {
+        Ok(self
+            .instructions
             .iter_main()
-            .try_for_each(|instr| instr.weight().verify(&self.resource_table))
+            .try_for_each(|instr| instr.weight().verify(&self.resource_table))?)
     }
 }
 
@@ -99,6 +100,7 @@ pub enum MirVerificationError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::instruction::InstructionVerificationError;
     use crate::ops::MirOp;
     use crate::ops::pbc::{AngleType, Pauli, PauliRotation, PauliString};
     use crate::qid::{BitLayout, QidInfo, QidList};
@@ -179,9 +181,12 @@ mod tests {
             SymbolIdList::default(),
         ));
 
+        //mir.verify().unwrap();
         assert!(matches!(
             mir.verify(),
-            Err(InstructionVerificationError::AliasedQids)
+            Err(MirVerificationError::InstructionList(
+                InstructionVerificationError::AliasedQids
+            ))
         ));
     }
 }
