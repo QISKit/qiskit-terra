@@ -12,6 +12,7 @@
 
 //! Generate randomizations of quantum circuits and programs.
 
+pub mod partition;
 pub mod virtual_type;
 
 /// Which way virtual state flows temporally.

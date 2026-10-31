@@ -65,6 +65,33 @@ impl DynTypeId<'_> {
             None => borrow::Cow::Borrowed(self.static_name),
         }
     }
+
+    /// A short description of this type.
+    ///
+    /// This differs from [`Self::describe`] in that it includes fewer qualifiers. When the
+    /// type is dynamic, it omits the description of the static type as a wrapper, for example,
+    /// leads to `CustomIR` rather than `qiskit_pyext::passmanager::PyIr[CustomIR]` for a
+    /// Python-defined IR. When the type is static, it omits the crate path. This method is
+    /// used in debugging printouts and error messages and its conventions are therefore
+    /// subject to change without notice.
+    pub fn short_describe(&self) -> &str {
+        match self.dynamic {
+            Some((_addr, dyn_name)) => dyn_name,
+            None => {
+                // Only the leading path, up to the first generic parameter, is certain to be a
+                // module path. Stopping there keeps the split from landing somewhere meaningless,
+                // at the cost of leaving any path within the generic parameters qualified.
+                let head = self
+                    .static_name
+                    .split_once('<')
+                    .map_or(self.static_name, |(head, _)| head);
+                match head.rfind("::") {
+                    Some(split) => &self.static_name[split + 2..],
+                    None => self.static_name,
+                }
+            }
+        }
+    }
 }
 impl<'a> DynTypeId<'a> {
     /// Set the dynamic components of the type identifier.

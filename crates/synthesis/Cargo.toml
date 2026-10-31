@@ -55,5 +55,8 @@ features = ["num-complex"]
 workspace = true
 features = ["rayon", "serde"]
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [features]
 cache_pygates = ["qiskit-circuit/cache_pygates"]

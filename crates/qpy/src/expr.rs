@@ -293,7 +293,7 @@ pub(crate) fn read_expression<R: Read + Seek>(
             let operand = read_expression(reader, endian, (qpy_data,))?;
             let constant = operand.is_const();
             Ok(Expr::Unary(Box::new(Unary {
-                op: UnaryOp::from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
+                op: UnaryOp::try_from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
                 operand,
                 ty: unpack_expression_type(unary_type_pack),
                 constant,
@@ -304,7 +304,7 @@ pub(crate) fn read_expression<R: Read + Seek>(
             let right = read_expression(reader, endian, (qpy_data,))?;
             let constant = left.is_const() && right.is_const();
             Ok(Expr::Binary(Box::new(Binary {
-                op: BinaryOp::from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
+                op: BinaryOp::try_from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
                 left,
                 right,
                 ty: unpack_expression_type(binary_type_pack),

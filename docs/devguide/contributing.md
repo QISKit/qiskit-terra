@@ -14,7 +14,7 @@ community in this goal.
   * [Pull request author checklist](#pull-request-author-checklist)
   * [Use of generative AI](#use-of-generative-ai)
   * [Code review](#code-review)
-  * [Pull request merging checking](#pull-request-merging-checklist)
+  * [Pull request merging checklist](#pull-request-merging-checklist)
 * [Contributor Licensing Agreement](#contributor-licensing-agreement)
 * [Changelog generation](#changelog-generation)
 * [Release notes](#release-notes)
@@ -182,7 +182,7 @@ The documentation, linting and other development processes may require newer Pyt
 Qiskit has a conservative policy for the minimum-supported Rust version (MSRV) needed to build.
 The MSRV may increase on any major or minor version, but not on a patch release without exceptional circumstances.
 The MSRV must always be at least one year old at the time of any major or minor release, but may be older.
-The source of truth from the current MSRV is the `rust-version` key in the root `Cargo.toml` file.
+The source of truth for the current MSRV is the `rust-version` key in the root `Cargo.toml` file.
 
 
 ### Compile time options

@@ -65,6 +65,7 @@ from qiskit.passmanager.flow_controllers import ConditionalController, DoWhileCo
 from qiskit.transpiler.timing_constraints import TimingConstraints
 from qiskit.transpiler.passes.layout.vf2_layout import VF2LayoutStopReason
 from qiskit.circuit.equivalence_library import SessionEquivalenceLibrary as sel
+from qiskit.circuit.controlflow import CONTROL_FLOW_OP_NAMES
 from qiskit.quantum_info.operators.symplectic.clifford_circuits import get_clifford_gate_names
 from qiskit.utils import default_num_processes
 from qiskit import user_config
@@ -1013,7 +1014,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
         self, pass_manager_config: PassManagerCliffordTConfig, optimization_level: int | None = None
     ):
         optimization_metric = OptimizationMetric.COUNT_T
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
 
         if optimization_level == 0:
             init = None
@@ -1129,7 +1130,7 @@ class TranslateToCliffordRZPassManager(PassManagerCliffordTStagePlugin):
     def pass_manager(
         self, pass_manager_config: PassManagerCliffordTConfig, optimization_level: int | None = None
     ):
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
         translate = PassManager(
             [
                 UnitarySynthesis(
@@ -1169,7 +1170,7 @@ class OptimizeCliffordRZPassManager(PassManagerCliffordTStagePlugin):
     ):
         """Build pass manager for optimization stage."""
 
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
 
         match optimization_level:
             case 0:

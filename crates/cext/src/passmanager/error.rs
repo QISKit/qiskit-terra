@@ -10,7 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{ExposesOwnedPointers, const_ptr_as_ref, expose_by_box};
+use crate::pointers::{ExposesOwnedPointers, expose_by_box};
 use crate::util;
 use std::ffi::{CStr, c_char};
 
@@ -58,7 +58,7 @@ pub unsafe extern "C" fn qk_compilation_error_new(msg: *const c_char) -> *mut Co
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_compilation_error_str(error: *const CompilationError) -> *mut c_char {
     // SAFETY: per documentation, `error` points to an aligned valid error.
-    let error = unsafe { const_ptr_as_ref(error) };
+    let error = unsafe { &*error };
     util::cstring_from_utf8_lossy(error.0.to_string()).into_raw()
 }
 

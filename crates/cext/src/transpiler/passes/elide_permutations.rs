@@ -10,8 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::mut_ptr_as_ref;
-
 use qiskit_circuit::Qubit;
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
@@ -40,7 +38,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_elide_permutations(
     circuit: *mut CircuitData,
 ) -> *mut TranspileLayout {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    let circuit = unsafe { &mut *circuit };
     let dag = match DAGCircuit::from_circuit_data(circuit, false, None, None) {
         Ok(dag) => dag,
         Err(_e) => panic!("Internal circuit to DAG conversion failed."),
@@ -114,7 +112,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_elide_permutations(
     dag: *mut DAGCircuit,
 ) -> *mut TranspileLayout {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     let res = run_elide_permutations(dag).expect("ElidePermutations pass failed.");
     match res {
         Some(res) => {

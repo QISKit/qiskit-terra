@@ -134,6 +134,7 @@ impl Qid {
         }
     }
 }
+
 /// SAFETY: `Qid` is a transparent wrapper of `u32` in the exact range `0..=Self::MAX_RAW`; the
 /// range is inhabited; all distinct bit patterns compare unequal.
 unsafe impl bytemuck::Contiguous for Qid {
@@ -320,6 +321,24 @@ impl QidInfo {
     #[inline]
     pub const fn layout(&self) -> &BitLayout {
         &self.layout
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct QidList(Vec<Qid>);
+
+impl QidList {
+    pub fn new(qids: Vec<Qid>) -> Self {
+        QidList(qids)
+    }
+    pub fn inner(&self) -> &Vec<Qid> {
+        &self.0
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 

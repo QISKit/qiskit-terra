@@ -17,7 +17,7 @@ use std::slice;
 use qiskit_circuit::circuit_data::CircuitData;
 
 use crate::exit_codes::ExitCode;
-use crate::pointers::{check_ptr, mut_ptr_as_ref};
+use crate::pointers::check_ptr;
 use crate::util;
 
 /// @ingroup QkQpy
@@ -434,7 +434,7 @@ pub unsafe extern "C" fn qk_qpy_loaded_circuits_clear(circuits: *mut QpyLoadedCi
     if !circuits.is_null() {
         // SAFETY: Per the documentation the pointer must be a valid pointer to a QpyLoadedCircuits
         // object
-        let circuits = unsafe { mut_ptr_as_ref(circuits) };
+        let circuits = unsafe { &mut *circuits };
         // SAFETY: Per the documentation the QpyLoadCircuits object must have a valid circuits
         let circuit_array: Box<[*mut CircuitData]> = unsafe {
             Box::from_raw(std::ptr::slice_from_raw_parts_mut(

@@ -16,7 +16,7 @@ use std::mem;
 use std::sync::Arc;
 
 use crate::exit_codes::ExitCode;
-use crate::pointers::{ExposesOwnedPointers, const_ptr_as_ref, expose_by_box, mut_ptr_as_ref};
+use crate::pointers::{ExposesOwnedPointers, expose_by_box};
 use crate::util;
 
 use qiskit_circuit::operations::Param;
@@ -160,7 +160,7 @@ pub extern "C" fn qk_param_from_complex(value: Complex64) -> *mut Param {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_copy(param: *const Param) -> *mut Param {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    unsafe { const_ptr_as_ref(param) }.clone().into_leaked()
+    unsafe { &*param }.clone().into_leaked()
 }
 
 /// @ingroup QkParam
@@ -193,7 +193,7 @@ pub unsafe extern "C" fn qk_param_copy(param: *const Param) -> *mut Param {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_str(param: *const Param) -> *mut c_char {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(param) };
+    let expr = unsafe { &*param };
     let str = match expr {
         Param::ParameterExpression(expr) => expr.to_string(),
         Param::Float(f) => f.to_string(),
@@ -232,9 +232,9 @@ pub unsafe extern "C" fn qk_param_add(
     rhs: *const Param,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let lhs = unsafe { const_ptr_as_ref(lhs) };
-    let rhs = unsafe { const_ptr_as_ref(rhs) };
+    let out = unsafe { &mut *out };
+    let lhs = unsafe { &*lhs };
+    let rhs = unsafe { &*rhs };
 
     let ret = match (lhs, rhs) {
         (Param::ParameterExpression(lhs), Param::ParameterExpression(rhs)) => lhs
@@ -288,9 +288,9 @@ pub unsafe extern "C" fn qk_param_sub(
     rhs: *const Param,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let lhs = unsafe { const_ptr_as_ref(lhs) };
-    let rhs = unsafe { const_ptr_as_ref(rhs) };
+    let out = unsafe { &mut *out };
+    let lhs = unsafe { &*lhs };
+    let rhs = unsafe { &*rhs };
 
     let ret = match (lhs, rhs) {
         (Param::ParameterExpression(lhs), Param::ParameterExpression(rhs)) => lhs
@@ -343,9 +343,9 @@ pub unsafe extern "C" fn qk_param_mul(
     rhs: *const Param,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let lhs = unsafe { const_ptr_as_ref(lhs) };
-    let rhs = unsafe { const_ptr_as_ref(rhs) };
+    let out = unsafe { &mut *out };
+    let lhs = unsafe { &*lhs };
+    let rhs = unsafe { &*rhs };
 
     let ret = match (lhs, rhs) {
         (Param::ParameterExpression(lhs), Param::ParameterExpression(rhs)) => lhs
@@ -398,9 +398,9 @@ pub unsafe extern "C" fn qk_param_div(
     den: *const Param,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let num = unsafe { const_ptr_as_ref(num) };
-    let den = unsafe { const_ptr_as_ref(den) };
+    let out = unsafe { &mut *out };
+    let num = unsafe { &*num };
+    let den = unsafe { &*den };
 
     let ret = match (num, den) {
         (Param::ParameterExpression(num), Param::ParameterExpression(den)) => num
@@ -453,9 +453,9 @@ pub unsafe extern "C" fn qk_param_pow(
     pow: *const Param,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let base = unsafe { const_ptr_as_ref(base) };
-    let pow = unsafe { const_ptr_as_ref(pow) };
+    let out = unsafe { &mut *out };
+    let base = unsafe { &*base };
+    let pow = unsafe { &*pow };
 
     let ret = match (base, pow) {
         (Param::ParameterExpression(base), Param::ParameterExpression(pow)) => base
@@ -504,8 +504,8 @@ pub unsafe extern "C" fn qk_param_pow(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_sin(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -543,8 +543,8 @@ pub unsafe extern "C" fn qk_param_sin(out: *mut Param, src: *const Param) -> Exi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_cos(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -582,8 +582,8 @@ pub unsafe extern "C" fn qk_param_cos(out: *mut Param, src: *const Param) -> Exi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_tan(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -621,8 +621,8 @@ pub unsafe extern "C" fn qk_param_tan(out: *mut Param, src: *const Param) -> Exi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_asin(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -660,8 +660,8 @@ pub unsafe extern "C" fn qk_param_asin(out: *mut Param, src: *const Param) -> Ex
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_acos(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -699,8 +699,8 @@ pub unsafe extern "C" fn qk_param_acos(out: *mut Param, src: *const Param) -> Ex
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_atan(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -738,8 +738,8 @@ pub unsafe extern "C" fn qk_param_atan(out: *mut Param, src: *const Param) -> Ex
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_log(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -777,8 +777,8 @@ pub unsafe extern "C" fn qk_param_log(out: *mut Param, src: *const Param) -> Exi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_exp(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -816,8 +816,8 @@ pub unsafe extern "C" fn qk_param_exp(out: *mut Param, src: *const Param) -> Exi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_abs(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -855,8 +855,8 @@ pub unsafe extern "C" fn qk_param_abs(out: *mut Param, src: *const Param) -> Exi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_sign(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -894,8 +894,8 @@ pub unsafe extern "C" fn qk_param_sign(out: *mut Param, src: *const Param) -> Ex
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_neg(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -933,8 +933,8 @@ pub unsafe extern "C" fn qk_param_neg(out: *mut Param, src: *const Param) -> Exi
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_conjugate(out: *mut Param, src: *const Param) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let src = unsafe { const_ptr_as_ref(src) };
+    let out = unsafe { &mut *out };
+    let src = unsafe { &*src };
 
     match src {
         Param::ParameterExpression(expr) => {
@@ -977,8 +977,8 @@ pub unsafe extern "C" fn qk_param_conjugate(out: *mut Param, src: *const Param) 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_equal(lhs: *const Param, rhs: *const Param) -> bool {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let lhs = unsafe { const_ptr_as_ref(lhs) };
-    let rhs = unsafe { const_ptr_as_ref(rhs) };
+    let lhs = unsafe { &*lhs };
+    let rhs = unsafe { &*rhs };
 
     lhs.eq(rhs).unwrap()
 }
@@ -1018,7 +1018,7 @@ pub unsafe extern "C" fn qk_param_equal(lhs: *const Param, rhs: *const Param) ->
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_as_real(param: *const Param) -> f64 {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let param = unsafe { const_ptr_as_ref(param) };
+    let param = unsafe { &*param };
 
     match param {
         Param::ParameterExpression(expr) => match expr.try_to_value(true) {
@@ -1090,7 +1090,7 @@ pub extern "C" fn qk_param_stride() -> usize {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_as_int(param: *const Param, value: *mut i64) -> bool {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let param = unsafe { const_ptr_as_ref(param) };
+    let param = unsafe { &*param };
 
     // SAFETY: Per documentation, the pointer is non-null, alligned and valid to hold an ``int64_t``.
     param_try_int(param)
@@ -1138,7 +1138,7 @@ pub enum ParamKind {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_param_kind(param: *const Param) -> ParamKind {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let param = unsafe { const_ptr_as_ref(param) };
+    let param = unsafe { &*param };
 
     match param {
         Param::ParameterExpression(_) => ParamKind::ParameterExpression,

@@ -421,12 +421,12 @@ pub fn load_qpy(
 ///
 /// Returns
 /// A list of Python `QuantumCircuit` objects reconstructed from the QPY payload.
-pub fn py_load_qpy(
-    py: Python,
+pub fn py_load_qpy<'py>(
+    py: Python<'py>,
     file_obj: &Bound<PyAny>,
     metadata_deserializer: Option<Bound<PyAny>>,
     annotation_factories: Option<Bound<PyDict>>,
-) -> Result<Vec<Py<PyAny>>, QpyError> {
+) -> Result<Vec<Bound<'py, PyAny>>, QpyError> {
     let annotation_factories = annotation_factories.unwrap_or(PyDict::new(py));
     // Read all data from file object
     let data: Bytes = file_obj.call_method0("read")?.extract()?;
