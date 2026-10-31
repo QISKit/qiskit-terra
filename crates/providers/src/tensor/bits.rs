@@ -58,14 +58,17 @@ fn final_byte_mask(num_bits: usize) -> Option<u8> {
 /// A dense array of bits.
 ///
 /// This object presents an array of bits with a shape, storing them packed eight bits to a
-/// byte along the last axis.
+/// byte along the last axis. Despite the packing, this object treats the last axis as though
+/// indexed over bools. For this reason, we refer to the _logical shape_ of the array as the shape
+/// vector whose last entry is the number of bitpacked bits, which may not be a multiple of 8.
 ///
-/// The storage format is the following. A "row" is the last axis of the logical shape, of
-/// [`num_bits`](Self::num_bits) bits, and occupies `ceil(num_bits / 8)` bytes. Bit `i` of a row is
-/// bit `i % 8` of byte `i / 8`, so the order within a byte is least significant first. The bits of
-/// a row's final byte at or above `num_bits` are padding, and are zero. Rows follow one another in
-/// row-major order of the leading axes, each starting on a byte boundary. A zero-dimensional
-/// tensor is one row of one bit.
+/// The storage format is the following. A "row" is the last axis of the logical
+/// [`shape`](Self::shape), of [`num_bits`](Self::num_bits) bits, and occupies
+/// `ceil(num_bits / 8)` bytes. Bit `i` of a row is bit `i % 8` of byte `i / 8`, so the order
+/// within a byte is least significant first. The bits of a row's final byte at or above
+/// `num_bits` are padding, and are zero. Rows follow one another in row-major order of the
+/// leading axes, each starting on a byte boundary. A zero-dimensional tensor is one row of one
+/// bit.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BitTensor {
     data: ArcArrayD<u8>,
