@@ -22,7 +22,8 @@ use smallvec::{SmallVec, smallvec};
 
 use super::analyze_commutations;
 use crate::commutation_checker::{CommutationChecker, CommutationError};
-use approx::abs_diff_eq;
+use crate::passes::common::{MINIMUM_TOL, is_angle_close_to_multiple_of_pi_k};
+
 use qiskit_circuit::Qubit;
 use qiskit_circuit::dag_circuit::{DAGCircuit, DAGError, NodeType, PyDAGCircuit};
 use qiskit_circuit::operations::{Operation, Param, StandardGate};
@@ -60,7 +61,6 @@ impl From<CommutationCancelError> for PyErr {
     }
 }
 
-const _CUTOFF_PRECISION: f64 = 1e-5;
 static ROTATION_GATES: [&str; 4] = ["p", "u1", "rz", "rx"];
 
 static VAR_Z_MAP: [(&str, StandardGate); 3] = [
@@ -127,6 +127,7 @@ pub fn cancel_commutations(
     basis_gates: Option<Vec<String>>,
     approximation_degree: f64,
 ) -> Result<(), CommutationCancelError> {
+    let tol = MINIMUM_TOL.max(1.0 - approximation_degree);
     let basis = basis_gates.unwrap_or_default();
     let z_var_gate = dag
         .get_op_counts()
@@ -318,10 +319,14 @@ pub fn cancel_commutations(
                     total_phase += phase_shift;
                 }
 
-                if is_multiple_of_pi(total_angle, 4.) {
+                if is_angle_close_to_multiple_of_pi_k(StandardGate::RZ, 1, total_angle, tol)
+                    .is_some_and(|m| m % 4 == 0)
+                {
                     // if the angle is close to a 4-pi multiple (from above or below), then the
                     // operator is equal to the identity
-                } else if is_multiple_of_pi(total_angle, 2.) {
+                } else if is_angle_close_to_multiple_of_pi_k(StandardGate::RZ, 1, total_angle, tol)
+                    .is_some_and(|m| m % 2 == 0)
+                {
                     if cancel_key.gate == GateOrRotation::XRotation
                         || matches!(z_var_gate, Some(&StandardGate::RZ))
                     {
@@ -334,11 +339,17 @@ pub fn cancel_commutations(
                 } else {
                     // cancel_gate.key is either ZRotation or XRotation in this block it is an
                     // XRotation.
-                    if x_supported && is_multiple_of_pi(total_angle, 1.) {
+                    if x_supported
+                        && is_angle_close_to_multiple_of_pi_k(StandardGate::RX, 1, total_angle, tol)
+                            .is_some()
+                    {
                         let num_x = (total_angle / PI).round();
                         total_phase -= FRAC_PI_2 * num_x;
                         dag.insert_1q_on_incoming_qubit((StandardGate::X, &[]), cancel_set[0]);
-                    } else if sx_supported && is_multiple_of_pi(total_angle, 0.5) {
+                    } else if sx_supported
+                        && is_angle_close_to_multiple_of_pi_k(StandardGate::RX, 2, total_angle, tol)
+                            .is_some()
+                    {
                         let num_sx = (total_angle / FRAC_PI_2).round();
                         total_phase -= FRAC_PI_4 * num_sx;
                         for _ in 0..(num_sx as i64).rem_euclid(4) {
@@ -362,14 +373,6 @@ pub fn cancel_commutations(
     }
 
     Ok(())
-}
-
-/// Checks if angle is an integer multiple of ``factor * PI``.
-fn is_multiple_of_pi(angle: f64, factor: f64) -> bool {
-    let modulo = angle / (factor * PI);
-    let remainder = modulo.rem_euclid(1.0);
-    abs_diff_eq!(remainder, 0., epsilon = _CUTOFF_PRECISION)
-        || abs_diff_eq!(remainder, 1., epsilon = _CUTOFF_PRECISION)
 }
 
 pub fn commutation_cancellation_mod(m: &Bound<PyModule>) -> PyResult<()> {

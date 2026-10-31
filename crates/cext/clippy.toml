@@ -1,0 +1,5 @@
+disallowed-methods = [
+    # When we used `CString::new`, we tended to `unwrap` or `expect` that there
+    # weren't any interior nul bytes, which is an unncessary panic risk.
+    { path = "std::ffi::CString::new", reason = "consider `crate::util::cstring_from_utf8_lossy`" },
+]

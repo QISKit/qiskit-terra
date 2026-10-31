@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed a panic in :func:`.qs_decomposition` (and therefore in
+    :attr:`.UnitaryGate.definition`) when called on a :math:`1 \times 1` unitary,
+    that is, a unitary acting on zero qubits. The function now returns a
+    zero-qubit :class:`.QuantumCircuit` whose global phase matches the phase of the
+    input matrix.
+    Fixed `#17036 <https://github.com/Qiskit/qiskit/issues/17036>`__.

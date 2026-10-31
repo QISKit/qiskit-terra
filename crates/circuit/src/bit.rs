@@ -160,13 +160,7 @@ trait ManifestableBit: ShareableBit {
 ///     This class cannot be instantiated directly. Its only purpose is to allow generic type
 ///     checking for :class:`.Clbit` and :class:`.Qubit`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[pyclass(
-    subclass,
-    name = "Bit",
-    module = "qiskit.circuit",
-    frozen,
-    skip_from_py_object
-)]
+#[pyclass(subclass, name = "Bit", module = "qiskit.circuit", frozen)]
 pub struct PyBit;
 /// Implement a generic register.
 ///
@@ -179,8 +173,7 @@ pub struct PyBit;
     subclass,
     frozen,
     eq,
-    hash,
-    skip_from_py_object
+    hash
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct PyRegister;
@@ -433,7 +426,7 @@ macro_rules! create_bit_object {
 
         #[doc = concat!("A ", $bit_desc, ", which can be compared between different circuits.")]
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        #[pyclass(subclass, name=$pybit_name, module="qiskit.circuit", extends=PyBit, frozen, eq, hash, skip_from_py_object)]
+        #[pyclass(subclass, name=$pybit_name, module="qiskit.circuit", extends=PyBit, frozen, eq, hash)]
         pub struct $pybit_struct($bit_struct);
         #[pymethods]
         impl $pybit_struct {
@@ -713,7 +706,7 @@ macro_rules! create_bit_object {
         }
 
         /// Implement a register.
-        #[pyclass(subclass, name=$pyreg_name, module="qiskit.circuit", extends=PyRegister, frozen, eq, hash, sequence, skip_from_py_object)]
+        #[pyclass(subclass, name=$pyreg_name, module="qiskit.circuit", extends=PyRegister, frozen, eq, hash, sequence)]
         #[derive(Clone, Debug, PartialEq, Eq, Hash)]
         pub struct $pyreg_struct($reg_struct);
 
@@ -937,7 +930,7 @@ impl ShareableQubit {
 
 /// A qubit used as an ancilla.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[pyclass(name="AncillaQubit", module="qiskit.circuit", extends=PyQubit, frozen, skip_from_py_object)]
+#[pyclass(name="AncillaQubit", module="qiskit.circuit", extends=PyQubit, frozen)]
 pub struct PyAncillaQubit;
 #[pymethods]
 impl PyAncillaQubit {
@@ -1055,7 +1048,6 @@ impl QuantumRegister {
     module = "qiskit.circuit",
     frozen,
     extends=PyQuantumRegister,
-    skip_from_py_object,
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PyAncillaRegister;

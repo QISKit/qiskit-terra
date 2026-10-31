@@ -14,7 +14,7 @@
 Special data types.
 """
 
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import NamedTuple, NewType
 
 from qiskit import circuit
@@ -72,7 +72,7 @@ HorizontalAxis.axis_map.__doc__ = "Mapping of apparent coordinate system and act
 HorizontalAxis.label.__doc__ = "Label of horizontal axis."
 
 
-class BoxType(str, Enum):
+class BoxType(StrEnum):
     """Box type.
 
     SCHED_GATE: Box that represents occupation time by gate.
@@ -85,7 +85,7 @@ class BoxType(str, Enum):
     TIMELINE = "Box.Timeline"
 
 
-class LineType(str, Enum):
+class LineType(StrEnum):
     """Line type.
 
     BARRIER: Line that represents barrier instruction.
@@ -96,7 +96,7 @@ class LineType(str, Enum):
     GATE_LINK = "Line.GateLink"
 
 
-class SymbolType(str, Enum):
+class SymbolType(StrEnum):
     """Symbol type.
 
     FRAME: Symbol that represents zero time frame change (Rz) instruction.
@@ -105,7 +105,7 @@ class SymbolType(str, Enum):
     FRAME = "Symbol.Frame"
 
 
-class LabelType(str, Enum):
+class LabelType(StrEnum):
     """Label type.
 
     GATE_NAME: Label that represents name of gate.
@@ -135,7 +135,7 @@ class AbstractCoordinate(Enum):
     BOTTOM = "BOTTOM"
 
 
-class Plotter(str, Enum):
+class Plotter(StrEnum):
     """Name of timeline plotter APIs.
 
     MPL: Matplotlib plotter interface. Show timeline in 2D canvas.

@@ -1209,12 +1209,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Pauli {
 ///         inputs, this can be inferred and need not be passed.  It is only necessary for the
 ///         sparse-label format.  If given unnecessarily, it must match the data input.
 #[cfg(feature = "python")]
-#[pyclass(
-    name = "QubitSparsePauli",
-    frozen,
-    module = "qiskit.quantum_info",
-    skip_from_py_object
-)]
+#[pyclass(name = "QubitSparsePauli", frozen, module = "qiskit.quantum_info")]
 #[derive(Clone, Debug)]
 pub struct PyQubitSparsePauli {
     inner: QubitSparsePauli,

@@ -12,7 +12,7 @@
 
 use std::{
     any::{self, Any},
-    marker,
+    fmt, marker,
 };
 
 use thiserror::Error;
@@ -113,4 +113,10 @@ pub trait Pass: Any + Send + Sync {
     /// badly behaved passes might have lied about their output types, or this trait may be called
     /// outside the context of the [`PassManager`](crate::PassManager).
     fn run(&self, ir: Box<dyn IR>, context: &mut PassContext) -> Result<Box<dyn IR>, PassError>;
+}
+
+impl fmt::Debug for dyn Pass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.name().fmt(f)
+    }
 }

@@ -13,9 +13,6 @@ jobs:
     if: github.repository_owner == 'Qiskit'
     name: Coverage
     runs-on: ubuntu-latest
-    env:
-      # Override the `rust-toolchain.toml` file because `grcov` has greater requirements.
-      RUSTUP_TOOLCHAIN: stable
 
     steps:
       - uses: actions/checkout@v7
@@ -34,7 +31,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-            cargo install grcov@0.8.20
+            cargo install --locked grcov@0.8.20
             sudo apt-get install lcov
 
       # This is needed to support any requirements, particularly in the `optionals` set,
@@ -81,7 +78,10 @@ jobs:
           # We set the --source-dir to '.' because we want all paths to appear relative to the repo
           # root (we need to combine them with the Python ones), but we only care about `grcov`
           # keeping the `crates/*` files; we don't care about coverage in dependencies.
-          grcov . --binary-path target/debug/ --source-dir . --output-type lcov --output-path rust.info --llvm --branch --parallel --keep-only 'crates/*'
+          # `--excl-line` takes a Rust regex; lines calling these defensive macros are never
+          # expected to execute during testing, so keep them out of the coverage report.
+          grcov . --binary-path target/debug/ --source-dir . --output-type lcov --output-path rust.info --llvm --branch --parallel --keep-only 'crates/*' \
+            --excl-line '(unreachable!|panic!|todo!|unimplemented!)'
       - name: Convert to lcov and combine data
         run: |
           set -e

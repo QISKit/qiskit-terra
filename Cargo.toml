@@ -6,7 +6,7 @@ resolver = "2"
 version = "2.7.0-dev"
 edition = "2024"
 # Keep `rust-version` in sync with `README.md` and `rust-toolchain.toml`.
-rust-version = "1.89"
+rust-version = "1.91"
 license = "Apache-2.0"
 
 # Shared dependencies that can be inherited.  This just helps a little with
@@ -15,15 +15,15 @@ license = "Apache-2.0"
 #
 # Each crate can add on specific features freely as it inherits.
 [workspace.dependencies]
-bytemuck = { version = "1.25", features = ["extern_crate_alloc", "derive"] }
+bytemuck = { version = "1.25", features = ["extern_crate_alloc", "derive", "impl_core_error"] }
 bitfield-struct = "0.13.0"
 indexmap.version = "2.10.0"
-hashbrown.version = "0.15.5"
+hashbrown.version = "0.17.1"
 num-bigint = "0.4"
 num-complex = { version = "0.4", features = ["bytemuck"] }
 nalgebra = "0.35"
 faer = "0.24"
-numpy = "0.29"
+numpy = "0.30"
 ndarray = "0.17"
 smallvec = "1.15"
 thiserror = "2.0"
@@ -49,13 +49,14 @@ binrw = "0.15"
 cbindgen = "0.29.4"
 mimalloc = "0.1.52"
 npyz = { version = "0.9.1", features = ["complex"] }
+tempfile = "3.0"
 
 # Most of the crates don't need the feature `extension-module`, since only `qiskit-pyext` builds an
 # actual C extension (the feature disables linking in `libpython`, which is forbidden in Python
 # distributions).  We only activate that feature when building the C extension module; we still need
 # it disabled for Rust-only tests to avoid linker errors with it not being loaded.  See
 # https://pyo3.rs/main/features#extension-module for more.
-pyo3 = { version = "0.29.0", features = ["abi3-py310"] }
+pyo3 = { version = "0.30", features = ["abi3-py310"] }
 
 # These are our own crates.
 qiskit-accelerate = { path = "crates/accelerate" }

@@ -56,7 +56,9 @@ class Instruction(Operation):
     _directive = False
     _standard_gate = None
 
-    def __init__(self, name, num_qubits, num_clbits, params, label=None):
+    def __init__(
+        self, name: str, num_qubits: int, num_clbits: int, params, label: str | None = None
+    ):
         """
         Args:
             name (str): instruction name
@@ -516,32 +518,32 @@ class Instruction(Operation):
         return instruction
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name."""
         return self._name
 
     @name.setter
-    def name(self, name):
+    def name(self, name: str) -> None:
         """Set the name."""
         self._name = name
 
     @property
-    def num_qubits(self):
+    def num_qubits(self) -> int:
         """Return the number of qubits."""
         return self._num_qubits
 
     @num_qubits.setter
-    def num_qubits(self, num_qubits):
+    def num_qubits(self, num_qubits: int) -> None:
         """Set num_qubits."""
         self._num_qubits = num_qubits
 
     @property
-    def num_clbits(self):
+    def num_clbits(self) -> int:
         """Return the number of clbits."""
         return self._num_clbits
 
     @num_clbits.setter
-    def num_clbits(self, num_clbits):
+    def num_clbits(self, num_clbits: int) -> None:
         """Set num_clbits."""
         self._num_clbits = num_clbits
 

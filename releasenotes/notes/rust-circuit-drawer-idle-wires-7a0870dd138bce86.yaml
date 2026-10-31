@@ -1,0 +1,8 @@
+---
+features_c:
+  - Added the ``idle_wires`` field to :c:struct:`QkCircuitDrawerConfig` struct, allowing users to control whether 
+    or not the circuit drawer should render unused qubit and classical bit wires. 
+
+features_visualization:
+  - Added support in the Rust circuit drawer to omit unused qubit and classical bit wires from the 
+    generated output. 

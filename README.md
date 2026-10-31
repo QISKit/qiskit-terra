@@ -5,7 +5,7 @@
 [![Downloads](https://img.shields.io/pypi/dm/qiskit.svg)](https://pypi.org/project/qiskit/)
 [![Coverage Status](https://coveralls.io/repos/github/Qiskit/qiskit/badge.svg?branch=main)](https://coveralls.io/github/Qiskit/qiskit?branch=main)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/qiskit)
-[![Minimum rustc 1.89](https://img.shields.io/badge/rustc-1.89+-blue.svg)](https://rust-lang.github.io/rfcs/2495-min-rust-version.html)
+[![Minimum rustc 1.91](https://img.shields.io/badge/rustc-1.91+-blue.svg)](https://rust-lang.github.io/rfcs/2495-min-rust-version.html)
 [![Downloads](https://static.pepy.tech/badge/qiskit)](https://pepy.tech/project/qiskit)<!--- long-description-skip-end -->
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.2583252.svg)](https://doi.org/10.5281/zenodo.2583252)
 
@@ -155,8 +155,8 @@ on how to get access and use these systems.
 
 ## Contribution Guidelines
 
-If you'd like to contribute to Qiskit, please take a look at our
-[contribution guidelines](CONTRIBUTING.md). By participating, you are expected to uphold our [code of conduct](CODE_OF_CONDUCT.md).
+If you'd like to contribute to Qiskit, please take a look at the [contribution guide](CONTRIBUTING.md).
+By participating, you are expected to uphold our [code of conduct](CODE_OF_CONDUCT.md).
 
 We use [GitHub issues](https://github.com/Qiskit/qiskit/issues) for tracking requests and bugs. Please
 [join the Qiskit Slack community](https://qisk.it/join-slack) for discussion, comments, and questions.

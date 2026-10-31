@@ -14,13 +14,9 @@
 Mixin for gate operator interface.
 """
 
-import sys
 from abc import ABC, abstractmethod
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from typing import Self
 
 
 class AdjointMixin(ABC):
@@ -45,7 +41,7 @@ class AdjointMixin(ABC):
 
     @abstractmethod
     def conjugate(self) -> Self:
-        """Return the conjugate of the CLASS."""
+        """Return the complex conjugate of the CLASS."""
 
     @abstractmethod
     def transpose(self) -> Self:

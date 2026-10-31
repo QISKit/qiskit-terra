@@ -149,6 +149,7 @@ This section contains functions that visualize quantum states.
    plot_state_hinton
    plot_state_paulivec
    plot_state_qsphere
+   state_to_latex
 
 Example Usage
 -------------
@@ -281,6 +282,7 @@ from .state_visualization import (
     plot_state_paulivec,
     plot_state_qsphere,
     state_drawer,
+    state_to_latex,
 )
 from .transition_visualization import visualize_transition
 from .dag_visualization import dag_drawer
@@ -318,6 +320,7 @@ __all__ = [
     "plot_state_qsphere",
     "staged_pass_manager_drawer",
     "state_drawer",
+    "state_to_latex",
     "text",
     "timeline_drawer",
     "visualize_transition",

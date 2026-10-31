@@ -70,5 +70,5 @@ setup(
             generated_files={"include": "qiskit.capi", "_ctypes.py": "qiskit.capi"},
         )
     ],
-    options={"bdist_wheel": {"py_limited_api": "cp310"}},
+    options={"bdist_wheel": {"py_limited_api": "cp311"}},
 )

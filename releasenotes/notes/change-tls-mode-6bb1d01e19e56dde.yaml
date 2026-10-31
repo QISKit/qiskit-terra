@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Fixed an issue on Linux systems when using Qiskit with other Python packages
+    that dynamically load shared libraries (such as qiskit-aer or sklearn) that
+    also were using thread local storage and in some cases could fill the available
+    static TLS space from glibc. This would result in an :exc:`ImportError` with an
+    error message like ``cannot allocate memory in static TLS block``. This was fixed
+    by changing how Qiskit build's mimalloc to use a different
+    `TLS model <https://www.akkadia.org/drepper/tls.pdf>`__ that doesn't use the static
+    TLS. See `#17213 <https://github.com/Qiskit/qiskit/issues/17213>`__.

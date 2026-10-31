@@ -23,9 +23,11 @@
 //! - [`program`] defines [`QuantumProgram`], which is a list of [`ProgramFunction`]s.
 //! - [`data_tree`] defines [`DataTree`], the container for nested structured values used to describe the
 //!   IO contract of a quantum program.
+//! - [`randomization`] defines randomization semantics for [`QuantumProgram`]s.
 pub mod data_tree;
 pub mod ops;
 pub mod program;
+pub mod randomization;
 pub mod tensor;
 
 pub use data_tree::{ArityMismatch, DataTree, InvalidName, PathEntry, TreeMatchError};

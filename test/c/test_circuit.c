@@ -1298,12 +1298,29 @@ static int test_circuit_draw(void) {
     QkPauliProductMeasurement ppm = {z, x, 4, true};
     qk_circuit_pauli_product_measurement(circuit, &ppm, qubits, 0);
 
-    QkCircuitDrawerConfig config = {false, true, 80, 0};
+    QkCircuitDrawerConfig config = {false, true, 80, 0, false};
 
     char *circ_str = qk_circuit_draw(circuit, &config);
 
     qk_str_free(circ_str);
     qk_param_free(angle);
+    qk_circuit_free(circuit);
+
+    return Ok;
+}
+
+static int test_circuit_draw_empty(void) {
+    QkCircuit *circuit = qk_circuit_new(0, 0);
+    QkCircuitDrawerConfig config = {false, true, 80, 0, true};
+
+    char *circ_str = qk_circuit_draw(circuit, &config);
+    if (circ_str == NULL || strcmp(circ_str, "") != 0) {
+        qk_str_free(circ_str);
+        qk_circuit_free(circuit);
+        return EqualityError;
+    }
+
+    qk_str_free(circ_str);
     qk_circuit_free(circuit);
 
     return Ok;
@@ -1891,6 +1908,7 @@ int test_circuit(void) {
     num_failed += RUN_TEST(test_unitary_gate_1q);
     num_failed += RUN_TEST(test_unitary_gate_3q);
     num_failed += RUN_TEST(test_circuit_draw);
+    num_failed += RUN_TEST(test_circuit_draw_empty);
     num_failed += RUN_TEST(test_get_instruction_params);
     num_failed += RUN_TEST(test_instruction_params_ownership);
     num_failed += RUN_TEST(test_parameterized_circuit);
