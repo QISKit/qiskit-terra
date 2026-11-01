@@ -72,6 +72,11 @@ fn main() {
     let (n, graph) = last.expect("at least one size");
     println!();
     println!("--- 2. LineGraph<MirInstruction> layout ({n} instructions) ---");
+
+    // Note: `DbgFlags::RUST_LAYOUT` on enums needs the nightly build and we currently use stable.
+    // It would panic if the tree walk reaches an enum (`MirOp`, `Slot`,
+    // `Pauli`, `QidSpace`, `BitLayout`).  It is only safe here because `mem_dbg` prints a `Vec`
+    // as a single leaf, so the walk stops at `slots` and never reaches `Slot` or `MirOp`.
     graph
         .mem_dbg(DbgFlags::default() | DbgFlags::CAPACITY | DbgFlags::RUST_LAYOUT)
         .expect("failed to print mem_dbg tree");
@@ -81,6 +86,9 @@ fn main() {
     let instruction = pauli_rotation_instruction(0);
     println!();
     println!("--- 3. MirInstruction layout ---");
+
+    // Don't use `RUST_LAYOUT` flad, since it requires the nigthly build for the inner enums.
+    // Fields are printed in declaration order instead.
     instruction
         .mem_dbg(DbgFlags::default())
         .expect("failed to print mem_dbg tree");
