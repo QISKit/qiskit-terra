@@ -640,7 +640,7 @@ mod tests {
         expected.extend_from_slice(b"s\0\0\0\x07d\0\0\0\x08\0\0\0\x09");
         expected.extend_from_slice(b"\0\x03foo");
         expected.extend_from_slice(&2u64.to_be_bytes()); // metadata_size
-        expected.extend_from_slice(b"{}"); 
+        expected.extend_from_slice(b"{}");
         assert_eq!(encoded(&header, (VERSION,)), expected);
     }
 
