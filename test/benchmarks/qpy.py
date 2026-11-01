@@ -12,6 +12,8 @@
 
 
 import io
+import os
+from unittest.mock import patch
 from qiskit.circuit import Parameter
 from qiskit import QuantumCircuit
 from qiskit import qpy
@@ -73,10 +75,12 @@ class ParallelLoadBenchmarks:
         self.qpy_bytes = qpy_file.getvalue()
 
     def time_load_sequential(self, _, __, ___):
-        qpy.load(io.BytesIO(self.qpy_bytes), parallel=False)
+        with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "TRUE"}):
+            qpy.load(io.BytesIO(self.qpy_bytes))
 
     def time_load_parallel(self, _, __, ___):
-        qpy.load(io.BytesIO(self.qpy_bytes), parallel=True)
+        with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "FALSE"}):
+            qpy.load(io.BytesIO(self.qpy_bytes))
 
 
 class CustomGateBenchmarks:

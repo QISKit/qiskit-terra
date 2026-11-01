@@ -17,13 +17,13 @@
 // including headers, circuit tables, and multiple circuits.
 
 use binrw::{BinRead, Endian, VecArgs};
-use ndarray::parallel::prelude::IntoParallelRefIterator;
-use ndarray::parallel::prelude::ParallelIterator;
 use pyo3::PyResult;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict};
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::converters::QuantumCircuitData;
+use qiskit_util::getenv_use_multiple_threads;
+use rayon::prelude::*;
 
 use crate::annotations::{AnnotationHandler, NativeDeserializers, NativeSerializers};
 use crate::bytes::Bytes;
@@ -303,36 +303,12 @@ pub fn native_dump_qpy(
     .map(|bytes| bytes.0)
 }
 
-enum ParallelPolicy {
-    Parallel,
-    Sequential,
-}
-
-impl From<bool> for ParallelPolicy {
-    fn from(is_parallel: bool) -> Self {
-        if is_parallel {
-            Self::Parallel
-        } else {
-            Self::Sequential
-        }
-    }
-}
-
-impl ParallelPolicy {
-    pub fn map_collect<T, U, F>(self, items: &[T], f: F) -> Result<Vec<U>, QpyError>
-    where
-        T: Sync,
-        U: Send,
-        F: Fn(&T) -> Result<U, QpyError> + Sync + Send,
-    {
-        match self {
-            Self::Parallel => items.par_iter().map(f).collect(),
-            Self::Sequential => items.iter().map(f).collect(),
-        }
-    }
-}
-
 /// Deserializes native circuits from a complete QPY payload.
+///
+/// For QPY version 16 or later, circuits are deserialized concurrently across multiple
+/// threads using `rayon`. This is controlled by the `QISKIT_IN_PARALLEL` and
+/// `QISKIT_FORCE_THREADS` environment variables — see
+/// [`qiskit_util::getenv_use_multiple_threads`] for the exact logic.
 ///
 /// # Arguments
 ///
@@ -345,7 +321,6 @@ pub fn load_qpy(
     data: &Bytes,
     annotation_handler: Option<AnnotationHandler>,
     caller: Option<QpyCaller>,
-    parallel: bool,
 ) -> Result<Vec<LoadedCircuit>, QpyError> {
     // Every QPY file begins with "QISKIT" followed by a version byte.
     // Since the header might be effected by the version, we begin by explicitly extracting the version.
@@ -391,27 +366,35 @@ pub fn load_qpy(
     cursor.seek(std::io::SeekFrom::Start(header_size as u64))?;
     if qpy_file_header.qpy_version >= 16 {
         let qpy_raw_circuits = read_raw_circuits(&mut cursor, num_programs)?;
-        let parallel_circuits = ParallelPolicy::from(parallel).map_collect(
-            &qpy_raw_circuits,
-            |raw_circuit| -> Result<LoadedCircuit, QpyError> {
-                let (packed_circuit, _) = deserialize_with_args::<QPYCircuit, (u8,)>(
-                    raw_circuit,
-                    (qpy_file_header.qpy_version,),
-                )?;
-                let circuit_data = unpack_circuit(
-                    &packed_circuit,
-                    qpy_file_header.qpy_version,
-                    use_symengine,
-                    annotation_handler.child()?,
-                    caller,
-                )?;
-                Ok(LoadedCircuit {
-                    circuit_data,
-                    packed_circuit,
-                })
-            },
-        )?;
-        circuits.extend(parallel_circuits);
+        let load_one_circuit = |raw_circuit: &Bytes| -> Result<LoadedCircuit, QpyError> {
+            let (packed_circuit, _) = deserialize_with_args::<QPYCircuit, (u8,)>(
+                raw_circuit,
+                (qpy_file_header.qpy_version,),
+            )?;
+            let circuit_data = unpack_circuit(
+                &packed_circuit,
+                qpy_file_header.qpy_version,
+                use_symengine,
+                annotation_handler.child()?,
+                caller,
+            )?;
+            Ok(LoadedCircuit {
+                circuit_data,
+                packed_circuit,
+            })
+        };
+
+        if getenv_use_multiple_threads() {
+            let parallel_circuits: Vec<LoadedCircuit> = qpy_raw_circuits
+                .par_iter()
+                .map(load_one_circuit)
+                .collect::<Result<Vec<_>, _>>()?;
+            circuits.extend(parallel_circuits);
+        } else {
+            for raw_circuit in &qpy_raw_circuits {
+                circuits.push(load_one_circuit(raw_circuit)?);
+            }
+        }
     } else {
         // QPY version < 16, no offset table
         let packed_qpy_circuits = Vec::<QPYCircuit>::read_options(
@@ -447,6 +430,11 @@ pub fn load_qpy(
 /// circuit, and then applies Python-only metadata, layout, and annotation data
 /// to create Python `QuantumCircuit` objects.
 ///
+/// For QPY version 16 or later, circuits are deserialized concurrently across multiple
+/// threads using `rayon`. This is controlled by the `QISKIT_IN_PARALLEL` and
+/// `QISKIT_FORCE_THREADS` environment variables — see
+/// [`qiskit_util::getenv_use_multiple_threads`] for the exact logic.
+///
 /// # Arguments
 ///
 /// * py: The GIL handle.
@@ -461,21 +449,14 @@ pub fn py_load_qpy<'py>(
     file_obj: &Bound<PyAny>,
     metadata_deserializer: Option<Bound<PyAny>>,
     annotation_factories: Option<Bound<PyDict>>,
-    parallel: bool,
 ) -> Result<Vec<Bound<'py, PyAny>>, QpyError> {
     let annotation_factories = annotation_factories.unwrap_or(PyDict::new(py));
     // Read all data from file object
     let data: Bytes = file_obj.call_method0("read")?.extract()?;
 
     let annotation_handler = AnnotationHandler::python(&annotation_factories.clone().unbind())?;
-    let loaded_circuits = py.detach(|| {
-        load_qpy(
-            &data,
-            Some(annotation_handler),
-            Some(QpyCaller::Python),
-            parallel,
-        )
-    })?;
+    let loaded_circuits =
+        py.detach(|| load_qpy(&data, Some(annotation_handler), Some(QpyCaller::Python)))?;
     loaded_circuits
         .into_iter()
         .map(|loaded| {
@@ -491,7 +472,7 @@ pub fn py_load_qpy<'py>(
 
 /// Deserialize native circuits from a complete QPY payload.
 pub fn native_load_qpy(data: &[u8]) -> Result<Vec<CircuitData>, QpyError> {
-    load_qpy(&Bytes::from(data), None, Some(QpyCaller::Native), false).map(|loaded| {
+    load_qpy(&Bytes::from(data), None, Some(QpyCaller::Native)).map(|loaded| {
         loaded
             .into_iter()
             .map(|loaded| loaded.circuit_data)
@@ -552,7 +533,7 @@ mod tests {
             ))
         });
         let payload = dump_qpy(data, version, None, None).unwrap();
-        let loaded = load_qpy(&payload, None, None, false).unwrap();
+        let loaded = load_qpy(&payload, None, None).unwrap();
 
         // Exactly one circuit, with exactly one instruction.
         assert_eq!(loaded.len(), 1);

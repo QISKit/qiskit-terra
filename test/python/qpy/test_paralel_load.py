@@ -12,14 +12,36 @@
 
 
 import io
+import os
+from unittest.mock import patch
 
+from qiskit.circuit.annotated_operation import AnnotatedOperation, ControlModifier, InverseModifier
+from qiskit.circuit.gate import Gate
+from qiskit.circuit.library.pauli_evolution import PauliEvolutionGate
+from qiskit.circuit.library.standard_gates.x import CXGate, XGate
+from qiskit.circuit.parameter import Parameter
+from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit.random import random_circuit
 from qiskit.qpy import dump, load
+from qiskit.quantum_info.operators.symplectic.sparse_pauli_op import SparsePauliOp
+from qiskit.synthesis.evolution.lie_trotter import LieTrotter
 from test import QiskitTestCase
 
 
+class MyParamGate(Gate):
+    "Custom gate for exercise the custom instruciton load"
+
+    def __init__(self, phi):
+        super().__init__("custom gate", 1, [phi])
+
+    def _define(self):
+        qc = QuantumCircuit(1)
+        qc.rx(self.params[0], 0)
+        self.definition = qc
+
+
 class TestParallelLoad(QiskitTestCase):
-    """Verify that parallel and sequantial loads produce identical results"""
+    """Verify that parallel and sequential loads produce identical results"""
 
     def generate_dump_with_random_circuits(self, num_circuits=10, num_qubits=20, depth=50, seed=42):
         circuits = [
@@ -35,8 +57,59 @@ class TestParallelLoad(QiskitTestCase):
     def test_parallel_and_sequential_match(self):
         dump = self.generate_dump_with_random_circuits()
 
-        sequential = load(io.BytesIO(dump), parallel=False)
-        parallel = load(io.BytesIO(dump), parallel=True)
+        with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "TRUE"}):
+            sequential = load(io.BytesIO(dump))
+        with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "FALSE"}):
+            parallel = load(io.BytesIO(dump))
+
+        self.assertEqual(len(sequential), len(parallel))
+        for seq, par in zip(sequential, parallel):
+            self.assertEqual(seq, par)
+
+    def generatge_dump_with_custom_operations(self):
+        """Build severl circuits, with with multiple operations: custom gate, PauliEvaluation,
+        AnnotatedOperation and ControlledGate, in order to exersise GIL acquiring in parallel load
+        """
+        theta = Parameter("theta")
+        circuits = []
+
+        qc1 = QuantumCircuit(3)
+        qc1.append(MyParamGate(1.23), [0])
+        qc1.append(MyParamGate(theta), [1])
+        qc1.append(XGate().control(2, annotated=False), [0, 1, 2])
+        circuits.append(qc1)
+
+        qc2 = QuantumCircuit(2)
+        p = PauliEvolutionGate(
+            SparsePauliOp.from_list([("ZI", 1), ("IZ", 1)]), time=2, synthesis=LieTrotter(reps=2)
+        )
+        qc2.append(p, [0, 1])
+        circuits.append(qc2)
+
+        qc3 = QuantumCircuit(4, 1)
+        op1 = AnnotatedOperation(
+            CXGate(), [InverseModifier(), ControlModifier(1), InverseModifier()]
+        )
+        qc3.append(op1, [0, 1, 2])
+        qc3.append(MyParamGate(2 * theta), [3])
+        qc3.append(CXGate().control(1, annotated=False), [0, 1, 2])
+        circuits.append(qc3)
+
+        q4 = QuantumCircuit(2)
+        q4.append(PauliEvolutionGate(SparsePauliOp.from_list([("XX", 1)]), time=1), [0, 1])
+        q4.append(AnnotatedOperation(XGate(), InverseModifier()), [0])
+        circuits.append(q4)
+
+        buf = io.BytesIO()
+        dump(circuits, buf)
+        return buf.getvalue()
+
+    def test_parallel_load_extensive_GIL_release(self):
+        dump = self.generatge_dump_with_custom_operations()
+        with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "TRUE"}):
+            sequential = load(io.BytesIO(dump))
+        with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "FALSE"}):
+            parallel = load(io.BytesIO(dump))
 
         self.assertEqual(len(sequential), len(parallel))
         for seq, par in zip(sequential, parallel):
