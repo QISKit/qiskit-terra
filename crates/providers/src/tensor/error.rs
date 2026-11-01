@@ -56,4 +56,23 @@ pub enum TensorError {
         fmt_shape(shape)
     )]
     DynamicDim { shape: Vec<Dim> },
+    /// A ragged axis is not an axis of the shape it is ragged over, or is its last axis.
+    ///
+    /// The last axis is excluded because that is the one a [`BitTensor`](super::BitTensor) packs
+    /// along, so a ragged final axis has no byte boundary to land on.
+    #[error(
+        "axis {axis} cannot be ragged in a shape of {ndim} dimension(s): \
+         a ragged axis must be one of the first {} and not the last",
+        ndim.saturating_sub(1)
+    )]
+    CsrAxis { axis: usize, ndim: usize },
+    /// A ragged array's offsets do not describe runs over its bounds.
+    #[error("invalid offsets for a ragged array: {reason}")]
+    CsrOffsets { reason: String },
+    /// A ragged array's values do not match the runs its offsets describe.
+    #[error("a ragged array's values should have shape {expected:?}, got {actual:?}")]
+    CsrValues {
+        expected: Vec<usize>,
+        actual: Vec<usize>,
+    },
 }

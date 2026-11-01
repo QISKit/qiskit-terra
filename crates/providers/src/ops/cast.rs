@@ -67,6 +67,7 @@ mod test {
         TensorType {
             dtype,
             shape: vec![Dim::Fixed(len)],
+            ..Default::default()
         }
     }
 
@@ -89,6 +90,7 @@ mod test {
         let bounded = |dtype| TensorType {
             dtype,
             shape: vec![Dim::Bounded { max: 4000 }, Dim::Fixed(2)],
+            ..Default::default()
         };
         assert_eq!(
             Cast::new(DType::F64)

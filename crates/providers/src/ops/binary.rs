@@ -87,6 +87,7 @@ mod tests {
         TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Fixed(len)],
+            ..Default::default()
         }
     }
 
@@ -174,6 +175,7 @@ mod tests {
         let f32_3 = TensorType {
             dtype: DType::F32,
             shape: vec![Dim::Fixed(3)],
+            ..Default::default()
         };
         assert_eq!(
             Add.infer_output_types(&[f64_1d(3), f32_3]).unwrap(),
@@ -203,6 +205,7 @@ mod tests {
         let bounded = TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Bounded { max: 8 }],
+            ..Default::default()
         };
         assert!(matches!(
             Add.infer_output_types(&[bounded.clone(), bounded.clone()])
@@ -232,6 +235,7 @@ mod tests {
         let bit = TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Fixed(2)],
+            ..Default::default()
         };
         assert!(matches!(
             Add.infer_output_types(&[bit.clone(), bit.clone()])
@@ -246,6 +250,7 @@ mod tests {
         let c128 = TensorType {
             dtype: DType::C128,
             shape: vec![Dim::Fixed(2)],
+            ..Default::default()
         };
         assert!(matches!(
             Remainder
@@ -270,6 +275,7 @@ mod tests {
         let bit = TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Fixed(3)],
+            ..Default::default()
         };
         assert_eq!(
             Add.infer_output_types(&[bit, f64_1d(3)]).unwrap(),

@@ -12,11 +12,17 @@
 
 //! A [`Tensor`] and its staticly introspectable data-less counterpart, a [`TensorType`].
 //!
-//! A value is a dense array over one of a fixed set of [`DType`]s. Its type pairs a dtype with a
-//! shape whose axes are each either a fixed size or a size bounded above ([`Dim`]).
+//! A value is an array over one of a fixed set of [`DType`]s. Its type pairs a dtype with a shape
+//! whose axes are each either a fixed size or a size bounded above ([`Dim`]), and a [`Layout`]
+//! saying whether every position that shape describes holds an entry.
+//!
+//! Most tensors are dense. A [`CsrBits`] is the exception: a ragged array of bits, whose entries
+//! along one axis vary in number with the indices of the axes before it. Post-selection produces
+//! one, since the number of shots that survive a criterion differs per sweep point.
 
 mod bits;
 mod broadcast;
+mod csr;
 mod dtype;
 mod error;
 mod tensor_type;
@@ -24,7 +30,8 @@ mod value;
 
 pub use bits::BitTensor;
 pub use broadcast::broadcast_shape;
+pub use csr::CsrBits;
 pub use dtype::{DType, promotion};
 pub use error::TensorError;
-pub use tensor_type::{Dim, TensorType, broadcast_dims, broadcast_dims_to, require_static};
+pub use tensor_type::{Dim, Layout, TensorType, broadcast_dims, broadcast_dims_to, require_static};
 pub use value::Tensor;

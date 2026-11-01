@@ -162,6 +162,7 @@ mod tests {
         TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Fixed(len)],
+            ..Default::default()
         }
     }
 
@@ -229,6 +230,7 @@ mod tests {
         let bounded = TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Bounded { max: 8 }],
+            ..Default::default()
         };
         assert_eq!(
             BitwiseNot
@@ -243,6 +245,7 @@ mod tests {
         let ty = TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Bounded { max: 4000 }, Dim::Fixed(3)],
+            ..Default::default()
         };
         assert_eq!(
             Parity::new(0).infer_output_types(&[ty]).unwrap(),
@@ -255,6 +258,7 @@ mod tests {
         let f64_1 = TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Fixed(1)],
+            ..Default::default()
         };
         assert!(matches!(
             BitwiseAnd
@@ -273,6 +277,7 @@ mod tests {
         let f64_1 = TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Fixed(1)],
+            ..Default::default()
         };
         assert!(matches!(
             BitwiseNot.infer_output_types(&[f64_1]).unwrap_err(),

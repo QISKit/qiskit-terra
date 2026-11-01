@@ -92,6 +92,7 @@ mod test {
         TensorType {
             dtype: DType::F64,
             shape,
+            ..Default::default()
         }
     }
 
@@ -123,6 +124,7 @@ mod test {
         let bit = TensorType {
             dtype: DType::Bit,
             shape: fixed(&[1]),
+            ..Default::default()
         };
         assert_eq!(
             BroadcastTo::new(fixed(&[4]))

@@ -152,6 +152,7 @@ impl Tensor {
         TensorType {
             dtype: self.dtype(),
             shape: self.shape().iter().map(|&n| Dim::Fixed(n)).collect(),
+            ..Default::default()
         }
     }
 
@@ -159,8 +160,11 @@ impl Tensor {
     ///
     /// A [`Dim::Fixed`] axis admits exactly its size and a [`Dim::Bounded`] axis admits any
     /// size up to and including its bound.
+    ///
+    /// Every `Tensor` variant is dense, so a ragged type is satisfied by no value of this type.
     pub fn matches(&self, ty: &TensorType) -> bool {
-        self.dtype() == ty.dtype
+        !ty.is_ragged()
+            && self.dtype() == ty.dtype
             && self.shape().len() == ty.shape.len()
             && self
                 .shape()
@@ -598,6 +602,7 @@ mod test {
             TensorType {
                 dtype: DType::F64,
                 shape: vec![Dim::Fixed(3)],
+                ..Default::default()
             }
         );
 
@@ -608,6 +613,7 @@ mod test {
             TensorType {
                 dtype: DType::I16,
                 shape: vec![Dim::Fixed(2), Dim::Fixed(4)],
+                ..Default::default()
             }
         );
     }
@@ -630,6 +636,7 @@ mod test {
                 !t.matches(&TensorType {
                     dtype: DType::F64,
                     shape: shape.clone(),
+                    ..Default::default()
                 }),
                 "for shape {shape:?}"
             );
@@ -637,6 +644,7 @@ mod test {
         assert!(!t.matches(&TensorType {
             dtype: DType::F32,
             shape: vec![Dim::Fixed(3)],
+            ..Default::default()
         }));
     }
 
@@ -645,11 +653,27 @@ mod test {
         let bounded = |max| TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Bounded { max }],
+            ..Default::default()
         };
         let t = Tensor::from([1.0f64, 2.0, 3.0]);
         assert!(t.matches(&bounded(4)));
         assert!(t.matches(&bounded(3)));
         assert!(!t.matches(&bounded(2)));
+    }
+
+    #[test]
+    fn test_matches_rejects_a_ragged_type() {
+        // Every `Tensor` variant is dense, so no value satisfies a ragged type -- not even one
+        // whose dtype and shape line up exactly.
+        let dims = vec![Dim::Fixed(2), Dim::Fixed(3), Dim::Fixed(2)];
+        let ragged = TensorType::ragged(DType::Bit, dims.clone(), 1, 3).unwrap();
+        let value =
+            Tensor::Bit(BitTensor::from_bools(std::iter::repeat_n(false, 12), &[2, 3, 2]).unwrap());
+        assert!(
+            value.matches(&TensorType::dense(DType::Bit, dims)),
+            "the same value satisfies the dense type"
+        );
+        assert!(!value.matches(&ragged));
     }
 
     // The cast method.

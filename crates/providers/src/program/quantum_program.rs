@@ -170,7 +170,7 @@ pub enum ProgramEvalError {
 /// use qiskit_providers::tensor::{DType, Dim, Tensor, TensorType};
 /// use qiskit_providers::{DataTree, FunctionId, ProgramFunction, QuantumProgram};
 ///
-/// let ty = TensorType { dtype: DType::F64, shape: vec![Dim::Fixed(1)] };
+/// let ty = TensorType::dense(DType::F64, vec![Dim::Fixed(1)]);
 /// let mut function = ProgramFunction::new();
 /// let x = function.add_parameter(ty.clone());
 /// let y = function.add_parameter(ty.clone());
@@ -456,6 +456,7 @@ mod test {
         TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Fixed(len)],
+            ..Default::default()
         }
     }
 

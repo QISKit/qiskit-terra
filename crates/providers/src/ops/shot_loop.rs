@@ -89,6 +89,7 @@ impl ProgramOp for ShotLoop {
                 outputs.push(TensorType {
                     dtype: DType::Bit,
                     shape,
+                    ..Default::default()
                 });
             }
         }
@@ -169,6 +170,7 @@ mod test {
         TensorType {
             dtype,
             shape: shape.iter().copied().map(Dim::Fixed).collect(),
+            ..Default::default()
         }
     }
 
@@ -179,6 +181,7 @@ mod test {
         TensorType {
             dtype: DType::Bit,
             shape,
+            ..Default::default()
         }
     }
 
@@ -251,6 +254,7 @@ mod test {
                 TensorType {
                     dtype: DType::F64,
                     shape: vec![bounded, Dim::Fixed(1)],
+                    ..Default::default()
                 },
             ])
             .unwrap(),
@@ -307,6 +311,7 @@ mod test {
             TensorType {
                 dtype: DType::F64,
                 shape: vec![Dim::Bounded { max: 2 }],
+                ..Default::default()
             },
         ] {
             assert!(matches!(

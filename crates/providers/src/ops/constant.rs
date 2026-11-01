@@ -95,6 +95,7 @@ mod tests {
             vec![TensorType {
                 dtype: DType::F64,
                 shape: vec![Dim::Fixed(2), Dim::Fixed(2)],
+                ..Default::default()
             }]
         );
     }
