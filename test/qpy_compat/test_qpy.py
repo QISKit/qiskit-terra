@@ -636,6 +636,28 @@ def generate_layout_circuits():
     return [qc]
 
 
+def generate_custom_definition_layout_circuit():
+    """Test a layout on the circuit definition of a custom gate."""
+
+    from qiskit.transpiler.layout import TranspileLayout, Layout
+
+    definition = QuantumCircuit(1)
+    definition.x(0)
+    input_qubit = Qubit()
+    input_layout = Layout.from_qubit_list([input_qubit])
+    definition._layout = TranspileLayout(
+        input_layout,
+        input_qubit_mapping={input_qubit: 0},
+        final_layout=None,
+    )
+
+    custom_gate = Gate("gate_with_definition_layout", 1, [])
+    custom_gate.definition = definition
+    circuit = QuantumCircuit(1, name="custom gate definition with layout")
+    circuit.append(custom_gate, [0])
+    return [circuit]
+
+
 def generate_clifford_circuits():
     """Test qpy circuits with Clifford operations."""
     from qiskit.quantum_info import Clifford
@@ -1068,6 +1090,10 @@ def generate_circuits(
         output_circuits["controlled_gates.qpy"] = generate_controlled_gates(current_version)
     if generating_version.release >= (0, 24, 2):
         output_circuits["layout.qpy"] = generate_layout_circuits()
+    if generating_version.release >= (2, 6, 0):
+        output_circuits["custom_definition_layout.qpy"] = (
+            generate_custom_definition_layout_circuit()
+        )
     if (0, 25, 0) <= generating_version.release < (2, 0):
         output_circuits["acquire_inst_with_kernel_and_disc.qpy"] = (
             None if load_context else generate_acquire_instruction_with_kernel_and_discriminator()
@@ -1270,6 +1296,13 @@ def load_qpy(qpy_files, generating_version):
                 equivalent=equivalent,
                 context=context,
             )
+            if path == "custom_definition_layout.qpy":
+                definition_layout = qpy_circuits[i].data[0].operation.definition.layout
+                input_qubit = definition_layout.initial_layout.get_physical_bits()[0]
+                if definition_layout.input_qubit_mapping != {input_qubit: 0}:
+                    msg = f"QPY Error: For {context}: custom definition layout mismatch\n"
+                    sys.stderr.write(msg)
+                    sys.exit(4)
 
     from qiskit.qpy.exceptions import QpyError
 
