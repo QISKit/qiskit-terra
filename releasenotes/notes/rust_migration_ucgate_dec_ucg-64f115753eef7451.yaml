@@ -11,6 +11,8 @@ performance:
     decomposition to reach the primitive gates.
     See `#16908 <https://github.com/Qiskit/qiskit/pull/16908>`__ for more details.
 upgrade:
-  - | 
-    When ``mux_simp=True``, nearly identical gates (differing by more than ``1e-8``) are
-    now treated as distinct, so some control qubits may be kept that were previously removed.
+  - |
+    When ``mux_simp=True``, :class:`.UCGate` now compares single-qubit gates with an
+    absolute tolerance of ``1e-8`` only,  instead of also including a relative tolerance.
+    Gates that differ by between ``1e-8`` and ``1e-5`` are no longer merged, so a control
+    qubit may be kept where it was previously removed.

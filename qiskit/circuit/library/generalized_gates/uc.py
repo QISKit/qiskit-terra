@@ -145,8 +145,10 @@ class UCGate(Gate):
         ucg_circuit, _ = self._dec_ucg()
         self.definition = ucg_circuit
 
+
     def _dec_ucg(self):
-        """Decompose this gate with :func:`uc_gate.dec_ucg` (https://arxiv.org/pdf/quant-ph/0410066.pdf).
+        """Decompose this gate with :func:``uc_gate.dec_ucg``.
+        See https://arxiv.org/pdf/quant-ph/0410066.pdf
 
         Returns:
             tuple: ``(circuit, diagonal)``, the circuit implementing the gate (up to the
