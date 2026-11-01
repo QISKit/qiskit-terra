@@ -146,9 +146,11 @@ class UCGate(Gate):
         self.definition = ucg_circuit
 
     def _dec_ucg(self):
-        """
-        This method finds the single qubit gate arising in the decomposition of UCGates given in
-        https://arxiv.org/pdf/quant-ph/0410066.pdf.
+        """Decompose this gate with :func:`uc_gate.dec_ucg` (https://arxiv.org/pdf/quant-ph/0410066.pdf).
+
+        Returns:
+            tuple: ``(circuit, diagonal)``, the circuit implementing the gate (up to the
+            diagonal if ``up_to_diagonal`` is set) and the diagonal as a list of complex numbers.
         """
         single_qubit_gates = [np.asarray(gate, dtype=complex, order="f") for gate in self.params]
         return uc_gate.dec_ucg(

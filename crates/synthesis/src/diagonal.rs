@@ -30,7 +30,7 @@ pub(crate) fn diagonal_gate_circuit(diag_phases: &[f64]) -> Result<CircuitData, 
     let mut diag_phases = diag_phases.to_vec();
 
     // Worst-case instruction count across all recursion levels is 2 * diag_phases.len() - 3
-    let capacity = 2 * diag_phases.len();
+    let capacity = (2 * diag_phases.len()).saturating_sub(3);
     let mut circuit = CircuitData::with_capacity(num_qubits as u32, 0, capacity, Param::Float(0.))?;
 
     let mut n = diag_phases.len();
@@ -61,15 +61,16 @@ pub(crate) fn diagonal_gate_circuit(diag_phases: &[f64]) -> Result<CircuitData, 
 /// exactly `2^num_qubits` entries.
 #[pyfunction]
 pub fn synth_diagonal(diag_phases: Vec<f64>, num_qubits: u32) -> PyResult<PyCircuitData> {
-    let expected = 1u64 << num_qubits;
+    let expected = 1usize
+        .checked_shl(num_qubits)
+        .ok_or_else(|| PyValueError::new_err(format!("num_qubits={num_qubits} is too large")))?;
     let got = diag_phases.len();
-    if got as u64 != expected {
+    if got != expected {
         return Err(PyValueError::new_err(format!(
             "expected {expected} diagonal phases for {num_qubits} qubits, got {got}"
         )));
     }
-    let phases = diag_phases;
-    let circuit = diagonal_gate_circuit(&phases).map_err(PyErr::from)?;
+    let circuit = diagonal_gate_circuit(&diag_phases).map_err(PyErr::from)?;
     Ok(circuit.into())
 }
 

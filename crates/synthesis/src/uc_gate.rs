@@ -72,7 +72,7 @@ fn compute_2x2_eig(mat: Matrix2<Complex64>) -> ([Complex64; 2], Matrix2<Complex6
         v_2.iter_mut().for_each(|x| *x /= v_2_norm);
         Matrix2::from_columns(&[v_1, v_2])
     } else {
-        // we know b is not close to 0 due to previous check {
+        // we know b is not close to 0 due to previous check
         let mut v_1: Vector2<Complex64> = [b, l1 - a].into();
         let v_1_norm = v_1.norm();
         v_1.iter_mut().for_each(|x| *x /= v_1_norm);
@@ -248,7 +248,16 @@ fn dec_ucg_inner(
     }
 
     let mut global_phase = 0.0;
-    let mut circuit = CircuitData::with_capacity(num_qubits, 0, 0, Param::Float(global_phase))?;
+    let n_gates = new_gates.len();
+    // Main loop: n single-qubit unitaries and n - 1 CX gates.
+    let mut capacity = 2 * n_gates - 1;
+    if !up_to_diagonal {
+        // diagonal_gate_circuit on 2n phases emits at most 2 * (2n) - 3 gates.
+        capacity += 4 * n_gates - 3;
+    }
+    let mut circuit =
+        CircuitData::with_capacity(num_qubits, 0, capacity, Param::Float(global_phase))?;
+
     let mut gates = new_gates;
     let diagonal = dec_ucg_help(&mut gates, simplified_num_qubits);
     let n = gates.len();
@@ -451,7 +460,7 @@ fn dec_ucg_help(single_qubit_gates: &mut [Matrix2<Complex64>], num_qubits: u32) 
                 // Remark: The Rz(pi/2) rotation acting on the target qubit and the Hadamard
                 // gates arising in the decomposition of D are ignored for the moment (they will
                 // be added together with the C-NOT gates at the end of the decomposition
-                // (in the method dec_ucg()))
+                // (in the method dec_ucg_inner()))
                 let r_conj_t = r.adjoint();
                 if ucg_index < num_ucgs - 1 {
                     // Absorb the Rz(pi/2) rotation on the control into the UC-Rz gate and
@@ -561,15 +570,13 @@ mod test {
         }
     }
 
-    // Helper: build a 2x2 unitary from a real angle (Ry-like rotation).
-    // Matches the ry() helper in test/python/test_simplify_porting.py.
+    // Helper: build a 2x2 real rotation (Ry) matrix from an angle.
     fn ry(theta: f64) -> Matrix2<Complex64> {
         let c = Complex64::new((theta / 2.0).cos(), 0.0);
         let s = Complex64::new((theta / 2.0).sin(), 0.0);
         Matrix2::new(c, -s, s, c)
     }
 
-    // Case 1 — matches Python: TestSimplify::test_single_gate
     // Single gate: no controls exist, gate is returned unchanged.
     #[test]
     fn test_simplify_single_gate() {
@@ -584,7 +591,6 @@ mod test {
         assert!(abs_diff_eq!(new_mux[0], gate, epsilon = 1e-12));
     }
 
-    // Case 2 — matches Python: TestSimplify::test_two_identical_gates_stub
     // [A, A]: period-1 repetition → control 1 removable, mux collapses to [A].
     #[test]
     fn test_simplify_two_identical_gates() {
@@ -599,7 +605,6 @@ mod test {
         assert!(abs_diff_eq!(new_mux[0], gate, epsilon = 1e-12));
     }
 
-    // Case 3 — matches Python: TestSimplify::test_four_gates_two_controls_stub
     // [A, B, A, B]: period-2 repetition → control 1 removed, mux = [A, B].
     #[test]
     fn test_simplify_four_gates_two_controls() {
@@ -616,7 +621,6 @@ mod test {
         assert!(abs_diff_eq!(new_mux[1], b, epsilon = 1e-12));
     }
 
-    // Case 4 — matches Python: TestSimplify::test_all_identical_stub
     // [A, A, A, A]: both controls removable, mux collapses to [A].
     #[test]
     fn test_simplify_all_identical() {
@@ -631,7 +635,6 @@ mod test {
         assert!(abs_diff_eq!(new_mux[0], gate, epsilon = 1e-12));
     }
 
-    // Case 5 — matches Python: TestSimplify::test_no_simplification_possible
     // All different gates: nothing is simplified, all controls and gates kept.
     #[test]
     fn test_simplify_no_simplification_possible() {
@@ -644,7 +647,6 @@ mod test {
         assert_eq!(new_mux.len(), 4);
     }
 
-    // Case 6 — matches Python: TestSimplify::test_controls_are_sorted_ascending
     // Controls must always be returned in ascending order (BTreeSet guarantee).
     #[test]
     fn test_simplify_controls_sorted_ascending() {
@@ -677,13 +679,8 @@ mod test {
         assert_eq!(result, diag);
     }
 
-    // Case: control 1 removed (d=2^1=2), num_qubits=2, new_ctrl=[2] (only ctrl 2 survived)
-    // Input diag has 2^1=2 entries (simplified), expand to 2^2=4
-    // Python equivalent:
-    //   i=1 not in [0, num_qubits-2=0] → wait, num_qubits=2, new_ctrl=[2]
-    //   active = [num_qubits - 2] = [0]  ← qubit 0 is target, always active
-    //   i=1 not in [0]+[0] → expand at d=2
-    //   diag=[a,b]: j=0→[a], j=1→[b,a,b] → result=[a,b,a,b]
+    // 2 qubits, the only control (qubit 1) was removed: no controls survive, so only the
+    // target is active. The 2-entry diagonal [a, b] is duplicated to [a, b, a, b].
     #[test]
     fn test_expand_diagonal_one_control_removed() {
         // simplified diag: 2 entries for 1 qubit (target only)
@@ -703,9 +700,7 @@ mod test {
     fn test_expand_diagonal_one_of_two_controls_removed() {
         let diag = vec![c(1.0), c(2.0), c(3.0), c(4.0)];
         let new_ctrl = vec![2_u32]; // control 2 survived, control 1 removed
-        // num_qubits=3: active = [3-2] = [1]
-        // i=1 → active (skip); i=2 → not active, d=4
-        // expand: j=0→[1], j=1→[1,2], j=2→[1,2,3], j=3→[1,2,3,4,1,2,3,4]
+        // control 1 is inactive: the 4-entry diagonal is repeated to give 8 entries
         let result = expand_diagonal(diag, &new_ctrl, 3);
         assert_eq!(
             result,
@@ -722,9 +717,7 @@ mod test {
         );
     }
 
-    // matches Python: TestSimplify::test_controls_are_sorted_ascending
-    // Controls must always be returned in ascending order (BTreeSet guarantee).
-    // (kept here as cross-check that expand_diagonal preserves length correctly)
+    // Removing all controls from a 3-qubit gate must still expand the diagonal to 2^3 entries.
     #[test]
     fn test_expand_diagonal_length() {
         // for num_qubits=3, all controls removed → diag starts at 2 (target only)
@@ -761,9 +754,8 @@ mod test {
     }
 
     // Partial simplification: [A, B, A, B] has period-2 repetition, so mux_simp drops
-    // exactly one of the two controls. Regression test for the diagonal-synthesis bug
-    // found in PR #16908 review: the dropped qubit must not be touched by any gate when
-    // up_to_diagonal=false.
+    // exactly one of the two controls. With up_to_diagonal=false, the dropped qubit must
+    // not be touched by any gate in the synthesized diagonal.
     #[test]
     fn test_dec_ucg_inner_up_to_diagonal_false_skips_dropped_qubit() {
         let a = ry(0.3);

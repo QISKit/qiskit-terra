@@ -10,3 +10,7 @@ performance:
     ``cx`` instructions, rather than as a single sub-gate that required further
     decomposition to reach the primitive gates.
     See `#16908 <https://github.com/Qiskit/qiskit/pull/16908>`__ for more details.
+upgrade:
+  - | 
+    When ``mux_simp=True``, nearly identical gates (differing by more than ``1e-8``) are
+    now treated as distinct, so some control qubits may be kept that were previously removed.
