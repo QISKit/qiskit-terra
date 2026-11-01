@@ -581,3 +581,330 @@ pub struct PauliEvolutionGatePack {
 pub struct ExpressionPack {
     pub expression: PackedExpression,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use binrw::{BinWrite, Endian};
+    use std::io::Cursor;
+
+    const VERSION: u8 = 19;
+
+    fn encoded<T>(value: &T, args: T::Args<'_>) -> Vec<u8>
+    where
+        T: BinWrite,
+    {
+        let mut result = Cursor::new(Vec::new());
+        value
+            .write_options(&mut result, Endian::Big, args)
+            .expect("test value should serialize");
+        result.into_inner()
+    }
+
+    fn string(value: &str) -> StringU16Pack {
+        StringU16Pack {
+            value: value.to_owned(),
+        }
+    }
+
+    fn symbol(name: &str, byte: u8) -> ParameterSymbolPack {
+        ParameterSymbolPack {
+            uuid: [byte; 16],
+            name: name.to_owned(),
+        }
+    }
+
+    #[test]
+    fn circuit_header_layout() {
+        let header = CircuitHeaderV19Pack {
+            global_phase: GlobalPhasePack::Float(1.5),
+            num_qubits: 45,
+            num_clbits: 3,
+            num_instructions: 2,
+            num_vars: 1,
+            registers: vec![],
+            qubit_interner: vec![InternerEntry::Single(7)],
+            clbit_interner: vec![InternerEntry::Double(8, 9)],
+            circuit_name: string("foo"),
+            metadata: Bytes::from(&b"{}"[..]),
+        };
+        let mut expected = vec![b'f'];
+        expected.extend_from_slice(&1.5f64.to_be_bytes());
+        expected.extend_from_slice(&45u32.to_be_bytes());
+        expected.extend_from_slice(&3u32.to_be_bytes());
+        expected.extend_from_slice(&2u64.to_be_bytes());
+        expected.extend_from_slice(&1u32.to_be_bytes());
+        expected.extend_from_slice(&0u32.to_be_bytes()); // num_registers
+        expected.extend_from_slice(&1u32.to_be_bytes()); // qubit_interner_size
+        expected.extend_from_slice(&1u32.to_be_bytes()); // clbit_interner_size
+        expected.extend_from_slice(b"s\0\0\0\x07d\0\0\0\x08\0\0\0\x09");
+        expected.extend_from_slice(b"\0\x03foo");
+        expected.extend_from_slice(&2u64.to_be_bytes()); // metadata_size
+        expected.extend_from_slice(b"{}"); 
+        assert_eq!(encoded(&header, (VERSION,)), expected);
+    }
+
+    #[test]
+    fn circuit_instruction_layout_and_extra_field_flags() {
+        let instruction = CircuitInstructionV19Pack {
+            operation: CircuitOperationType::StandardGate,
+            qargs: 0x0102_0304,
+            cargs: 5,
+            operation_data: OperationData::StandardGate(17),
+            params: vec![ParamDataPack::Bool(1), ParamDataPack::Int64(-2)],
+            annotations: None,
+            label: Some(string("x")),
+        };
+        let mut expected = vec![0, 1, 2, 3, 4, 0, 0, 0, 5, 17, 0, 2, b'b', 1, b'i'];
+        expected.extend_from_slice(&(-2i64).to_be_bytes());
+        expected.extend_from_slice(&[extra_fields_flag_parts::LABEL, 0, 1, b'x']);
+        assert_eq!(encoded(&instruction, (VERSION,)), expected);
+    }
+
+    #[test]
+    fn boolean_and_pauli_product_layouts() {
+        let bits = BoolVectorPack {
+            num_bits: 9,
+            data: Bytes::from(&[0x81, 0x01][..]),
+        };
+        assert_eq!(encoded(&bits, ()), vec![0, 0, 0, 9, 0x81, 0x01]);
+
+        let measurement = PauliProductMeasurementPack {
+            z: BoolVectorPack {
+                num_bits: 1,
+                data: vec![1].into(),
+            },
+            x: BoolVectorPack {
+                num_bits: 1,
+                data: vec![0].into(),
+            },
+            neg: 1,
+        };
+        assert_eq!(
+            encoded(&measurement, ()),
+            vec![0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1]
+        );
+
+        let rotation = PauliProductRotationPack {
+            z: BoolVectorPack {
+                num_bits: 2,
+                data: vec![2].into(),
+            },
+            x: BoolVectorPack {
+                num_bits: 2,
+                data: vec![1].into(),
+            },
+        };
+        assert_eq!(encoded(&rotation, ()), vec![0, 0, 0, 2, 2, 0, 0, 0, 2, 1]);
+    }
+
+    #[test]
+    fn standard_instruction_and_delay_unit_layouts() {
+        let delay = StandardInstructionData {
+            discriminant: 1,
+            delay_unit: Some(DelayUnitPack::NS),
+        };
+        assert_eq!(encoded(&delay, ()), b"\x01n");
+        let ordinary = StandardInstructionData {
+            discriminant: 7,
+            delay_unit: None,
+        };
+        assert_eq!(encoded(&ordinary, ()), b"\x07");
+        assert_eq!(encoded(&DelayUnitPack::Expr, ()), b"e");
+    }
+
+    #[test]
+    fn parameter_data_scalar_and_container_layouts() {
+        assert_eq!(
+            encoded(&ParamDataPack::Float64(1.5), (VERSION,)),
+            [vec![b'f'], 1.5f64.to_be_bytes().to_vec()].concat()
+        );
+        assert_eq!(
+            encoded(
+                &ParamDataPack::Complex64(Complex64::new(1.0, -2.0)),
+                (VERSION,)
+            ),
+            [
+                vec![b'c'],
+                1.0f64.to_be_bytes().to_vec(),
+                (-2.0f64).to_be_bytes().to_vec()
+            ]
+            .concat()
+        );
+        assert_eq!(
+            encoded(
+                &ParamDataPack::Range {
+                    start: -1,
+                    stop: 4,
+                    step: 2
+                },
+                (VERSION,)
+            ),
+            [
+                vec![b'r'],
+                (-1i64).to_be_bytes().to_vec(),
+                4i64.to_be_bytes().to_vec(),
+                2i64.to_be_bytes().to_vec()
+            ]
+            .concat()
+        );
+        assert_eq!(
+            encoded(
+                &ParamDataPack::NumpyObject {
+                    data: vec![3, 4].into()
+                },
+                (VERSION,)
+            ),
+            vec![b'n', 0, 0, 0, 0, 0, 0, 0, 2, 3, 4]
+        );
+        assert_eq!(
+            encoded(
+                &ParamDataPack::Tuple {
+                    elements: vec![ParamDataPack::Null, ParamDataPack::CaseDefault]
+                },
+                (VERSION,)
+            ),
+            vec![b'T', 0, 0, 0, 0, 0, 0, 0, 2, b'z', b'D']
+        );
+        assert_eq!(
+            encoded(&ParamDataPack::String(string("hi")), (VERSION,)),
+            b"s\0\x02hi"
+        );
+    }
+
+    #[test]
+    fn parameter_register_layouts() {
+        assert_eq!(
+            encoded(&ParamDataRegisterPack::Register(string("cr")), ()),
+            b"\x01\0\x02cr"
+        );
+        assert_eq!(
+            encoded(&ParamDataRegisterPack::Clbit(0x0102_0304), ()),
+            b"\0\x01\x02\x03\x04"
+        );
+    }
+
+    #[test]
+    fn python_operation_struct_layouts() {
+        let named = NamedParamDataPack {
+            name: string("p"),
+            value: ParamDataPack::Bool(1),
+        };
+        assert_eq!(encoded(&named, (VERSION,)), b"\0\x01pb\x01");
+
+        let from_python = FromPythonPack {
+            class_name: string("C"),
+            op_name: string("op"),
+            init_params: vec![NamedParamDataPack {
+                name: string("p"),
+                value: ParamDataPack::Null,
+            }],
+        };
+        assert_eq!(
+            encoded(&from_python, (VERSION,)),
+            b"\0\x01C\0\x02op\0\x01\0\x01pz"
+        );
+
+        let controlled = ControlledGatePack {
+            from_python: FromPythonPack {
+                class_name: string("C"),
+                op_name: string("x"),
+                init_params: vec![],
+            },
+            num_ctrl_qubits: 2,
+            ctrl_state: 1,
+        };
+        assert_eq!(
+            encoded(&controlled, (VERSION,)),
+            b"\0\x01C\0\x01x\0\0\0\0\0\x02\0\0\0\x01"
+        );
+    }
+
+    #[test]
+    fn control_flow_component_layouts() {
+        assert_eq!(
+            encoded(&ConditionV19Pack::Bit(3, 1), ()),
+            b"b\0\0\0\x03\x01"
+        );
+        assert_eq!(encoded(&BoxDurationPack::None, ()), b"n");
+        assert_eq!(
+            encoded(
+                &ForCollectionPack::List {
+                    values: vec![-1, 2]
+                },
+                ()
+            ),
+            [
+                vec![b'l'],
+                2u64.to_be_bytes().to_vec(),
+                (-1i64).to_be_bytes().to_vec(),
+                2i64.to_be_bytes().to_vec()
+            ]
+            .concat()
+        );
+        assert_eq!(
+            encoded(&LoopParamPack::Parameter(symbol("p", 0xaa)), ()),
+            [vec![b'p', 0, 1], vec![0xaa; 16], vec![b'p']].concat()
+        );
+        assert_eq!(
+            encoded(&SwitchTargetPack::Register(string("c")), ()),
+            b"r\0\x01c"
+        );
+    }
+
+    #[test]
+    fn case_struct_layouts() {
+        let labels = CaseLabelsPack {
+            labels: vec![
+                CaseSpecifierPack::Default,
+                CaseSpecifierPack::Uint(BigUint::from(258u16)),
+            ],
+        };
+        assert_eq!(encoded(&labels, ()), b"\0\0\0\x02di\x02\x01\x02");
+        let cases = CaseSpecPack {
+            labels: vec![CaseLabelsPack {
+                labels: vec![CaseSpecifierPack::Default],
+            }],
+        };
+        assert_eq!(encoded(&cases, ()), b"\0\0\0\x01\0\0\0\x01d");
+    }
+
+    #[test]
+    fn interner_entry_layouts() {
+        assert_eq!(encoded(&InternerEntry::Unused, ()), b"u");
+        assert_eq!(
+            encoded(&InternerEntry::Triple(1, 2, 3), ()),
+            b"t\0\0\0\x01\0\0\0\x02\0\0\0\x03"
+        );
+        assert_eq!(
+            encoded(&InternerEntry::VariableSize { bits: vec![4, 5] }, ()),
+            b"v\0\x02\0\0\0\x04\0\0\0\x05"
+        );
+        assert_eq!(encoded(&InternerEntry::All, ()), b"a");
+    }
+
+    #[test]
+    fn global_phase_layouts() {
+        assert_eq!(
+            encoded(&GlobalPhasePack::Float(-0.5), (VERSION,)),
+            [vec![b'f'], (-0.5f64).to_be_bytes().to_vec()].concat()
+        );
+        assert_eq!(
+            encoded(&GlobalPhasePack::Parameter(symbol("a", 1)), (VERSION,)),
+            [vec![b'p', 0, 1], vec![1; 16], vec![b'a']].concat()
+        );
+    }
+
+    #[test]
+    fn pauli_evolution_struct_layout() {
+        let value = PauliEvolutionGatePack {
+            standalone_op: 1,
+            pauli_data: vec![],
+            synth_data: vec![0xaa, 0xbb].into(),
+        };
+        assert_eq!(
+            encoded(&value, (VERSION,)),
+            b"\0\0\0\0\0\0\0\0\x01\0\0\0\0\0\0\0\x02\xaa\xbb"
+        );
+    }
+}
