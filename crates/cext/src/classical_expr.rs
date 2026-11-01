@@ -833,25 +833,28 @@ pub struct CBigUint {
 }
 
 impl CBigUint {
-    /// Convert BigUint to an CBigUint that owns its allocation.
-    pub fn from_biguint(biguint: &BigUint) -> Self {
-        let mut biguint_slice = biguint.to_u64_digits().into_boxed_slice();
-        let result = CBigUint {
-            limbs: biguint_slice.as_mut_ptr(),
-            num_limbs: biguint_slice.len(),
-        };
-        std::mem::forget(biguint_slice);
-        result
-    }
-}
+    const ZERO: CBigUint = CBigUint {
+        limbs: ptr::null_mut(),
+        num_limbs: 0,
+    };
 
-impl Drop for CBigUint {
-    fn drop(&mut self) {
-        // SAFETY: We own the slice.
-        unsafe {
-            let slice = ptr::slice_from_raw_parts_mut(self.limbs, self.num_limbs);
-            drop(Box::from_raw(slice));
+    /// Convert BigUint to an CBigUint that owns its allocation.
+    pub(crate) fn from_biguint(biguint: &BigUint) -> Self {
+        let boxed_slice = biguint.to_u64_digits().into_boxed_slice();
+        // An empty boxed slice has a dangling non-null pointer; give C `NULL` instead.
+        if boxed_slice.is_empty() {
+            return CBigUint::ZERO;
         }
+        let num_limbs = boxed_slice.len();
+        let limbs: *mut u64 = Box::into_raw(boxed_slice).cast::<u64>();
+        CBigUint { limbs, num_limbs }
+    }
+
+    /// Free the limb buffer allocation.
+    pub(crate) unsafe fn free(self) {
+        let slice = ptr::slice_from_raw_parts_mut(self.limbs, self.num_limbs);
+        // SAFETY: Caller must pass a valid allocation.
+        drop(unsafe { Box::from_raw(slice) });
     }
 }
 
@@ -919,11 +922,8 @@ pub unsafe extern "C" fn qk_biguint_clear(biguint: *mut CBigUint) {
         return;
     }
 
-    let zero = CBigUint {
-        limbs: ptr::null_mut(),
-        num_limbs: 0,
-    };
-    drop(std::mem::replace(biguint, zero));
+    // SAFETY: Per documentation, the allocation is valid and we can free it.
+    unsafe { std::mem::replace(biguint, CBigUint::ZERO).free() };
 }
 
 /// @ingroup QkClassicalExpressions
