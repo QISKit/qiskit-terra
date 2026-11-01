@@ -953,11 +953,11 @@ pub unsafe extern "C" fn qk_dag_apply_pauli_product_rotation(
 
     // SAFETY: The user guarantees the rotation pointer is valid and the data
     // is coherent. This allows us reading the Z and X arrays.
-    let c_data = unsafe { &*rotation };
-    let angle = unsafe { const_ptr_as_ref(c_data.angle) };
+    let rotation = unsafe { &*rotation };
+    let angle = unsafe { &*rotation.angle };
     let pbc_rotation = PauliProductRotation {
-        z: unsafe { ::std::slice::from_raw_parts(c_data.z, c_data.len) }.to_vec(),
-        x: unsafe { ::std::slice::from_raw_parts(c_data.x, c_data.len) }.to_vec(),
+        z: unsafe { ::std::slice::from_raw_parts(rotation.z, rotation.len) }.to_vec(),
+        x: unsafe { ::std::slice::from_raw_parts(rotation.x, rotation.len) }.to_vec(),
         angle: angle.clone(),
     };
 
@@ -1051,11 +1051,11 @@ pub unsafe extern "C" fn qk_dag_apply_pauli_product_measurement(
 
     // SAFETY: The user guarantees the measurement pointer is valid and the data
     // is coherent. This allows us reading the Z and X arrays.
-    let c_data = unsafe { const_ptr_as_ref(measurement) };
+    let measurement = unsafe { &*measurement };
     let pbc_measure = PauliProductMeasurement {
-        z: unsafe { ::std::slice::from_raw_parts(c_data.z, c_data.len) }.to_vec(),
-        x: unsafe { ::std::slice::from_raw_parts(c_data.x, c_data.len) }.to_vec(),
-        neg: c_data.flip_outcome,
+        z: unsafe { ::std::slice::from_raw_parts(measurement.z, measurement.len) }.to_vec(),
+        x: unsafe { ::std::slice::from_raw_parts(measurement.x, measurement.len) }.to_vec(),
+        neg: measurement.flip_outcome,
     };
 
     // SAFETY: per documentation, `qubits` is aligned and valid for `len` reads.
@@ -1111,15 +1111,15 @@ pub unsafe extern "C" fn qk_dag_apply_pauli_product_measurement(
 /// @param node The operation node index.
 /// @param instruction A pointer to an allocated ``QkPauliProductRotation`` to store the data.
 ///
-/// @return ``QkExitCode_Success`` if the data was written into the instruction, or
+/// @return ``QkExitCode_Success`` if the data was written into the instruction,
+///    ``QkExitCode_IndexError`` if ``node`` is not an operation node in ``dag``, or
 ///    ``QkExitCode_InvalidOperationKind`` if the node did not point to a ``QkPauliProductRotation``.
 ///
 /// # Safety
 ///
-/// Behavior is undefined if ``dag`` is not a valid, non-null pointer to a ``QkDag``. The
-/// value for ``node`` must be the index of an operation node in ``dag`` otherwise this function
-/// will panic. Behavior is undefined if ``instruction`` is not a valid, non-null pointer to a
-/// memory allocation with sufficient space for a ``QkPauliProductRotation``.
+/// Behavior is undefined if ``dag`` is not a valid, non-null pointer to a ``QkDag``, or if
+/// ``instruction`` is not a valid, non-null pointer to a memory allocation with sufficient space
+/// for a ``QkPauliProductRotation``.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_op_node_pauli_product_rotation(
     dag: *const DAGCircuit,
@@ -1129,7 +1129,10 @@ pub unsafe extern "C" fn qk_dag_op_node_pauli_product_rotation(
     // SAFETY: per documentation, `dag` points to valid data.
     let dag = unsafe { &*dag };
 
-    let instr = dag[NodeIndex::new(node as usize)].unwrap_operation();
+    let Some(NodeType::Operation(instr)) = dag.dag().node_weight(NodeIndex::new(node as usize))
+    else {
+        return ExitCode::IndexError;
+    };
 
     // Ensure the operation has the correct type, otherwise return early
     let OperationRef::PauliProductRotation(rotation) = instr.op.view() else {
@@ -1171,16 +1174,16 @@ pub unsafe extern "C" fn qk_dag_op_node_pauli_product_rotation(
 /// @param node The operation node index.
 /// @param instruction A pointer to an allocated ``QkPauliProductMeasurement`` to store the data.
 ///
-/// @return ``QkExitCode_Success`` if the data was written into the instruction, or
+/// @return ``QkExitCode_Success`` if the data was written into the instruction,
+///     ``QkExitCode_IndexError`` if ``node`` is not an operation node in ``dag``, or
 ///     ``QkExitCode_InvalidOperationKind`` if the node did not point to a
 ///     ``QkPauliProductMeasurement``.
 ///
 /// # Safety
 ///
-/// Behavior is undefined if ``dag`` is not a valid, non-null pointer to a ``QkDag``. The
-/// value for ``node`` must be the index of an operation node in ``dag`` otherwise this function
-/// will panic. Behavior is undefined if ``instruction`` is not a valid, non-null pointer to a
-/// memory allocation with sufficient space for a ``QkPauliProductMeasurement``.
+/// Behavior is undefined if ``dag`` is not a valid, non-null pointer to a ``QkDag``, or if
+/// ``instruction`` is not a valid, non-null pointer to a memory allocation with sufficient space
+/// for a ``QkPauliProductMeasurement``.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_op_node_pauli_product_measurement(
     dag: *const DAGCircuit,
@@ -1190,7 +1193,10 @@ pub unsafe extern "C" fn qk_dag_op_node_pauli_product_measurement(
     // SAFETY: per documentation, `dag` points to valid data.
     let dag = unsafe { &*dag };
 
-    let instr = dag[NodeIndex::new(node as usize)].unwrap_operation();
+    let Some(NodeType::Operation(instr)) = dag.dag().node_weight(NodeIndex::new(node as usize))
+    else {
+        return ExitCode::IndexError;
+    };
 
     // Ensure the operation has the correct type, otherwise return early
     let OperationRef::PauliProductMeasurement(measure) = instr.op.view() else {

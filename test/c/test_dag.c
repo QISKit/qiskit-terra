@@ -1475,8 +1475,15 @@ static int test_dag_pbc_instructions(void) {
         goto cleanup;
     }
 
-    // querying a node of the wrong kind returns an error and writes nothing
+    // querying a node that is not in the DAG returns an error
     QkPauliProductRotation wrong_rot;
+    if (qk_dag_op_node_pauli_product_rotation(dag, 1000, &wrong_rot) != QkExitCode_IndexError) {
+        fprintf(stderr, "Expected IndexError for node 1000\n");
+        result = EqualityError;
+        goto cleanup;
+    }
+
+    // querying a node of the wrong kind returns an error and writes nothing
     if (qk_dag_op_node_pauli_product_rotation(dag, meas_idx, &wrong_rot) !=
         QkExitCode_InvalidOperationKind) {
         fprintf(stderr, "Expected InvalidOperationKind for node %u\n", meas_idx);
