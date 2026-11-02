@@ -347,6 +347,7 @@ Link C objects in release notes using Sphinx syntax in the `c` domain.
 :c:struct:`QkFoo`
 :c:type:`QkFoo`
 :c:enum:`QkFoo`
+:c:enumerator:`QkFoo_Bar`
 :c:func:`qk_foo`
 ```
 
