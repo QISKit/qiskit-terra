@@ -2019,47 +2019,68 @@ class TestCircuitMatplotlibDrawer(QiskitTestCase):
     def test_vertical_multi_qubit_gate_labels(self):
         """Test vertical labels for multi-qubit gates."""
         qc = QuantumCircuit(4)
-        gate1 = Gate(
-            name="gate_with_math_label",
-            num_qubits=2,
-            params=[],
-            label=r"$\theta_{1} + \theta_{2} + \theta_{3} + \theta_{4}$",
+        qc.append(
+            Gate(
+                name="gate_with_math_label",
+                num_qubits=2,
+                params=[],
+                label=r"$\theta_{1} + \theta_{2} + \theta_{3} + \theta_{4}$",
+            ),
+            [0, 1],
         )
-        qc.append(gate1, [0, 1])
-
-        gate2 = Gate(name="gate_with_small_label", num_qubits=2, params=[], label="g3")
-        qc.append(gate2, [2, 3])
-
-        qc.h(3)
-
-        first_custom_multi_qubit_gate = QuantumCircuit(
-            2, name="first_custom_multi_qubit_gate"
-        ).to_gate
-        qc.append(first_custom_multi_qubit_gate(), [0, 1])
-
-        gate4 = Gate(
-            name="gate_with_small_label_and_params",
-            num_qubits=2,
-            params=[1, 2, 3, 4, 5, 6],
-            label="g4",
+        qc.append(Gate(name="gate_with_small_label", num_qubits=2, params=[], label="g1"), [2, 3])
+        qc.append(
+            Gate(
+                name="first_custom_multi_qubit_gate",
+                num_qubits=2,
+                params=[],
+                label="first_custom_multi_qubit_gate",
+            ),
+            [0, 1],
         )
-        qc.append(gate4, [2, 3])
-
-        gate3 = Gate(name="another_very_very_very_long_label", num_qubits=2, params=[1, 2, 3, 4])
-        qc.append(gate3, [1, 2])
-
-        second_custom_multi_qubit_gate = QuantumCircuit(
-            3, name="second_custom_multi_qubit_gate"
-        ).to_gate
-        qc.append(second_custom_multi_qubit_gate(), [0, 1, 2])
-
+        qc.append(
+            Gate(
+                name="gate_with_small_label_and_params",
+                num_qubits=2,
+                params=[1, 2, 3, 4, 5, 6],
+                label="g2",
+            ),
+            [2, 3],
+        )
+        qc.append(
+            Gate(name="another_very_very_very_long_label", num_qubits=2, params=[1, 2, 3, 4]),
+            [1, 2],
+        )
+        qc.append(
+            Gate(
+                name="second_custom_multi_qubit_gate",
+                num_qubits=3,
+                params=[],
+                label="second_custom_multi_qubit_gate",
+            ),
+            [0, 1, 2],
+        )
         qc.x(0)
-
-        third_custom_multi_qubit_gate = Gate(
-            name="third_custom_multi_qubit_gate", num_qubits=4, params=[1, 2, 3, 4, 5, 6]
+        qc.append(
+            Gate(name="third_custom_multi_qubit_gate", num_qubits=4, params=[1, 2, 3, 4, 5, 6]),
+            [0, 1, 2, 3],
         )
-
-        qc.append(third_custom_multi_qubit_gate, [0, 1, 2, 3])
+        qc.append(Gate(name="gate_name", num_qubits=4, params=[1, 2, 3, 4, 5, 6]), [0, 1, 2, 3])
+        qc.append(Gate(name="gate_another_name", num_qubits=4, params=[]), [0, 1, 2, 3])
+        qc.append(Gate("orbital_rotation", 2, []), [0, 1])
+        qc.append(Gate("orbital_rotation", 2, []), [2, 3])
+        qc.append(Gate("a_fairly_long_gate_name", 4, []), [0, 1, 2, 3])
+        qc.h(0)
+        qc.append(Gate("parametrized_gate", 2, [0.1234, 0.5678, 0.1234, 0.5678, 0.1234]), [0, 1])
+        qc.append(
+            Gate(
+                "parametrized_gate_2",
+                2,
+                [0.1234, 0.5678, 0.1234, 0.5678, 0.1234, 0.1234, 0.5678, 0.1234, 0.5678, 0.1234],
+            ),
+            [2, 3],
+        )
+        qc.x(0, label="A_very_long_label")
 
         fname = "vertical_multi_qubit_gate_labels.png"
         self.circuit_drawer(qc, output="mpl", filename=fname, vertical_labels=True)
