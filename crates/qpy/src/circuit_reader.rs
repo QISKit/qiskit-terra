@@ -981,10 +981,10 @@ fn read_custom_instructions(
                         )?))
                     })
             } else {
-                let (packed_definition, _) = deserialize_with_args::<
-                    formats::QPYCircuit,
-                    (u8,),
-                >(&operation.data, (qpy_data.version,))?;
+                let (packed_definition, _) = deserialize_with_args::<formats::QPYCircuit, (u8,)>(
+                    &operation.data,
+                    (qpy_data.version,),
+                )?;
                 let circuit = unpack_circuit(
                     &packed_definition,
                     qpy_data.version,
@@ -992,9 +992,9 @@ fn read_custom_instructions(
                     qpy_data.annotation_handler.child()?,
                     qpy_data.caller,
                 )?;
-                let py_circuit = qpy_data.caller.attach(
+                let py_circuit: Py<PyAny> = qpy_data.caller.attach(
                     "custom instruction definition",
-                    |py| -> Result<_, QpyError> {
+                    |py| -> Result<Py<PyAny>, QpyError> {
                         py_circuit_data_to_quantum_circuit(py, circuit, &packed_definition, None)
                     },
                 )?;
