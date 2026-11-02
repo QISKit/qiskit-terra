@@ -112,8 +112,10 @@ mod tests {
         };
 
         assert_eq!(*instr.op(), op);
-        assert_eq!(instr.returns().inner(), &vec![sym_id]);
-        let symbol = symbol_table.get(sym_id).unwrap();
+        assert_eq!(instr.returns().len(), 1);
+        let ret_id = instr.returns().inner()[0];
+        assert_eq!(ret_id, sym_id);
+        let symbol = symbol_table.get(ret_id).unwrap();
         assert_eq!(symbol.name(), "c0");
         assert_eq!(symbol.symbol_type(), SymbolType::Bool);
     }
