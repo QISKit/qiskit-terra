@@ -291,7 +291,8 @@ impl ops::Index<Qid> for ResourceTable {
 }
 
 // TEMPORARY: ResourceTable is not actually thread-safe — Acyclic's is not
-// thread safe. This is here ONLY to enable using  MIR as passmanager IR..
+// thread safe. This is here ONLY to enable using  MIR as passmanager IR.
+// Tracked for removal: https://github.com/Qiskit/qiskit/issues/17397
 unsafe impl Sync for ResourceTable {}
 
 #[cfg(test)]

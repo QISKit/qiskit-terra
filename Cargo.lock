@@ -2448,11 +2448,20 @@ dependencies = [
  "bytemuck",
  "hashbrown 0.17.1",
  "itertools 0.15.0",
- "qiskit-circuit",
  "qiskit-passmanager",
  "qiskit-util",
  "rustworkx-core",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "qiskit-mir-passes"
+version = "2.7.0-dev"
+dependencies = [
+ "anyhow",
+ "qiskit-circuit",
+ "qiskit-mir",
+ "qiskit-passmanager",
 ]
 
 [[package]]

@@ -66,6 +66,7 @@ qiskit-cext-vtable = { path = "crates/cext-vtable" }
 qiskit-circuit = { path = "crates/circuit" }
 qiskit-circuit-library = { path = "crates/circuit_library" }
 qiskit-mir = { path = "crates/mir" }
+qiskit-mir-passes = {path = "crates/mir-passes"}
 qiskit-passmanager = { path = "crates/passmanager" }
 qiskit-providers = { path = "crates/providers" }
 qiskit-qasm2 = { path = "crates/qasm2" }

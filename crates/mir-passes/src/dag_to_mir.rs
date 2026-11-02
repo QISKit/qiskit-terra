@@ -12,9 +12,11 @@
 
 //! Lowering pass from `DAGCircuit` to MIR.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
-use crate::{
+use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::operations::OperationRef;
+use qiskit_mir::{
     instruction::MirInstruction,
     mir::Mir,
     ops::{
@@ -24,8 +26,6 @@ use crate::{
     qid::{Qid, QidInfo, QidList},
     symbol_table::{Symbol, SymbolId, SymbolIdList, SymbolType},
 };
-use qiskit_circuit::dag_circuit::DAGCircuit;
-use qiskit_circuit::operations::OperationRef;
 use qiskit_passmanager::{PassContext, StaticPass};
 
 fn pauli_from_bits(x: bool, z: bool) -> Pauli {
@@ -38,36 +38,24 @@ fn pauli_from_bits(x: bool, z: bool) -> Pauli {
 }
 
 /// Lower a `DAGCircuit` into Mir.
-pub fn lower(dag: &DAGCircuit) -> anyhow::Result<Mir> {
+pub fn lower_dag(dag: &DAGCircuit) -> anyhow::Result<Mir> {
     let mut mir = Mir::new();
-    let mut qubits: BTreeSet<u32> = BTreeSet::new();
-    let mut clbits: BTreeSet<u32> = BTreeSet::new();
     let mut qid_for_qubits: BTreeMap<u32, Qid> = BTreeMap::new();
     let mut sym_for_clbits: BTreeMap<u32, SymbolId> = BTreeMap::new();
 
-    for node in dag.topological_op_nodes(false) {
-        let instr = dag.dag()[node].unwrap_operation();
-        for q in dag.get_qargs(instr.qubits) {
-            qubits.insert(q.0);
-        }
-        for c in dag.get_cargs(instr.clbits) {
-            clbits.insert(c.0);
-        }
-    }
-
-    for qubit in qubits {
+    for qubit in 0..dag.num_qubits() as u32 {
         let qid = mir
             .resource_table_mut()
-            .add_qid(QidInfo::new(crate::qid::BitLayout::Base(1)))
-            .expect("qid allocation should succeed");
+            .add_qid(QidInfo::new(qiskit_mir::qid::BitLayout::Base(1)))
+            .map_err(|e| anyhow::anyhow!("failed to allocate qid for qubit {qubit}: {e}"))?;
         qid_for_qubits.insert(qubit, qid);
     }
 
-    for clbit in clbits {
+    for clbit in 0..dag.num_clbits() as u32 {
         let sym_id = mir
             .symbol_table_mut()
             .add(Symbol::new(format!("c{clbit}"), SymbolType::Bool))
-            .expect("symbol allocation should succeed");
+            .map_err(|e| anyhow::anyhow!("failed to allocate symbol for clbit {clbit}: {e}"))?;
         sym_for_clbits.insert(clbit, sym_id);
     }
 
@@ -86,6 +74,8 @@ pub fn lower(dag: &DAGCircuit) -> anyhow::Result<Mir> {
                 let angle = rotation.angle.try_float().ok_or_else(|| {
                     anyhow::anyhow!("Currently MIR lowering supports only float angles")
                 })?;
+                // In qiskit angles are in radians, but MIR uses rad / \pi.
+                let angle = angle / std::f64::consts::PI;
                 let op = MirOp::PauliRotation(PauliRotation::new(
                     PauliString::new(paulis),
                     AngleType::new(angle),
@@ -134,6 +124,6 @@ pub struct DagToMirLowering;
 
 impl StaticPass<DAGCircuit, Mir> for DagToMirLowering {
     fn run(&self, ir: Box<DAGCircuit>, _context: &mut PassContext) -> anyhow::Result<Box<Mir>> {
-        Ok(Box::new(lower(&ir)?))
+        Ok(Box::new(lower_dag(&ir)?))
     }
 }

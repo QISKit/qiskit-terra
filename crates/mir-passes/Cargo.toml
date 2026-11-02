@@ -1,0 +1,19 @@
+[package]
+name = "qiskit-mir-passes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "qiskit_mir_passes"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+qiskit-circuit = {workspace = true, features = ["passmanager"]}
+qiskit-mir.workspace = true
+qiskit-passmanager.workspace = true

@@ -12,4 +12,4 @@
 
 //! Passes that transform Qiskit IR to MIR.
 
-pub mod lowering;
+pub mod dag_to_mir;
