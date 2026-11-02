@@ -843,7 +843,7 @@ pub unsafe extern "C" fn qk_custom_operation_is_unitary(inst: *const BoxedCustom
 /// Returns the number of control qubits supported by this ``QkCustomOperation``
 /// instance, if it is a controlled operation.
 ///
-/// This method is not required for every ``QkCustomOperation`` definition. Therefoere,
+/// This method is not required for every ``QkCustomOperation`` definition. Therefore,
 /// it will return ``0`` by default unless otherwise specified.
 ///
 /// @param inst A pointer to the ``QkCustomOperation`` instance.
