@@ -324,7 +324,7 @@ extern "C" fn qk_target_add_instruction(target: *mut Target, entry: *mut TargetE
 `unsafe` enables operations that are otherwise prohibited in safe Rust. When
 writing FFI code, we often dereference raw pointers or call unsafe functions
 within an `unsafe` block. These operations are unsafe because the compiler
-cannot verify their validity statically; as the programmer, you are asserting
+cannot verify their validity statically. As the programmer, you are asserting
 that you've checked the necessary conditions yourself. Document those conditions
 in a **safety comment** so that future readers understand the assumptions you
 made.
