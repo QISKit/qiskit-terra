@@ -3141,13 +3141,16 @@ pub(crate) unsafe fn ptr_to_params_owned<B>(
 
 /// @ingroup QkCircuit
 ///
-/// Retrieves a ``QkCustomOperation`` from a circuit.
+/// Retrieves a ``QkCustomOperation`` from a circuit. This operation instance
+/// represents data within the specific instance of ``QkCircuit`` and should not
+/// be used with ``qk_circuit_custom_operation`` or any function that consumes
+/// the data inside this pointer.
 ///
 /// @param circuit A pointer to the circuit instance
 /// @param index The index in which the instruction is located.
 ///
-/// @return A pointer to the ``QkCustomOperation`` instance or a `NULL` pointer if
-/// the operation is not custom.
+/// @return A pointer to the ``QkCustomOperation`` instance stored within the
+/// ``QkCircuit`` or a `NULL` pointer if the operation is not custom.
 ///
 /// # Safety
 ///

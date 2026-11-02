@@ -2049,13 +2049,16 @@ pub unsafe extern "C" fn qk_dag_apply_custom_operation(
 
 /// @ingroup QkDag
 ///
-/// Retrieves a ``QkCustomOperation`` from a dag.
+/// Retrieves a ``QkCustomOperation`` from a dag. This operation instance
+/// represents data within the specific instance of ``QkDag`` and should not
+/// be used with ``qk_dag_apply_custom_operation`` or any function that consumes
+/// the data inside this pointer.
 ///
 /// @param dag A pointer to the dag instance
 /// @param index The index in which the instruction is located.
 ///
-/// @return A pointer to the ``QkCustomOperation`` instance or a `NULL` pointer if
-/// the operation is not custom.
+/// @return A pointer to the ``QkCustomOperation`` instance stored within the
+/// ``QkDag`` or a `NULL` pointer if the operation is not custom.
 ///
 /// # Safety
 ///
