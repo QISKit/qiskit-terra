@@ -12,7 +12,7 @@
 
 //! Lowering pass from `DAGCircuit` to MIR.
 
-use std::collections::BTreeMap;
+use hashbrown::HashMap;
 
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_circuit::operations::OperationRef;
@@ -40,8 +40,8 @@ fn pauli_from_bits(x: bool, z: bool) -> Pauli {
 /// Lower a `DAGCircuit` into Mir.
 pub fn lower_dag(dag: &DAGCircuit) -> anyhow::Result<Mir> {
     let mut mir = Mir::new();
-    let mut qid_for_qubits: BTreeMap<u32, Qid> = BTreeMap::new();
-    let mut sym_for_clbits: BTreeMap<u32, SymbolId> = BTreeMap::new();
+    let mut qid_for_qubits: HashMap<u32, Qid> = HashMap::new();
+    let mut sym_for_clbits: HashMap<u32, SymbolId> = HashMap::new();
 
     for qubit in 0..dag.num_qubits() as u32 {
         let qid = mir

@@ -2459,6 +2459,7 @@ name = "qiskit-mir-passes"
 version = "2.7.0-dev"
 dependencies = [
  "anyhow",
+ "hashbrown 0.17.1",
  "qiskit-circuit",
  "qiskit-mir",
  "qiskit-passmanager",
