@@ -321,5 +321,5 @@ def make_output(graph, raw, filename):
             image = img.copy()
 
         if filename:
-            image.save(filename)
+            image.save(filename, "PNG")
         return image
