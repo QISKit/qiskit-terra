@@ -98,9 +98,6 @@ impl Annotation for InjectNoise {
 }
 
 /// Randomization annotations on a box.
-///
-/// Borrowed from the box carrying them: these say what a box declares, which a pass reads while
-/// lowering it and nothing holds afterwards.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RandomizationAnnotations<'a> {
     pub twirl: Option<&'a Twirl>,
