@@ -12,7 +12,7 @@
 
 use core::slice;
 use std::{
-    ffi::{CStr, CString, c_char, c_void},
+    ffi::{CStr, c_char, c_void},
     num::NonZero,
     ptr::{null, null_mut},
     sync::Arc,
@@ -31,7 +31,6 @@ use crate::{
 
 // SAFETY: all owned `BoxedCustomOperation` objects are exposed and freed using `Box`.
 const _: () = unsafe { expose_by_box!(BoxedCustomOperation) };
-use crate::pointers::const_ptr_as_ref;
 
 /// Represents a quantum operation fully defined in C.
 ///
@@ -714,15 +713,13 @@ pub unsafe extern "C" fn qk_custom_operation_name(
 ) -> *const c_char {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     if let Some(as_custom_op) = borrowed_inst.downcast_ref::<CustomOp>() {
         // Use vtable directly to avoid converting
         unsafe { (as_custom_op.v_table.name)(as_custom_op.orig) }
     } else {
-        CString::new(borrowed_inst.name())
-            .expect("Operation name should not contain null bytes")
-            .into_raw()
+        crate::util::cstring_from_utf8_lossy(borrowed_inst.name()).into_raw()
     }
 }
 
@@ -745,7 +742,7 @@ pub unsafe extern "C" fn qk_custom_operation_name(
 pub unsafe extern "C" fn qk_custom_operation_num_qubits(inst: *const BoxedCustomOperation) -> u32 {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     borrowed_inst.num_qubits()
 }
@@ -769,7 +766,7 @@ pub unsafe extern "C" fn qk_custom_operation_num_qubits(inst: *const BoxedCustom
 pub unsafe extern "C" fn qk_custom_operation_num_clbits(inst: *const BoxedCustomOperation) -> u32 {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     borrowed_inst.num_clbits()
 }
@@ -793,7 +790,7 @@ pub unsafe extern "C" fn qk_custom_operation_num_clbits(inst: *const BoxedCustom
 pub unsafe extern "C" fn qk_custom_operation_num_params(inst: *const BoxedCustomOperation) -> u32 {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     borrowed_inst.num_params()
 }
@@ -820,7 +817,7 @@ pub unsafe extern "C" fn qk_custom_operation_num_params(inst: *const BoxedCustom
 pub unsafe extern "C" fn qk_custom_operation_directive(inst: *const BoxedCustomOperation) -> bool {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     borrowed_inst.directive()
 }
@@ -851,7 +848,7 @@ pub unsafe extern "C" fn qk_custom_operation_directive(inst: *const BoxedCustomO
 pub unsafe extern "C" fn qk_custom_operation_is_unitary(inst: *const BoxedCustomOperation) -> bool {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     borrowed_inst.is_unitary()
 }
@@ -878,7 +875,7 @@ pub unsafe extern "C" fn qk_custom_operation_num_ctrl_qubits(
 ) -> u32 {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     if let Some(number) = borrowed_inst.num_ctrl_qubits() {
         number.into()
@@ -908,15 +905,13 @@ pub unsafe extern "C" fn qk_custom_operation_label(
 ) -> *const c_char {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     if let Some(as_custom_op) = borrowed_inst.downcast_ref::<CustomOp>() {
         // Use vtable directly to avoid converting
         unsafe { (as_custom_op.v_table.label)(as_custom_op.orig) }
     } else if let Some(label) = borrowed_inst.label() {
-        CString::new(label)
-            .expect("Label should not contain null bytes")
-            .into_raw()
+        crate::util::cstring_from_utf8_lossy(label).into_raw()
     } else {
         null()
     }
@@ -951,7 +946,7 @@ pub unsafe extern "C" fn qk_custom_operation_definition(
 ) -> *mut CircuitData {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
 
     if let Some(as_custom_op) = borrowed_inst.downcast_ref::<CustomOp>() {
         // Use vtable directly to avoid converting
@@ -960,7 +955,7 @@ pub unsafe extern "C" fn qk_custom_operation_definition(
         let parsed_params: Vec<Param> =
             unsafe { slice::from_raw_parts(params, borrowed_inst.num_params() as usize) }
                 .iter()
-                .map(|&ptr| unsafe { const_ptr_as_ref(ptr) }.clone())
+                .map(|&ptr| unsafe { &*ptr }.clone())
                 .collect();
 
         match borrowed_inst.definition(&parsed_params) {
@@ -1001,10 +996,10 @@ pub unsafe extern "C" fn qk_custom_operation_eq(
 ) -> bool {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_other = unsafe { const_ptr_as_ref(other) };
+    let borrowed_other = unsafe { &*other };
 
     **borrowed_inst == **borrowed_other
 }
@@ -1037,7 +1032,7 @@ pub unsafe extern "C" fn qk_custom_operation_eq(
 pub unsafe extern "C" fn qk_custom_operation_type_id(inst: *const BoxedCustomOperation) -> u64 {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
     let Some(op): Option<&CustomOp> = borrowed_inst.downcast_ref() else {
         return u64::MAX;
     };
@@ -1069,7 +1064,7 @@ pub unsafe extern "C" fn qk_custom_operation_raw(
 ) -> *const c_void {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
-    let borrowed_inst = unsafe { const_ptr_as_ref(inst) };
+    let borrowed_inst = unsafe { &*inst };
     let Some(op): Option<&CustomOp> = borrowed_inst.downcast_ref() else {
         return null();
     };

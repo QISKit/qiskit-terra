@@ -82,6 +82,7 @@ pub static QISKIT_PUBLIC_API_CRATES: &[&str] = &[
     "qiskit-circuit",
     "qiskit-transpiler",
     "qiskit-passmanager",
+    "qiskit-mir",
 ];
 
 pub static EXPORT_PREFIX: &str = "Qk";
@@ -126,6 +127,7 @@ pub static EXPORT_RENAME: &[(&str, &str)] = &[
     ("CIndexExprInfo", "IndexExprInfo"),
     ("CExprType", "ExprType"),
     ("CExprTypeInfo", "ExprTypeInfo"),
+    ("CBigUint", "BigUint"),
     ("CDurationType", "DurationType"),
     ("CDurationInfo", "DurationInfo"),
     ("CDurationValue", "DurationValue"),

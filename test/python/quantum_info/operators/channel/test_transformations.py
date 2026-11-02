@@ -173,6 +173,15 @@ class TestTransformations(ChannelTestCase):
             output = rho.evolve(Kraus(Choi(self.depol_choi(p))))
             self.assertEqual(output, target)
 
+    def test_choi_to_kraus_does_not_mutate_input(self):
+        """Converting to Kraus should not modify the input Choi data."""
+        choi = Choi(self.choiX)
+        original = choi.data.copy()
+
+        _ = Kraus(choi)
+
+        np.testing.assert_array_equal(choi.data, original)
+
     def test_choi_to_stinespring(self):
         """Test Choi to Stinespring transformation."""
         # Test unitary channels

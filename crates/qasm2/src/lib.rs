@@ -16,6 +16,7 @@ use pyo3::prelude::*;
 #[cfg(feature = "py")]
 use crate::bytecode::QASM2ParseError;
 
+mod build;
 mod bytecode;
 mod error;
 mod expr;
@@ -23,10 +24,39 @@ mod ext;
 mod lex;
 mod parse;
 
+pub use self::error::ParseError;
 pub use self::ext::{
     ClassicalBuiltinExt, ClassicalCallableExt, ClassicalEvaluator, CustomClassical,
     CustomInstruction,
 };
+
+/// Parse an OpenQASM 2 program directly into a [CircuitData][qiskit_circuit::circuit_data::CircuitData].
+///
+/// Any `custom_classical` must be callable without an interpreter (see
+/// [ClassicalEvaluator::detached]); a Python callable here is an error, not a panic.
+///
+/// Custom instructions are not yet supported, so are rejected with an error.
+pub fn circuit_from_string(
+    program: String,
+    include_path: Vec<std::path::PathBuf>,
+    custom_instructions: &[CustomInstruction],
+    custom_classical: &[CustomClassical],
+    strict: bool,
+) -> Result<qiskit_circuit::circuit_data::CircuitData, ParseError> {
+    if !custom_instructions.is_empty() {
+        return Err(ParseError::new(
+            "custom instructions are not yet supported by the native importer",
+        ));
+    }
+    let state = parse::State::new(
+        lex::TokenStream::from_string(program, strict),
+        include_path,
+        custom_instructions,
+        custom_classical,
+        strict,
+    )?;
+    build::build_circuit(bytecode::Iter::new(state))
+}
 
 /// Create a bytecode iterable from a string containing an OpenQASM 2 program.  The iterable will
 /// lex and parse the source lazily; evaluating OpenQASM 2 statements as required, without loading

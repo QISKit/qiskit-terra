@@ -14,7 +14,7 @@ N-Qubit Sparse Pauli Operator class.
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Literal, TYPE_CHECKING
 
 from collections.abc import Mapping, Sequence, Iterable
 from numbers import Number
@@ -34,6 +34,7 @@ from qiskit._accelerate.sparse_observable import SparseObservable
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.parameterexpression import ParameterExpression
 from qiskit.circuit.parametertable import ParameterView
+from qiskit.circuit import QuantumCircuit
 from qiskit.exceptions import QiskitError
 from qiskit.quantum_info.operators.custom_iterator import CustomIterator
 from qiskit.quantum_info.operators.linear_op import LinearOp
@@ -44,6 +45,7 @@ from qiskit.quantum_info.operators.symplectic.pauli_list import PauliList
 from qiskit.quantum_info.operators.symplectic.pauli import Pauli
 
 if TYPE_CHECKING:
+    from qiskit.quantum_info.operators.symplectic.clifford import Clifford
     from qiskit.transpiler.layout import TranspileLayout
 
 
@@ -236,7 +238,7 @@ class SparsePauliOp(LinearOp):
             return False
         if atol is None:
             atol = self.atol
-        return np.allclose((self - other).simplify().coeffs, 0.0, atol=atol)
+        return np.allclose((self - other).simplify(atol=atol).coeffs, 0.0, atol=atol)
 
     @property
     def settings(self) -> dict:
@@ -278,7 +280,7 @@ class SparsePauliOp(LinearOp):
         self._pauli_list = value
 
     @property
-    def coeffs(self):
+    def coeffs(self) -> np.ndarray:
         """Return the Pauli coefficients."""
         return self._coeffs
 
@@ -308,6 +310,8 @@ class SparsePauliOp(LinearOp):
     # ---------------------------------------------------------------------
 
     def conjugate(self):
+        """Return the complex conjugate with respect to the representation
+        returned by :meth:`~SparsePauliOp.to_matrix`."""
         # Conjugation conjugates phases and also Y.conj() = -Y
         # Hence we need to multiply conjugated coeffs by -1
         # for rows with an odd number of Y terms.
@@ -354,7 +358,7 @@ class SparsePauliOp(LinearOp):
         # This method is the outer version of `BasePauli.compose`.
         # `x1` and `z1` have shape `(self.size, num_qubits)`.
         # `x2` and `z2` have shape `(other.size, num_qubits)`.
-        # `x1[:, no.newaxis]` results in shape `(self.size, 1, num_qubits)`.
+        # `x1[:, np.newaxis]` results in shape `(self.size, 1, num_qubits)`.
         # `ar = ufunc(x1[:, np.newaxis], x2)` will be in shape `(self.size, other.size, num_qubits)`.
         # So, `ar.reshape((-1, num_qubits))` will be in shape `(self.size * other.size, num_qubits)`.
         # Ref: https://numpy.org/doc/stable/user/theory.broadcasting.html
@@ -434,6 +438,44 @@ class SparsePauliOp(LinearOp):
     # ---------------------------------------------------------------------
     # Utility Methods
     # ---------------------------------------------------------------------
+
+    def evolve(
+        self,
+        other: Pauli | Clifford | QuantumCircuit | str,
+        qargs: list | None = None,
+        frame: Literal["h", "s"] = "h",
+    ) -> SparsePauliOp:
+        r"""Performs either Heisenberg (default) or Schrödinger picture
+        evolution of the Pauli by a Clifford and returns the evolved Pauli.
+
+        Schrödinger picture evolution can be chosen by passing parameter ``frame='s'``.
+        This option yields a faster calculation.
+
+        Heisenberg picture evolves the Pauli as :math:`P^\prime = C^\dagger.P.C`.
+
+        Schrödinger picture evolves the Pauli as :math:`P^\prime = C.P.C^\dagger`.
+
+        Args:
+            other: The Clifford operator to evolve by.
+            qargs: a list of qubits to apply the Clifford to.
+            frame: ``'h'`` for Heisenberg (default) or ``'s'`` for
+                Schrödinger framework.
+
+        Returns:
+            The evolved sparse Pauli operator.
+
+        Raises:
+            QiskitError: if the Clifford number of qubits and qargs don't match.
+        """
+        if isinstance(other, str):
+            # Convert to a Pauli
+            other = Pauli(other)
+
+        return SparsePauliOp(
+            self.paulis.evolve(other, qargs=qargs, frame=frame),
+            self.coeffs.copy(),
+            copy=False,
+        )
 
     def is_unitary(self, atol: float | None = None, rtol: float | None = None) -> bool:
         """Return True if operator is a unitary matrix.
@@ -1265,7 +1307,7 @@ class SparsePauliOp(LinearOp):
 
 
 def sparsify_label(pauli_string):
-    """Return a sparse format of a Pauli string, e.g. "XIIIZ" -> ("XZ", [0, 4])."""
+    """Return a sparse format of a Pauli string, e.g. "XIIIZ" -> ("ZX", [0, 4])."""
     qubits = [i for i, label in enumerate(reversed(pauli_string)) if label != "I"]
     sparse_label = "".join(pauli_string[~i] for i in qubits)
 

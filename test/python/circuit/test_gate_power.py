@@ -47,7 +47,7 @@ from qiskit.circuit.library import (
     SwapGate,
 )
 from qiskit.quantum_info.operators import Operator
-from test import QiskitTestCase
+from test import QiskitTestCase, combine
 
 
 @ddt
@@ -281,6 +281,31 @@ class TestPowerAnnotatedGate(QiskitTestCase):
         self.assertIsInstance(result2, UnitaryGate)
 
         self.assertEqual(Operator(result1), Operator(result2))
+
+
+@ddt
+class TestControlledGatePower(QiskitTestCase):
+    """Test power method preserves ctrl_state on controlled gates."""
+
+    @combine(
+        gate=[
+            CPhaseGate(0.7, ctrl_state=0),
+            CPhaseGate(0.7, ctrl_state=1),
+            CSGate(ctrl_state=0),
+            CSGate(ctrl_state=1),
+            CSdgGate(ctrl_state=0),
+            CSdgGate(ctrl_state=1),
+        ],
+        exponent=[0.5, 1.5, 2, -1, -0.5],
+    )
+    def test_power_preserves_ctrl_state(self, gate: Gate, exponent: float):
+        """Test that power() preserves the control state on CPhase, CS, and CSdg gates."""
+        powered = gate.power(exponent)
+        self.assertEqual(powered.ctrl_state, gate.ctrl_state)
+        self.assertEqual(
+            Operator(powered),
+            Operator(gate.base_gate.power(exponent).control(1, ctrl_state=gate.ctrl_state)),
+        )
 
 
 if __name__ == "__main__":

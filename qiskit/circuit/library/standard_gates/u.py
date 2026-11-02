@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import cmath
-import copy as _copy
 import math
 from cmath import exp
 
@@ -183,48 +182,166 @@ class UGate(Gate):
         return False
 
 
-class _CUGateParams(list):
-    # This awful class is to let `CUGate.params` have its keys settable (as
-    # `QuantumCircuit.assign_parameters` requires), while accounting for the problem that `CUGate`
-    # was defined to have a different number of parameters to its `base_gate`, which breaks
-    # `ControlledGate`'s assumptions, and would make most parametric `CUGate` objects invalid.
-    #
-    # It's constructed only as part of the `CUGate.params` getter, and given that the general
-    # circuit model assumes that that's a directly mutable list that _must_ be kept in sync with the
-    # gate's requirements, we don't need this to support arbitrary mutation, just enough for
-    # `QuantumCircuit.assign_parameters` to work.
+class U4Gate(Gate):
+    r"""Generic single-qubit unitary with global phase.
 
-    __slots__ = ("_gate",)
+    This gate represents a generic :math:`U(2)` operation, obtained by adding a global-phase
+    parameter to :class:`.UGate`.
 
-    def __init__(self, gate):
-        super().__init__(gate._params)
-        self._gate = gate
+    .. math::
 
-    def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        self._gate._params[key] = value
-        # Magic numbers: CUGate has 4 parameters, UGate has 3, with the last of CUGate's missing.
-        if isinstance(key, slice):
-            # We don't need to worry about the case of the slice being used to insert extra / remove
-            # elements because that would be "undefined behavior" in a gate already, so we're
-            # within our rights to do anything at all.
-            for i, base_key in enumerate(range(*key.indices(4))):
-                if base_key < 0:
-                    base_key = 4 + base_key
-                if base_key < 3:
-                    self._gate.base_gate.params[base_key] = value[i]
+        U_4(\theta, \phi, \lambda, \gamma) = e^{i\gamma} U(\theta, \phi, \lambda)
+
+    .. note::
+
+        Currently, :class:`.U4Gate` is only available in Python. It was introduced as to allow
+        :class:`.CUGate` to be defined as the controlled version of this gate and have the same
+        parameters as the base gate.
+
+    Circuit symbol:
+
+    .. code-block:: text
+
+             ┌─────────────┐
+        q_0: ┤ U4(ϴ,φ,λ,γ) ├
+             └─────────────┘
+
+    Matrix representation:
+
+    .. math::
+
+        \newcommand{\rotationangle}{\frac{\theta}{2}}
+
+        U_4(\theta, \phi, \lambda, \gamma) =
+        \begin{pmatrix}
+            e^{i\gamma} \cos\left(\rotationangle\right) & -e^{i(\gamma + \lambda)}\sin\left(\rotationangle\right) \\
+            e^{i(\gamma + \phi)}\sin\left(\rotationangle\right) & e^{i(\gamma + \phi+\lambda)}\cos\left(\rotationangle\right)
+        \end{pmatrix}
+
+    """
+
+    def __init__(
+        self,
+        theta: ParameterValueType,
+        phi: ParameterValueType,
+        lam: ParameterValueType,
+        gamma: ParameterValueType,
+        label: str | None = None,
+    ):
+        r"""
+        Args:
+            theta: The angle :math:`\theta` corresponding to the :math:`R_Y(\theta)` rotation.
+            phi: The angle :math:`\phi` corresponding to the :math:`R_Z(\phi)` rotation.
+            lam: The angle :math:`\lambda` corresponding to the :math:`R_Z(\lambda)` rotation.
+            gamma: The global phase corresponding to :math:`e^{i\gamma}`.
+            label: An optional label for the gate.
+        """
+        super().__init__("u4", 1, [theta, phi, lam, gamma], label=label)
+
+    def inverse(self, annotated: bool = False):
+        r"""Return inverted U gate.
+
+        :math:`U4(\theta,\phi,\lambda, \gamma)^{\dagger} =U4(-\theta,-\lambda,-\phi,-\gamma))`
+
+        Args:
+            annotated: when set to ``True``, this is typically used to return an
+                :class:`.AnnotatedOperation` with an inverse modifier set instead of a concrete
+                :class:`.Gate`. However, for this class this argument is ignored as the
+                inverse of this gate is always a :class:`.U4Gate` with inverse parameter values.
+
+        Returns:
+            U4Gate: inverse gate.
+        """
+        return U4Gate(-self.params[0], -self.params[2], -self.params[1], -self.params[3])
+
+    def control(
+        self,
+        num_ctrl_qubits: int = 1,
+        label: str | None = None,
+        ctrl_state: str | int | None = None,
+        annotated: bool | None = None,
+    ):
+        """Return a controlled version of the U4 gate.
+
+        For a single control qubit, the controlled gate is implemented as :class:`.CUGate`,
+        regardless of the value of `annotated`.
+
+        For more than one control qubit,
+        the controlled gate is implemented as :class:`.ControlledGate` when ``annotated``
+        is ``False`` or ``None``, and as :class:`.AnnotatedOperation` when ``annotated``
+        is ``True``.
+
+        Args:
+            num_ctrl_qubits: Number of controls to add. Defaults to ``1``.
+            label: Optional gate label. Ignored if the controlled gate is implemented as an
+                annotated operation.
+            ctrl_state: The control state of the gate, specified either as an integer or a bitstring
+                (e.g. ``"110"``). If ``None``, defaults to the all-ones state ``2**num_ctrl_qubits - 1``.
+            annotated: Indicates whether the controlled gate should be implemented as a controlled gate
+                or as an annotated operation.
+
+        Returns:
+            A controlled version of this gate.
+        """
+        if num_ctrl_qubits == 1:
+            gate = CUGate(
+                self.params[0],
+                self.params[1],
+                self.params[2],
+                self.params[3],
+                label=label,
+                ctrl_state=ctrl_state,
+            )
+            gate.base_gate.label = self.label
         else:
-            if key < 0:
-                key = 4 + key
-            if key < 3:
-                self._gate.base_gate.params[key] = value
+            gate = super().control(
+                num_ctrl_qubits=num_ctrl_qubits,
+                label=label,
+                ctrl_state=ctrl_state,
+                annotated=annotated,
+            )
+        return gate
+
+    def __array__(self, dtype=None, copy=None):
+        """Return a numpy.array for the U4 gate."""
+        if copy is False:
+            raise ValueError("unable to avoid copy while creating an array as requested")
+        theta, phi, lam, gamma = (float(param) for param in self.params)
+        cos = math.cos(theta / 2)
+        sin = math.sin(theta / 2)
+        return numpy.array(
+            [
+                [exp(1j * gamma) * cos, -exp(1j * (gamma + lam)) * sin],
+                [exp(1j * (gamma + phi)) * sin, exp(1j * (gamma + phi + lam)) * cos],
+            ],
+            dtype=dtype or complex,
+        )
+
+    def _define(self):
+        """Default definition"""
+
+        # global phase: γ
+        #    ┌──────────┐
+        # q: ┤ U(ϴ,φ,λ) ├
+        #    └──────────┘
+
+        from qiskit.circuit import QuantumCircuit
+
+        definition = QuantumCircuit(1, global_phase=self.params[3])
+        definition.u(self.params[0], self.params[1], self.params[2], 0)
+        self.definition = definition
+
+    def __eq__(self, other):
+        if isinstance(other, U4Gate):
+            return self._compare_parameters(other)
+        return False
 
 
 class CUGate(ControlledGate):
     r"""Controlled-U gate (4-parameter two-qubit gate).
 
-    This is a controlled version of the U gate (generic single qubit rotation),
-    including a possible global phase :math:`e^{i\gamma}` of the U gate.
+    This is a controlled version of :class:`.U4Gate` (generic single qubit rotation
+    including a possible global phase).
 
     Can be applied to a :class:`~qiskit.circuit.QuantumCircuit`
     with the :meth:`~qiskit.circuit.QuantumCircuit.cu` method.
@@ -233,10 +350,10 @@ class CUGate(ControlledGate):
 
     .. code-block:: text
 
-        q_0: ──────■──────
-             ┌─────┴──────┐
-        q_1: ┤ U(ϴ,φ,λ,γ) ├
-             └────────────┘
+        q_0: ───────■──────
+             ┌──────┴──────┐
+        q_1: ┤ U4(ϴ,φ,λ,γ) ├
+             └─────────────┘
 
     Matrix representation:
 
@@ -307,7 +424,7 @@ class CUGate(ControlledGate):
             num_ctrl_qubits=1,
             label=label,
             ctrl_state=ctrl_state,
-            base_gate=UGate(theta, phi, lam, label=_base_label),
+            base_gate=U4Gate(theta, phi, lam, gamma, label=_base_label),
         )
 
     def _define(self):
@@ -367,26 +484,6 @@ class CUGate(ControlledGate):
             return numpy.array(
                 [[a, 0, b, 0], [0, 1, 0, 0], [c, 0, d, 0], [0, 0, 0, 1]], dtype=dtype
             )
-
-    @property
-    def params(self):
-        return _CUGateParams(self)
-
-    @params.setter
-    def params(self, parameters):
-        # We need to skip `ControlledGate` in the inheritance tree, since it defines
-        # that all controlled gates are `(1-|c><c|).1 + |c><c|.base` for control-state `c`, which
-        # this class does _not_ satisfy (so it shouldn't really be a `ControlledGate`).
-        super(ControlledGate, type(self)).params.fset(self, parameters)
-        self.base_gate.params = parameters[:-1]
-
-    def __deepcopy__(self, memo=None):
-        # We have to override this because `ControlledGate` doesn't copy the `_params` list,
-        # assuming that `params` will be a view onto the base gate's `_params`.
-        memo = memo if memo is not None else {}
-        out = super().__deepcopy__(memo)
-        out._params = _copy.deepcopy(out._params, memo)
-        return out
 
     def __eq__(self, other):
         return (

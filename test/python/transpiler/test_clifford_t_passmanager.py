@@ -891,6 +891,69 @@ class TestCliffordTPassManager(QiskitTestCase):
         self.assertEqual(len(run_calls), 1)
         self.assertEqual(run_calls[0], 9876)
 
+    def test_control_flow(self):
+        """Test Clifford+T transpilation of circuits containing control-flow operations."""
+        qc = QuantumCircuit(5, 1)
+        qc.ccx(0, 1, 2)
+        qc.measure(0, 0)
+        with qc.if_test((qc.clbits[0], True)) as else_:
+            qc.x(1)
+            qc.ccx(2, 3, 4)
+        with else_:
+            qc.x(1)
+            with qc.for_loop(range(3)):
+                qc.z(2)
+                with qc.for_loop((4, 0, 1)):
+                    qc.ccx(2, 3, 4)
+        with qc.while_loop((qc.clbits[0], True)):
+            qc.ccx(0, 1, 2)
+            qc.measure(0, 0)
+
+        pm = generate_preset_clifford_t_pass_manager()
+        transpiled = pm.run(qc)
+
+        # count operations recursively
+        transpiled_ops = set(circuit_to_dag(transpiled).count_ops(recurse=True))
+
+        expected_ops = set(
+            {"z", "x", "h", "cx", "t", "tdg", "measure", "if_else", "for_loop", "while_loop"}
+        )
+        self.assertEqual(expected_ops, transpiled_ops)
+
+    def test_control_flow_with_rotations(self):
+        """Test Clifford+T transpilation of circuits containing control-flow operations
+        and non-Clifford rotation gates."""
+        qc = QuantumCircuit(5, 1)
+        qc.ccx(0, 1, 2)
+        qc.measure(0, 0)
+        with qc.if_test((qc.clbits[0], True)) as else_:
+            qc.rx(0.1, 1)
+            qc.ccx(2, 3, 4)
+        with else_:
+            qc.x(1)
+            with qc.for_loop(range(3)):
+                qc.rz(0.2, 2)
+                with qc.for_loop((4, 0, 1)):
+                    qc.ccx(2, 3, 4)
+        with qc.while_loop((qc.clbits[0], True)):
+            qc.ccx(0, 1, 2)
+            qc.measure(0, 0)
+
+        pm = generate_preset_clifford_t_pass_manager()
+        transpiled = pm.run(qc)
+
+        transpiled_ops = set(circuit_to_dag(transpiled).count_ops(recurse=True))
+        basis_ops = {
+            *get_clifford_gate_names(),
+            "t",
+            "tdg",
+            "measure",
+            "if_else",
+            "for_loop",
+            "while_loop",
+        }
+        self.assertLessEqual(transpiled_ops, basis_ops)
+
 
 def _get_t_count(qc):
     """Returns the number of T/Tdg gates in a circuit."""

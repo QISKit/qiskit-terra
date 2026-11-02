@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed :meth:`SparsePauliOp.equiv` so a the ``atol`` parameter is honored consistently.
+    Previously, the internal call to simplify used its own default ``atol`` (1e-8).
+
+    See `#17025 <https://github.com/Qiskit/qiskit/issues/17025>`__.
+

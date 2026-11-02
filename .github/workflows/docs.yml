@@ -11,6 +11,10 @@ on:
         description: Runner image to use.  Expects an Ubuntu image.
         type: string
         required: true
+      base-branch:
+        description: If set, the branch name to use for code source links.
+        type: string
+        required: false
 
 jobs:
   docs:
@@ -22,20 +26,32 @@ jobs:
         with:
           # We need to fetch the whole history so 'reno' can do its job and we can inspect tags.
           fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
+
       - name: Install Rust
         run: rustup toolchain install --profile minimal --no-self-update
+
       - name: Install ubuntu docs dependencies
-        run: tools/install_ubuntu_docs_dependencies.sh
+        run: tools/install_ubuntu_docs_dependencies.bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set GitHub branch name
+        if: ${{ inputs.base-branch}}
+        run: echo "QISKIT_DOCS_GITHUB_BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+        env:
+          BRANCH_NAME: ${{ inputs.base-branch }}
+
       - name: Run docs
         run: tox -e docs
+
       - name: Clean up docs detritus
         run: rm -rf docs/_build/html/{.doctrees,.buildinfo}
+
       - name: Store built documentation artifact
         uses: actions/upload-artifact@v7
         with:

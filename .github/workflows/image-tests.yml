@@ -40,8 +40,7 @@ jobs:
             --group test \
             --group optionals-all \
             -e .
-          sudo apt-get update
-          sudo apt-get install -y graphviz pandoc
+          sudo tools/install_ubuntu_graphviz.sh
           pip check
       - name: Run image tests
         run: |

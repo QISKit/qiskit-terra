@@ -114,13 +114,20 @@ C_LIBQISKIT_OUT=$(C_DIR_OUT_LIB)/$(subst _cext,,$(C_LIB_CARGO_FILENAME))
 # Recipes for the C components.
 # ==============================================================================
 
-.PHONY: cformat fix_cformat
+.PHONY: cformat fix_cformat ctidy
 # Run clang-format (does not apply any changes)
 cformat:
 	bash tools/run_clang_format.sh
 # Apply clang-format changes
 fix_cformat:
 	bash tools/run_clang_format.sh apply
+
+# Run clang tidy, which currently only checks for `printf` occurences
+# This currently only checks for files in test/c/*.c. We could turn this into
+# a bash script, like for clang-format, which globs for .c files, but we only really care to
+# run this print check on the test files at the moment.
+ctidy: cheader
+	clang-tidy $(C_DIR_TEST)/*.c -- -std=c11 -I$(C_DIR_OUT_INCLUDE)
 
 # Abstraction over calling Cargo to build the C extension in "standalone" C
 # mode.  This _also_ builds the C header file as a side-effect into

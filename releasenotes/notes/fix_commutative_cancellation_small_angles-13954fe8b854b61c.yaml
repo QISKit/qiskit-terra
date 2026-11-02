@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.CommutativeCancellation` where an incorrect tolerance
+    caused rotation gates with small but non-negligible angles to be dropped during
+    the accumulation step.
+
+    Fixed `#17315 <https://github.com/Qiskit/qiskit/issues/17315>`__.

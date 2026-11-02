@@ -9,30 +9,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  config:
+    name: Configure
+    uses: ./.github/workflows/config.yml
+
+  resolve:
     if: github.repository_owner == 'Qiskit'
-    name: Build
-    runs-on: ubuntu-latest
-
+    name: Resolve
+    needs: [config]
+    runs-on: ${{ needs.config.outputs.runner-linux-x86_64 }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          # We need to fetch the whole history so 'reno' can do its job and we can inspect tags.
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v7
-        name: Install Python
-        with:
-          python-version: "3.14"
-      - name: Install Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-
-      - name: Install dependencies
-        run: tools/install_ubuntu_docs_dependencies.sh
-        env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-      - name: Determine GitHub branch name
+      - id: resolve
+        name: Resolve branch name
         run: |
+          set -e
           # Tags like 1.0.0 and 1.0.0rc1 should point to their stable branch. We do this
           # to reduce the diff in the qiskit/documentation repository between generating
           # the API docs from a tag release versus a workflow_dispatch.
@@ -42,16 +32,17 @@ jobs:
               BRANCH_NAME="$GITHUB_REF_NAME"
           fi
           echo "Using branch '${BRANCH_NAME}' for GitHub source code links"
-          echo "QISKIT_DOCS_GITHUB_BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+          echo "base-branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+    outputs:
+      base-branch: "${{ steps.resolve.outputs.base-branch }}"
 
-      - name: Build documentation
-        run: tox run -e docs
-      - name: Store built documentation artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: qiskit-docs
-          path: |
-            ./docs/_build/html/*
-            !**/.doctrees
-            !**/.buildinfo
-          if-no-files-found: error
+  docs:
+    if: github.repository_owner == 'Qiskit'
+    needs: [config, resolve]
+    name: Build documentation
+    uses: ./.github/workflows/docs.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-new }}
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+      base-branch: ${{ needs.resolve.outputs.base-branch }}
+    secrets: inherit

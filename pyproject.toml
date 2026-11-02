@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "qiskit"
 description = "An open-source SDK for working with quantum computers at the level of extended quantum circuits, operators, and primitives."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = [
     "LICENSE.txt",
@@ -283,7 +283,7 @@ include = ["qiskit", "qiskit.*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310', 'py311', 'py312', 'py313']
+target-version = ['py311', 'py312', 'py313', 'py314']
 
 [tool.cibuildwheel]
 manylinux-x86_64-image = "manylinux_2_28"
@@ -505,9 +505,9 @@ ignore = [
 
 [tool.coverage.report]
 exclude_also = [
-    "def __repr__",               # Printable epresentational string does not typically execute during testing
+    "def __repr__",               # Printable representational string does not typically execute during testing
     "raise NotImplementedError",  # Abstract methods are not testable
-    "raise RuntimeError",         # Exceptions for defensive programming that cannot be tested a head
+    "raise RuntimeError",         # Exceptions for defensive programming that cannot be tested ahead
     "if TYPE_CHECKING:",          # Code that only runs during type checks
     "@abstractmethod",            # Abstract methods are not testable
     ]

@@ -21,14 +21,14 @@ static int test_round_trip(void) {
         qk_circuit_gate(source, QkGate_CX, (uint32_t[]){0, 1}, NULL) != QkExitCode_Success ||
         qk_circuit_measure(source, 0, 0) != QkExitCode_Success ||
         qk_circuit_measure(source, 1, 1) != QkExitCode_Success) {
-        printf("Unexpected error encountered in QPY test_round_trip.");
+        fprintf(stderr, "Unexpected error encountered in QPY test_round_trip.");
         qk_circuit_free(source);
         return RuntimeError;
     }
 
     const QkCircuit *sources[] = {source, source};
     if (qk_qpy_dump_file(sources, 2, filename, NULL) != QkExitCode_Success) {
-        printf("Unexpected error encountered in QPY test_round_trip.");
+        fprintf(stderr, "Unexpected error encountered in QPY test_round_trip.");
         qk_circuit_free(source);
         return RuntimeError;
     }
@@ -37,7 +37,7 @@ static int test_round_trip(void) {
     QkExitCode load_result = qk_qpy_load_file(&loaded, filename, NULL);
     remove(filename);
     if (load_result != QkExitCode_Success || loaded.data == NULL || loaded.len != 2) {
-        printf("Unexpected error encountered in QPY test_round_trip.");
+        fprintf(stderr, "Unexpected error encountered in QPY test_round_trip.");
         if (loaded.data != NULL) {
             qk_qpy_loaded_circuits_clear(&loaded);
         }

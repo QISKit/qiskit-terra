@@ -9,6 +9,7 @@ updates:
         patterns: ['*']
     labels:
       - "Rust"
+      - "theme: qa"
       - "dependencies"
       - "Changelog: None"
     ignore:
@@ -35,7 +36,7 @@ updates:
     schedule:
       interval: weekly
     labels:
-      - "type: qa"
+      - "theme: qa"
       - "dependencies"
       - "Changelog: None"
 
@@ -53,7 +54,7 @@ updates:
     schedule:
       interval: weekly
     labels:
-      - "type: qa"
       - "ci: test wheels"
+      - "theme: qa"
       - "dependencies"
       - "Changelog: None"

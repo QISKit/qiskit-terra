@@ -231,7 +231,7 @@ static int test_circuit_ir(void) {
     int result = Ok;
 
     if (qk_passmanager_push_pass(pm, pass) != QkExitCode_Success) {
-        printf("Failed pushing pass.\n");
+        fprintf(stderr, "Failed pushing pass.\n");
         result = RuntimeError;
         goto cleanup;
     }
@@ -256,18 +256,18 @@ static int test_circuit_ir(void) {
         QkOpCount count = counts.data[i];
         if (strcmp(count.name, "h") == 0) {
             if (count.count != 2) {
-                printf("Expected 2 H gates, found %zu\n", count.count);
+                fprintf(stderr, "Expected 2 H gates, found %zu\n", count.count);
                 result = EqualityError;
                 goto cleanup_counts;
             }
         } else if (strcmp(count.name, "rz") == 0) {
             if (count.count != 1) {
-                printf("Expected 1 RZ gate, found %zu\n", count.count);
+                fprintf(stderr, "Expected 1 RZ gate, found %zu\n", count.count);
                 result = EqualityError;
                 goto cleanup_counts;
             }
         } else {
-            printf("Unexpected gate.\n");
+            fprintf(stderr, "Unexpected gate.\n");
             result = EqualityError;
             goto cleanup_counts;
         }
@@ -288,12 +288,12 @@ static int test_circuit_ir(void) {
         QkOpCount count = counts.data[i];
         if (strcmp(count.name, "cx") == 0) {
             if (count.count != 2) {
-                printf("Expected 2 CX gates, found %zu\n", count.count);
+                fprintf(stderr, "Expected 2 CX gates, found %zu\n", count.count);
                 result = EqualityError;
                 goto cleanup_counts;
             }
         } else {
-            printf("Unexpected gate.\n");
+            fprintf(stderr, "Unexpected gate.\n");
             result = EqualityError;
             goto cleanup_counts;
         }
@@ -332,12 +332,12 @@ static int test_lowering(void) {
     QkPassManager *pm = qk_passmanager_new();
     int result = Ok;
     if (qk_passmanager_push_pass(pm, remove_identity) != QkExitCode_Success) {
-        printf("Failed pushing circuit pass.\n");
+        fprintf(stderr, "Failed pushing circuit pass.\n");
         result = RuntimeError;
         goto cleanup;
     }
     if (qk_passmanager_push_pass(pm, circuit_to_dag) != QkExitCode_Success) {
-        printf("Failed pushing circuit->dag lowering pass.\n");
+        fprintf(stderr, "Failed pushing circuit->dag lowering pass.\n");
         result = RuntimeError;
         goto cleanup;
     }
@@ -355,7 +355,7 @@ static int test_lowering(void) {
     QkDag *out =
         (QkDag *)qk_passmanager_run_simple(pm, (void *)circuit, circuit_ir, dag_ir, &error);
     if (error != NULL) {
-        printf("Failed running pass.\n");
+        fprintf(stderr, "Failed running pass.\n");
         result = RuntimeError;
         qk_compilation_error_free(error);
         goto cleanup;
@@ -372,20 +372,20 @@ static int test_lowering(void) {
 
         if (i == 0 || i == 2) {
             if (strcmp(inst.name, "h") != 0) {
-                printf("Expected h at %zu, but got %s\n", i, inst.name);
+                fprintf(stderr, "Expected h at %zu, but got %s\n", i, inst.name);
                 result = EqualityError;
                 qk_circuit_instruction_clear(&inst);
                 goto dag_cleanup;
             }
         } else if (i == 1) {
             if (strcmp(inst.name, "rz") != 0) {
-                printf("Expected rz at %zu, but got %s\n", i, inst.name);
+                fprintf(stderr, "Expected rz at %zu, but got %s\n", i, inst.name);
                 result = EqualityError;
                 qk_circuit_instruction_clear(&inst);
                 goto dag_cleanup;
             }
         } else {
-            printf("Unexpected number of operations.\n");
+            fprintf(stderr, "Unexpected number of operations.\n");
             result = EqualityError;
             qk_circuit_instruction_clear(&inst);
             goto dag_cleanup;
@@ -418,7 +418,7 @@ static int test_custom_ir(void) {
     size_t flipped = num_flips(program);
 
     if (flipped != 5) {
-        printf("Wrong number of initial bitflips, expected 5 got %zu\n", flipped);
+        fprintf(stderr, "Wrong number of initial bitflips, expected 5 got %zu\n", flipped);
         free_flips(program);
         return EqualityError;
     }
@@ -432,7 +432,7 @@ static int test_custom_ir(void) {
 
     int result = Ok;
     if (qk_passmanager_push_pass(pm, cancellation) != QkExitCode_Success) {
-        printf("Failed pushing pass.\n");
+        fprintf(stderr, "Failed pushing pass.\n");
         result = RuntimeError;
         free_flips(program);
         goto cleanup;
@@ -444,13 +444,13 @@ static int test_custom_ir(void) {
     free_flips(out);
 
     if (num_deletes != 0) {
-        printf("Unwarrented delete of the IR!\n");
+        fprintf(stderr, "Unwarrented delete of the IR!\n");
         result = RuntimeError;
         goto cleanup;
     }
 
     if (flipped != 3) {
-        printf("Wrong number of bitflips, expected 3 got %zu\n", flipped);
+        fprintf(stderr, "Wrong number of bitflips, expected 3 got %zu\n", flipped);
         result = EqualityError;
     }
 
@@ -481,7 +481,7 @@ static int test_empty_pm(void) {
     const size_t num_ops = 2;
     int result = Ok;
     if (qk_circuit_num_instructions(out) != num_ops) {
-        printf("Expected 2 instructions, got %zu\n", qk_circuit_num_instructions(out));
+        fprintf(stderr, "Expected 2 instructions, got %zu\n", qk_circuit_num_instructions(out));
         result = EqualityError;
         goto cleanup;
     }
@@ -492,14 +492,14 @@ static int test_empty_pm(void) {
 
         if (i == 0) {
             if (strcmp(inst.name, "h") != 0) {
-                printf("Expected h at %zu, but got %s\n", i, inst.name);
+                fprintf(stderr, "Expected h at %zu, but got %s\n", i, inst.name);
                 result = EqualityError;
                 qk_circuit_instruction_clear(&inst);
                 goto cleanup;
             }
         } else {
             if (strcmp(inst.name, "cx") != 0) {
-                printf("Expected cx at %zu, but got %s\n", i, inst.name);
+                fprintf(stderr, "Expected cx at %zu, but got %s\n", i, inst.name);
                 result = EqualityError;
                 qk_circuit_instruction_clear(&inst);
                 goto cleanup;
@@ -538,14 +538,14 @@ static int test_invalid_pipeline(void) {
     int result = Ok;
     QkPassManager *pm = qk_passmanager_new();
     if (qk_passmanager_push_pass(pm, flip_pass) != QkExitCode_Success) {
-        printf("Failed pushing pass.\n");
+        fprintf(stderr, "Failed pushing pass.\n");
         result = RuntimeError;
         goto cleanup;
     }
 
     // Now try pushing the circuit pass onto the flip pass. This should error.
     if (qk_passmanager_push_pass(pm, circuit_pass) != QkExitCode_IncompatibleTypes) {
-        printf("Expected QkExitCode_IncompatibleTypes.\n");
+        fprintf(stderr, "Expected QkExitCode_IncompatibleTypes.\n");
         result = EqualityError;
     }
 
@@ -580,7 +580,7 @@ static int test_mismatching_input(void) {
     QkPassManager *pm = qk_passmanager_new();
     int result = Ok;
     if (qk_passmanager_push_pass(pm, pass) != QkExitCode_Success) {
-        printf("Failed pushing pass.\n");
+        fprintf(stderr, "Failed pushing pass.\n");
         result = RuntimeError;
         goto cleanup;
     }
@@ -594,20 +594,20 @@ static int test_mismatching_input(void) {
     Flips *out = (Flips *)qk_passmanager_run_simple(pm, (void *)program, flip_ir, flip_ir, &error);
 
     if (out != NULL) {
-        printf("Expected out pointer to be NULL, but it is not.\n");
+        fprintf(stderr, "Expected out pointer to be NULL, but it is not.\n");
         result = EqualityError;
         free_flips(out);
         goto cleanup;
     }
 
     if (error == NULL) {
-        printf("Expected error to be written, but the pointer is NULL.\n");
+        fprintf(stderr, "Expected error to be written, but the pointer is NULL.\n");
         result = EqualityError;
         goto cleanup;
     } else {
         char *error_msg = qk_compilation_error_str(error);
         if (strcmp(error_msg, "failed to cast to expected input type") != 0) {
-            printf("Wrong error message: %s\n", error_msg);
+            fprintf(stderr, "Wrong error message: %s\n", error_msg);
             result = EqualityError;
         }
         qk_str_free(error_msg);
@@ -617,7 +617,7 @@ static int test_mismatching_input(void) {
     // at this point we know `out` is NULL (as expected) and no longer need to free it,
     // and the error has been freed. Now we can verify the input IR was freed, too.
     if (logger.num_deletes != 1) {
-        printf("Input IR has not been freed despite faulty pipeline.\n");
+        fprintf(stderr, "Input IR has not been freed despite faulty pipeline.\n");
         result = RuntimeError;
         goto cleanup;
     }
@@ -647,7 +647,7 @@ static int test_mismatching_output(void) {
     QkPassManager *pm = qk_passmanager_new();
     int result = Ok;
     if (qk_passmanager_push_pass(pm, cancellation) != QkExitCode_Success) {
-        printf("Failed pushing pass.\n");
+        fprintf(stderr, "Failed pushing pass.\n");
         result = RuntimeError;
         goto cleanup;
     }
@@ -666,7 +666,7 @@ static int test_mismatching_output(void) {
         (QkCircuit *)qk_passmanager_run_simple(pm, (void *)program, flip_ir, circuit_ir, &error);
 
     if (out != NULL) {
-        printf("Expected out pointer to be NULL, but it is not.\n");
+        fprintf(stderr, "Expected out pointer to be NULL, but it is not.\n");
         result = EqualityError;
         goto cleanup;
     }
@@ -674,19 +674,19 @@ static int test_mismatching_output(void) {
     // at this point we know `out` is NULL (as expected) and no longer need to free it
     // -- but the input IR should've been freed, so we check this here
     if (logger.num_deletes != 1) {
-        printf("Input IR has not been freed despite faulty return type.\n");
+        fprintf(stderr, "Input IR has not been freed despite faulty return type.\n");
         result = RuntimeError;
         goto cleanup;
     }
 
     if (error == NULL) {
-        printf("Expected error to be written, but the pointer is NULL.\n");
+        fprintf(stderr, "Expected error to be written, but the pointer is NULL.\n");
         result = EqualityError;
         goto cleanup;
     } else {
         char *error_msg = qk_compilation_error_str(error);
         if (strcmp(error_msg, "declared output IR type does not match the pipeline result") != 0) {
-            printf("Wrong error message: %s\n", error_msg);
+            fprintf(stderr, "Wrong error message: %s\n", error_msg);
             result = EqualityError;
         }
         qk_str_free(error_msg);
@@ -721,7 +721,7 @@ static int test_pass_deconstructor_after_run(void) {
     int result = Ok;
     QkPassManager *pm = qk_passmanager_new();
     if (qk_passmanager_push_pass(pm, pop) != QkExitCode_Success) {
-        printf("Failed pushing pass.\n");
+        fprintf(stderr, "Failed pushing pass.\n");
         result = RuntimeError;
         qk_passmanager_free(pm);
         goto cleanup;
@@ -736,7 +736,7 @@ static int test_pass_deconstructor_after_run(void) {
 
     Flips *out = (Flips *)qk_passmanager_run_simple(pm, program, ir, ir, NULL);
     if (out == NULL) {
-        printf("Failed running PM.\n");
+        fprintf(stderr, "Failed running PM.\n");
         result = RuntimeError;
         qk_passmanager_free(pm);
         goto cleanup;
@@ -747,19 +747,19 @@ static int test_pass_deconstructor_after_run(void) {
     free_flips(out);
 
     if (flipped != 3) {
-        printf("Wrong number of final flips, expected 3, got %zu\n", flipped);
+        fprintf(stderr, "Wrong number of final flips, expected 3, got %zu\n", flipped);
         result = EqualityError;
         qk_passmanager_free(pm);
         goto cleanup;
     }
     if (num_ir_deletes != 0) {
-        printf("Unwarrented delete of the IR!\n");
+        fprintf(stderr, "Unwarrented delete of the IR!\n");
         result = RuntimeError;
         qk_passmanager_free(pm);
         goto cleanup;
     }
     if (pass_logger.num_deletes != 0) {
-        printf("Unwarrented delete of the pass!\n");
+        fprintf(stderr, "Unwarrented delete of the pass!\n");
         result = RuntimeError;
         qk_passmanager_free(pm);
         goto cleanup;
@@ -767,7 +767,7 @@ static int test_pass_deconstructor_after_run(void) {
 
     qk_passmanager_free(pm);
     if (pass_logger.num_deletes != 1) {
-        printf("Pass not correctly deletes upon pass manager free.\n");
+        fprintf(stderr, "Pass not correctly deletes upon pass manager free.\n");
         result = RuntimeError;
     }
 cleanup:
@@ -797,7 +797,7 @@ static int test_pass_deconstructor_on_failure(void) {
     int result = Ok;
     QkPassManager *pm = qk_passmanager_new();
     if (qk_passmanager_push_pass(pm, circuit_pass) != QkExitCode_Success) {
-        printf("Failed pushing pass.\n");
+        fprintf(stderr, "Failed pushing pass.\n");
         result = RuntimeError;
         goto cleanup;
     }
@@ -814,14 +814,14 @@ static int test_pass_deconstructor_on_failure(void) {
     // In case this succeeds, we already know from other tests that the pass' deconstructor
     // is correctly called, so we don't have any cleanup to do.
     if (qk_passmanager_push_pass(pm, flip_pass) != QkExitCode_IncompatibleTypes) {
-        printf("Expected QkExitCode_IncompatibleTypes.\n");
+        fprintf(stderr, "Expected QkExitCode_IncompatibleTypes.\n");
         result = EqualityError;
         goto cleanup;
     }
 
     // .. since the PM took ownership, the pass' deconstructor should've been called.
     if (pass_logger.num_deletes != 1) {
-        printf("Pass deconstructor not called on failed push.\n");
+        fprintf(stderr, "Pass deconstructor not called on failed push.\n");
         result = RuntimeError;
     }
 
@@ -880,19 +880,19 @@ static int test_failing_pass(void) {
 
     int result = Ok;
     if (out != NULL) {
-        printf("Expected NULL pointer.\n");
+        fprintf(stderr, "Expected NULL pointer.\n");
         result = EqualityError;
         goto cleanup;
     }
 
     if (error == NULL) {
-        printf("Expected error to be set, but it is NULL\n");
+        fprintf(stderr, "Expected error to be set, but it is NULL\n");
         result = EqualityError;
         goto cleanup;
     } else {
         char *error_msg = qk_compilation_error_str(error);
         if (strcmp(error_msg, "task successfully failed!") != 0) {
-            printf("Wrong error message: %s\n", error_msg);
+            fprintf(stderr, "Wrong error message: %s\n", error_msg);
             result = EqualityError;
         }
         qk_str_free(error_msg);

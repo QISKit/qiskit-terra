@@ -13,7 +13,7 @@ on:
       python-old:
         description: Oldest supported version of Python
         # Logic in `wheels-build.yml` relies on this being a regular `[0-9](\.[0-9])*` version.
-        value: '3.10'
+        value: '3.11'
 
       python-new:
         description: Newest supported version of Python
@@ -30,19 +30,19 @@ on:
 
       runner-linux-x86_64:
         description: Runner image for Linux x86_64 jobs
-        value: 'ubuntu-latest'
+        value: 'ubuntu-26.04'
 
       runner-linux-arm64:
         description: Runner image for Linux ARM64 jobs
-        value: 'ubuntu-24.04-arm'
+        value: 'ubuntu-26.04-arm'
 
       runner-macos-arm64:
         description: Runner image for macOS ARM64 jobs
-        value: 'macos-15'
+        value: 'macos-26'
 
       runner-windows-x86_64:
         description: Runner image for Windows x86_64 jobs
-        value: 'windows-latest'
+        value: 'windows-2025'
 
 jobs:
   # We have to have _some_ job defined or the workflow isn't valid.

@@ -187,10 +187,10 @@ static int run_optimize_h_gates(optimize_h_gates_fn optimize_fn) {
 
     size_t num_gates[5] = {1, 2, 2, 2, 1};
     char *names[5] = {"u1_u2_u3", "rz_rx", "rz_sx", "rz_ry_u", "rz_ry_u_noerror"};
-    printf("Optimize h gates tests.\n");
+    fprintf(stderr, "Optimize h gates tests.\n");
     for (int idx = 0; idx < 5; idx++) {
         int result = optimize_fn(targets[idx], gates[idx], freq[idx], num_gates[idx]);
-        printf("--- Run with %-21s: %s \n", names[idx], (bool)result ? "Fail" : "Ok");
+        fprintf(stderr, "--- Run with %-21s: %s \n", names[idx], (bool)result ? "Fail" : "Ok");
         num_failed += result;
     }
     return num_failed;
@@ -235,10 +235,10 @@ static int run_optimize_identity_target(optimize_identity_target_fn optimize_fn)
         "rz_sx",
         "rz_ry_u",
     };
-    printf("Optimize identities with target tests.\n");
+    fprintf(stderr, "Optimize identities with target tests.\n");
     for (int idx = 0; idx < 4; idx++) {
         int result = optimize_fn(targets[idx]);
-        printf("--- Run with %-21s: %s \n", names[idx], (bool)result ? "Fail" : "Ok");
+        fprintf(stderr, "--- Run with %-21s: %s \n", names[idx], (bool)result ? "Fail" : "Ok");
         num_failed += result;
     }
     return num_failed;

@@ -17,7 +17,6 @@ Abstract base class for Quantum Channels.
 from __future__ import annotations
 import copy
 import math
-import sys
 from abc import abstractmethod
 from numbers import Number, Integral
 
@@ -35,10 +34,7 @@ from qiskit.quantum_info.operators.channel.transformations import _to_kraus
 from qiskit.quantum_info.operators.channel.transformations import _to_operator
 from qiskit.quantum_info.operators.scalar_op import ScalarOp
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from typing import Self
 
 
 class QuantumChannel(LinearOp):
