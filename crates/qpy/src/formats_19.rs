@@ -595,9 +595,11 @@ mod tests {
         T: BinWrite,
     {
         let mut result = Cursor::new(Vec::new());
-        value
-            .write_options(&mut result, Endian::Big, args)
-            .expect("test value should serialize");
+        let write_result = value.write_options(&mut result, Endian::Big, args);
+        assert!(
+            write_result.is_ok(),
+            "test value should serialize: {write_result:?}"
+        );
         result.into_inner()
     }
 
