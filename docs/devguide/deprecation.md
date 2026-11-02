@@ -142,7 +142,7 @@ change:
 
 The proper way to raise a deprecation warning is to use the decorators `@deprecate_arg` and
 `@deprecate_func` from `qiskit.utils.deprecation`. These will generate a standardized message and
-and add the deprecation to that function's docstring so that it shows up in the docs.
+add the deprecation to that function's docstring so that it shows up in the docs.
 
 
 ```python

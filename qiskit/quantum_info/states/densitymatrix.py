@@ -158,10 +158,18 @@ class DensityMatrix(QuantumState, TolerancesMixin):
                 be changed by adding the line ``state_drawer = <default>`` to
                 ``~/.qiskit/settings.conf`` under ``[default]``.
             drawer_args: Arguments to be passed directly to the relevant drawing
-                function or constructor (`TextMatrix()`, `array_to_latex()`,
-                `plot_state_qsphere()`, `plot_state_hinton()` or `plot_bloch_multivector()`).
-                See the relevant function under `qiskit.visualization` for that function's
-                documentation.
+                function or constructor:
+
+                * For ``'latex'`` and ``'latex_source'``: see
+                  :func:`~qiskit.visualization.state_to_latex` (which forwards to
+                  :func:`~qiskit.visualization.array_to_latex`).
+                * For ``'text'``: arguments such as ``max_size`` to control the
+                  summarization threshold.
+                * For Matplotlib figures (``'qsphere'``, ``'hinton'``, or ``'bloch'``):
+                  see the corresponding plotting functions in :mod:`qiskit.visualization`
+                  (such as :func:`~qiskit.visualization.plot_state_qsphere`,
+                  :func:`~qiskit.visualization.plot_state_hinton`, or
+                  :func:`~qiskit.visualization.plot_bloch_multivector`).
 
         Returns:
             :class:`matplotlib.Figure` or :class:`str` or

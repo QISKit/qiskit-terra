@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::mut_ptr_as_ref;
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_transpiler::passes::run_remove_diagonal_before_measure;
@@ -30,7 +29,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_remove_diagonal_gates_bef
     circuit: *mut CircuitData,
 ) {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    let circuit = unsafe { &mut *circuit };
     let mut dag = DAGCircuit::from_circuit_data(circuit, false, None, None)
         .expect("Circuit to DAG conversion failed");
     run_remove_diagonal_before_measure(&mut dag);
@@ -70,6 +69,6 @@ pub unsafe extern "C" fn qk_transpiler_pass_remove_diagonal_gates_before_measure
     dag: *mut DAGCircuit,
 ) {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     run_remove_diagonal_before_measure(dag);
 }

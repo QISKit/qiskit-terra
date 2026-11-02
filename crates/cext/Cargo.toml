@@ -33,7 +33,7 @@ hashbrown.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
 anyhow.workspace = true
-mimalloc = { workspace = true, optional = true }
+mimalloc = { workspace = true, optional = true, features = ["local_dynamic_tls"] }
 uuid.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true

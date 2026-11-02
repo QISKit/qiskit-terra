@@ -975,6 +975,23 @@ class TestTwoQubitWeylDecompositionSpecialization(CheckDecompositions):
 class TestTwoQubitDecompose(CheckDecompositions):
     """Test TwoQubitBasisDecomposer() for exact/approx decompositions"""
 
+    def test_decomposition_public_interfaces(self):
+        """Test the python interface for the decomposition methods"""
+        target = TwoQubitWeylDecomposition(random_unitary(4, seed=1234), fidelity=None)
+        decomposer = TwoQubitBasisDecomposer(CXGate())
+
+        decompositions = [
+            (TwoQubitBasisDecomposer.decomp0(target), 2),
+            (decomposer.decomp1(target), 4),
+            (decomposer.decomp2_supercontrolled(target), 6),
+            (decomposer.decomp3_supercontrolled(target), 8),
+        ]
+        for matrices, expected_length in decompositions:
+            with self.subTest(expected_length=expected_length):
+                self.assertEqual(len(matrices), expected_length)
+                for matrix in matrices:
+                    self.assertEqual(matrix.shape, (2, 2))
+
     @combine(seed=range(10), name="test_exact_two_qubit_cnot_decompose_random_{seed}")
     def test_exact_two_qubit_cnot_decompose_random(self, seed):
         """Verify exact CNOT decomposition for random Haar 4x4 unitary (seed={seed})."""

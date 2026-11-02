@@ -119,7 +119,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
       - name: Install Rust
         run:
-          rustup toolchain install 1.98
+          rustup toolchain install stable
             --override
             --profile minimal
             --component llvm-tools-preview
@@ -141,9 +141,9 @@ jobs:
           cat >>"$GITHUB_ENV" <<EOF
           CIBW_BEFORE_ALL_LINUX=dnf install -y wget && {package}/tools/install_rust.sh
           CIBW_BEFORE_BUILD=bash ./tools/build_pgo.sh $PGO_WORK_DIR $PGO_OUT_PATH
-          CIBW_ENVIRONMENT=RUSTUP_TOOLCHAIN=1.98 RUSTFLAGS='-Cprofile-use=$PGO_OUT_PATH -Cllvm-args=-pgo-warn-missing-function' QISKIT_BUILD_WITH_MIMALLOC=1
-          CIBW_ENVIRONMENT_MACOS=MACOSX_DEPLOYMENT_TARGET='10.12' RUSTUP_TOOLCHAIN=1.98 RUSTFLAGS='-Cprofile-use=$PGO_OUT_PATH -Cllvm-args=-pgo-warn-missing-function' QISKIT_BUILD_WITH_MIMALLOC=1
-          CIBW_ENVIRONMENT_LINUX=RUSTUP_TOOLCHAIN=1.98 QISKIT_BUILD_WITH_MIMALLOC=1 RUSTFLAGS='-Cprofile-use=$PGO_OUT_PATH -Cllvm-args=-pgo-warn-missing-function' PATH="\$PATH:\$HOME/.cargo/bin" CARGO_NET_GIT_FETCH_WITH_CLI="true"
+          CIBW_ENVIRONMENT=RUSTUP_TOOLCHAIN=stable RUSTFLAGS='-Cprofile-use=$PGO_OUT_PATH -Cllvm-args=-pgo-warn-missing-function' QISKIT_BUILD_WITH_MIMALLOC=1
+          CIBW_ENVIRONMENT_MACOS=MACOSX_DEPLOYMENT_TARGET='10.12' RUSTUP_TOOLCHAIN=stable RUSTFLAGS='-Cprofile-use=$PGO_OUT_PATH -Cllvm-args=-pgo-warn-missing-function' QISKIT_BUILD_WITH_MIMALLOC=1
+          CIBW_ENVIRONMENT_LINUX=RUSTUP_TOOLCHAIN=stable QISKIT_BUILD_WITH_MIMALLOC=1 RUSTFLAGS='-Cprofile-use=$PGO_OUT_PATH -Cllvm-args=-pgo-warn-missing-function' PATH="\$PATH:\$HOME/.cargo/bin" CARGO_NET_GIT_FETCH_WITH_CLI="true"
           EOF
         env:
           PGO_WORK_DIR: ${{ github.workspace }}/pgo-data

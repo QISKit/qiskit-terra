@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    The :class:`.SynthesizeRZRotations` transpiler pass now correctly
+    synthesizes rotations withon control-flow blocks.

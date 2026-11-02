@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_transpiler::passes::run_basis_translator;
@@ -64,9 +63,9 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_basis_translator(
     min_qubits: usize,
 ) {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circ_from_ptr = unsafe { mut_ptr_as_ref(circuit) };
+    let circ_from_ptr = unsafe { &mut *circuit };
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let target = unsafe { const_ptr_as_ref(target) };
+    let target = unsafe { &*target };
 
     let dag = DAGCircuit::from_circuit_data(circ_from_ptr, false, None, None)
         .expect("Circuit to DAG conversion failed");

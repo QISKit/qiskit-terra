@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed :meth:`.TwoQubitBasisDecomposer.decomp0`,
+    :meth:`.TwoQubitBasisDecomposer.decomp1`,
+    :meth:`.TwoQubitBasisDecomposer.decomp2_supercontrolled`, and
+    :meth:`.TwoQubitBasisDecomposer.decomp3_supercontrolled` so they correctly accept
+    :class:`.TwoQubitWeylDecomposition` arguments.

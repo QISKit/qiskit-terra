@@ -100,20 +100,6 @@ jobs:
           python -m pip check
         if: ${{ inputs.install-optionals }}
 
-      - name: Preload libgomp for Aer
-        # TODO: As of the Ubuntu 26.04, Aer has been failing to load with a message
-        #   libgomp-a34b3233.so.1.0.0: cannot allocate memory in static TLS block
-        # This appears to be something to do with initialisation order.  In order to keep the Aer
-        # tests unskipped, this finds Aer's bundled `libgomp`, so the test runners can forcibly load
-        # it up.
-        run: |
-          set -e
-          source test-job/bin/activate
-          libgomp=$(python -c 'from importlib.metadata import files; print(next(str(f.locate()) for f in files("qiskit_aer") if "libgomp" in str(f)))')
-          echo "libgomp=$libgomp"
-          echo "AER_LIBGOMP=$libgomp" >> "$GITHUB_ENV"
-        if: ${{ inputs.install-optionals }}
-
       - name: Install optional non-Python dependencies
         run: sudo tools/install_ubuntu_graphviz.sh
         if: ${{ inputs.install-optionals }}
@@ -130,7 +116,6 @@ jobs:
           QISKIT_PARALLEL: FALSE
           QISKIT_IGNORE_USER_SETTINGS: TRUE
           RUST_BACKTRACE: 1
-          LD_PRELOAD: ${{ env.LD_PRELOAD }}:${{ env.AER_LIBGOMP }}
       - name: Filter stestr history
         if: ${{ !inputs.install-from-sdist }}
         run: |
@@ -154,7 +139,6 @@ jobs:
           QISKIT_PARALLEL: FALSE
           QISKIT_IGNORE_USER_SETTINGS: TRUE
           RUST_BACKTRACE: 1
-          LD_PRELOAD: ${{ env.LD_PRELOAD }}:${{ env.AER_LIBGOMP }}
       - name: Filter stestr history (sdist)
         if: ${{ inputs.install-from-sdist }}
         run: |
