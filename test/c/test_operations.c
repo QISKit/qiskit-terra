@@ -668,7 +668,7 @@ static int test_custom_operation_query(void) {
         res = RuntimeError;
         goto exit;
     }
-    const QkCustomOp *op = qk_circuit_custom_operation_get(circuit, 0);
+    const QkCustomOp *op = qk_circuit_get_custom_operation(circuit, 0);
     void *gate = gates[0];
 
     const char *retrieved_name = qk_custom_operation_name(op);
@@ -758,7 +758,7 @@ static int test_custom_operation_query(void) {
         res = RuntimeError;
         goto cleanup_definitions;
     }
-    op = qk_circuit_custom_operation_get(circuit, 1);
+    op = qk_circuit_get_custom_operation(circuit, 1);
     gate = gates[1];
 
     const char *retrieved_name_1 = qk_custom_operation_name(op);
@@ -1017,7 +1017,7 @@ static int test_custom_operation_directive(void) {
     // NOTE: this consumes ``op``, so it must not be freed afterwards.
     qk_circuit_custom_operation(circuit, op, qubits, NULL, NULL);
 
-    const QkCustomOp *retrieved = qk_circuit_custom_operation_get(circuit, 0);
+    const QkCustomOp *retrieved = qk_circuit_get_custom_operation(circuit, 0);
     if (retrieved == NULL) {
         printf("Retrieved a Null pointer instead of a custom operation.\n");
         res = NullptrError;

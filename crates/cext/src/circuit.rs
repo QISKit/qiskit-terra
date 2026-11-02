@@ -3156,7 +3156,7 @@ pub(crate) unsafe fn ptr_to_params_owned<B>(
 ///
 /// Undefined behavior may happen if the `circuit` pointer is null or unaligned.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qk_circuit_custom_operation_get(
+pub unsafe extern "C" fn qk_circuit_get_custom_operation(
     circuit: *mut CircuitData,
     index: usize,
 ) -> *const BoxedCustomOperation {
