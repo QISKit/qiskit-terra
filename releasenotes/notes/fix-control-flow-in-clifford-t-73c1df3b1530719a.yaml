@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed compilation to Clifford+T basis sets  (for example, using
+    :func:`~.generate_preset_clifford_t_pass_manager`) to correctly handle
+    control-flow instructions.
+
+    See `#17314 <https://github.com/Qiskit/qiskit/issues/17314>`__.

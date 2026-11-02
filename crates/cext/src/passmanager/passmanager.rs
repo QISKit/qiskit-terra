@@ -15,7 +15,7 @@ use std::ptr;
 
 use super::{CPass, CompilationError, IrHandle};
 use crate::ExitCode;
-use crate::pointers::{ExposesOwnedPointers, const_ptr_as_ref, expose_by_box, mut_ptr_as_ref};
+use crate::pointers::{ExposesOwnedPointers, expose_by_box};
 use anyhow::anyhow;
 use qiskit_passmanager::{Pass, PassManager, Task};
 
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn qk_passmanager_push_pass(
     pass: *mut CPass,
 ) -> ExitCode {
     // SAFETY: per documentation, `pm` points to a valid `PassManager`.
-    let pm = unsafe { mut_ptr_as_ref(pm) };
+    let pm = unsafe { &mut *pm };
     // SAFETY: per documentation, `pass` points to a valid owned `CPass`.
     let pass = unsafe { CPass::steal(pass) };
     match pm.try_push_task(Task::Transformation(pass as Box<dyn Pass>)) {
@@ -119,9 +119,9 @@ pub unsafe extern "C" fn qk_passmanager_run_simple(
     error: *mut *mut CompilationError,
 ) -> *mut c_void {
     // SAFETY: Per documentation, `pm` is non-null and valid
-    let pm = unsafe { mut_ptr_as_ref(pm) };
-    let ir_in_handle = unsafe { const_ptr_as_ref(ir_in_handle) };
-    let ir_out_handle = unsafe { const_ptr_as_ref(ir_out_handle) };
+    let pm = unsafe { &mut *pm };
+    let ir_in_handle = unsafe { &*ir_in_handle };
+    let ir_out_handle = unsafe { &*ir_out_handle };
     let ir = unsafe { ir_in_handle.0.steal(ir) };
 
     let parse_error = |e| {
