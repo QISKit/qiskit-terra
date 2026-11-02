@@ -128,7 +128,7 @@ impl PauliMeasure {
 
 impl fmt::Display for PauliMeasure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "pauli_measure({:?}, neg={:?})", self.paulis, self.neg)
+        write!(f, "pauli_measure({:?}, neg={})", self.paulis, self.neg)
     }
 }
 
