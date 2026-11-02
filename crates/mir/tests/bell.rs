@@ -145,7 +145,7 @@ fn build_bell_pbc_dag() -> DAGCircuit {
 #[test]
 fn lower_bell_pbc() {
     let dag = build_bell_pbc_dag();
-    let mir = lower(&dag);
+    let mir = lower(&dag).unwrap();
 
     assert_eq!(mir.instructions().node_count(), 7);
     assert_eq!(mir.resource_table().iter_qids().len(), 2);

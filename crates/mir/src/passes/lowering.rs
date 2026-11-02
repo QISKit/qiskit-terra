@@ -10,6 +10,8 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+//! Lowering pass from `DAGCircuit` to MIR.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
@@ -35,7 +37,8 @@ fn pauli_from_bits(x: bool, z: bool) -> Pauli {
     }
 }
 
-pub fn lower(dag: &DAGCircuit) -> Mir {
+/// Lower a `DAGCircuit` into Mir.
+pub fn lower(dag: &DAGCircuit) -> anyhow::Result<Mir> {
     let mut mir = Mir::new();
     let mut qubits: BTreeSet<u32> = BTreeSet::new();
     let mut clbits: BTreeSet<u32> = BTreeSet::new();
@@ -80,10 +83,9 @@ pub fn lower(dag: &DAGCircuit) -> Mir {
                     .zip(rotation.z.iter())
                     .map(|(&x, &z)| pauli_from_bits(x, z))
                     .collect();
-                let angle = rotation
-                    .angle
-                    .try_float()
-                    .expect("Currently MIR lowering supports only float angles");
+                let angle = rotation.angle.try_float().ok_or_else(|| {
+                    anyhow::anyhow!("Currently MIR lowering supports only float angles")
+                })?;
                 let op = MirOp::PauliRotation(PauliRotation::new(
                     PauliString::new(paulis),
                     AngleType::new(angle),
@@ -103,9 +105,8 @@ pub fn lower(dag: &DAGCircuit) -> Mir {
                     .map(|(&x, &z)| pauli_from_bits(x, z))
                     .collect();
                 let node_clbits = dag.get_cargs(instr.clbits);
-                assert_eq!(
-                    node_clbits.len(),
-                    1,
+                anyhow::ensure!(
+                    node_clbits.len() == 1,
                     "PauliProductMeasurement should have 1 clbits"
                 );
                 let sym_id = sym_for_clbits[&node_clbits[0].0];
@@ -121,17 +122,18 @@ pub fn lower(dag: &DAGCircuit) -> Mir {
                 ));
             }
             other => {
-                panic!("MIR lowering doesn't support operation {other:?}");
+                anyhow::bail!("MIR lowering doesn't support operation {other:?}");
             }
         }
     }
-    mir
+    Ok(mir)
 }
 
+/// `StaticPass` that lowers a DAGCircuit to Mir
 pub struct DagToMirLowering;
 
 impl StaticPass<DAGCircuit, Mir> for DagToMirLowering {
     fn run(&self, ir: Box<DAGCircuit>, _context: &mut PassContext) -> anyhow::Result<Box<Mir>> {
-        Ok(Box::new(lower(&ir)))
+        Ok(Box::new(lower(&ir)?))
     }
 }
