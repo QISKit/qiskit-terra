@@ -22,7 +22,7 @@ static QkCircuit *load(const char *program) {
     QkOpenQasm2Options *options = qk_openqasm2_options_new();
     QkCircuit *circuit = NULL;
     char *error = NULL;
-    QkExitCode code = qk_circuit_from_openqasm2(program, options, &circuit, &error);
+    QkExitCode code = qk_openqasm2_load(program, options, &circuit, &error);
     qk_openqasm2_options_free(options);
     if (code != QkExitCode_Success) {
         fprintf(stderr, "parse error: %s\n", error != NULL ? error : "(no description)");
@@ -98,7 +98,7 @@ static int test_parse_error(void) {
     QkCircuit *parsed = NULL;
     char *error = NULL;
     QkExitCode code =
-        qk_circuit_from_openqasm2("qreg q[2]; not_a_gate q[0];", options, &parsed, &error);
+        qk_openqasm2_load("qreg q[2]; not_a_gate q[0];", options, &parsed, &error);
     qk_openqasm2_options_free(options);
     if (code != QkExitCode_CInputError) {
         fprintf(stderr, "%s: expected an input error, got exit code %u\n", __func__,
@@ -130,7 +130,7 @@ static int test_strict_requires_version(void) {
     // No `OPENQASM 2.0;` header, which only strict mode objects to.  Passing `NULL` for `error`
     // must be accepted.
     QkCircuit *parsed = NULL;
-    QkExitCode code = qk_circuit_from_openqasm2("qreg q[1];", options, &parsed, NULL);
+    QkExitCode code = qk_openqasm2_load("qreg q[1];", options, &parsed, NULL);
     qk_openqasm2_options_free(options);
     if (code != QkExitCode_CInputError) {
         fprintf(stderr, "%s: strict mode accepted a program with no version statement\n", __func__);
@@ -188,7 +188,7 @@ static int test_null_arguments(void) {
     QkCircuit *parsed = NULL;
     char *error = NULL;
     // A null `program` is a null-pointer error, which carries no description of its own.
-    if (qk_circuit_from_openqasm2(NULL, NULL, &parsed, &error) != QkExitCode_NullPointerError) {
+    if (qk_openqasm2_load(NULL, NULL, &parsed, &error) != QkExitCode_NullPointerError) {
         fprintf(stderr, "%s: a null program was not rejected\n", __func__);
         return EqualityError;
     }
@@ -198,13 +198,13 @@ static int test_null_arguments(void) {
         return EqualityError;
     }
     // A null `circuit` slot is rejected before anything is written through it.
-    QkExitCode code = qk_circuit_from_openqasm2("qreg q[1];", NULL, NULL, NULL);
+    QkExitCode code = qk_openqasm2_load("qreg q[1];", NULL, NULL, NULL);
     if (code != QkExitCode_NullPointerError) {
         fprintf(stderr, "%s: a null circuit slot was not rejected\n", __func__);
         return EqualityError;
     }
     // Null `options` selects the defaults.
-    code = qk_circuit_from_openqasm2("qreg q[1];", NULL, &parsed, NULL);
+    code = qk_openqasm2_load("qreg q[1];", NULL, &parsed, NULL);
     if (code != QkExitCode_Success || parsed == NULL) {
         fprintf(stderr, "%s: null options were not treated as the defaults\n", __func__);
         return RuntimeError;

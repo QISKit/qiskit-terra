@@ -1,7 +1,7 @@
 ---
 features_c:
   - |
-    Added :c:func:`qk_circuit_from_openqasm2`, which loads a :c:type:`QkCircuit` from a string
+    Added :c:func:`qk_openqasm2_load`, which loads a :c:type:`QkCircuit` from a string
     containing an OpenQASM 2 program.  The importer is written natively in Rust and does not call
     into Python.  Parsing is configured with an opaque :c:type:`QkOpenQasm2Options` handle,
     created by :c:func:`qk_openqasm2_options_new` and configured with

@@ -15,7 +15,7 @@ parses in Rust but builds the circuit in Python.
     QkOpenQasm2Options *options = qk_openqasm2_options_new();
     QkCircuit *qc = NULL;
     char *error = NULL;
-    QkExitCode code = qk_circuit_from_openqasm2(
+    QkExitCode code = qk_openqasm2_load(
         "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0]; cx q[0], q[1];",
         options, &qc, &error);
     qk_openqasm2_options_free(options);

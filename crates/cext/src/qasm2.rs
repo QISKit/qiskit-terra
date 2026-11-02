@@ -170,7 +170,7 @@ pub unsafe extern "C" fn qk_openqasm2_options_append_include_path(
 ///     QkOpenQasm2Options *options = qk_openqasm2_options_new();
 ///     QkCircuit *qc = NULL;
 ///     char *error = NULL;
-///     QkExitCode code = qk_circuit_from_openqasm2(
+///     QkExitCode code = qk_openqasm2_load(
 ///         "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0]; cx q[0], q[1];",
 ///         options, &qc, &error);
 ///     qk_openqasm2_options_free(options);
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn qk_openqasm2_options_append_include_path(
 /// points to is overwritten without being released.  ``circuit`` must point to a writable
 /// ``QkCircuit *`` slot.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qk_circuit_from_openqasm2(
+pub unsafe extern "C" fn qk_openqasm2_load(
     program: *const c_char,
     options: *const OpenQasm2Options,
     circuit: *mut *mut CircuitData,

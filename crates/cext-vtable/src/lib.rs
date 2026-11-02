@@ -589,7 +589,7 @@ mod qasm2 {
 
     pub static FUNCTIONS: ExportedFunctions = ExportedFunctions::leaves(5, || {
         vec![
-            export_fn!(qk_circuit_from_openqasm2),
+            export_fn!(qk_openqasm2_load),
             export_fn!(qk_openqasm2_options_new),
             export_fn!(qk_openqasm2_options_free),
             export_fn!(qk_openqasm2_options_set_strict),

@@ -151,7 +151,7 @@ def load_qasm2_from_c(
             raise ValueError(f"include path is not valid UTF-8: {path!r}")
     error = ctypes.POINTER(ctypes.c_char)()
     circuit = ctypes.POINTER(capi.QkCircuit)()
-    code = capi.qk_circuit_from_openqasm2(
+    code = capi.qk_openqasm2_load(
         program.encode("utf-8"),
         options,
         ctypes.byref(circuit),
