@@ -36,6 +36,7 @@ use qiskit_circuit::bit::{ShareableClbit, ShareableQubit};
 use qiskit_circuit::instruction::Parameters;
 use qiskit_circuit::operations::{Param, StandardGate, StandardInstruction};
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
+use qiskit_circuit::var_stretch_container::VarType;
 
 /// Represents a control flow instruction in a ``QkCircuit``.
 ///
@@ -249,14 +250,16 @@ pub enum CSymbolType {
 #[repr(C)]
 pub struct CSymbolInfo {
     /// The type of symbol (standalone or element)
-    ty: CSymbolType,
+    pub(crate) ty: CSymbolType,
     /// A null-terminated C string containing the symbol name. For standalone symbols,
     /// this is the variable name. For element symbols, this is the base name of the parameter
-    /// vector. The caller is responsible for freeing this string using `qk_str_free`.
-    name: *mut c_char,
+    /// vector. When returned by ``qk_control_flow_loop_symbol_info``, the caller is responsible for
+    /// freeing this string using ``qk_str_free``. When passed to ``qk_circuit_for_loop_range`` or
+    /// ``qk_circuit_for_loop_elements``, it is borrowed.
+    pub(crate) name: *mut c_char,
     /// For element symbols, this is the index into the parameter vector. For standalone
     /// symbols, this field is unused and should be ignored.
-    index: usize,
+    pub(crate) index: usize,
 }
 
 /// The type of collection used in a ForLoop control flow instruction.
@@ -270,15 +273,25 @@ pub enum CLoopCollectionType {
 
 /// A struct containing loop elements from a ForLoop control flow instruction.
 ///
-/// This struct is returned by `qk_control_flow_loop_elements` and contains both
-/// a pointer to the array of loop elements and the number of elements in the array.
-/// The pointer is borrowed and must not be freed by the caller.
+/// This struct is returned by ``qk_control_flow_loop_elements``, and is also used to specify the
+/// elements when building a for-loop with ``qk_circuit_for_loop_elements``. It contains both a
+/// pointer to the array of loop elements and the number of elements in the array. The pointer is
+/// borrowed in both directions and is never freed by the receiver.
 #[repr(C)]
 pub struct CLoopElements {
     /// Pointer to the array of loop elements.
-    elements: *const isize,
+    pub(crate) elements: *const isize,
     /// Number of elements in the array.
-    len: usize,
+    pub(crate) len: usize,
+}
+
+/// A union to hold the loop variable of a ForLoop.
+#[repr(C)]
+pub union CLoopParamValue {
+    /// The loop parameter (active when ``kind`` is ``QkLoopParamKind_Parameter``)
+    pub(crate) parameter: *const CSymbolInfo,
+    /// The loop variable (active when ``kind`` is ``QkLoopParamKind_Variable``)
+    pub(crate) variable: *const Var,
 }
 
 /// @ingroup QkControlFlow
@@ -2290,6 +2303,19 @@ pub unsafe extern "C" fn inner_test_control_flow_circuit() -> *mut CircuitData {
         .expect("Failed to add second while loop");
 
     Box::into_raw(Box::new(circuit))
+}
+
+/// cbindgen:qk-vtable-rules=[no-export]
+/// cbindgen:no-export
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn inner_test_add_input_var(
+    circuit: *mut CircuitData,
+    var: *const Var,
+) -> bool {
+    let circuit = unsafe { &mut *circuit };
+    let var = unsafe { &*var };
+    circuit.add_var(var.clone(), VarType::Input).is_ok()
 }
 
 #[cfg(test)]

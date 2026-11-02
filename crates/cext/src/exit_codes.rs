@@ -44,6 +44,12 @@ pub enum ExitCode {
     DuplicateIndexError = 104,
     /// Invalid ``QkOperationKind``.
     InvalidOperationKind = 105,
+    /// The step of a for loop range is zero.
+    ZeroLoopStep = 106,
+    /// The loop variable of a for loop is not ``Uint``-typed.
+    InvalidLoopVariable = 107,
+    /// The loop variable does not match the body's input variable.
+    LoopVariableMismatch = 108,
     /// Error related to arithmetic operations or similar.
     ArithmeticError = 200,
     /// Mismatching number of qubits.

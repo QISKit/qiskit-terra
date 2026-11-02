@@ -1,0 +1,5 @@
+---
+features_c:
+  - |
+    Added :c:func:`qk_circuit_for_loop_range` and :c:func:`qk_circuit_for_loop_elements` for
+    appending a for-loop control-flow instruction to a ``QkCircuit``.
