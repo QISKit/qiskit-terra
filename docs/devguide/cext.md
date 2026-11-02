@@ -13,7 +13,7 @@ The C API is useful for...
 - projects with high-performance computing requirements.
 - writing python extension modules.
 
-This document defines guidelines for C API development, helping address
+This document defines guidelines for C API development while helping address
 stability, consistency, and familiarity concerns. The examples are written with
 Rust and `cbindgen` in mind.
 
