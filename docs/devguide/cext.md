@@ -26,7 +26,7 @@ access members or allocate instances. `cbindgen` generates transparent structs
 when the layout is `repr(C)`, otherwise opaque.
 
 *Don't conflate transparency with Rust's `repr(transparent)`, which has a
-totally different meaning.*
+completely different meaning.*
 
 Use opaque structs when...
 
