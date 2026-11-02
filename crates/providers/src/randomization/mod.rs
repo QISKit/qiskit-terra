@@ -17,6 +17,7 @@ pub mod emissions;
 pub mod partition;
 pub mod virtual_type;
 
+use partition::Partition;
 use virtual_type::VirtualType;
 
 /// The synthesizer to use for virtual gates.
@@ -65,16 +66,27 @@ impl DistributionType {
         }
     }
 
-    /// The number of qubits the sampled virtual gate acts on.
-    pub fn num_qubits(&self) -> u32 {
+    /// How samples from this distribution factorize.
+    pub fn factorization(&self) -> Partition<u32> {
         match self {
             Self::UniformPauli
             | Self::BalancedUniformPauli
             | Self::UniformPauliSubset
             | Self::UniformC1
-            | Self::HaarU2 => 1,
-            Self::UniformLocalC1 => 2,
+            | Self::HaarU2 => Partition::whole([0]),
+            Self::UniformLocalC1 => Partition::singletons([0, 1]),
         }
+        .expect("a distribution's factorization covers at least one qubit")
+    }
+
+    /// The total number of qubits.
+    pub fn num_qubits(&self) -> u32 {
+        self.factorization().num_elements() as u32
+    }
+
+    /// The number of factors in this distribution.
+    pub fn num_slots(&self) -> usize {
+        self.factorization().num_parts()
     }
 }
 

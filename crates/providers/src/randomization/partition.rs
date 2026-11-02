@@ -101,6 +101,13 @@ impl<T: Copy + Ord> Partition<T> {
         &self.elements
     }
 
+    /// The part at index `index` or `None` if there is no such part.
+    pub fn part(&self, index: usize) -> Option<&[T]> {
+        let start = *self.splits.get(index)? as usize;
+        let end = *self.splits.get(index + 1)? as usize;
+        Some(&self.elements[start..end])
+    }
+
     /// Get an iterator over the individual parts.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &[T]> {
         std::ops::Range {
