@@ -141,7 +141,7 @@ integers found in `inttypes.h`. For example, `i32` is mapped to `int32_t`.
 ## Namespacing
 
 C has no namepaces, so every identifier with external linkage shares one flat
-namespace across the entire program. If two header files define a funciton with
+namespace across the entire program. If two header files define a function with
 the same name, the linker will report a duplicate symbol error. Library authors
 work around this by prefixing identifiers. Qiskit prefixes all identifiers with
 `qk`, `QK`, or `Qk`. In some cases, identifiers are prefixed automatically by
