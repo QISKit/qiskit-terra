@@ -45,7 +45,15 @@ from qiskit.circuit.library import (
 )
 from qiskit.circuit.parameter import Parameter
 from qiskit.transpiler.passes import CommutativeOptimization
-from qiskit.quantum_info import Operator, SparsePauliOp, Clifford, Pauli
+from qiskit.quantum_info import (
+    Operator,
+    SparsePauliOp,
+    SparseObservable,
+    Clifford,
+    Pauli,
+    average_gate_fidelity,
+)
+from qiskit.circuit.library.pauli_evolution import _merge_two_pauli_evolutions
 
 from test import QiskitTestCase
 
@@ -354,6 +362,48 @@ class TestCommutativeOptimization(QiskitTestCase):
         qct = CommutativeOptimization()(qc)
 
         self.assertEqual(len(qct.data), 1)
+
+    def test_merge_pauli_evolutions_rounding_noise(self):
+        """Hamiltonians differing only by floating-point noise still merge for moderate times."""
+        h1 = SparsePauliOp.from_list([("Z", 1.0)])
+        h2 = SparsePauliOp.from_list([("Z", 1.0 + 1e-15)])
+
+        qc = QuantumCircuit(1)
+        qc.append(PauliEvolutionGate(h1, time=10.0), [0])
+        qc.append(PauliEvolutionGate(h2, time=10.0), [0])
+
+        qct = CommutativeOptimization()(qc)
+
+        self.assertEqual(len(qct.data), 1)
+
+    @data("pauli_single", "pauli_sum", "observable")
+    def test_merge_pauli_evolutions_threshold(self, kind):
+        """Merge iff (|t1| + |t2|) * ||H1 - H2|| <= tol, and a merge keeps the average gate
+        infidelity below tol**2."""
+        tol = 1e-6
+        t = 2.0  # eps = 4 * delta, so merge iff delta <= 2.5e-7
+
+        def make(delta):
+            if kind == "pauli_single":
+                return SparsePauliOp.from_list([("Z", 1.0 + delta)])
+            if kind == "pauli_sum":
+                return SparsePauliOp.from_list([("XX", 0.7), ("ZI", 0.4 + delta), ("IZ", -0.3)])
+            return SparseObservable.from_list([("ZI", 0.4 + delta), ("XX", 0.7)])
+
+        base = make(0.0)
+        merged = _merge_two_pauli_evolutions(
+            PauliEvolutionGate(base, t), PauliEvolutionGate(make(1e-7), t), tol
+        )
+        not_merged = _merge_two_pauli_evolutions(
+            PauliEvolutionGate(base, t), PauliEvolutionGate(make(1e-6), t), tol
+        )
+        self.assertIsNotNone(merged)
+        self.assertIsNone(not_merged)
+
+        original = Operator(PauliEvolutionGate(make(1e-7), t)).compose(
+            Operator(PauliEvolutionGate(base, t))
+        )
+        self.assertLess(1 - average_gate_fidelity(original, Operator(merged)), tol**2)
 
     def test_not_merge_pauli_evolutions(self):
         """Test that the pass merges PauliEvolutionGates when appropriate."""

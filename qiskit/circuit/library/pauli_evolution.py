@@ -404,23 +404,32 @@ def _bounded_phase_error(op1, op2, t1: float, t2: float) -> float:
 def _merge_two_pauli_evolutions(
     gate1: PauliEvolutionGate, gate2: PauliEvolutionGate, tol: float = 0.0
 ) -> PauliEvolutionGate | None:
-    """Attempt to merge two PauliEvolutionGates into one, replacing ``gate2``'s
-    Hamiltonian by ``gate1``'s if their induced phase error is within ``tol``.
+    """Attempt to merge two :class:`.PauliEvolutionGate` objects into one.
 
-    For ``SparsePauliOp`` and ``SparseObservable`` operators with concrete
-    (non-``Parameter``) times, the merge is allowed only if the resulting
-    phase error is within ``tol``. When either time is symbolic, or the
-    operators are of some other matching type, the comparison falls back to
-    exact/near-exact operator equivalence, independent of ``tol``.
+    The merged gate evolves under ``gate1``'s operator for the summed time.
+
+    For ``SparsePauliOp`` or ``SparseObservable`` operators with numeric times, the gates are
+    merged only if ``eps <= tol``, where ``eps = (|t1| + |t2|) * ||op1 - op2||`` bounds the
+    distance between the merged and the original unitary. The average gate infidelity of the
+    merge is at most ``eps**2``, because an eigenvalue ``exp(i*theta)`` at distance ``eps`` from 1
+    has ``1 - cos(theta) <= eps**2 / 2``. So a merge guarantees ``1 - F_avg < tol**2``. This is
+    stricter than the ``1 - F_avg < tol`` criterion of the other checks in
+    :class:`.CommutativeOptimization`, so some merges within that criterion are refused.
+    ``SparseObservable`` has no canonical form, so equal operators written differently may not
+    be merged.
+
+    If either time is symbolic, the operators must be equal and ``tol`` is not used. Operators of
+    any other type are merged only if they compare equal.
 
     Args:
         gate1: First gate.
         gate2: Second gate.
-        tol: Maximum phase error allowed for the merge.
+        tol: Maximum allowed value of the bound ``eps`` (see above).
 
     Returns:
-        The merged gate, or ``None`` if the gates cannot be merged. Internal;
-        called from Rust, not part of the public API.
+        The merged gate, or ``None`` if the gates cannot be merged.
+
+    This function is internal (used from within Rust code) and not a part of public API.
     """
     if not isinstance(gate1, PauliEvolutionGate) or not isinstance(gate2, PauliEvolutionGate):
         return None
@@ -428,19 +437,19 @@ def _merge_two_pauli_evolutions(
     if isinstance(gate1.operator, (SparseObservable, SparsePauliOp)) and isinstance(
         gate2.operator, type(gate1.operator)
     ):
-        try:
-            t1 = float(gate1.time)
-            t2 = float(gate2.time)
-        except TypeError:
-            t1 = t2 = None
-
-        if t1 is None or t2 is None:
+        if gate1.is_parameterized() or gate2.is_parameterized():
             if isinstance(gate1.operator, SparsePauliOp):
                 can_merge = gate1.operator.equiv(gate2.operator, atol=0)
             else:
-                can_merge = gate1.operator.simplify() == gate2.operator.simplify()
+                can_merge = gate1.operator.simplify(tol=0) == gate2.operator.simplify(tol=0)
         else:
-            can_merge = _bounded_phase_error(gate1.operator, gate2.operator, t1, t2) <= tol
+            eps = _bounded_phase_error(
+                gate1.operator, gate2.operator, float(gate1.time), float(gate2.time)
+            )
+            # ``eps`` bounds the distance between the merged and the original unitary. The average
+            # gate infidelity is at most ``eps**2``, not ``eps``, so ``eps <= tol`` guarantees
+            # ``1 - F_avg < tol**2``: safe, but stricter than the ``1 - F_avg < tol`` used elsewhere.
+            can_merge = eps <= tol
 
     else:
         can_merge = gate1.operator == gate2.operator
