@@ -6,12 +6,12 @@ userbase, the need for different entry points to use Qiskit will lead to the
 development of new pipelines, which ultimately resulted in the development of
 the C API. 
 
-The C API is useful for...
+**Use Cases**
 
-- wrapper libraries like [Qiskit.jl](https://github.com/Qiskit/Qiskit.jl) and
+- Wrappers like [Qiskit.jl](https://github.com/Qiskit/Qiskit.jl) and
   [qiskit-cpp](https://github.com/Qiskit/qiskit-cpp).
-- projects with high-performance computing requirements.
-- writing python extension modules.
+- Projects with high-performance computing (HPC) requirements.
+- Python extension modules.
 
 This document defines guidelines for C API development while helping address
 stability, consistency, and familiarity concerns. The examples are written with
@@ -28,11 +28,8 @@ when the layout is `repr(C)`, otherwise opaque.
 *Don't conflate transparency with Rust's `repr(transparent)`, which has a
 completely different meaning.*
 
-Use opaque structs when...
-
-- runtime invariant(s) need enforcement.
-- complex behavior needs encapsulation.
-- fields are likely to change.
+Use opaque structs when runtime invariants need enforcement, complex behavior
+needs encapsulation, fields are likely to change.
 
 ```rust
 pub struct Qubit {
@@ -43,10 +40,8 @@ pub struct Qubit {
 
 *Note that `repr(Rust)` is implicit.*
 
-Use transparent structs when...
-
-- encoding plain data without complex behavior.
-- fields are unlikely to change.
+Use transparent structs when encoding plain data without complex behavior or
+fields are unlikely to change.
 
 ```rust
 #[repr(C)]
@@ -56,8 +51,8 @@ pub struct QubitArray {
 }
 ```
 
-*The `pub` keyword has no effect across FFI. Though, it's best practice to
-include `pub` for documentation purposes.*
+*The `pub` keyword has no effect across the foreign function interface (FFI).
+Though, it's best practice to include `pub` for documentation purposes.*
 
 ## Enumerations
 
@@ -218,7 +213,7 @@ extern "C" fn qk_obs_matrix(
 }
 ```
 
-### Panic
+### Don't Panic!
 
 You can almost always do better than panicking based on caller input. For
 short-lived, experimental programs, panic could be acceptable. However,
@@ -234,22 +229,22 @@ C and Python share the same version number, following
 [SemVer](https://semver.org/). Breaking changes are prohibited without
 incrementing the major version number.
 
-Backwards compatible changes include...
+**Breaking Changes**
 
-- creating public functions, types, macros, constants, and headers.
-- adding enum variant(s) without changing integer values.
-- adding bit flags without changing the previous meanings.
-- changing the size and layout of opaque structs.
-- relaxing preconditions.
-- fixing bugs that bring behavior in line with the documentation.
+- Removing or renaming public functions, types, macros, constants, and headers.
+- If declared exhausitive, adding an enum variant.
+- Changing transparent struct fields.
+- Tightening preconditions.
+- Changing function signatures (including `const`-ness changes).
 
-Breaking changes include...
+**Non-breaking Changes**
 
-- removing or renaming public functions, types, macros, constants, and headers.
-- if declared exhausitive, adding an enum variant.
-- changing transparent struct fields.
-- tightening preconditions.
-- changing function signatures (including `const`-ness changes).
+- Creating public functions, types, macros, constants, and headers.
+- Adding enum variant(s) without changing integer values.
+- Adding bit flags without changing the previous meanings.
+- Changing the size and layout of opaque structs.
+- Relaxing preconditions.
+- Fixing bugs that bring behavior in line with the documentation.
 
 ## Platform-specific Features
 
@@ -259,8 +254,6 @@ callers could be targeting multiple platforms. For example, `__int128_t` and
 types are only available in GCC. In this case, we would be better off using the
 platform independent complex number utilities defined in `complex.h` since C99.
 For reference, Qiskit targets C11 as the minimum C standard.
-
-*See [this PR](https://github.com/Qiskit/qiskit/pull/17011) for details.*
 
 ## Documentation
 
@@ -359,3 +352,5 @@ programming contexts, only 1 thread will access the pointer at a given instant.
 We assume this is true for both GIL-attached and free- threaded Python. Thus, a
 simple function that returns a data model pointer given a `PyObject *` should be
 sufficient.
+
+*See [this PR](https://github.com/Qiskit/qiskit/pull/17011) for details.*
