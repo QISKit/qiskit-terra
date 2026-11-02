@@ -65,6 +65,7 @@ impl SymbolTableErrorKind {
 /// Symbol represents various types of classical information. This will start
 /// with variables, but likely grow to include other things over time.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct Symbol {
     /// Symbol ID used in the IR. This field should be set when adding to the
     /// Symbol Table. This field is intentionally private and does not have a
@@ -101,6 +102,7 @@ impl fmt::Display for Symbol {
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct SymbolId(usize);
 
 impl fmt::Display for SymbolId {
@@ -110,6 +112,7 @@ impl fmt::Display for SymbolId {
 }
 
 #[derive(Default, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct SymbolTable {
     sym_table: Vec<Symbol>,
 }
@@ -155,6 +158,7 @@ impl SymbolTable {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct SymbolIdList(Vec<SymbolId>);
 
 impl SymbolIdList {

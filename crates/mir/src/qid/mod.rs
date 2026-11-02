@@ -44,6 +44,7 @@ pub use table::ResourceTable;
 /// leave reachable instructions in place that violate the overlap rules.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, bytemuck::Zeroable)]
 #[repr(transparent)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct Qid(u32);
 impl Qid {
     /// The bitwidth allowed for use by values.
@@ -164,6 +165,7 @@ impl fmt::Display for Qid {
 ///
 /// The semantics of the [`Qid`] in a complete program varies based on what space it is in.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bytemuck::Zeroable, bytemuck::Contiguous)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 #[repr(u8)]
 pub enum QidSpace {
     /// Qids that can be freely created and manipulated within transformations on MIR itself.
@@ -197,6 +199,7 @@ impl QidSpace {
 /// Logically this is just a two-tuple of `(Qid, u32)`, but with an internal trick to make
 /// `Option<QidBit>` the same size as `QidBit`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct QidBit {
     qid: Qid,
     /// The bitwise negation of the index.
@@ -262,6 +265,7 @@ impl Ord for QidBit {
 /// it refers to.  You can construct a [`BitLayout`] that does not follow the rules, but
 /// [`ResourceTable`] methods will reject them.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub enum BitLayout {
     /// A [`Qid`] that has undefined size.
     ///
@@ -302,6 +306,7 @@ impl BitLayout {
 /// suitable; the API split between "abstractly described in MIR" and "concretely described by
 /// custom backend target descriptors" is not clear yet.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct QidInfo {
     layout: BitLayout,
 }
@@ -325,6 +330,7 @@ impl QidInfo {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct QidList(Vec<Qid>);
 
 impl QidList {
