@@ -11,7 +11,7 @@
 // that they have been altered from the originals.
 
 use std::ffi::{CStr, CString, c_char};
-use std::ptr::{self, null};
+use std::ptr;
 
 use crate::ExitCode::CInputError;
 use crate::circuit_library::pbc::{CPauliProductMeasurement, CPauliProductRotation};
@@ -3160,15 +3160,17 @@ pub(crate) unsafe fn ptr_to_params_owned<B>(
 /// Undefined behavior may happen if the `circuit` pointer is null or unaligned.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_circuit_get_custom_operation(
-    circuit: *mut CircuitData,
+    circuit: *const CircuitData,
     index: usize,
 ) -> *const BoxedCustomOperation {
     let circuit_borrowed = unsafe { &*circuit };
 
-    let operation = &circuit_borrowed.data()[index];
+    let Some(operation) = &circuit_borrowed.data().get(index) else {
+        return std::ptr::null();
+    };
 
     let Ok(custom): Result<&'_ BoxedCustomOperation, _> = (&operation.op).try_into() else {
-        return null();
+        return std::ptr::null();
     };
 
     custom as *const BoxedCustomOperation
