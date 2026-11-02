@@ -1,0 +1,7 @@
+---
+features_c:
+  - |
+    Add :c:func:`qk_control_flow_condition_reg_cond_biguint`. It equivalent to
+    the existing :c:func:`qk_control_flow_condition_reg_cond_uint` accessor,
+    but supports returning values where the underlying integer is bigger than
+    64 bits. The value is returned as a :c:struct:`QkBigUint`.

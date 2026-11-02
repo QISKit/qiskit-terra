@@ -24,6 +24,7 @@ use std::fmt;
 /// I have not yet looked at the existing implementation pwdin Qiskit to know
 /// whether the same could be done with them.
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub enum Pauli {
     #[default]
     I,
@@ -45,6 +46,7 @@ impl fmt::Display for Pauli {
 /// functionality. This will be optimized in future work (see [Issue
 /// 17326](https://github.com/Qiskit/qiskit/issues/17326)).
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct PauliString(Vec<Pauli>);
 
 impl PauliString {
@@ -67,6 +69,7 @@ impl PauliString {
 /// This causes angles corresponding to Clifford rotations are stored without
 /// round-off from inexact representations of π .
 #[derive(Debug, Copy, Clone, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct AngleType(f64);
 
 impl AngleType {
@@ -81,6 +84,7 @@ impl AngleType {
 
 #[derive(Clone, Debug, PartialEq)]
 // TODO: Document rotation convention used and how it's similar/different from conventions used throughout Qiskit.
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct PauliRotation {
     paulis: PauliString,
     angle: AngleType,
