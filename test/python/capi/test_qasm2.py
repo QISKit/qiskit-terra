@@ -74,20 +74,12 @@ class TestQasm2CParity(QiskitTestCase):
     @ddt.idata(DEFINED_GATE_PROGRAMS)
     @unittest.expectedFailure
     def test_defined_gates_agree_on_structure_and_unitary(self, body):
-        """`gate` declarations cannot round-trip through the C API yet.
-
-        ``qk_circuit_to_python_full`` raises ``NotImplementedError: Custom operations from Rust
-        cannot be exposed to Python``, so a program containing a ``gate`` declaration cannot be
-        brought back into Python space at all.  The native importer itself handles these (see the
-        Rust tests in ``crates/qasm2/src/build.rs`` and ``test/c/test_qasm2.c``); it is only the
-        C-to-Python bridge that cannot carry them.  Even once it can, ``Instruction.__eq__``
-        compares ``base_class``, so these will agree on structure and unitary rather than being
-        equal to the Python loader's ``_DefinedGate``.
-        """
+        """`gate` declarations cannot round-trip through the C API yet; see #17389."""
         program = HEADER + body
         from_python = qiskit.qasm2.loads(program)
         from_c = ffi.load_qasm2_from_c(program)
 
+        # Compared structurally: Python builds a `_DefinedGate`, Rust a custom operation.
         self.assertEqual(from_python.num_qubits, from_c.num_qubits)
         self.assertEqual(from_python.num_clbits, from_c.num_clbits)
         self.assertEqual(
