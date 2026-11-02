@@ -363,6 +363,45 @@ class TestCommutativeOptimization(QiskitTestCase):
 
         self.assertEqual(len(qct.data), 1)
 
+    def test_merge_sparse_observable_evolutions_symbolic_time(self):
+        """With a symbolic time, ``SparseObservable`` operators merge only if they are equal."""
+        t = Parameter("t")
+        op = SparseObservable.from_list([("Z", 1.0)])
+        # Differs from ``op`` by a tiny term that ``simplify`` drops with its default tolerance.
+        close_op = SparseObservable.from_list([("Z", 1.0), ("X", 1e-10)])
+
+        qc = QuantumCircuit(1)
+        qc.append(PauliEvolutionGate(op, time=t), [0])
+        qc.append(PauliEvolutionGate(op, time=t), [0])
+        self.assertEqual(len(CommutativeOptimization()(qc).data), 1)
+
+        # The time is unknown, so even a tiny difference could matter after binding.
+        qc = QuantumCircuit(1)
+        qc.append(PauliEvolutionGate(op, time=t), [0])
+        qc.append(PauliEvolutionGate(close_op, time=t), [0])
+        self.assertEqual(len(CommutativeOptimization()(qc).data), 2)
+
+    @data(1.0, Parameter("t"))
+    def test_not_merge_equal_sparse_observables_without_canonical_form(self, time):
+        """``SparseObservable`` has no canonical form: equal operators written differently
+        are not recognized as equal. This only misses a merge, it never merges wrongly."""
+        z = SparseObservable.from_label("Z")
+        z_as_projectors = SparseObservable.from_list([("0", 1.0), ("1", -1.0)])  # |0><0| - |1><1|
+        # The two operators are the same matrix ...
+        self.assertTrue(
+            Operator(PauliEvolutionGate(z, 1.0)).equiv(
+                Operator(PauliEvolutionGate(z_as_projectors, 1.0))
+            )
+        )
+
+        qc = QuantumCircuit(1)
+        qc.append(PauliEvolutionGate(z, time=time), [0])
+        qc.append(PauliEvolutionGate(z_as_projectors, time=time), [0])
+        qct = CommutativeOptimization()(qc)
+
+        # ... but they are not merged.
+        self.assertEqual(len(qct.data), 2)
+
     def test_merge_pauli_evolutions_rounding_noise(self):
         """Hamiltonians differing only by floating-point noise still merge for moderate times."""
         h1 = SparsePauliOp.from_list([("Z", 1.0)])
