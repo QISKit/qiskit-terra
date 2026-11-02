@@ -385,40 +385,23 @@ mod export {
         out
     }
 
-    /// Get a string representing the declaration of this `struct` as a Python `ctypes.Structure`.
-    pub fn r#struct(val: &simple_ir::Struct<Primitive>) -> String {
-        // TODO: this doesn't handle the case of (mutually) recursive `struct` definitions; we
-        // assume that all the `_fields_` will refer to fully defined `ctypes` objects.
-        let mut out = format!("\nclass {}(ctypes.Structure):\n", val.name);
-        let Some(fields) = val.fields.as_ref() else {
-            out.push_str("    pass\n");
-            return out;
-        };
-        out.push_str("    _fields_ = [\n");
-        for simple_ir::StructField { name, ty } in fields {
-            out.push_str("        (\"");
-            out.push_str(name);
-            out.push_str("\", ");
-            render_type(ty, &mut out);
-            out.push_str("),\n");
-        }
-        out.push_str("    ]");
-        out
+    /// Get a string declaring an empty Python `ctypes` class, so it can be used before its
+    /// `_fields_` are set.
+    fn class_def(name: &str, class_type: &str) -> String {
+        format!("\nclass {name}(ctypes.{class_type}):\n    pass")
     }
 
-    /// Get a string representing the declaration of this `union`` as a Python `ctypes.Union`.
-    pub fn r#union(val: &simple_ir::Union<Primitive>) -> String {
-        let mut out = format!("\nclass {}(ctypes.Union):\n", val.name);
-        out.push_str("    _fields_ = [\n");
-
-        for simple_ir::StructField { name, ty } in &val.fields {
-            out.push_str("        (\"");
+    /// Get a string setting the `_fields_` of a class declared by `class_def`.
+    fn class_fields(name: &str, fields: &[simple_ir::StructField<Primitive>]) -> String {
+        let mut out = format!("\n{name}._fields_ = [\n");
+        for simple_ir::StructField { name, ty } in fields {
+            out.push_str("    (\"");
             out.push_str(name);
             out.push_str("\", ");
             render_type(ty, &mut out);
             out.push_str("),\n");
         }
-        out.push_str("    ]");
+        out.push(']');
         out
     }
 
@@ -470,16 +453,24 @@ mod export {
         for item in &items.enums {
             writeln!(out, "{}", r#enum(item))?;
         }
-        // Python executes the file top to bottom, so each declaration must precede its first use: opaque
-        // structs depend on nothing, unions may point to them, and structs may hold a union by value.
-        for item in items.structs.iter().filter(|item| item.fields.is_none()) {
-            writeln!(out, "{}", r#struct(item))?;
+        // Python executes the file top to bottom, so all classes are declared empty before any
+        // `_fields_` are set: a pointer may then refer to any class, but structs may hold a union
+        // by value, so unions get their fields first.
+        for item in &items.structs {
+            writeln!(out, "{}", class_def(&item.name, "Structure"))?;
         }
         for item in &items.unions {
-            writeln!(out, "{}", r#union(item))?;
+            writeln!(out, "{}", class_def(&item.name, "Union"))?;
         }
-        for item in items.structs.iter().filter(|item| item.fields.is_some()) {
-            writeln!(out, "{}", r#struct(item))?;
+
+        for item in &items.unions {
+            writeln!(out, "{}", class_fields(&item.name, &item.fields))?;
+        }
+
+        for item in &items.structs {
+            if let Some(item_fields) = &item.fields {
+                writeln!(out, "{}", class_fields(&item.name, item_fields))?;
+            }
         }
         for item in &items.functions {
             writeln!(out, "{}", function(item, &config.dll.name))?;
