@@ -61,7 +61,8 @@ use crate::params::generic_value_to_param;
 use crate::py_methods::{
     PAULI_PRODUCT_MEASUREMENT_GATE_CLASS_NAME, PAULI_PRODUCT_ROTATION_GATE_CLASS_NAME,
     STORE_INSTR_CLASS_NAME, UNITARY_GATE_CLASS_NAME, deserialize_pauli_evolution_gate,
-    py_convert_from_generic_value, unpack_custom_instruction, unpack_py_instruction,
+    py_circuit_data_to_quantum_circuit, py_convert_from_generic_value, unpack_custom_instruction,
+    unpack_py_instruction,
 };
 use crate::value::{
     BitType, CircuitInstructionType, ExpressionType, ExpressionVarDeclaration, GenericValue,
@@ -980,25 +981,21 @@ fn read_custom_instructions(
                         )?))
                     })
             } else {
-                let circuit: PyCircuitData = unpack_circuit(
-                    &deserialize_with_args::<formats::QPYCircuit, (u8,)>(
-                        &operation.data,
-                        (qpy_data.version,),
-                    )?
-                    .0,
+                let (packed_definition, _) = deserialize_with_args::<
+                    formats::QPYCircuit,
+                    (u8,),
+                >(&operation.data, (qpy_data.version,))?;
+                let circuit = unpack_circuit(
+                    &packed_definition,
                     qpy_data.version,
                     qpy_data.use_symengine,
                     qpy_data.annotation_handler.child()?,
                     qpy_data.caller,
-                )?
-                .into();
+                )?;
                 let py_circuit = qpy_data.caller.attach(
                     "custom instruction definition",
                     |py| -> Result<_, QpyError> {
-                        Ok(circuit
-                            .into_py_quantum_circuit(py)
-                            .map_err(QpyError::from)?
-                            .unbind())
+                        py_circuit_data_to_quantum_circuit(py, circuit, &packed_definition, None)
                     },
                 )?;
                 Ok(Some(py_circuit))
