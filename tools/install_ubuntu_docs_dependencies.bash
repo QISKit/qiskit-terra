@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Prepare an Ubuntu CI machine for running 'tox -e docs'.  Assumes that Python is available.
 
@@ -11,8 +11,7 @@ fi
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install --upgrade tox
 
-sudo apt-get update
-sudo apt-get install -y graphviz pandoc 
+sudo "$(dirname "${BASH_SOURCE[0]}")/install_ubuntu_graphviz.sh"
 
 # This command fetches the latest release of doxygen and its linux binaries
 wget --header "Authorization: token $GITHUB_TOKEN" \

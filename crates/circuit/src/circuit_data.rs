@@ -243,12 +243,7 @@ mod passmanager {
 ///
 /// This object is usable as a :class:`.passmanager.IR` corresponding to the Rust/C-native
 /// components of :class:`.QuantumCircuit`.
-#[pyclass(
-    name = "CircuitData",
-    sequence,
-    module = "qiskit.circuit",
-    skip_from_py_object
-)]
+#[pyclass(name = "CircuitData", sequence, module = "qiskit.circuit")]
 #[derive(Clone, Debug)]
 pub struct PyCircuitData {
     pub inner: CircuitData,
@@ -385,6 +380,9 @@ impl CircuitData {
 
     /// Registers a :class:`.QuantumRegister` instance.
     ///
+    /// Fails only if the register's name collides with an existing one under `strict`, or if
+    /// adding one of its (previously untracked) bits would push the qubit count past `u32`.
+    ///
     /// Args:
     ///     bit (:class:`.QuantumRegister`): The register to add.
     pub fn add_qreg(
@@ -422,6 +420,9 @@ impl CircuitData {
     }
 
     /// Registers a :class:`.ClassicalRegister` instance.
+    ///
+    /// Fails only if the register's name collides with an existing one under `strict`, or if
+    /// adding one of its (previously untracked) bits would push the clbit count past `u32`.
     ///
     /// Args:
     ///     bit (:class:`.ClassicalRegister`): The register to add.

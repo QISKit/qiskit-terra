@@ -2069,12 +2069,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for BitTerm {
 ///
 /// These are typically created by indexing into or iterating through a :class:`SparseObservable`.
 #[cfg(feature = "python")]
-#[pyclass(
-    name = "Term",
-    frozen,
-    module = "qiskit.quantum_info",
-    skip_from_py_object
-)]
+#[pyclass(name = "Term", frozen, module = "qiskit.quantum_info")]
 #[derive(Clone, Debug)]
 struct PySparseTerm {
     inner: SparseTerm,

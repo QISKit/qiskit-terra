@@ -24,3 +24,6 @@ hashbrown.workspace = true
 workspace = true
 optional = true
 features = ["py-clone", "num-bigint"]
+
+[dependencies.qiskit-circuit]
+workspace = true

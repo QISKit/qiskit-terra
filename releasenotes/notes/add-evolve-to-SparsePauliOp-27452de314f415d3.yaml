@@ -1,0 +1,7 @@
+---
+features_quantum_info:
+  - |
+    Added a new method :meth:`.SparsePauliOp.evolve` to support Heisenberg (default,
+    :math:`P' = C^\dagger P C`) and Schrödinger (:math:`P' = C P C^\dagger`)
+    picture evolution. A ``qargs`` list can be used to apply the evolution to a
+    subset of qubits.

@@ -54,15 +54,17 @@ pub enum CommutationError {
     HashingNaN,
     #[error("Invalid hash type: parameterized")]
     HashingParameter,
+    #[error("{0} contains duplicate qubits")]
+    DuplicateQubits(&'static str),
 }
 
 impl From<CommutationError> for PyErr {
     fn from(value: CommutationError) -> Self {
         match value {
             // For backward compatibility we keep these two errors as QiskitErrors
-            CommutationError::HashingParameter | CommutationError::FirstInstructionTooLarge => {
-                QiskitError::new_err(value.to_string())
-            }
+            CommutationError::HashingParameter
+            | CommutationError::FirstInstructionTooLarge
+            | CommutationError::DuplicateQubits(_) => QiskitError::new_err(value.to_string()),
             _ => PyRuntimeError::new_err(value.to_string()),
         }
     }
@@ -283,6 +285,16 @@ pub fn try_pauli_generator_for_pauli_based<'a>(
     }
 }
 
+fn validate_unique_bits<T>(bits: &[T], arg_name: &'static str) -> Result<(), CommutationError>
+where
+    T: Copy + Eq + std::hash::Hash,
+{
+    if bits.iter().copied().collect::<HashSet<_>>().len() != bits.len() {
+        return Err(CommutationError::DuplicateQubits(arg_name));
+    }
+    Ok(())
+}
+
 fn get_bits_from_py<T>(
     py_bits1: &Bound<'_, PyTuple>,
     py_bits2: &Bound<'_, PyTuple>,
@@ -366,7 +378,7 @@ impl CommutationChecker {
         )?)
     }
 
-    #[pyo3(name="commute", signature=(op1, qargs1, cargs1, op2, qargs2, cargs2, max_num_qubits=None, approximation_degree=1., matrix_max_num_qubits=3))]
+    #[pyo3(name="commute", signature=(op1, qargs1, cargs1, op2, qargs2, cargs2, max_num_qubits=None, approximation_degree=1., matrix_max_num_qubits=3, check_inputs=true))]
     #[allow(clippy::too_many_arguments)]
     fn py_commute(
         &mut self,
@@ -379,8 +391,13 @@ impl CommutationChecker {
         max_num_qubits: Option<u32>,
         approximation_degree: f64,
         matrix_max_num_qubits: u32,
+        check_inputs: bool,
     ) -> PyResult<bool> {
         let (qargs1, qargs2) = get_bits_from_py::<Qubit>(qargs1, qargs2)?;
+        if check_inputs {
+            validate_unique_bits(&qargs1, "qargs1")?;
+            validate_unique_bits(&qargs2, "qargs2")?;
+        }
         let (cargs1, cargs2) = get_bits_from_py::<Clbit>(cargs1, cargs2)?;
 
         Ok(self.commute(
@@ -893,7 +910,7 @@ fn get_relative_placement(
 }
 
 #[derive(Clone, Debug)]
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 pub struct CommutationLibrary {
     pub library: Option<HashMap<(String, String), CommutationLibraryEntry>>,
 }

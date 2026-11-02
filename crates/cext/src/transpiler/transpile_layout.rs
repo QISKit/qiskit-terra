@@ -10,7 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{ExposesOwnedPointers, const_ptr_as_ref, expose_by_box};
+use crate::pointers::{ExposesOwnedPointers, expose_by_box};
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_circuit::nlayout::{NLayout, PhysicalQubit};
 use qiskit_transpiler::target::Target;
@@ -41,7 +41,7 @@ const _: () = unsafe { expose_by_box!(TranspileLayout) };
 pub unsafe extern "C" fn qk_transpile_layout_num_input_qubits(
     layout: *const TranspileLayout,
 ) -> u32 {
-    let layout = unsafe { const_ptr_as_ref(layout) };
+    let layout = unsafe { &*layout };
     layout.num_input_qubits()
 }
 
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn qk_transpile_layout_num_input_qubits(
 pub unsafe extern "C" fn qk_transpile_layout_num_output_qubits(
     layout: *const TranspileLayout,
 ) -> u32 {
-    let layout = unsafe { const_ptr_as_ref(layout) };
+    let layout = unsafe { &*layout };
     layout.num_output_qubits()
 }
 
@@ -104,7 +104,7 @@ pub unsafe extern "C" fn qk_transpile_layout_initial_layout(
     initial_layout: *mut u32,
 ) -> bool {
     // SAFETY: Per the documentation layout must be a valid pointer to a TranspileLayout
-    let layout = unsafe { const_ptr_as_ref(layout) };
+    let layout = unsafe { &*layout };
     let out_initial_layout = layout.initial_physical_layout(filter_ancillas);
     if let Some(out_initial_layout) = out_initial_layout {
         // SAFETY: Per the documentation initial_layout must be a valid pointer with a sufficient
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn qk_transpile_layout_output_permutation(
     output_permutation: *mut u32,
 ) -> bool {
     // SAFETY: Per the documentation layout must be a valid pointer to a TranspileLayout
-    let layout = unsafe { const_ptr_as_ref(layout) };
+    let layout = unsafe { &*layout };
     let permutation = layout.output_permutation();
     if let Some(permutation) = permutation {
         // SAFETY: Per the documentation output_permutation must be a valid pointer with a sufficient
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn qk_transpile_layout_final_layout(
     final_layout: *mut u32,
 ) {
     // SAFETY: Per the documentation layout must be a valid pointer to a TranspileLayout
-    let layout = unsafe { const_ptr_as_ref(layout) };
+    let layout = unsafe { &*layout };
     let result = layout.final_index_layout(filter_ancillas);
     // SAFETY: Per the documentation final_layout must be a valid pointer with a sufficient
     // allocation for the output array
@@ -257,8 +257,8 @@ pub unsafe extern "C" fn qk_transpile_layout_generate_from_mapping(
     qubit_mapping: *const u32,
 ) -> *mut TranspileLayout {
     // SAFETY: Per the documentation these are valid pointers to the appropriate type
-    let dag = unsafe { const_ptr_as_ref(original_dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let dag = unsafe { &*original_dag };
+    let target = unsafe { &*target };
     // SAFETY: Per the documentation this must be a valid pointer to a u32 array with
     // target.num_qubits elements.
     let virt_to_phys: Vec<PhysicalQubit> = unsafe {
@@ -320,8 +320,8 @@ pub unsafe extern "C" fn qk_transpile_layout_to_python(
     // SAFETY: Per the documentation layout and circuit are valid pointers
     // and the thread running the function holds the gil.
     unsafe {
-        let layout = const_ptr_as_ref(layout);
-        let circuit = const_ptr_as_ref(circuit);
+        let layout = &*layout;
+        let circuit = &*circuit;
         let py = Python::assume_attached();
         let res = layout.to_py_native(py, circuit.qubits().objects()).unwrap();
         res.into_ptr()

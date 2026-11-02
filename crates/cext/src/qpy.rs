@@ -10,14 +10,15 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, c_char};
 use std::fs;
 use std::slice;
 
 use qiskit_circuit::circuit_data::CircuitData;
 
 use crate::exit_codes::ExitCode;
-use crate::pointers::{check_ptr, mut_ptr_as_ref};
+use crate::pointers::check_ptr;
+use crate::util;
 
 /// @ingroup QkQpy
 /// Get the oldest QPY format version readable by the loaded library.
@@ -58,11 +59,9 @@ fn return_error(error: *mut *mut c_char, value: QpyCError) -> ExitCode {
         QpyCError::ExitCode(code) => code,
         QpyCError::Diagnostic(message) => {
             if !error.is_null() {
-                // A safeguard in case the error contains nuls from payload
-                // defined strings.
-                let message = message.replace('\0', "\\0");
+                let message = util::cstring_from_utf8_lossy(message);
                 // SAFETY: the caller guarantees that a non-null `error` is valid for one write.
-                unsafe { error.write(CString::new(message).unwrap().into_raw()) };
+                unsafe { error.write(message.into_raw()) };
             }
             ExitCode::QpyError
         }
@@ -435,7 +434,7 @@ pub unsafe extern "C" fn qk_qpy_loaded_circuits_clear(circuits: *mut QpyLoadedCi
     if !circuits.is_null() {
         // SAFETY: Per the documentation the pointer must be a valid pointer to a QpyLoadedCircuits
         // object
-        let circuits = unsafe { mut_ptr_as_ref(circuits) };
+        let circuits = unsafe { &mut *circuits };
         // SAFETY: Per the documentation the QpyLoadCircuits object must have a valid circuits
         let circuit_array: Box<[*mut CircuitData]> = unsafe {
             Box::from_raw(std::ptr::slice_from_raw_parts_mut(

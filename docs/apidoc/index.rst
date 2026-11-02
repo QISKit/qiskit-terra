@@ -26,6 +26,7 @@ Quantum information:
    :maxdepth: 1
 
    quantum_info
+   quantum_info_random
 
 Transpilation:
 

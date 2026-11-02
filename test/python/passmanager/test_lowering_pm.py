@@ -439,12 +439,13 @@ class TestLoweringPassManager(QiskitTestCase):
 
     def test_invalid_pipeline(self):
         """Test constructing a type-mismatched pipeline raises."""
-        with self.assertRaisesRegex(TypeError, "IR types mismatched"):
+        expected = "cannot append the task: .*outputs DAGCircuit.*takes QuantumCircuit"
+        with self.assertRaisesRegex(TypeError, expected):
             _ = LoweringPassManager([CircuitToDag(), CircuitToDag()])
 
         pm = LoweringPassManager([CircuitToDag()])
         pass_ = CircuitToDag()
-        with self.assertRaisesRegex(TypeError, "IR types mismatched"):
+        with self.assertRaisesRegex(TypeError, expected):
             pm.append(pass_)
 
         # check the pass_ we failed to put is still the same object

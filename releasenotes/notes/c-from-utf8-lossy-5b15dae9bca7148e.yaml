@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Various C-API functions that return strings (either directly or as error
+    messages) will no longer panic if the backing string contains interior nul bytes.

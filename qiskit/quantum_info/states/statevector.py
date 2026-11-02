@@ -202,7 +202,7 @@ class Statevector(QuantumState, TolerancesMixin):
         return {"data": self._data, "dims": self._op_shape.dims_l()}
 
     def draw(self, output: str | None = None, **drawer_args):
-        """Return a visualization of the Statevector.
+        r"""Return a visualization of the Statevector.
 
         **repr**: ASCII TextMatrix of the state's ``__repr__``.
 
@@ -229,10 +229,21 @@ class Statevector(QuantumState, TolerancesMixin):
                 Default can be changed by adding the line ``state_drawer = <default>`` to
                 ``~/.qiskit/settings.conf`` under ``[default]``.
             drawer_args: Arguments to be passed directly to the relevant drawing
-                function or constructor (`TextMatrix()`, `array_to_latex()`,
-                `plot_state_qsphere()`, `plot_state_hinton()` or `plot_bloch_multivector()`).
-                See the relevant function under `qiskit.visualization` for that function's
-                documentation.
+                function or constructor:
+
+                * For ``'latex'`` and ``'latex_source'``: see
+                  :func:`~qiskit.visualization.state_to_latex` (e.g. ``max_size``,
+                  ``convention``, ``prefix``, and ``decimals``).
+                * For ``'text'``: arguments such as ``max_size`` (default: 8) to
+                  control the display threshold.
+                * For Matplotlib figures (``'qsphere'``, ``'hinton'``, ``'bloch'``,
+                  ``'city'``, or ``'paulivec'``): see the corresponding plotting
+                  functions in :mod:`qiskit.visualization` (such as
+                  :func:`~qiskit.visualization.plot_state_qsphere`,
+                  :func:`~qiskit.visualization.plot_state_hinton`,
+                  :func:`~qiskit.visualization.plot_bloch_multivector`,
+                  :func:`~qiskit.visualization.plot_state_city`, or
+                  :func:`~qiskit.visualization.plot_state_paulivec`).
 
         Returns:
             :class:`matplotlib.Figure` or :class:`str` or
@@ -244,7 +255,7 @@ class Statevector(QuantumState, TolerancesMixin):
 
         Examples:
 
-            Plot one of the Bell states
+            Plot one of the Bell states:
 
             .. plot::
                :alt: Output from the previous code.
@@ -252,8 +263,20 @@ class Statevector(QuantumState, TolerancesMixin):
 
                 from numpy import sqrt
                 from qiskit.quantum_info import Statevector
-                sv=Statevector([1/sqrt(2), 0, 0, -1/sqrt(2)])
+                sv = Statevector([1/sqrt(2), 0, 0, -1/sqrt(2)])
                 sv.draw(output='hinton')
+
+            Draw a multi-qubit statevector in LaTeX ket notation without truncation by
+            increasing ``max_size``:
+
+            .. code-block:: python
+
+                from qiskit.quantum_info import Statevector
+                sv = Statevector.from_label("++++")
+                # Default output truncates after 12 non-zero terms:
+                sv.draw(output="latex")
+                # Set max_size to display all 16 terms:
+                sv.draw(output="latex", max_size=16)
 
         """
 
@@ -321,7 +344,8 @@ class Statevector(QuantumState, TolerancesMixin):
         return Operator(mat, input_dims=self.dims(), output_dims=self.dims())
 
     def conjugate(self) -> Statevector:
-        """Return the conjugate of the operator."""
+        """Return the complex conjugate of the state vector with respect to the
+        basis of the vector components returned by :meth:`~StateVector.data`."""
         return Statevector(np.conj(self.data), dims=self.dims())
 
     def trace(self) -> np.float64:

@@ -1,4 +1,4 @@
 # Requirements for the wheel-build CI jobs.  Stored in this directory to allow
 # job isolation in the dependabot configuration.
 
-cibuildwheel==4.3.0
+cibuildwheel==4.3.3
