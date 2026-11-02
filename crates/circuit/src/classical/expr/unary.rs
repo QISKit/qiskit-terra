@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-
 use crate::classical::expr::Expr;
 #[cfg(feature = "py")]
 use crate::classical::expr::{ExprKind, PyExpr};
