@@ -996,6 +996,7 @@ fn read_custom_instructions(
                     "custom instruction definition",
                     |py| -> Result<Py<PyAny>, QpyError> {
                         py_circuit_data_to_quantum_circuit(py, circuit, &packed_definition, None)
+                            .map(Bound::unbind)
                     },
                 )?;
                 Ok(Some(py_circuit))
