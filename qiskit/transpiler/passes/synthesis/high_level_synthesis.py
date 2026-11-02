@@ -196,6 +196,7 @@ class HighLevelSynthesis(TransformationPass):
         min_qubits: int = 0,
         qubits_initially_zero: bool = True,
         optimization_metric: OptimizationMetric = OptimizationMetric.COUNT_2Q,
+        optimization_level: int = 2,
     ):
         r"""
         HighLevelSynthesis initializer.
@@ -219,8 +220,13 @@ class HighLevelSynthesis(TransformationPass):
             qubits_initially_zero: Indicates whether the qubits are initially in the state
                 :math:`|0\rangle`. This allows the high-level-synthesis to use clean auxiliary qubits
                 (i.e. in the zero state) to synthesize an operation.
-            optimization_metric:  Specifies the optimization criterion used by the default synthesis
-                methods for high-level-objects (when available).
+            optimization_metric: The optimization criterion used by synthesis plugins. The plugins may
+                use this option to choose different synthesis algorithms depending on the criterion
+                being optimized.
+            optimization_level: The optimization level used by synthesis plugins. The plugins may
+                use this option to choose different synthesis algorithms depending on the optimization
+                level, generating potentially more optimized circuits at the expense of longer
+                transpilation time.
         """
         super().__init__()
 
@@ -261,6 +267,7 @@ class HighLevelSynthesis(TransformationPass):
             min_qubits=min_qubits,
             unroll_definitions=unroll_definitions,
             optimize_clifford_t=optimization_metric == OptimizationMetric.COUNT_T,
+            optimization_level=optimization_level,
         )
 
     def run(self, dag: DAGCircuit) -> DAGCircuit:
@@ -382,6 +389,7 @@ def _synthesize_op_using_plugins(
             plugin_args["optimization_metric"] = OptimizationMetric.COUNT_T
         else:
             plugin_args["optimization_metric"] = OptimizationMetric.COUNT_2Q
+        plugin_args["optimization_level"] = data.optimization_level
 
         qubits = input_qubits if data.use_physical_indices else None
 

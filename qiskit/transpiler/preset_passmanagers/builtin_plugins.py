@@ -65,6 +65,7 @@ from qiskit.passmanager.flow_controllers import ConditionalController, DoWhileCo
 from qiskit.transpiler.timing_constraints import TimingConstraints
 from qiskit.transpiler.passes.layout.vf2_layout import VF2LayoutStopReason
 from qiskit.circuit.equivalence_library import SessionEquivalenceLibrary as sel
+from qiskit.circuit.controlflow import CONTROL_FLOW_OP_NAMES
 from qiskit.quantum_info.operators.symplectic.clifford_circuits import get_clifford_gate_names
 from qiskit.utils import default_num_processes
 from qiskit import user_config
@@ -107,6 +108,7 @@ class DefaultInitPassManager(PassManagerStagePlugin):
                     pass_manager_config.hls_config,
                     pass_manager_config.qubits_initially_zero,
                     optimization_metric,
+                    optimization_level,
                 )
         elif optimization_level == 1:
             init = PassManager()
@@ -127,6 +129,7 @@ class DefaultInitPassManager(PassManagerStagePlugin):
                     pass_manager_config.hls_config,
                     pass_manager_config.qubits_initially_zero,
                     optimization_metric,
+                    optimization_level,
                 )
             init.append(
                 [
@@ -145,6 +148,7 @@ class DefaultInitPassManager(PassManagerStagePlugin):
                 pass_manager_config.hls_config,
                 pass_manager_config.qubits_initially_zero,
                 optimization_metric,
+                optimization_level,
             )
             if pass_manager_config.routing_method != "none":
                 init.append(ElidePermutations())
@@ -1010,7 +1014,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
         self, pass_manager_config: PassManagerCliffordTConfig, optimization_level: int | None = None
     ):
         optimization_metric = OptimizationMetric.COUNT_T
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
 
         if optimization_level == 0:
             init = None
@@ -1031,6 +1035,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
                     pass_manager_config.hls_config,
                     pass_manager_config.qubits_initially_zero,
                     optimization_metric,
+                    optimization_level,
                 )
         elif optimization_level == 1:
             init = PassManager()
@@ -1051,6 +1056,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
                     pass_manager_config.hls_config,
                     pass_manager_config.qubits_initially_zero,
                     optimization_metric,
+                    optimization_level,
                 )
             init.append(
                 [
@@ -1069,6 +1075,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
                 pass_manager_config.hls_config,
                 pass_manager_config.qubits_initially_zero,
                 optimization_metric,
+                optimization_level,
             )
             if not pass_manager_config._routing_disabled:
                 init.append(ElidePermutations())
@@ -1123,7 +1130,7 @@ class TranslateToCliffordRZPassManager(PassManagerCliffordTStagePlugin):
     def pass_manager(
         self, pass_manager_config: PassManagerCliffordTConfig, optimization_level: int | None = None
     ):
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
         translate = PassManager(
             [
                 UnitarySynthesis(
@@ -1143,6 +1150,7 @@ class TranslateToCliffordRZPassManager(PassManagerCliffordTStagePlugin):
                     basis_gates=clifford_rz_gates,
                     qubits_initially_zero=pass_manager_config.qubits_initially_zero,
                     optimization_metric=OptimizationMetric.COUNT_T,
+                    optimization_level=optimization_level,
                 ),
                 # Note that HighLevelSynthesis does not translate gates in the equivalence
                 # library, which is BasisTranslator is used as well.
@@ -1162,7 +1170,7 @@ class OptimizeCliffordRZPassManager(PassManagerCliffordTStagePlugin):
     ):
         """Build pass manager for optimization stage."""
 
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
 
         match optimization_level:
             case 0:

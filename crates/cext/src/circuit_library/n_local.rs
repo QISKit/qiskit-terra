@@ -10,7 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::const_ptr_as_ref;
+use crate::pointers::ExposesOwnedPointers;
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::operations::StandardGate;
 use qiskit_circuit_library::blocks::{Block, Entanglement};
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn qk_circuit_library_n_local(
         &NLocalSettings::default()
     } else {
         // SAFETY: Per documentation, the pointer is non-null and aligned.
-        unsafe { const_ptr_as_ref(settings) }
+        unsafe { &*settings }
     };
 
     // Create entanglement
@@ -241,7 +241,7 @@ pub unsafe extern "C" fn qk_circuit_library_n_local(
         Err(_) => return std::ptr::null_mut(),
     };
 
-    match n_local(
+    n_local(
         num_qubits,
         &rotation_blocks,
         &entanglement_blocks,
@@ -260,10 +260,9 @@ pub unsafe extern "C" fn qk_circuit_library_n_local(
         },
         settings.skip_final_rotation_layer,
         false,
-    ) {
-        Ok(circuit) => Box::into_raw(Box::new(circuit)),
-        Err(_) => std::ptr::null_mut(),
-    }
+    )
+    .map(ExposesOwnedPointers::into_leaked)
+    .unwrap_or_else(|_| std::ptr::null_mut())
 }
 
 /// @ingroup QkCircuitLibrary

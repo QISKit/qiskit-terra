@@ -2058,6 +2058,34 @@ class TestDagEquivalence(DAGTest):
 
         self.assertNotEqual(self.dag1, dag2)
 
+    def test_dag_eq_multiple_delays(self):
+        """DAG Equivalence with multiple delays of different unit types."""
+        #      ┌───┐┌────────────────┐     ┌──────────────────┐
+        # q_0: ┤ H ├┤ Delay(100[dt]) ├──■──┤ Delay(100.0[ms]) ├
+        #      └───┘└────────────────┘┌─┴─┐└┬───────────────┬─┘
+        # q_1: ───────────────────────┤ X ├─┤ Delay(1.0[s]) ├──
+        #                             └───┘ └───────────────┘
+        circ = QuantumCircuit(2, 0)
+        circ.h(0)
+        circ.delay(100, 0, "dt")
+        circ.cx(0, 1)
+        circ.delay(1, 1, "s")
+        circ.delay(100, 0, "ms")
+
+        expected = DAGCircuit()
+        expected.add_qreg(QuantumRegister(2, "q"))
+        expected.apply_operation_back(HGate(), [expected.qubits[0]], [])
+        expected.apply_operation_back(Delay(100, "dt"), [expected.qubits[0]], [])
+        expected.apply_operation_back(CXGate(), [expected.qubits[0], expected.qubits[1]], [])
+        expected.apply_operation_back(Delay(1, "s"), [expected.qubits[1]], [])
+        expected.apply_operation_back(Delay(100, "ms"), [expected.qubits[0]], [])
+
+        obtained = circuit_to_dag(circ)
+        for node1, node2 in zip(expected.op_nodes(), obtained.op_nodes()):
+            # Compare node by node to make sure it compares correctly.
+            self.assertEqual(node1, node2)
+        self.assertEqual(obtained, expected)
+
     def test_dag_neq_same_topology(self):
         """DAG equivalence check: False. Same topology."""
         #        ┌───┐                ┌───┐
@@ -2458,6 +2486,34 @@ class TestDagEquivalence(DAGTest):
             (op_switch, dag.output_map[d], d),
         }
         self.assertEqual(set(dag.edges()), expected_edges)
+
+    def test_get_var_by_name(self):
+        """Look up input, captured, and declared variables by name."""
+        input_var = expr.Var.new("input", types.Bool())
+        dag = DAGCircuit()
+        dag.add_input_var(input_var)
+        self.assertEqual(dag.get_var("input"), input_var)
+        self.assertIsNone(dag.get_var("missing"))
+
+        captured_var = expr.Var.new("captured", types.Bool())
+        declared_var = expr.Var.new("declared", types.Bool())
+        dag = DAGCircuit()
+        dag.add_captured_var(captured_var)
+        dag.add_declared_var(declared_var)
+        self.assertEqual(dag.get_var("captured"), captured_var)
+        self.assertEqual(dag.get_var("declared"), declared_var)
+        self.assertIsNone(dag.get_var("missing"))
+
+    def test_get_stretch_by_name(self):
+        """Look up captured and declared stretches by name."""
+        captured = expr.Stretch.new("captured")
+        declared = expr.Stretch.new("declared")
+        dag = DAGCircuit()
+        dag.add_captured_stretch(captured)
+        dag.add_declared_stretch(declared)
+        self.assertEqual(dag.get_stretch("captured"), captured)
+        self.assertEqual(dag.get_stretch("declared"), declared)
+        self.assertIsNone(dag.get_stretch("missing"))
 
     def test_forbid_mixing_captures_inputs(self):
         """Test that a DAG can't have both captures and inputs."""

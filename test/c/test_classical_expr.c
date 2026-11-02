@@ -55,7 +55,7 @@ static int test_expr_info_structs(void) {
 
     QkExprNodeKind kind = qk_expr_kind(expr);
     if (kind != QkExprNodeKind_Index) {
-        printf("Expected Index node, got %d\n", kind);
+        fprintf(stderr, "Expected Index node, got %d\n", kind);
         result = EqualityError;
         goto cleanup;
     }
@@ -63,64 +63,64 @@ static int test_expr_info_structs(void) {
     QkIndexExprInfo index_info = qk_expr_index_info(expr);
     QkExprNodeKind target_kind = qk_expr_kind(index_info.target);
     if (target_kind != QkExprNodeKind_Var) {
-        printf("Expected Var node for target, got %d\n", target_kind);
+        fprintf(stderr, "Expected Var node for target, got %d\n", target_kind);
         result = EqualityError;
         goto cleanup;
     }
 
     QkExprNodeKind index_kind = qk_expr_kind(index_info.index);
     if (index_kind != QkExprNodeKind_Cast) {
-        printf("Expected Cast node for index, got %d\n", index_kind);
+        fprintf(stderr, "Expected Cast node for index, got %d\n", index_kind);
         result = EqualityError;
         goto cleanup;
     }
 
     QkCastExprInfo cast_info = qk_expr_cast_info(index_info.index);
     if (cast_info.ty.ty != QkExprType_Uint || cast_info.ty.width != 1) {
-        printf("Expected Cast to Uint(1), got type %d width %d\n", cast_info.ty.ty,
-               cast_info.ty.width);
+        fprintf(stderr, "Expected Cast to Uint(1), got type %d width %d\n", cast_info.ty.ty,
+                cast_info.ty.width);
         result = EqualityError;
         goto cleanup;
     }
 
     QkExprNodeKind cast_operand_kind = qk_expr_kind(cast_info.operand);
     if (cast_operand_kind != QkExprNodeKind_Unary) {
-        printf("Expected Unary node for cast operand, got %d\n", cast_operand_kind);
+        fprintf(stderr, "Expected Unary node for cast operand, got %d\n", cast_operand_kind);
         result = EqualityError;
         goto cleanup;
     }
 
     QkUnaryExprInfo unary_info = qk_expr_unary_info(cast_info.operand);
     if (unary_info.op != QkUnaryOpType_LogicNot) {
-        printf("Expected LogicNot operation, got %d\n", unary_info.op);
+        fprintf(stderr, "Expected LogicNot operation, got %d\n", unary_info.op);
         result = EqualityError;
         goto cleanup;
     }
 
     QkExprNodeKind unary_operand_kind = qk_expr_kind(unary_info.operand);
     if (unary_operand_kind != QkExprNodeKind_Binary) {
-        printf("Expected Binary node for unary operand, got %d\n", unary_operand_kind);
+        fprintf(stderr, "Expected Binary node for unary operand, got %d\n", unary_operand_kind);
         result = EqualityError;
         goto cleanup;
     }
 
     QkBinaryExprInfo binary_info = qk_expr_binary_info(unary_info.operand);
     if (binary_info.op != QkBinaryOpType_Greater) {
-        printf("Expected Greater operation, got %d\n", binary_info.op);
+        fprintf(stderr, "Expected Greater operation, got %d\n", binary_info.op);
         result = EqualityError;
         goto cleanup;
     }
 
     QkExprNodeKind left_kind = qk_expr_kind(binary_info.left);
     if (left_kind != QkExprNodeKind_Var) {
-        printf("Expected Var node for left operand, got %d\n", left_kind);
+        fprintf(stderr, "Expected Var node for left operand, got %d\n", left_kind);
         result = EqualityError;
         goto cleanup;
     }
 
     QkExprNodeKind right_kind = qk_expr_kind(binary_info.right);
     if (right_kind != QkExprNodeKind_Value) {
-        printf("Expected Value node for right operand, got %d\n", right_kind);
+        fprintf(stderr, "Expected Value node for right operand, got %d\n", right_kind);
         result = EqualityError;
         goto cleanup;
     }
@@ -145,14 +145,15 @@ static int test_op_types_roundtrip(void) {
 
         QkExprNodeKind kind = qk_expr_kind(expr);
         if (kind != QkExprNodeKind_Unary) {
-            printf("Expected Unary expression node, got %d\n", kind);
+            fprintf(stderr, "Expected Unary expression node, got %d\n", kind);
             result = EqualityError;
             goto cleanup;
         }
 
         QkUnaryExprInfo unary_info = qk_expr_unary_info(expr);
         if (unary_info.op != expected_op) {
-            printf("Unary op type mismatch: expected %d, got %d\n", expected_op, unary_info.op);
+            fprintf(stderr, "Unary op type mismatch: expected %d, got %d\n", expected_op,
+                    unary_info.op);
             result = EqualityError;
             goto cleanup;
         }
@@ -167,14 +168,14 @@ static int test_op_types_roundtrip(void) {
 
         QkExprNodeKind kind = qk_expr_kind(expr);
         if (kind != QkExprNodeKind_Binary) {
-            printf("Expected Binary expression node, got %d\n", kind);
+            fprintf(stderr, "Expected Binary expression node, got %d\n", kind);
             result = EqualityError;
             goto cleanup;
         }
 
         QkBinaryExprInfo binary_info = qk_expr_binary_info(expr);
         if (binary_info.op != expected_op) {
-            printf("Op type mismatch: expected %d, got %d\n", expected_op, binary_info.op);
+            fprintf(stderr, "Op type mismatch: expected %d, got %d\n", expected_op, binary_info.op);
             result = EqualityError;
             goto cleanup;
         }
@@ -210,7 +211,7 @@ static int test_expr_kind_and_type(void) {
 
             QkExprNodeKind result_kind = qk_expr_kind(expr);
             if (result_kind != kind) {
-                printf("Kind mismatch: expected %d, got %d\n", kind, result_kind);
+                fprintf(stderr, "Kind mismatch: expected %d, got %d\n", kind, result_kind);
                 result = EqualityError;
                 goto cleanup;
             }
@@ -238,20 +239,21 @@ static int test_expr_kind_and_type(void) {
                 break;
             }
             default:
-                printf("Unexpected kind for type checking: %d\n", result_kind);
+                fprintf(stderr, "Unexpected kind for type checking: %d\n", result_kind);
                 result = EqualityError;
                 goto cleanup;
             }
 
             if (result_type.ty != type_info.ty) {
-                printf("Type mismatch: expected %d, got %d\n", type_info.ty, result_type.ty);
+                fprintf(stderr, "Type mismatch: expected %d, got %d\n", type_info.ty,
+                        result_type.ty);
                 result = EqualityError;
                 goto cleanup;
             }
 
             if (type_info.ty == QkExprType_Uint && result_type.width != type_info.width) {
-                printf("Width mismatch for Uint: expected %d, got %d\n", type_info.width,
-                       result_type.width);
+                fprintf(stderr, "Width mismatch for Uint: expected %d, got %d\n", type_info.width,
+                        result_type.width);
                 result = EqualityError;
                 goto cleanup;
             }
@@ -282,27 +284,27 @@ static int test_expr_var(void) {
         expr = inner_test_expr_kinds_and_types(QkExprNodeKind_Var, type_info);
         QkExprNodeKind kind = qk_expr_kind(expr);
         if (kind != QkExprNodeKind_Var) {
-            printf("Expected Var node, got %d\n", kind);
+            fprintf(stderr, "Expected Var node, got %d\n", kind);
             result = EqualityError;
             goto cleanup;
         }
 
         const QkVar *var = qk_expr_as_var(expr);
         if (var == NULL) {
-            printf("qk_expr_as_var returned NULL for Var expression\n");
+            fprintf(stderr, "qk_expr_as_var returned NULL for Var expression\n");
             result = EqualityError;
             goto cleanup;
         }
 
         char *name = qk_var_name(var);
         if (name == NULL) {
-            printf("qk_var_name returned NULL\n");
+            fprintf(stderr, "qk_var_name returned NULL\n");
             result = EqualityError;
             goto cleanup;
         }
 
         if (strcmp(name, "test_var") != 0) {
-            printf("Expected var name 'test_var', got '%s'\n", name);
+            fprintf(stderr, "Expected var name 'test_var', got '%s'\n", name);
             qk_str_free(name);
             result = EqualityError;
             goto cleanup;
@@ -311,13 +313,14 @@ static int test_expr_var(void) {
 
         QkExprTypeInfo var_type = qk_var_type_info(var);
         if (var_type.ty != type_info.ty) {
-            printf("Var type mismatch: expected %d, got %d\n", type_info.ty, var_type.ty);
+            fprintf(stderr, "Var type mismatch: expected %d, got %d\n", type_info.ty, var_type.ty);
             result = EqualityError;
             goto cleanup;
         }
 
         if (type_info.ty == QkExprType_Uint && var_type.width != type_info.width) {
-            printf("Var width mismatch: expected %d, got %d\n", type_info.width, var_type.width);
+            fprintf(stderr, "Var width mismatch: expected %d, got %d\n", type_info.width,
+                    var_type.width);
             result = EqualityError;
             goto cleanup;
         }
@@ -335,14 +338,14 @@ static int test_expr_var(void) {
     QkExprTypeInfo var_type_info = qk_var_type_info(var);
 
     if (var_type_info.ty != QkExprType_Bool) {
-        printf("Expected var type to be QkExprType_Bool, got %d\n", var_type_info.ty);
+        fprintf(stderr, "Expected var type to be QkExprType_Bool, got %d\n", var_type_info.ty);
         result = EqualityError;
         goto cleanup_vars;
     }
 
     char *name = qk_var_name(var);
     if (name != NULL) {
-        printf("Expected var name to be NULL, got %s\n", name);
+        fprintf(stderr, "Expected var name to be NULL, got %s\n", name);
         qk_str_free(name);
         result = EqualityError;
         goto cleanup_vars;
@@ -353,14 +356,14 @@ static int test_expr_var(void) {
     var_type_info = qk_var_type_info(var);
 
     if (var_type_info.ty != QkExprType_Uint) {
-        printf("Expected var type to be QkExprType_Uint, got %d\n", var_type_info.ty);
+        fprintf(stderr, "Expected var type to be QkExprType_Uint, got %d\n", var_type_info.ty);
         result = EqualityError;
         goto cleanup_vars;
     }
 
     name = qk_var_name(var);
     if (name != NULL) {
-        printf("Expected var name to be NULL, got %s\n", name);
+        fprintf(stderr, "Expected var name to be NULL, got %s\n", name);
         qk_str_free(name);
         result = EqualityError;
         goto cleanup_vars;
@@ -391,27 +394,27 @@ static int test_expr_stretch(void) {
 
         QkExprNodeKind kind = qk_expr_kind(expr);
         if (kind != QkExprNodeKind_Stretch) {
-            printf("Expected Stretch node, got %d\n", kind);
+            fprintf(stderr, "Expected Stretch node, got %d\n", kind);
             result = EqualityError;
             goto cleanup;
         }
 
         const QkStretch *stretch = qk_expr_as_stretch(expr);
         if (stretch == NULL) {
-            printf("qk_expr_as_stretch returned NULL for Stretch expression\n");
+            fprintf(stderr, "qk_expr_as_stretch returned NULL for Stretch expression\n");
             result = EqualityError;
             goto cleanup;
         }
 
         char *name = qk_stretch_name(stretch);
         if (name == NULL) {
-            printf("qk_stretch_name returned NULL\n");
+            fprintf(stderr, "qk_stretch_name returned NULL\n");
             result = EqualityError;
             goto cleanup;
         }
 
         if (strcmp(name, "test_stretch") != 0) {
-            printf("Expected stretch name 'test_stretch', got '%s'\n", name);
+            fprintf(stderr, "Expected stretch name 'test_stretch', got '%s'\n", name);
             qk_str_free(name);
             result = EqualityError;
             goto cleanup;
@@ -443,14 +446,14 @@ static int test_expr_value(void) {
 
         QkExprNodeKind kind = qk_expr_kind(expr);
         if (kind != QkExprNodeKind_Value) {
-            printf("Expected Value node for Bool, got %d\n", kind);
+            fprintf(stderr, "Expected Value node for Bool, got %d\n", kind);
             result = EqualityError;
             goto cleanup;
         }
 
         const QkValue *value = qk_expr_as_value(expr);
         if (value == NULL) {
-            printf("qk_expr_as_value returned NULL for Bool value\n");
+            fprintf(stderr, "qk_expr_as_value returned NULL for Bool value\n");
             result = EqualityError;
             goto cleanup;
         }
@@ -459,61 +462,63 @@ static int test_expr_value(void) {
         switch (ty) {
         case QkExprType_Bool:
             if (value_type_info.ty != QkExprType_Bool) {
-                printf("Expected Bool type, got %d\n", value_type_info.ty);
+                fprintf(stderr, "Expected Bool type, got %d\n", value_type_info.ty);
                 result = EqualityError;
                 goto cleanup;
             }
 
             bool bool_val = qk_value_bool(value);
             if (bool_val != true) {
-                printf("Expected true, got %d\n", bool_val);
+                fprintf(stderr, "Expected true, got %d\n", bool_val);
                 result = EqualityError;
                 goto cleanup;
             }
             break;
         case QkExprType_Duration:
             if (value_type_info.ty != QkExprType_Duration) {
-                printf("Expected Duration type, got %d\n", value_type_info.ty);
+                fprintf(stderr, "Expected Duration type, got %d\n", value_type_info.ty);
                 result = EqualityError;
                 goto cleanup;
             }
 
             QkDurationInfo result_duration = qk_value_duration_info(value);
             if (result_duration.ty != QkDurationType_Dt) {
-                printf("Expected Dt duration type, got %d\n", result_duration.ty);
+                fprintf(stderr, "Expected Dt duration type, got %d\n", result_duration.ty);
                 result = EqualityError;
                 goto cleanup;
             }
 
             if (result_duration.value.dt != 12345) {
-                printf("Expected dt value 12345, got %" PRId64 "\n", result_duration.value.dt);
+                fprintf(stderr, "Expected dt value 12345, got %" PRId64 "\n",
+                        result_duration.value.dt);
                 result = EqualityError;
                 goto cleanup;
             }
             break;
         case QkExprType_Float:
             if (value_type_info.ty != QkExprType_Float) {
-                printf("Expected Float type, got %d\n", value_type_info.ty);
+                fprintf(stderr, "Expected Float type, got %d\n", value_type_info.ty);
                 result = EqualityError;
                 goto cleanup;
             }
 
             double float_val = qk_value_float(value);
             if (float_val != 3.14) {
-                printf("Expected float value 3.14159, got %f\n", float_val);
+                fprintf(stderr, "Expected float value 3.14159, got %f\n", float_val);
                 result = EqualityError;
                 goto cleanup;
             }
             break;
         case QkExprType_Uint:
             if (value_type_info.ty != QkExprType_Uint) {
-                printf("Expected Uint type, got %d\n", value_type_info.ty);
+                fprintf(stderr, "Expected Uint type, got %d\n", value_type_info.ty);
                 result = EqualityError;
                 goto cleanup;
             }
 
             if (value_type_info.width != 4) {
-                printf("Expected Uint width to be 4, got %" PRIu32 "\n", value_type_info.width);
+                fprintf(stderr, "Expected Uint width to be 4, got %" PRIu32 "\n",
+                        value_type_info.width);
                 result = EqualityError;
                 goto cleanup;
             }
@@ -521,7 +526,7 @@ static int test_expr_value(void) {
             uint64_t uint_val = qk_value_uint(value);
 
             if (uint_val != 12345) {
-                printf("Expected uint value 12345, got %" PRIu64 "\n", uint_val);
+                fprintf(stderr, "Expected uint value 12345, got %" PRIu64 "\n", uint_val);
                 result = EqualityError;
                 goto cleanup;
             }

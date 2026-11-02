@@ -606,7 +606,7 @@ class TestPauliEvolutionSwapStrategies(QiskitTestCase):
         # test as pre-routing step
         backend = GenericBackendV2(num_qubits=4, coupling_map=[[0, 1], [0, 2], [0, 3]], seed=42)
         pm = generate_preset_pass_manager(
-            optimization_level=3, target=backend.target, seed_transpiler=40
+            optimization_level=1, target=backend.target, seed_transpiler=40
         )
         pm.pre_routing = swap_pm
         full = pm.run(circ.decompose())

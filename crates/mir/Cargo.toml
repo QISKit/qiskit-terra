@@ -1,0 +1,23 @@
+[package]
+name = "qiskit-mir"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "qiskit_mir"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+bytemuck.workspace = true
+hashbrown.workspace = true
+qiskit-util.workspace = true
+rustworkx-core.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+itertools.workspace = true

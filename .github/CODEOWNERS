@@ -24,6 +24,9 @@
 
 # Qiskit folders (also their corresponding tests)
 primitives/           @Qiskit/terra-core @Qiskit/qiskit-primitives
+providers/            @Qiskit/terra-core @joshuasn
+mir/                  @Qiskit/terra-core @Qiskit/terra-mir
+mir-*/                @Qiskit/terra-core @Qiskit/terra-mir
 # Override the release notes directories to have _no_ code owners, so any review
 # from somebody with write access is acceptable.
 /releasenotes/notes

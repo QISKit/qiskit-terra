@@ -113,6 +113,15 @@ class TestQuantumShannonDecomposer(QiskitTestCase):
         self.assertTrue(np.allclose(mat, Operator(circ).data))
         self.assertEqual(sum(circ.count_ops().values()), 0)
 
+    def test_zero_qubit_unitary(self):
+        """Test decomposition of a 1x1 (zero-qubit) unitary does not panic and preserves
+        the global phase. See https://github.com/Qiskit/qiskit/issues/17036."""
+        mat = np.array([[1j]])
+        circ = self.qsd(mat)
+        self.assertEqual(circ.num_qubits, 0)
+        self.assertEqual(sum(circ.count_ops().values()), 0)
+        self.assertTrue(np.allclose(mat, Operator(circ).data))
+
     @combine(nqubits=[1, 2, 3, 4], opt_a1=[True, None], opt_a2=[False, None])
     def test_diagonal(self, nqubits, opt_a1, opt_a2):
         """Test decomposition on diagonal -- qsd is not optimal"""

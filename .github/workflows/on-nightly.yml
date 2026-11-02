@@ -19,7 +19,7 @@ jobs:
     uses: ./.github/workflows/test-linux.yml
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         runner: ["ubuntu-latest", "ubuntu-24.04-arm"]
     with:
       python-version: ${{ matrix.python-version }}
@@ -30,7 +30,7 @@ jobs:
     uses: ./.github/workflows/test-mac.yml
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         runner: ["macos-14"]
 
     with:
@@ -42,7 +42,7 @@ jobs:
     uses: ./.github/workflows/test-windows.yml
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         runner: ["windows-latest"]
     with:
       python-version: ${{ matrix.python-version }}

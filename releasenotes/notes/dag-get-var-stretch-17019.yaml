@@ -1,0 +1,5 @@
+---
+features:
+  - |
+    Added :meth:`.DAGCircuit.get_var` and :meth:`.DAGCircuit.get_stretch` to look up
+    variables and stretches by name. Each returns ``None`` if the name is absent.

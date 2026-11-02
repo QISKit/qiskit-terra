@@ -205,6 +205,7 @@ and operations.
    U1Gate
    U2Gate
    U3Gate
+   U4Gate
    XGate
    YGate
    ZGate

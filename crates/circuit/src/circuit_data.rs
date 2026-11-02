@@ -52,7 +52,7 @@ use numpy::PyReadonlyArray1;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyList, PySet, PyTuple, PyType};
+use pyo3::types::{IntoPyDict, PyDict, PyList, PyNone, PySet, PyTuple, PyType};
 use pyo3::{PyTraverseError, PyVisit, import_exception, intern};
 
 use hashbrown::{HashMap, HashSet};
@@ -225,64 +225,25 @@ pub struct CircuitData {
     global_phase: Param,
 }
 
-/// A container for :class:`.QuantumCircuit` instruction listings that stores
-/// :class:`.CircuitInstruction` instances in a packed form by interning
-/// their :attr:`~.CircuitInstruction.qubits` and
-/// :attr:`~.CircuitInstruction.clbits` to native vectors of indices.
+#[cfg(feature = "passmanager")]
+mod passmanager {
+    use super::CircuitData;
+    qiskit_util::dyn_types::static_dyn_typed!(CircuitData);
+    impl qiskit_passmanager::IR for CircuitData {}
+}
+
+/// Private internal Qiskit object that corresponds to the C-API :c:type:`QkCircuit`.
 ///
-/// Before adding a :class:`.CircuitInstruction` to this container, its
-/// :class:`.Qubit` and :class:`.Clbit` instances MUST be registered via the
-/// constructor or via :meth:`.CircuitData.add_qubit` and
-/// :meth:`.CircuitData.add_clbit`. This is because the order in which
-/// bits of the same type are added to the container determines their
-/// associated indices used for storage and retrieval.
+/// Regardless of naming, all methods and attributes of this object are private and not for user
+/// consumption from Python.  This is an implementation detail of Qiskit.
 ///
-/// Once constructed, this container behaves like a Python list of
-/// :class:`.CircuitInstruction` instances. However, these instances are
-/// created and destroyed on the fly, and thus should be treated as ephemeral.
+/// The only valid uses of this object for Python users are to pass it to methods that expect the
+/// "native" component of circuits.  This includes the C-API function
+/// :c:func:`qk_circuit_borrow_from_python`, for example.
 ///
-/// For example,
-///
-/// .. plot::
-///    :include-source:
-///    :no-figs:
-///
-///     qubits = [Qubit()]
-///     data = CircuitData(qubits)
-///     data.append(CircuitInstruction(XGate(), (qubits[0],), ()))
-///     assert(data[0] == data[0]) # => Ok.
-///     assert(data[0] is data[0]) # => PANICS!
-///
-/// .. warning::
-///
-///     This is an internal interface and no part of it should be relied upon
-///     outside of Qiskit.
-///
-/// Args:
-///     qubits (Iterable[:class:`.Qubit`] | None): The initial sequence of
-///         qubits, used to map :class:`.Qubit` instances to and from its
-///         indices.
-///     clbits (Iterable[:class:`.Clbit`] | None): The initial sequence of
-///         clbits, used to map :class:`.Clbit` instances to and from its
-///         indices.
-///     data (Iterable[:class:`.CircuitInstruction`]): An initial instruction
-///         listing to add to this container. All bits appearing in the
-///         instructions in this iterable must also exist in ``qubits`` and
-///         ``clbits``.
-///     reserve (int): The container's initial capacity. This is reserved
-///         before copying instructions into the container when ``data``
-///         is provided, so the initialized container's unused capacity will
-///         be ``max(0, reserve - len(data))``.
-///
-/// Raises:
-///     KeyError: if ``data`` contains a reference to a bit that is not present
-///         in ``qubits`` or ``clbits``.
-#[pyclass(
-    name = "CircuitData",
-    sequence,
-    module = "qiskit._accelerate.circuit",
-    skip_from_py_object
-)]
+/// This object is usable as a :class:`.passmanager.IR` corresponding to the Rust/C-native
+/// components of :class:`.QuantumCircuit`.
+#[pyclass(name = "CircuitData", sequence, module = "qiskit.circuit")]
 #[derive(Clone, Debug)]
 pub struct PyCircuitData {
     pub inner: CircuitData,
@@ -419,6 +380,9 @@ impl CircuitData {
 
     /// Registers a :class:`.QuantumRegister` instance.
     ///
+    /// Fails only if the register's name collides with an existing one under `strict`, or if
+    /// adding one of its (previously untracked) bits would push the qubit count past `u32`.
+    ///
     /// Args:
     ///     bit (:class:`.QuantumRegister`): The register to add.
     pub fn add_qreg(
@@ -456,6 +420,9 @@ impl CircuitData {
     }
 
     /// Registers a :class:`.ClassicalRegister` instance.
+    ///
+    /// Fails only if the register's name collides with an existing one under `strict`, or if
+    /// adding one of its (previously untracked) bits would push the clbit count past `u32`.
     ///
     /// Args:
     ///     bit (:class:`.ClassicalRegister`): The register to add.
@@ -2135,6 +2102,13 @@ impl PyCircuitData {
             self_.extend(data)?;
         }
         Ok(self_)
+    }
+
+    #[classattr]
+    pub fn _qiskit_ir_builtin_(py: Python) -> Bound<PyNone> {
+        // Marker object for type checkers to recognise `CircuitData` as a special form of
+        // Python-available IRs.
+        PyNone::get(py).to_owned()
     }
 
     pub fn __reduce__(self_: &Bound<PyCircuitData>, py: Python<'_>) -> PyResult<Py<PyAny>> {

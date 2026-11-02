@@ -24,6 +24,7 @@
 static void **_Qk_API_Circuit;
 static void **_Qk_API_Transpile;
 static void **_Qk_API_QI;
+static void **_Qk_API_Mir;
 
 /**
  * Import the Qiskit C API.
@@ -50,6 +51,9 @@ static int qk_import(void) {
         return -1;
     _Qk_API_QI = (void **)PyCapsule_Import("qiskit._accelerate.capi.QK_FFI_QI", 0);
     if (!_Qk_API_QI)
+        return -1;
+    _Qk_API_Mir = (void **)PyCapsule_Import("qiskit._accelerate.capi.QK_FFI_MIR", 0);
+    if (!_Qk_API_Mir)
         return -1;
     return 0;
 }

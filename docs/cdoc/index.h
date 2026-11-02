@@ -8,11 +8,13 @@
  * @defgroup QkCircuitLibrary QkCircuitLibrary
  * @defgroup QkClassicalRegister QkClassicalRegister
  * @defgroup QkComplex64 QkComplex64
+ * @defgroup QkCustomOp QkCustomOp
  * @defgroup QkDag QkDag
  * @defgroup QkNeighbors QkNeighbors
  * @defgroup QkObs QkObs
  * @defgroup QkObsTerm QkObsTerm
  * @defgroup QkParam QkParam
+ * @defgroup QkQpy QkQpy
  * @defgroup QkQuantumRegister QkQuantumRegister
  * @defgroup QkSabreLayoutOptions QkSabreLayoutOptions
  * @defgroup QkTarget QkTarget
@@ -26,4 +28,6 @@
  * @defgroup QkVF2LayoutResult QkVF2LayoutResult
  * @defgroup QkClassicalExpressions QkClassicalExpressions
  * @defgroup QkControlFlow QkControlFlow
+ * @defgroup dynamic-types Dynamic-typing system
+ * @defgroup pass-manager Pass manager infrastructure, including generic passes and IRs.
  */

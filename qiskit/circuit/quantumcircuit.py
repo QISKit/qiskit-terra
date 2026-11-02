@@ -43,6 +43,7 @@ from qiskit.circuit.instruction import Instruction
 from qiskit.circuit.gate import Gate
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.exceptions import CircuitError
+from qiskit.passmanager import IR
 from qiskit.utils import deprecate_func, deprecate_arg
 from . import (
     Bit,
@@ -108,7 +109,7 @@ BitType = TypeVar("BitType", Qubit, Clbit)
 # it has at least some amount of organizational structure.
 
 
-class QuantumCircuit:
+class QuantumCircuit(IR):
     """Core Qiskit representation of a quantum circuit.
 
     .. note::
@@ -172,7 +173,8 @@ class QuantumCircuit:
     :attr:`clbits`                 List of :class:`Clbit`\\ s tracked by the circuit.
     :attr:`data`                   List of individual :class:`CircuitInstruction`\\ s that make up
                                    the circuit.
-    :attr:`_data`                  Python-space handle to the C API :c:struct:`QkCircuit` object.
+    :attr:`_data`                  Python-space handle to the Rust-native backing data, used by
+                                   the C API :c:struct:`QkCircuit` object.
     :attr:`duration`               Total duration of the circuit, added by scheduling transpiler
                                    passes.
                                    This attribute is deprecated and :meth:`.estimate_duration`
@@ -215,16 +217,20 @@ class QuantumCircuit:
 
     .. autoattribute:: data
 
-    .. py::attribute:: _data
-        An opaque handle to the C API object ``QkCircuit``.
+    .. py:attribute:: _data
+        :type: CircuitData
+
+        An opaque handle to the native Rust object backing :class:`QuantumCircuit`.
+
+        This object corresponds directly to the C API object ``QkCircuit``.
 
         .. warning::
-            No part of this object other than its existence is part of the public API.
+            No part of this object other than its existence is part of the public API in Python.
 
-        The only valid use of this object from within the public Python API is as part of the
-        extraction of a :c:struct:`QkCircuit` using :c:func:`qk_circuit_borrow_from_python` or
-        similar methods.  The Python-space type of the object is not specified in the public API,
-        and none of its methods, regardless of name, should be considered public.
+        There are very few valid uses of this object within Python.  You can pass it to functions
+        that expect the C-API type :c:type:`QkCircuit`, such as those that will call
+        :c:func:`qk_circuit_borrow_from_python`; you can use it as a :class:`.passmanager.IR`; you
+        can reconstruct the full circuit with :meth:`QuantumCircuit.from_circuit_data`.
 
     Alongside the :attr:`data`, the :attr:`global_phase` of a circuit can have some impact on its
     output, if the circuit is used to describe a :class:`.Gate` that may be controlled.  This is
@@ -306,6 +312,7 @@ class QuantumCircuit:
     :meth:`copy`               Make a complete copy of an existing circuit.
     :meth:`copy_empty_like`    Copy data objects from one circuit into a new one without any
                                instructions.
+    :meth:`from_circuit_data`  Recreate from the Rust-native :attr:`_data` object.
     :meth:`from_instructions`  Infer data objects needed from a list of instructions.
     :meth:`from_qasm_file`     Legacy interface to :func:`.qasm2.load`.
     :meth:`from_qasm_str`      Legacy interface to :func:`.qasm2.loads`.
@@ -338,6 +345,12 @@ class QuantumCircuit:
     object that has the correct resources and all the instructions.
 
     .. automethod:: from_instructions
+
+    If you are interoperating with C or native code, you may need to access the inner backing data
+    in :attr:`QuantumCircuit._data`.  You can recreate the full circuit using
+    :meth:`from_circuit_data`.
+
+    .. automethod:: from_circuit_data
 
     :class:`QuantumCircuit` also still has two constructor methods that are legacy wrappers around
     the importers in :mod:`qiskit.qasm2`.  These automatically apply :ref:`the legacy compatibility
@@ -953,6 +966,11 @@ class QuantumCircuit:
     .. automethod:: size
     .. automethod:: width
 
+    Comparing circuits
+    ------------------
+
+    .. automethod:: __eq__
+
     Accessing scheduling information
     --------------------------------
 
@@ -1049,6 +1067,10 @@ class QuantumCircuit:
     .. automethod:: decompose
     .. automethod:: reverse_bits
     """
+
+    # Implementation of the IR protocol.
+    _qiskit_ir_name_ = "QuantumCircuit"
+    _qiskit_ir_base_ = None
 
     instances = 0
     prefix = "circuit"
@@ -1257,15 +1279,40 @@ class QuantumCircuit:
     def unit(self, value):
         self._unit = value
 
-    @classmethod
+    @staticmethod
     def _from_circuit_data(
-        cls, data: CircuitData, legacy_qubits: bool = False, name: str | None = None
-    ) -> typing.Self:
+        data: CircuitData, legacy_qubits: bool = False, name: str | None = None
+    ) -> QuantumCircuit:
         """A private constructor from rust space circuit data."""
-        out = QuantumCircuit(name=name)
-        out._data = data
+        out = QuantumCircuit.from_circuit_data(data, name=name)
         if legacy_qubits:
             out.ensure_physical(apply_layout=False)
+        return out
+
+    @staticmethod
+    def from_circuit_data(
+        data: CircuitData, /, *, name: str | None = None, metadata: dict | None = None
+    ) -> QuantumCircuit:
+        """Construct a circuit from an opaque :class:`CircuitData`.
+
+        Typically this function is used to wrap an object coming from C in the full Python
+        :class:`QuantumCircuit` class.  The :class:`CircuitData` object is the Rust-native object
+        that corresponds to the C-API object :c:type:`QkCircuit`.  See its documentation for more
+        detail on this opaque object.
+
+        The reverse of this function is the :attr:`._data` attribute.
+
+        Args:
+            data: the native object containing the circuit IR.
+            name: an optional Python-only name to apply to the circuit.
+            metadata: optional, arbitrary, Python-only metadata to attach to the circuit.
+
+        Returns:
+            A full circuit object.
+        """
+        out = QuantumCircuit(name=name, metadata=metadata)
+        out._data = data
+        out._ancillas = [bit for bit in data.qubits if isinstance(bit, AncillaQubit)]
         return out
 
     @staticmethod
@@ -1565,6 +1612,56 @@ class QuantumCircuit:
         return str(self.draw(output="text"))
 
     def __eq__(self, other) -> bool:
+        """Check if this circuit is equal to another circuit.
+
+        Equality is determined by comparing the :class:`.DAGCircuit` representation
+        of both circuits, delegating to :meth:`.DAGCircuit.__eq__`. This means that
+        the insertion order of independent operations does not affect equality, as
+        long as the dependency structure between operations is the same.
+
+        For example::
+
+            qc1 = QuantumCircuit(2)
+            qc1.x(0)
+            qc1.x(1)
+
+            qc2 = QuantumCircuit(2)
+            qc2.x(1)
+            qc2.x(0)
+
+            qc1 == qc2  # True, because x(0) and x(1) are independent
+
+        The following are considered when checking equality:
+
+        * DAG structure (gate names, parameters, and qubit dependencies)
+        * Quantum and classical registers
+        * Global phase (:attr:`global_phase`)
+        * Calibrations (:attr:`calibrations`)
+        * Variables (``Var`` nodes)
+
+        The following are **not** considered:
+
+        * Circuit name (:attr:`name`)
+        * Circuit metadata (:attr:`metadata`)
+
+        .. note::
+
+            This does **not** check whether two circuits implement the same unitary.
+            Two circuits with different gate structures may still be unitarily equivalent.
+            To check that, use :class:`.Operator`::
+
+                from qiskit.quantum_info import Operator
+                Operator(qc1) == Operator(qc2)
+
+        Args:
+            other: The object to compare against.
+
+        Returns:
+            bool: ``True`` if the circuits are equal, ``False`` otherwise.
+
+        See Also:
+            :meth:`.DAGCircuit.__eq__`: The underlying equality implementation.
+        """
         if not isinstance(other, QuantumCircuit):
             return False
 
@@ -2829,6 +2926,27 @@ class QuantumCircuit:
             instructions._add_ref(circuit_scope.instructions, len(circuit_scope.instructions) - 1)
         return instructions
 
+    # Overloads for append. Passing an Operation to instruction allows qargs
+    # and cargs to be specified. However, passing a CircuitInstruction will
+    # cause qargs and cargs to be overritten in the implementation.
+    @overload
+    def append(
+        self,
+        instruction: Operation,
+        qargs: Sequence[QubitSpecifier] | None = None,
+        cargs: Sequence[ClbitSpecifier] | None = None,
+        *,
+        copy: bool = True,
+    ) -> InstructionSet: ...
+
+    @overload
+    def append(
+        self,
+        instruction: CircuitInstruction,
+        *,
+        copy: bool = True,
+    ) -> InstructionSet: ...
+
     def append(
         self,
         instruction: Operation | CircuitInstruction,
@@ -2845,8 +2963,8 @@ class QuantumCircuit:
         integer indices) will be resolved into the relevant instances.
 
         If a :class:`.CircuitInstruction` is given, it will be unwrapped, verified in the context of
-        this circuit, and a new object will be appended to the circuit.  In this case, you may not
-        pass ``qargs`` or ``cargs`` separately.
+        this circuit, and a new object will be appended to the circuit.  In this case, passing
+        ``qargs`` or ``cargs`` separately will issue a warning, and their values will be ignored.
 
         Args:
             instruction: :class:`~.circuit.Instruction` instance to append, or a
@@ -2872,6 +2990,12 @@ class QuantumCircuit:
         """
         if isinstance(instruction, CircuitInstruction):
             operation = instruction.operation
+            if qargs is not None or cargs is not None:
+                warnings.warn(
+                    "QuantumCircuit.append() uses qargs/cargs from CircuitInstruction. "
+                    "Any qargs/cargs passed into append() alongside a valid CircuitInstruction will be ignored.",
+                    stacklevel=2,
+                )
             qargs = instruction.qubits
             cargs = instruction.clbits
         else:

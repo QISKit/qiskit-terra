@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed an issue where drawing an empty circuit with no qubits and no
+    classical bits using the Rust circuit drawer (e.g. via :c:func:`qk_circuit_draw`)
+    caused a panic. Fixes `#16723 <https://github.com/Qiskit/qiskit/issues/16723>`__.

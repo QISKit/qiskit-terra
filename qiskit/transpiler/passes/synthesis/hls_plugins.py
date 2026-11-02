@@ -361,6 +361,10 @@ Pauli Evolution Synthesis
       - Plugin class
       - Description
       - Targeted connectivity
+    * - ``"basic"``
+      - :class:`~.PauliEvolutionSynthesisBasic`
+      - use a diagonalizing Clifford per Pauli term
+      - all-to-all
     * - ``"rustiq"``
       - :class:`~.PauliEvolutionSynthesisRustiq`
       - use the synthesis method from `Rustiq circuit synthesis library
@@ -372,13 +376,14 @@ Pauli Evolution Synthesis
       - all-to-all
     * - ``"default"``
       - :class:`~.PauliEvolutionSynthesisDefault`
-      - use a diagonalizing Clifford per Pauli term
+      - Uses the best synthesis method available.
       - all-to-all
 
 .. autosummary::
    :toctree: ../stubs/
 
    PauliEvolutionSynthesisDefault
+   PauliEvolutionSynthesisBasic
    PauliEvolutionSynthesisRustiq
    PauliEvolutionSynthesisMcts
 
@@ -625,12 +630,25 @@ from qiskit.transpiler.passes.routing.algorithms import ApproximateTokenSwapper
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.circuit._add_control import EFFICIENTLY_CONTROLLED_GATES
 from qiskit.transpiler.optimization_metric import OptimizationMetric
+from qiskit.circuit.library.pauli_evolution import _contains_projectors
 
 from qiskit._accelerate.high_level_synthesis import synthesize_operation, HighLevelSynthesisData
 from .plugin import HighLevelSynthesisPlugin
 
 if TYPE_CHECKING:
     from qiskit.circuit.quantumcircuitdata import CircuitInstruction
+
+
+def _is_coupling_map_all_to_all(coupling_map: CouplingMap) -> bool:
+    """Return whether the coupling map is all-to-all.
+
+    A coupling map is all-to-all if for every pair of distinct qubits
+    ``i`` and ``j`` either ``(i, j)`` or ``(j, i)`` or both are present
+    in the edge list.
+    """
+    n = coupling_map.size()
+    edges = {(min(a, b), max(a, b)) for a, b in coupling_map}
+    return len(edges) == n * (n - 1) // 2
 
 
 class DefaultSynthesisClifford(HighLevelSynthesisPlugin):
@@ -2170,10 +2188,82 @@ class MultiplierSynthesisDefault(HighLevelSynthesisPlugin):
         )
 
 
+def _cx_size_for_pauli_evo(circuit: QuantumCircuit) -> int:
+    """
+    Estimate the number of CX-gates in a circuit produced by one of the PauliEvolutionGate
+    synthesis algorithms (``basic``, ``rustiq`` or ``mcts``).
+
+    This function is only called for PauliEvolutionGates without projectors. In this case,
+    in addition to CX gates, ``basic`` can produce two-qubit rxx, ryy, rzz, and rzx rotations,
+    while ``rustiq`` and ``mcts`` can produce swaps. These two-qubit gates are counted according
+    to the number of CX gates required to decompose them.
+    """
+    ops = circuit.count_ops()
+    return (
+        ops.get("cx", 0)
+        + 2 * (ops.get("rxx", 0) + ops.get("ryy", 0) + ops.get("rzz", 0) + ops.get("rzx", 0))
+        + 3 * ops.get("swap", 0)
+    )
+
+
 class PauliEvolutionSynthesisDefault(HighLevelSynthesisPlugin):
     """Synthesize a :class:`.PauliEvolutionGate` using the default synthesis algorithm.
 
     This plugin name is:``PauliEvolution.default`` which can be used as the key on
+    an :class:`~.HLSConfig` object to use this method with :class:`~.HighLevelSynthesis`.
+
+    This plugin runs other implemented synthesis plugins, forwarding all options to
+    the selected plugins. The choice of which synthesis plugins to run is heuristic.
+    The current implementation generally runs :class:`PauliEvolutionSynthesisBasic`,
+    but might run :class:`PauliEvolutionSynthesisMcts` to minimize the CX count
+    if suitable. This selection is subject to change and should not be relied upon.
+
+    For greater control, specify :class:`~.HLSConfig` with the relevant synthesis plugins
+    directly.
+
+    The following plugin option directly influences this plugin:
+
+    * optimization_level: The optimization level used to select the synthesis
+      algorithm. Higher levels generate potentially more optimized circuits,
+      at the expense of longer transpilation time.
+
+    """
+
+    def run(self, high_level_object, coupling_map=None, target=None, qubits=None, **options):
+        if not isinstance(high_level_object, PauliEvolutionGate):
+            return None
+
+        synth_object = PauliEvolutionSynthesisBasic().run(
+            high_level_object, coupling_map, target, qubits, **options
+        )
+
+        # Currently we only run the MCTS method for higher optimization levels, for all-to-all
+        # connectivity, for Pauli evolution gates without projector terms, and with
+        # preserve_order=True.
+        if (
+            (options.get("optimization_level", 2) >= 2)
+            and options.get("preserve_order", True)
+            and (not _contains_projectors(high_level_object))
+            and ((coupling_map is None) or _is_coupling_map_all_to_all(coupling_map))
+        ):
+            synth_mcts = PauliEvolutionSynthesisMcts().run(
+                high_level_object, coupling_map, target, qubits, **options
+            )
+            # TODO: In this initial implementation, choose the better circuit based on the number of
+            # CX gates, using their CX decompositions. Experimentally, this seems to work well both
+            # when the targeted basis set contains CX gates and when it contains RZZ gates.
+            # In a follow-up, investigate whether target-aware heuristics could improve the
+            # results further.
+            if _cx_size_for_pauli_evo(synth_mcts) < _cx_size_for_pauli_evo(synth_object):
+                synth_object = synth_mcts
+
+        return synth_object
+
+
+class PauliEvolutionSynthesisBasic(HighLevelSynthesisPlugin):
+    """Synthesize a :class:`.PauliEvolutionGate` using the basic synthesis algorithm.
+
+    This plugin name is:``PauliEvolution.basic`` which can be used as the key on
     an :class:`~.HLSConfig` object to use this method with :class:`~.HighLevelSynthesis`.
 
     The following plugin option can be set:
@@ -2458,6 +2548,7 @@ class AnnotatedSynthesisDefault(HighLevelSynthesisPlugin):
             min_qubits=0,
             unroll_definitions=data.unroll_definitions,
             optimize_clifford_t=data.optimize_clifford_t,
+            optimization_level=data.optimization_level,
         )
 
         num_ctrl = sum(mod.num_ctrl_qubits for mod in modifiers if isinstance(mod, ControlModifier))

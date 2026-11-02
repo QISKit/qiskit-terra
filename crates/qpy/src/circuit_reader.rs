@@ -381,19 +381,18 @@ pub fn unpack_instruction(
         InstructionType::Unitary => unpack_unitary(instruction, qpy_data)?,
         InstructionType::ControlFlow => unpack_control_flow(instruction, qpy_data)?,
         InstructionType::Store => unpack_store(instruction, qpy_data)?,
-        InstructionType::Custom => {
-            QpyCaller::Python.attach("Python custom instruction unpacking", |py| {
-                unpack_custom_instruction(
-                    py,
-                    instruction,
-                    label.as_deref(),
-                    qpy_data,
-                    custom_instructions,
-                )
-            })?
-        }
-        InstructionType::Python => QpyCaller::Python
-            .attach("Python instruction unpacking", |py| {
+        InstructionType::Custom => qpy_data.caller.attach("Custom instructions", |py| {
+            unpack_custom_instruction(
+                py,
+                instruction,
+                label.as_deref(),
+                qpy_data,
+                custom_instructions,
+            )
+        })?,
+        InstructionType::Python => qpy_data
+            .caller
+            .attach("Python defined instructions", |py| {
                 unpack_py_instruction(py, instruction, label.as_deref(), qpy_data)
             })?,
     };
@@ -562,7 +561,7 @@ fn unpack_pauli_product_rotation(
         qpy_data,
         ValueEndian::LittleForV17AndBelow,
     )?;
-    let angle = generic_value_to_param(&angle_value)?;
+    let angle = generic_value_to_param(&angle_value, qpy_data)?;
     let rotation = PauliProductRotation { z, x, angle };
     let pbc = Box::new(PauliBased::PauliProductRotation(rotation));
     let op = PackedOperation::from_pauli_based(pbc);
@@ -868,10 +867,17 @@ fn unpack_transpile_layout<'py>(
                 &packed_register.register_type,
             ),
         };
-        if *register_type == RegisterType::Qreg {
-            let register = QuantumRegister::new_owning(name.clone(), bit_indices_len as u32);
-            extra_register_map.insert(name.as_str(), register);
-        }
+        match register_type {
+            RegisterType::Qreg => extra_register_map.insert(
+                name.as_str(),
+                QuantumRegister::new_owning(name.clone(), bit_indices_len as u32),
+            ),
+            RegisterType::Areg => extra_register_map.insert(
+                name.as_str(),
+                QuantumRegister::new_ancilla_owning(name.clone(), bit_indices_len as u32),
+            ),
+            _ => None,
+        };
     }
     // add the registers from the circuit, to streamline the search phase
     for qreg in circuit_data.qregs() {
@@ -1114,11 +1120,18 @@ fn add_registers_and_bits(
                     non_standalone_registers.push(raw_register);
                 } else {
                     match packed_register.register_type {
-                        RegisterType::Qreg => {
-                            let qreg = QuantumRegister::new_owning(
-                                &packed_register.name,
-                                packed_register.bit_indices.len() as u32,
-                            );
+                        RegisterType::Qreg | RegisterType::Areg => {
+                            let qreg = match packed_register.register_type {
+                                RegisterType::Qreg => QuantumRegister::new_owning(
+                                    &packed_register.name,
+                                    packed_register.bit_indices.len() as u32,
+                                ),
+                                RegisterType::Areg => QuantumRegister::new_ancilla_owning(
+                                    packed_register.name.clone(),
+                                    packed_register.bit_indices.len() as u32,
+                                ),
+                                _ => unreachable!(),
+                            };
                             for (qubit, &index) in
                                 qreg.bits().zip(packed_register.bit_indices.iter())
                             {
@@ -1160,11 +1173,19 @@ fn add_registers_and_bits(
                     non_standalone_registers.push(raw_register);
                 } else {
                     match packed_register.register_type {
-                        RegisterType::Qreg => {
-                            let qreg = QuantumRegister::new_owning(
-                                &packed_register.name,
-                                packed_register.size,
-                            );
+                        RegisterType::Qreg | RegisterType::Areg => {
+                            let qreg = match packed_register.register_type {
+                                RegisterType::Qreg => QuantumRegister::new_owning(
+                                    &packed_register.name,
+                                    packed_register.size,
+                                ),
+                                RegisterType::Areg => QuantumRegister::new_ancilla_owning(
+                                    packed_register.name.clone(),
+                                    packed_register.size,
+                                ),
+                                _ => unreachable!(),
+                            };
+
                             if packed_register.register_attachment == 1 {
                                 let start = packed_register.start_index;
                                 for i in 0..packed_register.size {
@@ -1249,7 +1270,7 @@ fn add_registers_and_bits(
     for raw_register in non_standalone_registers {
         match raw_register {
             formats::RegisterPack::V4(packed_register) => match packed_register.register_type {
-                RegisterType::Qreg => {
+                RegisterType::Qreg | RegisterType::Areg => {
                     let bits: Vec<ShareableQubit> = packed_register
                         .bit_indices
                         .iter()
@@ -1262,7 +1283,20 @@ fn add_registers_and_bits(
                             }
                         })
                         .collect::<Result<_, QpyError>>()?;
-                    let qreg = QuantumRegister::new_alias(Some(packed_register.name.clone()), bits);
+                    let qreg = match packed_register.register_type {
+                        RegisterType::Qreg => {
+                            QuantumRegister::new_alias(Some(packed_register.name.clone()), bits)
+                        }
+                        RegisterType::Areg => {
+                            QuantumRegister::new_ancilla_alias(packed_register.name.clone(), bits)
+                                .ok_or_else(|| {
+                                QpyError::InvalidRegister(
+                                    "all bits from an ancilla register must be ancillas".to_owned(),
+                                )
+                            })?
+                        }
+                        _ => unreachable!(),
+                    };
                     qregs.push(qreg);
                 }
                 RegisterType::Creg => {
@@ -1290,7 +1324,7 @@ fn add_registers_and_bits(
                     ));
                 }
                 match packed_register.register_type {
-                    RegisterType::Qreg => {
+                    RegisterType::Qreg | RegisterType::Areg => {
                         let bits: Vec<ShareableQubit> = packed_register
                             .bit_indices
                             .iter()
@@ -1303,8 +1337,21 @@ fn add_registers_and_bits(
                                 }
                             })
                             .collect::<Result<_, QpyError>>()?;
-                        let qreg =
-                            QuantumRegister::new_alias(Some(packed_register.name.clone()), bits);
+                        let qreg = match packed_register.register_type {
+                            RegisterType::Qreg => {
+                                QuantumRegister::new_alias(Some(packed_register.name.clone()), bits)
+                            }
+                            RegisterType::Areg => QuantumRegister::new_ancilla_alias(
+                                packed_register.name.clone(),
+                                bits,
+                            )
+                            .ok_or_else(|| {
+                                QpyError::InvalidRegister(
+                                    "all bits from an ancilla register must be ancillas".to_owned(),
+                                )
+                            })?,
+                            _ => unreachable!(),
+                        };
                         qregs.push(qreg);
                     }
                     RegisterType::Creg => {
@@ -1399,12 +1446,15 @@ pub(crate) fn unpack_circuit(
             .annotation_handler
             .load_deserializers(annotation_deserializers_data)?;
     }
-    let global_phase = generic_value_to_param(&load_value(
-        packed_circuit.header.global_phase_type,
-        &packed_circuit.header.global_phase_data,
-        &mut qpy_data,
-        ValueEndian::Big,
-    )?)?;
+    let global_phase = generic_value_to_param(
+        &load_value(
+            packed_circuit.header.global_phase_type,
+            &packed_circuit.header.global_phase_data,
+            &mut qpy_data,
+            ValueEndian::Big,
+        )?,
+        &qpy_data,
+    )?;
     qpy_data.circuit_data.set_global_phase_param(global_phase)?;
     add_standalone_vars(packed_circuit, &mut qpy_data)?;
     add_registers_and_bits(packed_circuit, &mut qpy_data)?;

@@ -14,12 +14,16 @@ crate-type = ["rlib"]
 workspace = true
 
 [dependencies]
+derive_more = { version = "2.1", features = ["try_from"] }
 thiserror.workspace = true
 num-complex.workspace = true
 qiskit-quantum-info.workspace = true
-qiskit-circuit.workspace = true
+qiskit-circuit  = { workspace = true, features = ["passmanager"] }
 qiskit-circuit-library.workspace = true
+qiskit-mir.workspace = true
+qiskit-passmanager.workspace = true
 qiskit-transpiler.workspace = true
+qiskit-qpy.workspace = true
 pyo3 = { workspace = true, optional = true }
 qiskit-util.workspace = true
 smallvec.workspace = true
@@ -29,7 +33,7 @@ hashbrown.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
 anyhow.workspace = true
-mimalloc = { workspace = true, optional = true}
+mimalloc = { workspace = true, optional = true, features = ["local_dynamic_tls"] }
 uuid.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
@@ -37,4 +41,7 @@ bytemuck.workspace = true
 
 [features]
 python_binding = ["dep:pyo3"]
-cache_pygates = ["qiskit-circuit/cache_pygates", "qiskit-transpiler/cache_pygates"]
+cache_pygates = [
+    "qiskit-circuit/cache_pygates",
+    "qiskit-transpiler/cache_pygates",
+]

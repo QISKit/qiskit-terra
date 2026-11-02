@@ -6,7 +6,7 @@ pull_request_rules:
     actions:
       backport:
         branches:
-          - stable/2.5
+          - stable/2.6
 
 merge_queue:
   # Disallow Mergify from posting an "add this to the queue?" comment.

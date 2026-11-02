@@ -16,12 +16,13 @@ import io
 import struct
 
 from qiskit.circuit import (
-    Qubit,
+    AncillaRegister,
     ClassicalRegister,
-    Parameter,
-    ParameterVector,
     QuantumCircuit,
     QuantumRegister,
+    Qubit,
+    Parameter,
+    ParameterVector,
 )
 from qiskit.circuit.classical import expr
 from qiskit.circuit.gate import Gate
@@ -145,6 +146,22 @@ class TestV17VsV18(QiskitTestCase):
         qc = QuantumCircuit(qr, cr)
         qc.switch(expr.bit_and(cr, 3), [(1, body.copy()), (2, body.copy())], [0], [])
         self.assertNotEqual(_dump(qc, 17), _dump(qc, 18))
+
+    def test_ancilla_register_round_trip(self):
+        """Ancilla register and qubit types survive serialization."""
+        circuit = QuantumCircuit(AncillaRegister(2, "ancilla"))
+        loaded = load(io.BytesIO(_dump(circuit, 18)))[0]
+        self.assertIsInstance(loaded.qregs[0], AncillaRegister)
+        self.assertEqual(loaded, circuit)
+
+        ar = AncillaRegister(2, "ancilla")
+        qr = QuantumRegister(2, "q")
+        circuit = QuantumCircuit(qr, ar)
+        circuit.cx(qr[0], ar[0])
+        loaded = load(io.BytesIO(_dump(circuit, 18)))[0]
+        self.assertIsInstance(loaded.qregs[0], QuantumRegister)
+        self.assertIsInstance(loaded.qregs[1], AncillaRegister)
+        self.assertEqual(loaded, circuit)
 
 
 class TestV18RegisterParam(QiskitTestCase):

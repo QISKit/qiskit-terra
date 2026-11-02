@@ -616,12 +616,7 @@ impl GeneratorTerm {
 ///
 /// These are typically created by indexing into or iterating through a :class:`PauliLindbladMap`.
 #[cfg(feature = "python")]
-#[pyclass(
-    name = "GeneratorTerm",
-    frozen,
-    module = "qiskit.quantum_info",
-    skip_from_py_object
-)]
+#[pyclass(name = "GeneratorTerm", frozen, module = "qiskit.quantum_info")]
 #[derive(Clone, Debug)]
 struct PyGeneratorTerm {
     inner: GeneratorTerm,

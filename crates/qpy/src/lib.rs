@@ -32,6 +32,14 @@ mod params;
 mod py_methods;
 mod value;
 
+pub use interface::{native_dump_qpy, native_load_qpy};
+
+/// The oldest QPY format version that the Rust QPY implementation can read.
+pub const QPY_READ_MIN_VERSION: u8 = 13;
+
+/// The oldest QPY format version that the Rust QPY implementation can write.
+pub const QPY_WRITE_MIN_VERSION: u8 = 17;
+
 /// Internal module supplying the QPY capabilities.  The entries in it should largely
 /// be re-exposed directly to public Python space.
 pub fn qpy(module: &Bound<PyModule>) -> PyResult<()> {

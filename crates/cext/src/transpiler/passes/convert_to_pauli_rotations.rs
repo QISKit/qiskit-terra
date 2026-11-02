@@ -13,8 +13,6 @@
 use qiskit_circuit::{circuit_data::CircuitData, dag_circuit::DAGCircuit};
 use qiskit_transpiler::passes::convert_to_pauli_rotations;
 
-use crate::pointers::mut_ptr_as_ref;
-
 /// @ingroup QkTranspilerPassesStandalone
 /// Run the ``ConvertToPauliRotations`` pass in-place on a circuit.
 ///
@@ -34,7 +32,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_convert_to_pauli_rotation
     circuit: *mut CircuitData,
 ) {
     // SAFETY: The user guarantees the pointer is safe to read.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    let circuit = unsafe { &mut *circuit };
     let dag = match DAGCircuit::from_circuit_data(circuit, false, None, None) {
         Ok(dag) => dag,
         Err(_) => panic!("Internal Circuit -> DAG conversion failed"),

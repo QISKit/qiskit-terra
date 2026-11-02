@@ -51,7 +51,7 @@ use qiskit_circuit::instruction::{Instruction, Parameters};
 /// The global qubits are numbered by consecutive integers starting at `0`,
 /// and the states are distinguished into clean (:math:`|0\rangle`)
 /// and dirty (unknown).
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[derive(Clone, Debug)]
 struct QubitTracker {
     /// The total number of global qubits
@@ -277,10 +277,7 @@ impl QubitTracker {
 }
 
 /// Internal class that encapsulates immutable data required by the HighLevelSynthesis transpiler pass.
-#[pyclass(
-    module = "qiskit._accelerate.high_level_synthesis",
-    skip_from_py_object
-)]
+#[pyclass(module = "qiskit._accelerate.high_level_synthesis")]
 #[derive(Clone, Debug)]
 pub struct HighLevelSynthesisData {
     // The high-level-synthesis config that specifies the synthesis methods
@@ -340,6 +337,11 @@ pub struct HighLevelSynthesisData {
     // prioritize methods for Clifford+T basis set.
     #[pyo3(get)]
     optimize_clifford_t: bool,
+
+    // The optimization level to use for the default synthesis methods, in the case
+    // that multiple synthesis methods are available.
+    #[pyo3(get)]
+    optimization_level: usize,
 }
 
 #[pymethods]
@@ -358,6 +360,7 @@ impl HighLevelSynthesisData {
         min_qubits: usize,
         unroll_definitions: bool,
         optimize_clifford_t: bool,
+        optimization_level: usize,
     ) -> Self {
         Self {
             hls_config,
@@ -371,6 +374,7 @@ impl HighLevelSynthesisData {
             min_qubits,
             unroll_definitions,
             optimize_clifford_t,
+            optimization_level,
         }
     }
 
@@ -387,13 +391,14 @@ impl HighLevelSynthesisData {
             self.min_qubits,
             self.unroll_definitions,
             self.optimize_clifford_t,
+            self.optimization_level,
         )
             .into_py_any(py)
     }
 
     fn __str__(&self) -> String {
         format!(
-            "HighLevelSynthesisData(hls_config: {:?}, hls_plugin_manager: {:?}, hls_op_names: {:?}, coupling_map: {:?}, target: {:?},  equivalence_library: {:?}, device_insts: {:?}, use_physical_indices: {:?}, min_qubits: {:?}, unroll_definitions: {:?}, optimize_clifford_t: {:?})",
+            "HighLevelSynthesisData(hls_config: {:?}, hls_plugin_manager: {:?}, hls_op_names: {:?}, coupling_map: {:?}, target: {:?},  equivalence_library: {:?}, device_insts: {:?}, use_physical_indices: {:?}, min_qubits: {:?}, unroll_definitions: {:?}, optimize_clifford_t: {:?}, optimization_level: {:?})",
             self.hls_config,
             self.hls_plugin_manager,
             self.hls_op_names,
@@ -405,6 +410,7 @@ impl HighLevelSynthesisData {
             self.min_qubits,
             self.unroll_definitions,
             self.optimize_clifford_t,
+            self.optimization_level,
         )
     }
 }

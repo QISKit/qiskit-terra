@@ -12,7 +12,7 @@
 
 use std::ptr;
 
-use crate::pointers::const_ptr_as_ref;
+use crate::util;
 use num_bigint::BigUint;
 use num_traits::{ToPrimitive, Zero};
 use qiskit_circuit::{
@@ -23,7 +23,7 @@ use qiskit_circuit::{
     },
     duration::Duration,
 };
-use std::ffi::{CString, c_char};
+use std::ffi::c_char;
 use uuid::Uuid;
 
 /// The different types of expression nodes that can appear in a classical expression tree.
@@ -444,7 +444,7 @@ impl From<CDurationInfo> for Duration {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_kind(expr: *const Expr) -> CExprNodeKind {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     CExprNodeKind::from(expr)
 }
@@ -473,7 +473,7 @@ pub unsafe extern "C" fn qk_expr_kind(expr: *const Expr) -> CExprNodeKind {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_binary_info(expr: *const Expr) -> CBinaryExprInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Binary(binary) = expr else {
         panic!("qk_expr_binary_info called on non-binary expression")
@@ -510,7 +510,7 @@ pub unsafe extern "C" fn qk_expr_binary_info(expr: *const Expr) -> CBinaryExprIn
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_unary_info(expr: *const Expr) -> CUnaryExprInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Unary(unary) = expr else {
         panic!("qk_expr_unary_info called on non-unary expression")
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn qk_expr_unary_info(expr: *const Expr) -> CUnaryExprInfo
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_cast_info(expr: *const Expr) -> CCastExprInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Cast(cast) = expr else {
         panic!("qk_expr_cast_info called on non-cast expression")
@@ -583,7 +583,7 @@ pub unsafe extern "C" fn qk_expr_cast_info(expr: *const Expr) -> CCastExprInfo {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_index_info(expr: *const Expr) -> CIndexExprInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Index(index) = expr else {
         panic!("qk_expr_index_info called on non-index expression")
@@ -617,7 +617,7 @@ pub unsafe extern "C" fn qk_expr_index_info(expr: *const Expr) -> CIndexExprInfo
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_as_value(expr: *const Expr) -> *const Value {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Value(val) = expr else {
         panic!("qk_expr_as_value called on non-value expression")
@@ -646,7 +646,7 @@ pub unsafe extern "C" fn qk_expr_as_value(expr: *const Expr) -> *const Value {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_as_var(expr: *const Expr) -> *const Var {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Var(var) = expr else {
         panic!("qk_expr_as_var called on non-variable expression")
@@ -675,7 +675,7 @@ pub unsafe extern "C" fn qk_expr_as_var(expr: *const Expr) -> *const Var {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_as_stretch(expr: *const Expr) -> *const Stretch {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Stretch(stretch) = expr else {
         panic!("qk_expr_as_stretch called on non-stretch expression")
@@ -702,7 +702,7 @@ pub unsafe extern "C" fn qk_expr_as_stretch(expr: *const Expr) -> *const Stretch
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_type_info(value: *const Value) -> CExprTypeInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     match value {
         Value::Duration(_) => CExprTypeInfo {
@@ -733,7 +733,7 @@ pub unsafe extern "C" fn qk_value_type_info(value: *const Value) -> CExprTypeInf
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_duration_info(value: *const Value) -> CDurationInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     let Value::Duration(duration) = value else {
         panic!("qk_value_duration_info called on non-duration value")
@@ -762,7 +762,7 @@ pub unsafe extern "C" fn qk_value_duration_info(value: *const Value) -> CDuratio
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_float(value: *const Value) -> f64 {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     let Value::Float {
         raw,
@@ -799,7 +799,7 @@ pub unsafe extern "C" fn qk_value_float(value: *const Value) -> f64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_uint(value: *const Value) -> u64 {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     let Value::Uint {
         raw,
@@ -833,7 +833,7 @@ pub unsafe extern "C" fn qk_value_uint(value: *const Value) -> u64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_bool(value: *const Value) -> bool {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     let Value::Uint {
         raw,
@@ -870,16 +870,11 @@ pub unsafe extern "C" fn qk_value_bool(value: *const Value) -> bool {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_var_name(var: *const Var) -> *mut c_char {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let var = unsafe { const_ptr_as_ref(var) };
-
-    let name = match var {
-        Var::Standalone { name, .. } => name.as_str(),
-        Var::Register { .. } | Var::Bit { .. } => return ptr::null_mut(),
-    };
-
-    CString::new(name)
-        .expect("Var should have a valid name")
-        .into_raw()
+    let var = unsafe { &*var };
+    match var {
+        Var::Standalone { name, .. } => util::cstring_from_utf8_lossy(name).into_raw(),
+        Var::Register { .. } | Var::Bit { .. } => ptr::null_mut(),
+    }
 }
 
 /// @ingroup QkClassicalExpressions
@@ -902,7 +897,7 @@ pub unsafe extern "C" fn qk_var_name(var: *const Var) -> *mut c_char {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_var_type_info(var: *const Var) -> CExprTypeInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let var = unsafe { const_ptr_as_ref(var) };
+    let var = unsafe { &*var };
 
     let ty = match var {
         Var::Standalone { ty, .. } => ty,
@@ -940,11 +935,8 @@ pub unsafe extern "C" fn qk_var_type_info(var: *const Var) -> CExprTypeInfo {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_stretch_name(stretch: *const Stretch) -> *mut c_char {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let stretch = unsafe { const_ptr_as_ref(stretch) };
-
-    CString::new(stretch.name.as_str())
-        .expect("Stretch should have a valid name")
-        .into_raw()
+    let stretch = unsafe { &*stretch };
+    util::cstring_from_utf8_lossy(&stretch.name).into_raw()
 }
 
 //////////////////////////////////////////////////////////////////

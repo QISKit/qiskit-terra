@@ -731,9 +731,11 @@ static int test_boundaries(void) {
 
     for (size_t i = 0; i < num_terms + 1; i++) {
         if (boundaries[i] != expected[i]) {
+            qk_obs_free(obs);
             return EqualityError;
         }
     }
+    qk_obs_free(obs);
     return Ok;
 }
 

@@ -131,7 +131,7 @@ impl ValueEndian {
     }
 }
 
-// Standard char representation of register types: 'q' qreg, 'c' for creg
+// Standard char representation of register types: 'q' qreg, 'c' for creg, 'a' for ancilla reg
 #[binrw]
 #[brw(repr = u8)]
 #[repr(u8)]
@@ -139,6 +139,7 @@ impl ValueEndian {
 pub enum RegisterType {
     Qreg = b'q',
     Creg = b'c',
+    Areg = b'a',
 }
 
 impl TryFrom<u8> for RegisterType {
@@ -147,8 +148,9 @@ impl TryFrom<u8> for RegisterType {
         match value {
             b'q' => Ok(Self::Qreg),
             b'c' => Ok(Self::Creg),
+            b'a' => Ok(Self::Areg),
             _ => Err(QpyError::InvalidValueType {
-                expected: "b'q', b'c'".to_string(),
+                expected: "b'q', b'c', b'a'".to_string(),
                 actual: value.to_string(),
             }),
         }
@@ -748,7 +750,7 @@ pub(crate) fn load_value(
             let (modifier_pack, _) = deserialize::<formats::ModifierPack>(bytes)?;
             let values = qpy_data
                 .caller
-                .attach("unpack modifier", |py| -> Result<_, QpyError> {
+                .attach("AnnotatedOperation", |py| -> Result<_, QpyError> {
                     py_unpack_modifier(py, &modifier_pack)
                 })?;
             Ok(GenericValue::Modifier(values))

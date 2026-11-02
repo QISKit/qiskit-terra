@@ -162,7 +162,7 @@ class Stinespring(QuantumChannel):
         if self._data[1] is not None:
             return False
         check = np.dot(np.transpose(np.conj(self._data[0])), self._data[0])
-        return is_identity_matrix(check, rtol=self.rtol, atol=self.atol)
+        return is_identity_matrix(check, rtol=rtol, atol=atol)
 
     def _evolve(self, state, qargs=None):
         return SuperOp(self)._evolve(state, qargs)

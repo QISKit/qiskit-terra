@@ -10,136 +10,92 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::data_tree::DataTree;
+//! The op that supplies a fixed tensor.
+
 use crate::ops::ProgramOp;
 use crate::tensor::{Tensor, TensorType};
-use std::sync::LazyLock;
 
-// An empty data tree is the input for all store ops.
-static EMPTY_DATA_TREE: LazyLock<DataTree<TensorType>> = LazyLock::new(DataTree::new);
-
-/// A program op that owns constant data and outputs it unconditionally.
-///
-/// `Store` takes no inputs; its `call()` always returns the data it was constructed with.
-/// In a data-flow graph, `Store` ops play the role of constants — they are wired to
-/// the input ports of computation ops to supply fixed values.
-pub struct Store {
-    /// Tensors in DFS leaf order matching `output_types`.
-    leaves: Vec<Tensor>,
-    output_types: DataTree<TensorType>,
+/// A program op that owns one tensor and produces it unconditionally.
+#[derive(Clone)]
+pub struct Constant {
+    value: Tensor,
 }
 
-impl Store {
-    /// Construct a new `Store` holding the given data.
-    pub fn new(data: DataTree<Tensor>) -> Self {
-        let output_types = data.map_leaves(Tensor::tensor_type);
-        let leaves: Vec<Tensor> = data.into_leaves().collect();
-        Self {
-            leaves,
-            output_types,
-        }
+impl Constant {
+    /// Construct a new `Constant` producing `value`.
+    pub fn new(value: Tensor) -> Self {
+        Self { value }
+    }
+
+    /// Return the tensor this op produces.
+    pub fn value(&self) -> &Tensor {
+        &self.value
     }
 }
 
-impl ProgramOp for Store {
-    type CallError = std::convert::Infallible;
+impl ProgramOp for Constant {
+    type Error = std::convert::Infallible;
 
     fn name(&self) -> &str {
-        "store"
+        "constant"
     }
 
     fn namespace(&self) -> &str {
-        "qiskit"
+        super::QISKIT
     }
 
-    fn input_types(&self) -> &DataTree<TensorType> {
-        &EMPTY_DATA_TREE
+    fn arity(&self) -> usize {
+        0
     }
 
-    fn output_types(&self) -> &DataTree<TensorType> {
-        &self.output_types
-    }
-
-    fn implements_call(&self) -> bool {
+    fn has_builtin_eval(&self) -> bool {
         true
     }
 
-    fn call_flat(&self, _args: &[Tensor]) -> Result<Vec<Tensor>, Self::CallError> {
-        Ok(self.leaves.to_vec())
+    fn infer_output_types(&self, _inputs: &[TensorType]) -> Result<Vec<TensorType>, Self::Error> {
+        Ok(vec![self.value.tensor_type()])
+    }
+
+    fn eval(&self, _args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
+        Ok(vec![self.value.clone()])
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::{DType, DTypeLike, Dim, Tensor};
+    use crate::tensor::{DType, Dim};
 
     #[test]
-    fn test_store_leaf_call() {
-        let data = DataTree::new_leaf(Tensor::from([1.0_f64, 2.0, 3.0]));
-        let store = Store::new(data);
-        let result = store.call_flat(&[]).unwrap();
-        assert_eq!(result.len(), 1);
-        let Tensor::F64(arr) = &result[0] else {
-            panic!("expected f64 leaf");
-        };
-        assert_eq!(arr.as_slice().unwrap(), &[1.0, 2.0, 3.0]);
+    fn test_constant_eval_returns_its_tensor() {
+        let constant = Constant::new(Tensor::from([1.0_f64, 2.0, 3.0]));
+        assert_eq!(
+            constant.eval(&[]).unwrap(),
+            vec![Tensor::from([1.0_f64, 2.0, 3.0])]
+        );
+        assert_eq!(constant.value(), &Tensor::from([1.0_f64, 2.0, 3.0]));
     }
 
     #[test]
-    fn test_store_output_types_2d() {
+    fn test_constant_full_name_and_arity() {
+        let constant = Constant::new(Tensor::from([1.0_f64]));
+        assert_eq!(constant.arity(), 0);
+        assert!(constant.has_builtin_eval());
+        assert_eq!(constant.full_name(), "qiskit.constant");
+    }
+
+    #[test]
+    fn test_constant_output_type_is_its_tensor_type() {
         use ndarray::arr2;
-        let data = DataTree::new_leaf(Tensor::F64(
+        let constant = Constant::new(Tensor::F64(
             arr2(&[[1.0_f64, 2.0], [3.0, 4.0]]).into_dyn().into_shared(),
         ));
-        let store = Store::new(data);
-        let DataTree::Leaf(tt) = store.output_types() else {
-            panic!("expected leaf output type");
-        };
-        assert_eq!(tt.shape, vec![Dim::Fixed(2), Dim::Fixed(2)]);
-    }
-
-    #[test]
-    fn test_store_branched() {
-        let mut data = DataTree::new();
-        data.insert_leaf("a", Tensor::from([1.0_f64, 2.0]));
-        data.insert_leaf("b", Tensor::from([10_i32, 20, 30]));
-        let store = Store::new(data);
-
-        assert!(store.input_types().is_empty());
-        assert_eq!(store.name(), "store");
-        assert_eq!(store.namespace(), "qiskit");
-        assert_eq!(store.full_name(), "qiskit.store");
-
-        let out_types = store.output_types();
-        let DataTree::Leaf(tt_a) = out_types.get_by_str_key("a").unwrap() else {
-            panic!("expected leaf at a");
-        };
-        assert!(matches!(tt_a.dtype, DTypeLike::Concrete(DType::F64)));
-        assert_eq!(tt_a.shape, vec![Dim::Fixed(2)]);
-
-        let DataTree::Leaf(tt_b) = out_types.get_by_str_key("b").unwrap() else {
-            panic!("expected leaf at b");
-        };
-        assert!(matches!(tt_b.dtype, DTypeLike::Concrete(DType::I32)));
-        assert_eq!(tt_b.shape, vec![Dim::Fixed(3)]);
-    }
-
-    #[test]
-    fn test_store_branched_call_returns_flat_in_dfs_order() {
-        let mut data = DataTree::new();
-        data.insert_leaf("a", Tensor::from([1.0_f64]));
-        data.insert_leaf("b", Tensor::from([2.0_f64]));
-        let store = Store::new(data);
-        let result = store.call_flat(&[]).unwrap();
-        assert_eq!(result.len(), 2);
-        let Tensor::F64(arr_a) = &result[0] else {
-            panic!()
-        };
-        let Tensor::F64(arr_b) = &result[1] else {
-            panic!()
-        };
-        assert_eq!(arr_a.as_slice().unwrap(), &[1.0]);
-        assert_eq!(arr_b.as_slice().unwrap(), &[2.0]);
+        assert_eq!(
+            constant.infer_output_types(&[]).unwrap(),
+            vec![TensorType {
+                dtype: DType::F64,
+                shape: vec![Dim::Fixed(2), Dim::Fixed(2)],
+            }]
+        );
     }
 }

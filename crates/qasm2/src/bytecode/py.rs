@@ -22,7 +22,7 @@ use super::InternalBytecode;
 
 /// The Rust parser produces an iterator of these `Bytecode` instructions, which comprise an opcode
 /// integer for operation distinction, and a free-form tuple containing the operands.
-#[pyclass(module = "qiskit._accelerate.qasm2", frozen, skip_from_py_object)]
+#[pyclass(module = "qiskit._accelerate.qasm2", frozen)]
 #[derive(Clone)]
 pub struct Bytecode {
     #[pyo3(get)]
@@ -32,7 +32,7 @@ pub struct Bytecode {
 }
 
 /// The operations that are represented by the "bytecode" passed to Python.
-#[pyclass(module = "qiskit._accelerate.qasm2", frozen, eq, skip_from_py_object)]
+#[pyclass(module = "qiskit._accelerate.qasm2", frozen, eq)]
 #[derive(Clone, Eq, PartialEq)]
 pub enum OpCode {
     // There is only a `Gate` here, not a `GateInBasis`, because in Python space we don't have the
@@ -110,7 +110,7 @@ impl BytecodeIterator {
     }
 }
 
-#[pyclass(module = "qiskit._accelerate.qasm2", frozen, skip_from_py_object)]
+#[pyclass(module = "qiskit._accelerate.qasm2", frozen)]
 pub struct GateBodyArguments(Vec<Expr>);
 
 impl GateBodyArguments {

@@ -10,9 +10,26 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-mod constant;
-pub mod math;
-mod program_op;
+//! The `ProgramOp` trait and its Qiskit implementations.
 
-pub use constant::Store;
-pub use program_op::{CallError, CallInputError, MissingCallError, ProgramOp, ProgramOpExt};
+mod binary;
+mod bitwise;
+mod broadcast_to;
+mod cast;
+mod constant;
+mod error;
+mod inference;
+mod program_op;
+mod reduction;
+mod shot_loop;
+
+pub use binary::{Add, Divide, Multiply, Power, Remainder, Subtract};
+pub use bitwise::{BitwiseAnd, BitwiseNot, BitwiseOr, BitwiseXor, Parity};
+pub use broadcast_to::BroadcastTo;
+pub use cast::Cast;
+pub use constant::Constant;
+pub use error::MathOpError;
+pub use program_op::{BoxedOpError, BoxedProgramOp, ErasedProgramOp, ProgramOp, QISKIT};
+
+pub use reduction::{Mean, Std, Variance};
+pub use shot_loop::{ShotLoop, ShotLoopError};

@@ -23,10 +23,7 @@ from typing import Any, TypeVar
 from qiskit.circuit import QuantumCircuit
 from qiskit.converters import circuit_to_dag, dag_to_circuit
 from qiskit.dagcircuit import DAGCircuit
-from qiskit.passmanager.passmanager import BasePassManager
-from qiskit.passmanager.base_tasks import Task
-from qiskit.passmanager.flow_controllers import FlowControllerLinear
-from qiskit.passmanager.exceptions import PassManagerError
+from qiskit.passmanager import BasePassManager, Task, FlowControllerLinear, PassManagerError
 from .basepasses import BasePass
 from .exceptions import TranspilerError
 from .layout import TranspileLayout
@@ -59,10 +56,12 @@ class PassManager(BasePassManager):
         input_program: QuantumCircuit,
         **kwargs,
     ) -> DAGCircuit:
-        self.property_set["original_qubit_indices"] = {
-            bit: i for i, bit in enumerate(input_program.qubits)
-        }
-        self.property_set["num_input_qubits"] = input_program.num_qubits
+        if self.property_set["original_qubit_indices"] is None:
+            self.property_set["original_qubit_indices"] = {
+                bit: i for i, bit in enumerate(input_program.qubits)
+            }
+        if self.property_set["num_input_qubits"] is None:
+            self.property_set["num_input_qubits"] = input_program.num_qubits
         return circuit_to_dag(input_program, copy_operations=True)
 
     def _passmanager_backend(

@@ -2554,6 +2554,16 @@ class TestSparseObservable(QiskitTestCase):
         spo = SparsePauliOp.from_sparse_observable(obs)
         np.testing.assert_allclose(obs.to_matrix(), spo.to_matrix())
 
+    @ddt.data(
+        ([("XX", (1, 0), 1.0j), ("1Y", (1, 2), 1.0j)], True),
+        ([("XX", (1, 0), 1.0j), ("ZY", (1, 2), 1.0j)], False),
+    )
+    @ddt.unpack
+    def test_contains_projectors(self, obs, expected):
+        """Test that the method `contains_projectors` works correctly."""
+        obs = SparseObservable.from_sparse_list(obs, num_qubits=10)
+        self.assertEqual(obs.contains_projectors(), expected)
+
 
 def canonicalize_term(pauli, indices, coeff):
     # canonicalize a sparse list term by sorting by indices (which is unique as

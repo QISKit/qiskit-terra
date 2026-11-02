@@ -44,4 +44,5 @@ jobs:
           # package. The exact command isn't important, it should just be cheap and update the lock.
           cargo metadata --format-version=1 --locked >/dev/null
           make cformat
+          make ctidy
           tox -e lint

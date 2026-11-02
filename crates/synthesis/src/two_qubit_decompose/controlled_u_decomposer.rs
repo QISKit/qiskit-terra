@@ -95,11 +95,7 @@ impl<'py> IntoPyObject<'py> for RXXEquivalent {
 }
 
 #[derive(Clone, Debug)]
-#[pyclass(
-    module = "qiskit._accelerate.two_qubit_decompose",
-    subclass,
-    skip_from_py_object
-)]
+#[pyclass(module = "qiskit._accelerate.two_qubit_decompose", subclass)]
 pub struct TwoQubitControlledUDecomposer {
     rxx_equivalent_gate: RXXEquivalent,
     euler_basis: EulerBasis,

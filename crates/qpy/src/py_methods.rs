@@ -583,12 +583,12 @@ fn deserialize_metadata(
 
 // This function finalizes the creation of QuantumCircuit from CircuitData by performing the Python-only
 // required operations: handling layouts and metadata, and creating the Python QuantumCircuit object.
-pub(crate) fn py_circuit_data_to_quantum_circuit(
-    py: Python,
+pub(crate) fn py_circuit_data_to_quantum_circuit<'py>(
+    py: Python<'py>,
     circuit_data: CircuitData,
     packed_circuit: &formats::QPYCircuit,
     metadata_deserializer: Option<&Py<PyAny>>,
-) -> Result<Py<PyAny>, QpyError> {
+) -> Result<Bound<'py, PyAny>, QpyError> {
     let py_circuit_data: PyCircuitData = circuit_data.into();
     let unpacked_layout = unpack_layout(py, &packed_circuit.layout, &py_circuit_data)?;
     let metadata =
@@ -601,7 +601,7 @@ pub(crate) fn py_circuit_data_to_quantum_circuit(
     if let Some(layout) = unpacked_layout {
         circuit.setattr("_layout", layout)?;
     }
-    Ok(circuit.unbind().as_any().clone())
+    Ok(circuit)
 }
 
 // This method handles all the non-standard, non-custom gates which have no rust-space implementation
@@ -617,7 +617,7 @@ pub fn unpack_py_instruction(
     let mut py_params: Vec<Bound<PyAny>> = instruction_values
         .iter()
         .map(|value| -> Result<_, QpyError> {
-            generic_value_to_param(value)?
+            generic_value_to_param(value, qpy_data)?
                 .into_pyobject(py)
                 .map_err(QpyError::from)
         })
@@ -783,7 +783,7 @@ pub fn unpack_custom_instruction(
     let py_params: Vec<Bound<PyAny>> = instruction_values
         .iter()
         .map(|value| -> Result<_, QpyError> {
-            generic_value_to_param(value)?
+            generic_value_to_param(value, qpy_data)?
                 .into_pyobject(py)
                 .map_err(QpyError::from)
         })

@@ -21,6 +21,7 @@ from qiskit.circuit.library import HGate, CU1Gate
 from qiskit._accelerate.synthesis.multi_controlled import (
     c3x as c3x_rs,
     c4x as c4x_rs,
+    synth_mcx_explicit as synth_mcx_explicit_rs,
     synth_mcx_n_dirty_i15 as synth_mcx_n_dirty_i15_rs,
     synth_mcx_n_dirty_m15 as synth_mcx_n_dirty_m15_rs,
     synth_mcx_noaux_hp24 as synth_mcx_noaux_hp24_rs,
@@ -115,26 +116,8 @@ def synth_mcx_n_dirty_m15(num_ctrl_qubits: int) -> QuantumCircuit:
 
 
 def _synth_mcx_special_cases(num_ctrl_qubits: int) -> QuantumCircuit:
-    """Internal function that produces default MCX circuits when num_ctrl_qubits is 0, 1, or 2."""
-    if num_ctrl_qubits == 0:
-        qc = QuantumCircuit(1)
-        qc.x(0)
-        return qc
-
-    elif num_ctrl_qubits == 1:
-        qc = QuantumCircuit(2)
-        qc.cx(0, 1)
-        return qc
-
-    elif num_ctrl_qubits == 2:
-        qc = QuantumCircuit(3)
-        qc.ccx(0, 1, 2)
-        return qc
-
-    else:
-        raise QiskitError(
-            "_synth_mcx_special_cases should be called with only 0, 1, or 2 controls."
-        )
+    """Internal function that produces default MCX circuits when num_ctrl_qubits is <=4."""
+    return QuantumCircuit._from_circuit_data(synth_mcx_explicit_rs(num_ctrl_qubits))
 
 
 def synth_mcx_n_clean_m15(num_ctrl_qubits: int) -> QuantumCircuit:

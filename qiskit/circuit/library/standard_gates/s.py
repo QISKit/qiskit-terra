@@ -21,7 +21,6 @@ from qiskit.circuit.singleton import SingletonGate, SingletonControlledGate, std
 from qiskit.circuit._utils import with_gate_array, with_controlled_gate_array
 from qiskit._accelerate.circuit import StandardGate
 
-
 _S_ARRAY = numpy.array([[1, 0], [0, 1j]])
 _SDG_ARRAY = numpy.array([[1, 0], [0, -1j]])
 
@@ -159,7 +158,7 @@ class SdgGate(SingletonGate):
 
     .. math::
 
-        Sdg = \begin{pmatrix}
+        S^\dagger = \begin{pmatrix}
                 1 & 0 \\
                 0 & -i
             \end{pmatrix}
@@ -206,7 +205,7 @@ class SdgGate(SingletonGate):
         ctrl_state: int | str | None = None,
         annotated: bool | None = None,
     ):
-        """Return a controlled version of the Sdg gate.
+        r"""Return a controlled version of the :math:`S^\dagger` gate.
 
         For a single control qubit, the controlled gate is implemented as :class:`.CSdgGate`,
         regardless of the value of `annotated`.
@@ -239,7 +238,7 @@ class SdgGate(SingletonGate):
         return gate
 
     def inverse(self, annotated: bool = False):
-        """Return inverse of Sdg (SGate).
+        r"""Return inverse of :math:`S^\dagger` (SGate).
 
         Args:
             annotated: when set to ``True``, this is typically used to return an
@@ -346,7 +345,7 @@ class CSGate(SingletonControlledGate):
     def power(self, exponent: float, annotated: bool = False):
         from .p import CPhaseGate
 
-        return CPhaseGate(0.5 * numpy.pi * exponent)
+        return CPhaseGate(0.5 * numpy.pi * exponent, ctrl_state=self.ctrl_state)
 
     def __eq__(self, other):
         return isinstance(other, CSGate) and self.ctrl_state == other.ctrl_state
@@ -436,7 +435,7 @@ class CSdgGate(SingletonControlledGate):
     def power(self, exponent: float, annotated: bool = False):
         from .p import CPhaseGate
 
-        return CPhaseGate(-0.5 * numpy.pi * exponent)
+        return CPhaseGate(-0.5 * numpy.pi * exponent, ctrl_state=self.ctrl_state)
 
     def __eq__(self, other):
         return isinstance(other, CSdgGate) and self.ctrl_state == other.ctrl_state

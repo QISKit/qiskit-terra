@@ -476,12 +476,10 @@ class CouplingMap:
 
     def __str__(self):
         """Return a string representation of the coupling graph."""
-        string = ""
-        if self.get_edges():
-            string += "["
-            string += ", ".join([f"[{src}, {dst}]" for (src, dst) in self.get_edges()])
-            string += "]"
-        return string
+        return str(list(self))
+
+    def __repr__(self):
+        return f"CouplingMap({list(self)!r})"
 
     def __eq__(self, other):
         """Check if the graph in ``other`` has the same node labels and edges as the graph in

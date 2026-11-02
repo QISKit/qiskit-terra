@@ -34,13 +34,15 @@ class CouplingTest(QiskitTestCase):
         self.assertEqual([], coupling.physical_qubits)
         self.assertEqual([], coupling.get_edges())
         self.assertFalse(coupling.is_connected())
-        self.assertEqual("", str(coupling))
+        self.assertEqual([], list(coupling))
 
     def test_coupling_str(self):
         coupling_list = [[0, 1], [0, 2], [1, 2]]
         coupling = CouplingMap(coupling_list)
-        expected = "[[0, 1], [0, 2], [1, 2]]"
-        self.assertEqual(expected, str(coupling))
+        # The purpose is just to make sure the methods aren't broken.  The edge order and exact
+        # format aren't specified.
+        self.assertIsInstance(str(coupling), str)
+        self.assertIsInstance(repr(coupling), str)
 
     def test_coupling_distance(self):
         coupling_list = [(0, 1), (0, 2), (1, 2)]
@@ -53,10 +55,10 @@ class CouplingTest(QiskitTestCase):
 
     def test_add_physical_qubits(self):
         coupling = CouplingMap()
-        self.assertEqual("", str(coupling))
+        self.assertEqual([], list(coupling))
         coupling.add_physical_qubit(0)
         self.assertEqual([0], coupling.physical_qubits)
-        self.assertEqual("", str(coupling))
+        self.assertEqual([], list(coupling))
 
     def test_add_physical_qubits_not_int(self):
         coupling = CouplingMap()
@@ -64,10 +66,9 @@ class CouplingTest(QiskitTestCase):
 
     def test_add_edge(self):
         coupling = CouplingMap()
-        self.assertEqual("", str(coupling))
+        self.assertEqual([], list(coupling))
         coupling.add_edge(0, 1)
-        expected = "[[0, 1]]"
-        self.assertEqual(expected, str(coupling))
+        self.assertEqual([(0, 1)], list(coupling))
 
     def test_neighbors(self):
         """Test neighboring qubits are found correctly."""

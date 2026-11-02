@@ -563,9 +563,8 @@ per bit term than the equivalent version 17 payload.  No other field of `SPARSE_
 changes, and the meaning of `bitterm_data_len` is unaffected because it counts elements rather
 than bytes.
 
-Changes to REGISTER_PACK
-~~~~~~~~~~~~~~~~~~~~~~~~
-
+Changes to REGISTERS
+~~~~~~~~~~~~~~~~~~~~
 The representation of registers defined in :ref:`qpy_registers` and updated in :ref:`qpy_version_4`)
 in QPY has changed in Version 18. The first change is the type of register
 index mapping array from ``int64_t`` to ``uint32_t`` (which is what it was prior to QPY v4). The original
@@ -573,6 +572,11 @@ change to ``int64_t`` was done to enable using -1 as a sentinel value for a bit 
 is not actually needed as we can use the max value of a ``uint32_t`` (4294967295) as the sentinel value.
 In version 18 values of 4294967295 should be treated as -1 was in previous QPY and the bit in that array
 position is not in the circuit.
+
+Version 18 also adds ``'a'`` as a value for the ``type`` field to represent an
+:class:`.AncillaRegister`. Previously, ancilla registers were encoded as ``'q'`` and were
+therefore deserialized as ordinary :class:`.QuantumRegister` objects. The existing ``'q'`` and
+``'c'`` values continue to represent quantum and classical registers, respectively.
 
 The :ref:`qpy_registers` header format has also been updated to
 

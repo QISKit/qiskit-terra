@@ -29,16 +29,20 @@ qiskit-bindgen.workspace = true
 qiskit-cext-vtable = { workspace = true, features = ["python_binding"] }
 
 [dependencies]
+anyhow.workspace = true
 pyo3.workspace = true
 qiskit-accelerate.workspace = true
-qiskit-circuit.workspace = true
+qiskit-circuit = { workspace = true, features = ["passmanager"] }
 qiskit-circuit-library.workspace = true
+qiskit-mir.workspace = true
+qiskit-passmanager.workspace = true
 qiskit-qasm2.workspace = true
 qiskit-qasm3.workspace = true
 qiskit-qpy.workspace = true
 qiskit-cext = { workspace = true, features = ["python_binding"] }
 qiskit-cext-vtable = { workspace = true, features = ["python_binding", "addr"] }
 qiskit-transpiler.workspace = true
+qiskit-util.workspace = true
 qiskit-quantum-info = { workspace = true, features = ["python"] }
 qiskit-synthesis.workspace = true
-mimalloc = { workspace = true, optional = true }
+mimalloc = { workspace = true, optional = true, features = ["local_dynamic_tls"] }

@@ -11,7 +11,7 @@
 // that they have been altered from the originals.
 
 use approx::relative_eq;
-use qiskit_quantum_info::sparse_pauli_op::MatrixCompressedPaulis;
+use qiskit_quantum_info::matrix_compressed_pauli::MatrixCompressedPaulis;
 use std::any::Any;
 use std::fmt::Debug;
 use std::num::NonZero;
@@ -2262,7 +2262,7 @@ impl dyn CustomOperation + 'static {
 /// [`PackedOperation`].
 #[derive(Debug)]
 #[repr(align(8))]
-pub(crate) struct BoxedCustomOperation(Box<dyn CustomOperation>);
+pub struct BoxedCustomOperation(Box<dyn CustomOperation>);
 
 impl Deref for BoxedCustomOperation {
     type Target = dyn CustomOperation;

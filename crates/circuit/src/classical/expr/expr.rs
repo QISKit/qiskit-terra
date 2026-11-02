@@ -399,8 +399,7 @@ impl From<Box<Index>> for Expr {
     subclass,
     frozen,
     name = "Expr",
-    module = "qiskit._accelerate.circuit.classical.expr",
-    skip_from_py_object
+    module = "qiskit._accelerate.circuit.classical.expr"
 )]
 #[derive(PartialEq, Clone, Copy, Debug, Hash)]
 pub struct PyExpr(pub ExprKind); // ExprKind is used for fast extraction from Python

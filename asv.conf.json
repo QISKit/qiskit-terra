@@ -17,7 +17,7 @@
     "dvcs": "git",
     "environment_type": "virtualenv",
     "show_commit_url": "https://github.com/Qiskit/qiskit/commit/",
-    "pythons": ["3.10", "3.11", "3.12", "3.13", "3.14"],
+    "pythons": ["3.11", "3.12", "3.13", "3.14"],
     "benchmark_dir": "test/benchmarks",
     "env_dir": ".asv/env",
     "results_dir": ".asv/results"

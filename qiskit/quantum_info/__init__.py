@@ -96,15 +96,9 @@ Utility Functions
 Random
 ======
 
-.. autofunction:: random_statevector
-.. autofunction:: random_density_matrix
-.. autofunction:: random_unitary
-.. autofunction:: random_hermitian
-.. autofunction:: random_pauli
-.. autofunction:: random_clifford
-.. autofunction:: random_quantum_channel
-.. autofunction:: random_cnotdihedral
-.. autofunction:: random_pauli_list
+See :mod:`qiskit.quantum_info.random` for the full list of random-generation
+functions. All functions in that module are also importable directly from
+:mod:`qiskit.quantum_info`.
 
 Analysis
 =========
