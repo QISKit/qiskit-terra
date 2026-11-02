@@ -1,9 +1,10 @@
 # Contributing: C API
 
-Qiskit is fundamentally a Python library, though it has evolved significantly
-since its early days. As quantum computing becomes mainstream, researchers and
-developers increasingly have more diverse workflows. The C API makes Qiskit more
-accessible in non-Python ecosystems.
+Qiskit was fundamentally developed as a Python library, yet it has continued to
+evolve into a more universal tool. As quantum computing steadily expands its
+userbase, the need for different entry points to use Qiskit will lead to the
+development of new pipelines, which ultimately resulted in the development of
+the C API. 
 
 The C API is useful for...
 
