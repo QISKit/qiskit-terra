@@ -70,11 +70,14 @@ class UCGate(Gate):
     """
 
     def __init__(
-        self, gate_list: list[np.ndarray], up_to_diagonal: bool = False, mux_simp: bool = True
+        self,
+        gate_list: list[np.ndarray] | tuple[np.ndarray, ...],
+        up_to_diagonal: bool = False,
+        mux_simp: bool = True,
     ):
         r"""
         Args:
-            gate_list: List of two qubit unitaries :math:`[U_0, ..., U_{2^{k-1}}]`, where each
+            gate_list: Sequence of two qubit unitaries :math:`[U_0, ..., U_{2^{k-1}}]`, where each
                 single-qubit unitary :math:`U_i` is given as a :math:`2 \times 2` numpy array.
             up_to_diagonal: Determines if the gate is implemented up to a diagonal.
                 or if it is decomposed completely (default: False).
@@ -88,8 +91,9 @@ class UCGate(Gate):
             QiskitError: in case of bad input to the constructor
         """
         # check input format
-        if not isinstance(gate_list, list):
-            raise QiskitError("The single-qubit unitaries are not provided in a list.")
+        if not isinstance(gate_list, (list, tuple)):
+            raise QiskitError("The single-qubit unitaries are not provided in a list or tuple.")
+        gate_list = list(gate_list)
         for gate in gate_list:
             if not gate.shape == (2, 2):
                 raise QiskitError("The dimension of a controlled gate is not equal to (2,2).")
@@ -108,6 +112,8 @@ class UCGate(Gate):
             if not is_unitary_matrix(gate, _EPS):
                 raise QiskitError("A controlled gate is not unitary.")
 
+        self._gate_list = gate_list.copy()
+        self._mux_simp = mux_simp
         new_controls = set()
         if mux_simp:
             new_controls, gate_list = self._simplify(gate_list, num_contr)

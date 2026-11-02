@@ -156,6 +156,11 @@ class MSGate(Gate):
         """
         super().__init__("ms", num_qubits, [theta], label=label)
 
+    @property
+    def theta(self):
+        """Return the interaction angles used to construct the gate."""
+        return self.params[0]
+
     def _define(self):
         thetas = self.params[0]
         q = QuantumRegister(self.num_qubits, name="q")

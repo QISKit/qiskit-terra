@@ -539,8 +539,20 @@ fn pack_init_params_v19(
     qpy_data: &mut QPYWriteData,
 ) -> Result<Vec<formats::NamedParamDataPack>, QpyError> {
     let init_attributes = match class_name {
+        "Initialize" => vec![("params", "_qpy_params"), ("num_qubits", "_qpy_num_qubits")],
+        "StatePreparation" => vec![
+            ("params", "_qpy_params"),
+            ("num_qubits", "_qpy_num_qubits"),
+            ("inverse", "_inverse"),
+        ],
         "QFTGate" => vec![("num_qubits", "num_qubits")],
+        "UCRXGate" | "UCRYGate" | "UCRZGate" => vec![("angle_list", "params")],
         "DiagonalGate" => vec![("diag", "params")],
+        "MCPhaseGate" | "MCU1Gate" => vec![
+            ("lam", "lam"),
+            ("num_ctrl_qubits", "num_ctrl_qubits"),
+            ("ctrl_state", "ctrl_state"),
+        ],
         "MCXGate" | "MCXGrayCode" | "MCXRecursive" => vec![
             ("num_ctrl_qubits", "num_ctrl_qubits"),
             ("ctrl_state", "ctrl_state"),
@@ -552,6 +564,111 @@ fn pack_init_params_v19(
             ("relative_phase", "_relative_phase"),
             ("action_only", "_action_only"),
         ],
+        "UCGate" => vec![
+            ("gate_list", "_gate_list"),
+            ("up_to_diagonal", "up_to_diagonal"),
+            ("mux_simp", "_mux_simp"),
+        ],
+        "RVGate" => vec![
+            ("v_x", "v_x"),
+            ("v_y", "v_y"),
+            ("v_z", "v_z"),
+            ("basis", "basis"),
+        ],
+        "MSGate" => vec![("num_qubits", "num_qubits"), ("theta", "theta")],
+        "UniformSuperpositionGate" => vec![
+            ("num_superpos_states", "num_superpos_states"),
+            ("num_qubits", "num_qubits"),
+        ],
+        "Isometry" => vec![
+            ("isometry", "iso_data"),
+            ("num_ancillas_zero", "num_ancillas_zero"),
+            ("num_ancillas_dirty", "num_ancillas_dirty"),
+            ("epsilon", "_epsilon"),
+        ],
+        "MCGupDiag" => vec![
+            ("gate", "gate"),
+            ("num_controls", "num_controls"),
+            ("num_ancillas_zero", "num_ancillas_zero"),
+            ("num_ancillas_dirty", "num_ancillas_dirty"),
+        ],
+        "AndGate" | "OrGate" => vec![
+            ("num_variable_qubits", "num_variable_qubits"),
+            ("flags", "flags"),
+        ],
+        "BitwiseXorGate" => vec![("num_qubits", "num_qubits"), ("amount", "amount")],
+        "InnerProductGate" => vec![("num_qubits", "register_width")],
+        "BitFlipOracleGate" | "PhaseOracleGate" => {
+            vec![("expression", "expression"), ("var_order", "var_order")]
+        }
+        "HalfAdderGate" | "ModularAdderGate" | "FullAdderGate" => {
+            vec![("num_state_qubits", "num_state_qubits")]
+        }
+        "MultiplierGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("num_result_qubits", "num_result_qubits"),
+        ],
+        "IntegerComparatorGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("value", "value"),
+            ("geq", "geq"),
+        ],
+        "LinearPauliRotationsGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("slope", "slope"),
+            ("offset", "offset"),
+            ("basis", "basis"),
+        ],
+        "PolynomialPauliRotationsGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("coeffs", "coeffs"),
+            ("basis", "basis"),
+        ],
+        "PiecewiseLinearPauliRotationsGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("breakpoints", "breakpoints"),
+            ("slopes", "slopes"),
+            ("offsets", "offsets"),
+            ("basis", "basis"),
+        ],
+        "PiecewisePolynomialPauliRotationsGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("breakpoints", "breakpoints"),
+            ("coeffs", "coeffs"),
+            ("basis", "basis"),
+        ],
+        "PiecewiseChebyshevGate" => vec![
+            ("f_x", "_qpy_f_x"),
+            ("num_state_qubits", "num_state_qubits"),
+            ("degree", "degree"),
+            ("breakpoints", "breakpoints"),
+            ("_polynomials", "polynomials"),
+        ],
+        "LinearAmplitudeFunctionGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("slope", "slope"),
+            ("offset", "offset"),
+            ("domain", "domain"),
+            ("image", "image"),
+            ("rescaling_factor", "rescaling_factor"),
+            ("breakpoints", "breakpoints"),
+        ],
+        "QuadraticFormGate" => vec![
+            ("num_result_qubits", "num_result_qubits"),
+            ("quadratic", "quadratic"),
+            ("linear", "linear"),
+            ("offset", "offset"),
+        ],
+        "ExactReciprocalGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("scaling", "scaling"),
+            ("neg_vals", "neg_vals"),
+        ],
+        "WeightedSumGate" => vec![
+            ("num_state_qubits", "num_state_qubits"),
+            ("weights", "weights"),
+        ],
+        "LinearFunction" => vec![("linear", "linear")],
         _ => Vec::new(),
     };
     let init_values = init_attributes

@@ -21,7 +21,7 @@
 
 use hashbrown::HashMap;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyString, PyTuple};
+use pyo3::types::{PyDict, PyList, PyTuple};
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::circuit_instruction::OperationFromPython;
 use qiskit_circuit::imports;
@@ -357,7 +357,6 @@ fn unpack_instruction_v19(
                         py,
                         data,
                         &parameter_values,
-                        qpy_data.circuit_data.get_qargs(qubits).len(),
                         None,
                         instruction.label.as_ref().map(|label| label.value.as_str()),
                         qpy_data,
@@ -372,7 +371,6 @@ fn unpack_instruction_v19(
                         py,
                         &data.from_python,
                         &parameter_values,
-                        qpy_data.circuit_data.get_qargs(qubits).len(),
                         Some((data.num_ctrl_qubits, data.ctrl_state)),
                         instruction.label.as_ref().map(|label| label.value.as_str()),
                         qpy_data,
@@ -498,7 +496,6 @@ fn unpack_from_python_v19(
     py: Python<'_>,
     data: &formats::FromPythonPack,
     parameter_values: &[GenericValue],
-    num_qubits: usize,
     control: Option<(u32, u32)>,
     label: Option<&str>,
     qpy_data: &mut QPYReadData,
@@ -527,50 +524,13 @@ fn unpack_from_python_v19(
         kwargs.set_item(&init_param.name.value, value)?;
     }
 
-    let object = if !kwargs.is_empty() {
-        gate_class.call((), Some(&kwargs))?
-    } else {
-        // handling of special cases which cannot be handled by the current generic packing logic
-        // The solution is probably adding specialized getters to the python classes themselves
-        // and should be done in a future PR.
-        match data.class_name.value.as_str() {
-            "Initialize" | "StatePreparation" => {
-                if py_params
-                    .first()
-                    .is_some_and(|param| param.bind(py).is_instance_of::<PyString>())
-                {
-                    let label = py_params
-                        .iter()
-                        .map(|param| param.extract(py))
-                        .collect::<PyResult<Vec<String>>>()?
-                        .join("");
-                    gate_class.call1((label,))?
-                } else if let [param] = py_params.as_slice() {
-                    let value: f64 = param.getattr(py, "real")?.extract(py)?;
-                    gate_class.call1((value as u32, num_qubits))?
-                } else {
-                    gate_class.call1((py_params,))?
-                }
-            }
-            "UCRXGate" | "UCRYGate" | "UCRZGate" => gate_class.call1((py_params,))?,
-            "MCPhaseGate" | "MCU1Gate" => {
-                let Some((num_ctrl_qubits, ctrl_state)) = control else {
-                    return Err(QpyError::MissingData(format!(
-                        "{} requires controlled-gate data",
-                        data.class_name.value
-                    )));
-                };
-                kwargs.set_item("num_ctrl_qubits", num_ctrl_qubits)?;
-                kwargs.set_item("ctrl_state", ctrl_state)?;
-                gate_class.call(PyTuple::new(py, py_params)?, Some(&kwargs))?
-            }
-            _ => {
-                if let Some((_, ctrl_state)) = control {
-                    kwargs.set_item("ctrl_state", ctrl_state)?;
-                }
-                gate_class.call(PyTuple::new(py, py_params)?, Some(&kwargs))?
-            }
+    let object = if kwargs.is_empty() {
+        if let Some((_, ctrl_state)) = control {
+            kwargs.set_item("ctrl_state", ctrl_state)?;
         }
+        gate_class.call(PyTuple::new(py, py_params)?, Some(&kwargs))?
+    } else {
+        gate_class.call((), Some(&kwargs))?
     };
     if object.getattr("name")?.extract::<String>()? != data.op_name.value {
         object.setattr("_name", &data.op_name.value)?;

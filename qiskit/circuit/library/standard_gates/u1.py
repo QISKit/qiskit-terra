@@ -392,6 +392,11 @@ class MCU1Gate(ControlledGate):
             base_gate=U1Gate(lam, label=_base_label),
         )
 
+    @property
+    def lam(self):
+        """Return the phase angle used to construct the gate."""
+        return self.params[0]
+
     def _define(self):
 
         if self.num_ctrl_qubits == 0:

@@ -141,6 +141,11 @@ class InnerProductGate(Gate):
         """
         super().__init__("inner_product", 2 * num_qubits, [])
 
+    @property
+    def register_width(self):
+        """Return the width of either logical input register."""
+        return self.num_qubits // 2
+
     def _define(self):
         num_qubits = self.num_qubits // 2
         qr_a = QuantumRegister(num_qubits, name="x")

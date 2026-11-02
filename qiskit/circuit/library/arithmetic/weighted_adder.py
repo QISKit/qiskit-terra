@@ -422,3 +422,8 @@ class WeightedSumGate(Gate):
             self.num_sum_qubits = 1
 
         super().__init__("WeightedSum", self.num_state_qubits + self.num_sum_qubits, weights, label)
+
+    @property
+    def weights(self):
+        """Return the grouped weights used to construct the gate."""
+        return self.params

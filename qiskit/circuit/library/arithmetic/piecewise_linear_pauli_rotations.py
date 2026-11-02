@@ -338,6 +338,11 @@ class PiecewiseLinearPauliRotationsGate(Gate):
         num_compare_bits = 1 if len(self.breakpoints) > 1 else 0
         super().__init__("PwLinPauliRot", num_state_qubits + 1 + num_compare_bits, [], label=label)
 
+    @property
+    def num_state_qubits(self):
+        """Return the number of state qubits."""
+        return self.num_qubits - 1 - int(len(self.breakpoints) > 1)
+
     def _define(self):
         circuit = QuantumCircuit(self.num_qubits)
 

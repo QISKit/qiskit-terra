@@ -77,6 +77,16 @@ class Initialize(Instruction):
 
         super().__init__("initialize", self._stateprep.num_qubits, 0, self._stateprep.params)
 
+    @property
+    def _qpy_params(self):
+        """Return canonical constructor data for QPY serialization."""
+        return self._stateprep._qpy_params
+
+    @property
+    def _qpy_num_qubits(self):
+        """Return the constructor qubit count for integer initialization."""
+        return self.num_qubits if self._stateprep._from_int else None
+
     def _define(self):
         q = QuantumRegister(self.num_qubits, "q")
         initialize_circuit = QuantumCircuit(q, name="init_def")

@@ -72,7 +72,23 @@ class RVGate(Gate):
         from qiskit.synthesis.one_qubit.one_qubit_decompose import OneQubitEulerDecomposer
 
         super().__init__("rv", 1, [v_x, v_y, v_z], label=label)
+        self.basis = basis
         self._decomposer = OneQubitEulerDecomposer(basis=basis)
+
+    @property
+    def v_x(self):
+        """Return the x-component used to construct the gate."""
+        return self.params[0]
+
+    @property
+    def v_y(self):
+        """Return the y-component used to construct the gate."""
+        return self.params[1]
+
+    @property
+    def v_z(self):
+        """Return the z-component used to construct the gate."""
+        return self.params[2]
 
     def _define(self):
         try:

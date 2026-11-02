@@ -97,6 +97,8 @@ class DiagonalGate(Gate):
         Args:
             diag: list of the :math:`2^k` diagonal entries (for a diagonal gate on :math:`k` qubits).
         """
+        if isinstance(diag, tuple):
+            diag = list(diag)
         self._check_input(diag)
         num_qubits = int(math.log2(len(diag)))
 
@@ -144,8 +146,8 @@ class DiagonalGate(Gate):
     @staticmethod
     def _check_input(diag):
         """Check if ``diag`` is in valid format."""
-        if not isinstance(diag, (list, np.ndarray)):
-            raise CircuitError("Diagonal entries must be in a list or numpy array.")
+        if not isinstance(diag, (list, tuple, np.ndarray)):
+            raise CircuitError("Diagonal entries must be in a list, tuple, or numpy array.")
         num_qubits = math.log2(len(diag))
         if num_qubits < 1 or not num_qubits.is_integer():
             raise CircuitError("The number of diagonal entries is not a positive power of 2.")

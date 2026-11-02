@@ -355,6 +355,11 @@ class MCPhaseGate(ControlledGate):
             base_gate=PhaseGate(lam, label=_base_label),
         )
 
+    @property
+    def lam(self):
+        """Return the phase angle used to construct the gate."""
+        return self.params[0]
+
     def _define(self):
         from qiskit.synthesis.multi_controlled import synth_mcp_noaux_default
 

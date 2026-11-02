@@ -113,6 +113,20 @@ class StatePreparation(Gate):
 
         super().__init__(self._name, num_qubits, params, label=self._label)
 
+    @property
+    def _qpy_params(self):
+        """Return canonical constructor data for QPY serialization."""
+        if self._from_label:
+            return "".join(self.params)
+        if self._from_int:
+            return int(self.params[0].real)
+        return self.params
+
+    @property
+    def _qpy_num_qubits(self):
+        """Return the constructor qubit count for integer state preparation."""
+        return self.num_qubits if self._from_int else None
+
     def _define(self):
         if self._from_label:
             self.definition = self._define_from_label()
@@ -300,6 +314,11 @@ class UniformSuperpositionGate(Gate):
                 "num_qubits must be an integer greater than or equal to log2(num_superpos_states)."
             )
         super().__init__("USup", num_qubits, [num_superpos_states])
+
+    @property
+    def num_superpos_states(self):
+        """Return the number of states in the superposition."""
+        return self.params[0]
 
     def _define(self):
 
