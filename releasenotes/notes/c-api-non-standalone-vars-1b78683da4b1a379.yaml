@@ -1,0 +1,13 @@
+---
+features_c:
+  - |
+    Added support for inspecting non-standalone (old-style) variables of classical expressions in
+    the C API. In particular, added the following: 
+    
+    * The new :c:func:`qk_var_kind`, that returns a :c:enum:`QkVarKind`
+    * :c:func:`qk_var_clbit`, which resolves a bit variable to the index of the classical bit
+      it wraps in a given circuit, or ``UINT32_MAX`` if the bit is not part of that circuit.
+    * :c:func:`qk_var_register`, which returns a borrowed view of the classical register that a
+      register variable wraps.
+
+    Refer to the documentation of the functions for more details.

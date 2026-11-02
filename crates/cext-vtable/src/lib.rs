@@ -577,6 +577,9 @@ mod classical_expr {
             export_fn!(qk_var_name),
             export_fn!(qk_var_type_info),
             export_fn!(qk_stretch_name),
+            export_fn!(qk_var_kind),
+            export_fn!(qk_var_clbit),
+            export_fn!(qk_var_register),
         ]
     });
 }

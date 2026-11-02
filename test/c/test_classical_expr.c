@@ -29,7 +29,7 @@ QkExprNode *inner_test_unary_expr_ops(QkUnaryOpType);
 QkExprNode *inner_test_binary_expr_ops(QkBinaryOpType);
 QkExprNode *inner_test_expr_kinds_and_types(QkExprNodeKind, QkExprTypeInfo);
 QkExprNode *inner_test_value(QkExprType, bool, QkDurationInfo, double, uint64_t);
-void inned_test_old_style_vars(QkExprNode **);
+void inner_test_old_style_vars(const QkCircuit *, uint32_t, QkExprNode **);
 void *inner_expr_free(QkExprNode *);
 
 /*
@@ -330,8 +330,30 @@ static int test_expr_var(void) {
 
     expr = NULL;
 
+    // A standalone var reports its kind as such.
+    expr =
+        inner_test_expr_kinds_and_types(QkExprNodeKind_Var, (QkExprTypeInfo){QkExprType_Uint, 8});
+    QkVarKind kind = qk_var_kind(qk_expr_as_var(expr));
+    if (kind != QkVarKind_Standalone) {
+        fprintf(stderr, "Expected QkVarKind_Standalone, got %d\n", kind);
+        result = EqualityError;
+        goto cleanup;
+    }
+    inner_expr_free(expr);
+    expr = NULL;
+
+    // Build a circuit with two loose clbits followed by a 2-bit register "c1", so the old-style
+    // vars below resolve against it: the register maps onto circuit clbits [2, 3].
+    QkCircuit *circuit = qk_circuit_new(1, 2);
+    QkClassicalRegister *creg = qk_classical_register_new(2, "c1");
+    qk_circuit_add_classical_register(circuit, creg);
+    qk_classical_register_free(creg);
+
+    // An unrelated circuit, to check the "bit is not in this circuit" path.
+    QkCircuit *other_circuit = qk_circuit_new(1, 2);
+
     QkExprNode *var_nodes[2];
-    inned_test_old_style_vars(var_nodes);
+    inner_test_old_style_vars(circuit, 1, var_nodes);
 
     // The first var is a Bit variable
     const QkVar *var = qk_expr_as_var(var_nodes[0]);
@@ -351,7 +373,29 @@ static int test_expr_var(void) {
         goto cleanup_vars;
     }
 
-    // The second var is a Register variable
+    kind = qk_var_kind(var);
+    if (kind != QkVarKind_Bit) {
+        fprintf(stderr, "Expected QkVarKind_Bit, got %d\n", kind);
+        result = EqualityError;
+        goto cleanup_vars;
+    }
+
+    uint32_t clbit = qk_var_clbit(var, circuit);
+    if (clbit != 1) {
+        fprintf(stderr, "Expected bit var to wrap clbit 1, got %u\n", clbit);
+        result = EqualityError;
+        goto cleanup_vars;
+    }
+
+    // The same bit is not part of an unrelated circuit.
+    clbit = qk_var_clbit(var, other_circuit);
+    if (clbit != UINT32_MAX) {
+        fprintf(stderr, "Expected UINT32_MAX for a foreign circuit, got %u\n", clbit);
+        result = EqualityError;
+        goto cleanup_vars;
+    }
+
+    // The second var is a Register variable.
     var = qk_expr_as_var(var_nodes[1]);
     var_type_info = qk_var_type_info(var);
 
@@ -369,9 +413,43 @@ static int test_expr_var(void) {
         goto cleanup_vars;
     }
 
+    kind = qk_var_kind(var);
+    if (kind != QkVarKind_Register) {
+        fprintf(stderr, "Expected QkVarKind_Register, got %d\n", kind);
+        result = EqualityError;
+        goto cleanup_vars;
+    }
+
+    // The register view is borrowed from the expression, so it must not be freed.
+    const QkClassicalRegister *var_reg = qk_var_register(var);
+    if (var_reg == NULL) {
+        fprintf(stderr, "qk_var_register returned NULL for a register var\n");
+        result = NullptrError;
+        goto cleanup_vars;
+    }
+
+    char *reg_name = qk_classical_register_name(var_reg);
+    if (strcmp(reg_name, "c1") != 0) {
+        fprintf(stderr, "Expected register name 'c1', got '%s'\n", reg_name);
+        qk_str_free(reg_name);
+        result = EqualityError;
+        goto cleanup_vars;
+    }
+    qk_str_free(reg_name);
+
+    // Querying a variable of the wrong kind yields a sentinel rather than aborting. `var` is the
+    // register variable, so it has no classical bit to report.
+    if (qk_var_clbit(var, circuit) != UINT32_MAX) {
+        fprintf(stderr, "Expected UINT32_MAX from qk_var_clbit on a register var\n");
+        result = EqualityError;
+        goto cleanup_vars;
+    }
+
 cleanup_vars:
     inner_expr_free(var_nodes[0]);
     inner_expr_free(var_nodes[1]);
+    qk_circuit_free(circuit);
+    qk_circuit_free(other_circuit);
 
 cleanup:
     if (expr)

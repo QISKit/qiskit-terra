@@ -16,7 +16,9 @@ use crate::util;
 use num_bigint::BigUint;
 use num_traits::{ToPrimitive, Zero};
 use qiskit_circuit::{
-    bit::{ClassicalRegister, ShareableClbit},
+    Clbit,
+    bit::ClassicalRegister,
+    circuit_data::CircuitData,
     classical::{
         expr::{Binary, BinaryOp, Cast, Expr, Index, Stretch, Unary, UnaryOp, Value, Var},
         types::Type,
@@ -55,6 +57,32 @@ impl From<&Expr> for CExprNodeKind {
             Expr::Stretch(_) => Self::Stretch,
             Expr::Value(_) => Self::Value,
             Expr::Var(_) => Self::Var,
+        }
+    }
+}
+
+/// The different kinds of variable that can appear in a classical expression.
+///
+/// A variable is either a new-style ``Standalone`` variable, which owns its own storage and has
+/// an associated name, or one of the two legacy variants, which wrap a classical bit or a
+/// classical register owned by some containing circuit.
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum CVarKind {
+    /// A new-style variable that owns its own backing storage and has a name.
+    Standalone = 0,
+    /// A legacy variable that wraps a single classical bit of a circuit.
+    Bit = 1,
+    /// A legacy variable that wraps a classical register of a circuit.
+    Register = 2,
+}
+
+impl From<&Var> for CVarKind {
+    fn from(value: &Var) -> Self {
+        match value {
+            Var::Standalone { .. } => Self::Standalone,
+            Var::Bit { .. } => Self::Bit,
+            Var::Register { .. } => Self::Register,
         }
     }
 }
@@ -847,12 +875,54 @@ pub unsafe extern "C" fn qk_value_bool(value: *const Value) -> bool {
 }
 
 /// @ingroup QkClassicalExpressions
+/// Return the kind of a variable.
+///
+/// @param var A pointer to the variable to inspect.
+///
+/// @return The kind enum describing which concrete variable variant ``var`` contains.
+///
+/// # Example
+/// ```c
+/// switch (qk_var_kind(var)) {
+/// case QkVarKind_Standalone: {
+///     char *name = qk_var_name(var);
+///     // Use the name...
+///     qk_str_free(name);
+///     break;
+/// }
+/// case QkVarKind_Bit: {
+///     uint32_t clbit = qk_var_clbit(var, circuit);
+///     // Use the clbit index...
+///     break;
+/// }
+/// case QkVarKind_Register: {
+///     const QkClassicalRegister *creg = qk_var_register(var);
+///     // Use the register...
+///     break;
+/// }
+/// }
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``var`` is not a valid, non-null pointer to a ``QkVar``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_var_kind(var: *const Var) -> CVarKind {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let var = unsafe { const_ptr_as_ref(var) };
+
+    CVarKind::from(var)
+}
+
+/// @ingroup QkClassicalExpressions
 /// Return the name of a variable as a newly allocated C string.
 ///
 /// @param var A pointer to the variable to inspect.
 ///
 /// @return A null-terminated string containing the variable name, or ``NULL``
-/// if ``var`` refers to a non-standalone variable (i.e. based on a classical bit or a classical register).
+/// if ``var`` refers to a non-standalone variable (i.e. based on a classical bit or a classical
+/// register). Use ``qk_var_kind`` to distinguish the cases, and ``qk_var_clbit`` or
+/// ``qk_var_register`` to inspect the source of an old-style variable.
 /// The caller owns the returned string and must free it with `qk_str_free`.
 ///
 /// # Example
@@ -882,9 +952,8 @@ pub unsafe extern "C" fn qk_var_name(var: *const Var) -> *mut c_char {
 ///
 /// @param var A pointer to the variable to inspect.
 ///
-/// @return A `QkExprTypeInfo` struct containing the variable type information.
-///
-/// Panics if ``var`` is a bit variable, which is not yet supported by this API.
+/// @return A `QkExprTypeInfo` struct containing the variable type information. Variables of kind
+/// ``QkVarKind_Bit`` always report ``QkExprType_Bool``.
 ///
 /// # Example
 /// ```c
@@ -912,6 +981,83 @@ pub unsafe extern "C" fn qk_var_type_info(var: *const Var) -> CExprTypeInfo {
             _ => 0,
         },
     }
+}
+
+/// @ingroup QkClassicalExpressions
+/// Return the index of the classical bit that an old-style bit variable wraps.
+///
+/// A ``QkVarKind_Bit`` variable is identified solely by the classical bit it wraps, and is not
+/// registered with any circuit, so this function maps the variable onto the clbits of
+/// ``circuit``: it reports where that bit sits in ``circuit``, and ``UINT32_MAX`` if the bit is
+/// not one of them.
+///
+/// @param var A pointer to the variable to inspect.
+/// @param circuit A pointer to the circuit to resolve the classical bit against.
+///
+/// @return The index of the classical bit in ``circuit``, or ``UINT32_MAX`` if ``var`` is not of
+/// kind ``QkVarKind_Bit``, or if the bit is not part of ``circuit``. Call ``qk_var_kind`` to
+/// distinguish the two cases.
+///
+/// # Example
+/// ```c
+/// if (qk_var_kind(var) == QkVarKind_Bit) {
+///     uint32_t clbit = qk_var_clbit(var, circuit);
+///     if (clbit != UINT32_MAX) {
+///         printf("Variable wraps clbit %u\n", clbit);
+///     }
+/// }
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``var`` is not a valid, non-null pointer to a ``QkVar``, or if
+/// ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_var_clbit(var: *const Var, circuit: *const CircuitData) -> u32 {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let var = unsafe { const_ptr_as_ref(var) };
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let circuit = unsafe { const_ptr_as_ref(circuit) };
+
+    let Var::Bit { bit } = var else {
+        return u32::MAX;
+    };
+
+    circuit.clbit_index(bit).unwrap_or(u32::MAX)
+}
+
+/// @ingroup QkClassicalExpressions
+/// Return a view of the classical register that an old-style register variable wraps.
+///
+/// @param var A pointer to the variable to inspect. Must be of kind ``QkVarKind_Register``.
+///
+/// @return A borrowed pointer to the ``QkClassicalRegister`` stored inside ``var``.
+///
+/// Panics if ``var`` is not a register variable. Query ``qk_var_kind`` first.
+///
+/// # Example
+/// ```c
+/// if (qk_var_kind(var) == QkVarKind_Register) {
+///     const QkClassicalRegister *creg = qk_var_register(var);
+///     char *name = qk_classical_register_name(creg);
+///     printf("Variable wraps register %s\n", name);
+///     qk_str_free(name);
+/// }
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``var`` is not a valid, non-null pointer to a ``QkVar``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_var_register(var: *const Var) -> *const ClassicalRegister {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let var = unsafe { const_ptr_as_ref(var) };
+
+    let Var::Register { register, .. } = var else {
+        panic!("qk_var_register called on a non-register variable")
+    };
+
+    ptr::from_ref(register)
 }
 
 /// @ingroup QkClassicalExpressions
@@ -1139,13 +1285,30 @@ pub unsafe extern "C" fn inner_test_value(
     Box::into_raw(Box::new(Expr::Value(value)))
 }
 
+/// Build the two legacy variable expressions used in the C tests.
+///
+/// The bit variable wraps the clbit of ``circuit`` at index ``clbit``, and the register variable
+/// wraps a register equal to one named ``c1`` with two bits, so both can be resolved back against
+/// ``circuit`` by the public API.
+///
 /// cbindgen:qk-vtable-rules=[no-export]
 /// cbindgen:no-export
 #[allow(clippy::missing_safety_doc)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn inned_test_old_style_vars(out_vars: *mut *mut Expr) {
+pub unsafe extern "C" fn inner_test_old_style_vars(
+    circuit: *const CircuitData,
+    clbit: u32,
+    out_vars: *mut *mut Expr,
+) {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let circuit = unsafe { const_ptr_as_ref(circuit) };
+
     let bit_var = Var::Bit {
-        bit: ShareableClbit::new_anonymous(),
+        bit: circuit
+            .clbits()
+            .get(Clbit(clbit))
+            .expect("clbit should be in the circuit")
+            .clone(),
     };
     let reg_var = Var::Register {
         register: ClassicalRegister::new_owning("c1", 2),
