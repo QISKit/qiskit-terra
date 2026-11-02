@@ -160,6 +160,9 @@ mod circuit {
             export_fn!(qk_circuit_delay_dt),
             export_fn!(qk_circuit_delay_unit),
             export_fn!(qk_circuit_custom_operation),
+            export_fn!(qk_circuit_box),
+            export_fn!(qk_circuit_box_duration_info),
+            export_fn!(qk_circuit_box_duration_expr),
         ]
     });
 }

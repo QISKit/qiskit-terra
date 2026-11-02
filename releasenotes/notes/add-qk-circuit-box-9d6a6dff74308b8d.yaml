@@ -1,0 +1,6 @@
+---
+features_c:
+  - |
+    Added :c:func:`qk_circuit_box`, :c:func:`qk_circuit_box_duration_info` and
+    :c:func:`qk_circuit_box_duration_expr` for appending a ``box`` control-flow instruction to a
+    ``QkCircuit``.
