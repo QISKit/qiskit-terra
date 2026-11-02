@@ -290,17 +290,20 @@ pub fn instruction_values_to_params(
     // treat `values` as a vector of blocks
     // Null values represent missing else blocks in if-else statements and should be filtered out
 
-    // Filter out Null values and check if remaining values are all circuits
-    let non_null_values: Vec<&GenericValue> = values
+    // Check that all non-null values are all circuits and there is at least one
+    let mut non_empty: bool = false;
+    let all_circuit_values: bool = values
         .iter()
         .filter(|val| !matches!(val, GenericValue::Null))
-        .collect();
-
-    if !non_null_values.is_empty()
-        && non_null_values
-            .iter()
-            .all(|val| matches!(val, GenericValue::CircuitData(_)))
-    {
+        .all(|val| {
+            if matches!(val, GenericValue::CircuitData(_)) {
+                non_empty = true;
+                true
+            } else {
+                false
+            }
+        });
+    if all_circuit_values && non_empty {
         // blocks
         let out: Vec<Block> = values
             .into_iter()
