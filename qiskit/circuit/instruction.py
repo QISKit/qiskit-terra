@@ -281,7 +281,7 @@ class Instruction(Operation):
         """Return whether the :class:`Instruction` contains :ref:`compile-time parameters
         <circuit-compile-time-parameters>`."""
         return any(
-            isinstance(param, ParameterExpression) and param.parameters for param in self._params
+            isinstance(param, ParameterExpression) and param.parameters for param in self.params
         )
 
     @property
