@@ -1246,7 +1246,7 @@ def generate_qpy(qpy_files, qpy_version=None):
                 dump(circuits, fd, version=qpy_version)
 
 
-def load_qpy(qpy_files, generating_version):
+def load_qpy(qpy_files, generating_version, forward_tests=False):
     """Load qpy circuits from files and compare to reference circuits."""
     pulse_files = {
         "schedule_blocks.qpy": (0, 21, 0),
@@ -1296,7 +1296,11 @@ def load_qpy(qpy_files, generating_version):
                 equivalent=equivalent,
                 context=context,
             )
-            if path == "custom_definition_layout.qpy":
+            # Qiskit 2.6 and older discard layouts on custom operation definitions while
+            # loading.  Forward-compatibility tests therefore only verify that those readers
+            # can load the circuit; layout preservation is checked by the development reader in
+            # the backward-compatibility tests.
+            if path == "custom_definition_layout.qpy" and not forward_tests:
                 definition_layout = qpy_circuits[i].data[0].operation.definition.layout
                 input_qubit = definition_layout.initial_layout.get_physical_bits()[0]
                 if definition_layout.input_qubit_mapping != {input_qubit: 0}:
@@ -1381,7 +1385,7 @@ def _main():
             qpy_version=args.qpy_version,
             forward_tests=forward_tests,
         )
-        load_qpy(qpy_files, generating_version)
+        load_qpy(qpy_files, generating_version, forward_tests=forward_tests)
 
 
 if __name__ == "__main__":
