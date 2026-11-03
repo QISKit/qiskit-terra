@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a bug where the barrier labels were incorrectly positioned when
+    using ``wire_order`` and ``output=mpl`` parameter in the
+    :meth:`.QuantumCircuit.draw` method.
+    Fixed `#13609 <https://github.com/Qiskit/qiskit/issues/13609>`__.

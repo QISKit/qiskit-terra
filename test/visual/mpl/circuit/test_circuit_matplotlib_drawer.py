@@ -2015,6 +2015,71 @@ class TestCircuitMatplotlibDrawer(QiskitTestCase):
         )
         self.assertGreaterEqual(ratio, self.threshold)
 
+    def test_barrier_label_rendered_on_top(self):
+        """
+        Test to verify barrier label is always rendered on top
+        """
+        fname = "barrier_label_on_top.png"
+        circuit = QuantumCircuit(3)
+        circuit.barrier(label="init")
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cs(0, 2)
+        circuit.barrier(label="final")
+        self.circuit_drawer(circuit, output="mpl", filename=fname)
+        ratio = VisualTestUtilities._save_diff(
+            self._image_path(fname),
+            self._reference_path(fname),
+            fname,
+            FAILURE_DIFF_DIR,
+            FAILURE_PREFIX,
+        )
+        self.assertGreaterEqual(ratio, self.threshold)
+
+    def test_barrier_label_rendered_on_top_with_reserved_bits(self):
+        """
+        Test to verify barrier label is always rendered on top with
+        `reversed_bits` set to True
+        """
+        fname = "barrier_label_with_reverse_bits.png"
+        circuit = QuantumCircuit(3)
+        circuit.barrier(label="init")
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cs(0, 2)
+        circuit.barrier(label="final")
+        self.circuit_drawer(circuit, output="mpl", filename=fname, reverse_bits=True)
+        ratio = VisualTestUtilities._save_diff(
+            self._image_path(fname),
+            self._reference_path(fname),
+            fname,
+            FAILURE_DIFF_DIR,
+            FAILURE_PREFIX,
+        )
+        self.assertGreaterEqual(ratio, self.threshold)
+
+    def test_barrier_label_rendered_on_top_with_wire_order(self):
+        """
+        Test to verify barrier label is always rendered on top with
+        `wire_order` set
+        """
+        fname = "barrier_label_with_wire_order.png"
+        circuit = QuantumCircuit(3)
+        circuit.barrier(label="init")
+        circuit.h(0)
+        circuit.cx(0, 1)
+        circuit.cs(0, 2)
+        circuit.barrier(label="final")
+        self.circuit_drawer(circuit, output="mpl", filename=fname, wire_order=[1, 2, 0])
+        ratio = VisualTestUtilities._save_diff(
+            self._image_path(fname),
+            self._reference_path(fname),
+            fname,
+            FAILURE_DIFF_DIR,
+            FAILURE_PREFIX,
+        )
+        self.assertGreaterEqual(ratio, self.threshold)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
