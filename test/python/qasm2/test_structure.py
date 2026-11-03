@@ -34,37 +34,36 @@ from qiskit.circuit import (
     library as lib,
 )
 from qiskit.quantum_info import Operator
-from test import QiskitTestCase
 
-from . import gate_builder
+from . import Qasm2TestCase, gate_builder
 
 
 @ddt.ddt
-class TestWhitespace(QiskitTestCase):
+class TestWhitespace(Qasm2TestCase):
     def test_allows_empty(self):
-        self.assertEqual(qiskit.qasm2.loads(""), QuantumCircuit())
+        self.assertEqual(self.loads(""), QuantumCircuit())
 
     @ddt.data("", "\n", "\r\n", "\n  ", "\n\t", "\r\n\t")
     def test_empty_except_comment(self, terminator):
         program = "// final comment" + terminator
-        self.assertEqual(qiskit.qasm2.loads(program), QuantumCircuit())
+        self.assertEqual(self.loads(program), QuantumCircuit())
 
     @ddt.data("", "\n", "\r\n", "\n  ")
     def test_final_comment(self, terminator):
         # This is similar to the empty-circuit test, except that we also have an instruction.
         program = "qreg q[2]; // final comment" + terminator
-        self.assertEqual(qiskit.qasm2.loads(program), QuantumCircuit(QuantumRegister(2, "q")))
+        self.assertEqual(self.loads(program), QuantumCircuit(QuantumRegister(2, "q")))
 
 
-class TestVersion(QiskitTestCase):
+class TestVersion(Qasm2TestCase):
     def test_complete_version(self):
         program = "OPENQASM 2.0;"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(parsed, QuantumCircuit())
 
     def test_incomplete_version(self):
         program = "OPENQASM 2;"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(parsed, QuantumCircuit())
 
     def test_after_comment(self):
@@ -73,29 +72,29 @@ class TestVersion(QiskitTestCase):
             OPENQASM 2.0;
             qreg q[2];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         self.assertEqual(parsed, qc)
 
 
-class TestRegisters(QiskitTestCase):
+class TestRegisters(Qasm2TestCase):
     def test_qreg(self):
         program = "qreg q1[2]; qreg q2[1]; qreg q3[4];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         regs = [QuantumRegister(2, "q1"), QuantumRegister(1, "q2"), QuantumRegister(4, "q3")]
         self.assertEqual(list(parsed.qregs), regs)
         self.assertEqual(list(parsed.cregs), [])
 
     def test_creg(self):
         program = "creg c1[2]; creg c2[1]; creg c3[4];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         regs = [ClassicalRegister(2, "c1"), ClassicalRegister(1, "c2"), ClassicalRegister(4, "c3")]
         self.assertEqual(list(parsed.cregs), regs)
         self.assertEqual(list(parsed.qregs), [])
 
     def test_interleaved_registers(self):
         program = "qreg q1[3]; creg c1[2]; qreg q2[1]; creg c2[1];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qregs = [QuantumRegister(3, "q1"), QuantumRegister(1, "q2")]
         cregs = [ClassicalRegister(2, "c1"), ClassicalRegister(1, "c2")]
         self.assertEqual(list(parsed.qregs), qregs)
@@ -103,7 +102,7 @@ class TestRegisters(QiskitTestCase):
 
     def test_registers_after_gate(self):
         program = "qreg before[2]; CX before[0], before[1]; qreg after[2]; CX after[0], after[1];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         before = QuantumRegister(2, "before")
         after = QuantumRegister(2, "after")
         qc = QuantumCircuit(before, after)
@@ -113,20 +112,20 @@ class TestRegisters(QiskitTestCase):
 
     def test_empty_registers(self):
         program = "qreg q[0]; creg c[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(0, "q"), ClassicalRegister(0, "c"))
         self.assertEqual(parsed, qc)
 
 
 @ddt.ddt
-class TestGateApplication(QiskitTestCase):
+class TestGateApplication(Qasm2TestCase):
     def test_builtin_single(self):
         program = """
             qreg q[2];
             U(0, 0, 0) q[0];
             CX q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         qc.u(0, 0, 0, 0)
         qc.cx(0, 1)
@@ -134,7 +133,7 @@ class TestGateApplication(QiskitTestCase):
 
     def test_builtin_1q_broadcast(self):
         program = "qreg q[2]; U(0, 0, 0) q;"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         qc.u(0, 0, 0, 0)
         qc.u(0, 0, 0, 1)
@@ -150,7 +149,7 @@ class TestGateApplication(QiskitTestCase):
             barrier;
             CX q1, q2;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         q1 = QuantumRegister(2, "q1")
         q2 = QuantumRegister(2, "q2")
         qc = QuantumCircuit(q1, q2)
@@ -183,7 +182,7 @@ class TestGateApplication(QiskitTestCase):
 
             ccx q1, q2, q3;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         q1 = QuantumRegister(2, "q1")
         q2 = QuantumRegister(2, "q2")
         q3 = QuantumRegister(2, "q3")
@@ -236,7 +235,7 @@ class TestGateApplication(QiskitTestCase):
 
             {cond}ccx empty1, empty2, empty3;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(
             QuantumRegister(1, "q1"),
             QuantumRegister(1, "q2"),
@@ -254,7 +253,7 @@ class TestGateApplication(QiskitTestCase):
             if (cond == 0) U(0, 0, 0) q[0];
             if (cond == 1) CX q[1], q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         cond = ClassicalRegister(1, "cond")
         qc = QuantumCircuit(QuantumRegister(2, "q"), cond)
         with qc.if_test((cond, 0)):
@@ -271,7 +270,7 @@ class TestGateApplication(QiskitTestCase):
             if (cond == 0) U(0, 0, 0) q1;
             if (cond == 1) CX q1[0], q2;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         cond = ClassicalRegister(1, "cond")
         q1 = QuantumRegister(2, "q1")
         q2 = QuantumRegister(2, "q2")
@@ -292,7 +291,7 @@ class TestGateApplication(QiskitTestCase):
             qreg q[1];
             U(4 + 3 * 2 ^ 2, cos(pi) * (1 - ln(1)), 2 ^ 3 ^ 2) q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(1, "q"))
         qc.u(16.0, -1.0, 512.0, 0)
         self.assertEqual(parsed, qc)
@@ -306,7 +305,7 @@ class TestGateApplication(QiskitTestCase):
             my_gate q[0];
             my_gate q;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         my_gate_def = QuantumCircuit([Qubit()])
         my_gate_def.u(0, 0, 0, 0)
         my_gate = gate_builder("my_gate", [], my_gate_def)
@@ -322,7 +321,7 @@ class TestGateApplication(QiskitTestCase):
             CX q[0], q[1];
             CX() q[1], q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         qc.cx(0, 1)
         qc.cx(1, 0)
@@ -342,7 +341,7 @@ class TestGateApplication(QiskitTestCase):
             if (cond=={bigint}) measure qr[0] -> cr[0];
             if (cond=={bigint}) measure qr -> cr;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qr, cr = QuantumRegister(2, "qr"), ClassicalRegister(2, "cr")
         cond = ClassicalRegister(500, "cond")
         qc = QuantumCircuit(qr, cr, cond)
@@ -367,7 +366,7 @@ class TestGateApplication(QiskitTestCase):
         self.assertEqual(parsed, qc)
 
 
-class TestGateDefinition(QiskitTestCase):
+class TestGateDefinition(Qasm2TestCase):
     def test_simple_definition(self):
         program = """
             gate not_bell a, b {
@@ -377,7 +376,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             not_bell q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         not_bell_def = QuantumCircuit([Qubit(), Qubit()])
         not_bell_def.u(0, 0, 0, 0)
         not_bell_def.cx(0, 1)
@@ -396,7 +395,7 @@ class TestGateDefinition(QiskitTestCase):
             creg cond[1];
             if (cond == 0) not_bell q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         not_bell_def = QuantumCircuit([Qubit(), Qubit()])
         not_bell_def.u(0, 0, 0, 0)
         not_bell_def.cx(0, 1)
@@ -416,7 +415,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             bell q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         bell_def = QuantumCircuit([Qubit(), Qubit()])
         bell_def.u(math.pi / 2, 0, math.pi, 0)
         bell_def.cx(0, 1)
@@ -435,7 +434,7 @@ class TestGateDefinition(QiskitTestCase):
             my_gate(0.25, 0.5) q[0];
             my_gate(0.5, 0.25) q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         a, b = Parameter("a"), Parameter("b")
         my_gate_def = QuantumCircuit([Qubit()])
         my_gate_def.u(a, b, a + 2 * b, 0)
@@ -463,7 +462,7 @@ class TestGateDefinition(QiskitTestCase):
             my_gate q[0];
             my_gate() q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         my_gate_def = QuantumCircuit([Qubit()])
         my_gate_def.u(0, 0, 0, 0)
         my_gate = gate_builder("my_gate", [], my_gate_def)
@@ -482,7 +481,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             bell q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         bell_def = QuantumCircuit([Qubit(), Qubit()])
         bell_def.h(0)
         bell_def.cx(0, 1)
@@ -504,7 +503,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             second_bell q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         bell_def = QuantumCircuit([Qubit(), Qubit()])
         bell_def.h(0)
         bell_def.cx(0, 1)
@@ -530,7 +529,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             bell q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         bell_def = QuantumCircuit([Qubit(), Qubit()])
         bell_def.h(0)
         bell_def.cx(0, 1)
@@ -551,7 +550,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[1];
             shadow(0.5, 2.0) q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         rx, rz = Parameter("rx"), Parameter("rz")
         shadow_def = QuantumCircuit([Qubit()])
         shadow_def.rz(rz, 0)
@@ -572,7 +571,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[1];
             my_gate(0.5) q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         # No top-level circuit equality test here, because all the internals of gate application are
         # an implementation detail, and we don't want to tie the tests and implementation together
         # too closely.
@@ -598,7 +597,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             my_gate q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         my_gate_def = QuantumCircuit([Qubit(), Qubit()])
         my_gate_def.barrier(0)
         my_gate_def.barrier(1)
@@ -616,7 +615,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             my_gate q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         my_gate_def = QuantumCircuit([Qubit(), Qubit()])
         my_gate_def.barrier(my_gate_def.qubits)
         my_gate = gate_builder("my_gate", [], my_gate_def)
@@ -633,7 +632,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             my_gate q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         my_gate_def = QuantumCircuit([Qubit(), Qubit()])
         my_gate_def.barrier(0)
         my_gate_def.barrier([1, 0])
@@ -654,7 +653,7 @@ class TestGateDefinition(QiskitTestCase):
             my_gate(0.5) q[0], q[1];
             my_gate(0.25) q[1], q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         a = Parameter("a")
         my_gate_def = QuantumCircuit([Qubit(), Qubit()])
         my_gate_def.rz(2 * a, 0)
@@ -682,7 +681,7 @@ class TestGateDefinition(QiskitTestCase):
             qreg q[2];
             my_gate(0.5) q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
 
         # QPY won't persist custom gates by design choice, so instead let us check against the
         # explicit form it uses.
@@ -713,7 +712,7 @@ class TestGateDefinition(QiskitTestCase):
             my_gate(0.5) q[0], q[1];
             my_gate(0.25) q[1], q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
 
         my_gate1_def = QuantumCircuit([Qubit(), Qubit()])
         my_gate1_def.rz(1.0, 0)
@@ -740,7 +739,7 @@ class TestGateDefinition(QiskitTestCase):
         self.assertEqual(loaded, qc)
 
 
-class TestOpaque(QiskitTestCase):
+class TestOpaque(Qasm2TestCase):
     def test_simple(self):
         program = """
             opaque my_gate a;
@@ -751,7 +750,7 @@ class TestOpaque(QiskitTestCase):
             my_gate2 q[0];
             my_gate2() q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         qc.append(Gate("my_gate", 1, []), [0])
         qc.append(Gate("my_gate", 1, []), [1])
@@ -765,13 +764,13 @@ class TestOpaque(QiskitTestCase):
             qreg q[2];
             my_gate(0.5, 0.25) q[1], q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         qc.append(Gate("my_gate", 2, [0.5, 0.25]), [1, 0])
         self.assertEqual(parsed, qc)
 
 
-class TestBarrier(QiskitTestCase):
+class TestBarrier(Qasm2TestCase):
     def test_single_register_argument(self):
         program = """
             qreg first[3];
@@ -779,7 +778,7 @@ class TestBarrier(QiskitTestCase):
             barrier first;
             barrier second;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         first = QuantumRegister(3, "first")
         second = QuantumRegister(3, "second")
         qc = QuantumCircuit(first, second)
@@ -794,7 +793,7 @@ class TestBarrier(QiskitTestCase):
             barrier first[1];
             barrier second[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         first = QuantumRegister(3, "first")
         second = QuantumRegister(3, "second")
         qc = QuantumCircuit(first, second)
@@ -804,20 +803,20 @@ class TestBarrier(QiskitTestCase):
 
     def test_empty_circuit_empty_arguments(self):
         program = "barrier;"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit()
         self.assertEqual(parsed, qc)
 
     def test_one_register_circuit_empty_arguments(self):
         program = "qreg q1[2]; barrier;"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q1"))
         qc.barrier(qc.qubits)
         self.assertEqual(parsed, qc)
 
     def test_multi_register_circuit_empty_arguments(self):
         program = "qreg q1[2]; qreg q2[3]; qreg q3[1]; barrier;"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(
             QuantumRegister(2, "q1"), QuantumRegister(3, "q2"), QuantumRegister(1, "q3")
         )
@@ -832,7 +831,7 @@ class TestBarrier(QiskitTestCase):
             barrier q, empty;
             barrier;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         q = QuantumRegister(2, "q")
         qc = QuantumCircuit(q, QuantumRegister(0, "empty"))
         qc.barrier(q)
@@ -849,7 +848,7 @@ class TestBarrier(QiskitTestCase):
             barrier q1, q1[0];
             barrier q1, q2, q1;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         q1 = QuantumRegister(3, "q1")
         q2 = QuantumRegister(2, "q2")
         qc = QuantumCircuit(q1, q2)
@@ -860,14 +859,14 @@ class TestBarrier(QiskitTestCase):
         self.assertEqual(parsed, qc)
 
 
-class TestMeasure(QiskitTestCase):
+class TestMeasure(Qasm2TestCase):
     def test_single(self):
         program = """
             qreg q[1];
             creg c[1];
             measure q[0] -> c[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(1, "q"), ClassicalRegister(1, "c"))
         qc.measure(0, 0)
         self.assertEqual(parsed, qc)
@@ -878,7 +877,7 @@ class TestMeasure(QiskitTestCase):
             creg c[2];
             measure q -> c;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"), ClassicalRegister(2, "c"))
         qc.measure(0, 0)
         qc.measure(1, 1)
@@ -892,7 +891,7 @@ class TestMeasure(QiskitTestCase):
             if (cond == 0) measure q[0] -> c[0];
             if (cond == 1) measure q -> c;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         cond = ClassicalRegister(1, "cond")
         qc = QuantumCircuit(QuantumRegister(2, "q"), ClassicalRegister(2, "c"), cond)
         with qc.if_test((cond, 0)):
@@ -909,7 +908,7 @@ class TestMeasure(QiskitTestCase):
             creg c_empty[0];
             measure q_empty -> c_empty;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(0, "q_empty"), ClassicalRegister(0, "c_empty"))
         self.assertEqual(parsed, qc)
 
@@ -920,7 +919,7 @@ class TestMeasure(QiskitTestCase):
             creg cond[1];
             if (cond == 0) measure q_empty -> c_empty;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(
             QuantumRegister(0, "q_empty"),
             ClassicalRegister(0, "c_empty"),
@@ -940,7 +939,7 @@ class TestMeasure(QiskitTestCase):
             }
             my_gate(1.0) qr[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         expected = (
             lib.RZGate(-1.0).to_matrix()
             @ lib.RXGate(math.pi / 2).to_matrix()
@@ -953,13 +952,13 @@ class TestMeasure(QiskitTestCase):
         np.testing.assert_allclose(Operator(parsed), expected, atol=1e-14, rtol=0)
 
 
-class TestReset(QiskitTestCase):
+class TestReset(Qasm2TestCase):
     def test_single(self):
         program = """
             qreg q[1];
             reset q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(1, "q"))
         qc.reset(0)
         self.assertEqual(parsed, qc)
@@ -969,7 +968,7 @@ class TestReset(QiskitTestCase):
             qreg q[2];
             reset q;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         qc.reset(0)
         qc.reset(1)
@@ -982,7 +981,7 @@ class TestReset(QiskitTestCase):
             if (cond == 0) reset q[0];
             if (cond == 1) reset q;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         cond = ClassicalRegister(1, "cond")
         qc = QuantumCircuit(QuantumRegister(2, "q"), cond)
         with qc.if_test((cond, 0)):
@@ -998,7 +997,7 @@ class TestReset(QiskitTestCase):
             qreg empty[0];
             reset empty;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(0, "empty"))
         self.assertEqual(parsed, qc)
 
@@ -1008,12 +1007,12 @@ class TestReset(QiskitTestCase):
             creg cond[1];
             if (cond == 0) reset empty;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(0, "empty"), ClassicalRegister(1, "cond"))
         self.assertEqual(parsed, qc)
 
 
-class TestInclude(QiskitTestCase):
+class TestInclude(Qasm2TestCase):
     def setUp(self):
         super().setUp()
         self.tmp_dir = pathlib.Path(tempfile.mkdtemp())
@@ -1052,7 +1051,7 @@ class TestInclude(QiskitTestCase):
             cu1(0.5) q[0], q[1];
             cu3(0.5, 0.25, 0.125) q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(3, "q"))
         qc.append(lib.U3Gate(0.5, 0.25, 0.125), [0])
         qc.append(lib.U2Gate(0.5, 0.25), [0])
@@ -1091,7 +1090,7 @@ class TestInclude(QiskitTestCase):
             rx(0.5) q[0];
             bell q[1], q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         bell_def = QuantumCircuit([Qubit(), Qubit()])
         bell_def.u(math.pi / 2, 0, math.pi, 0)
         bell_def.cx(0, 1)
@@ -1114,7 +1113,7 @@ class TestInclude(QiskitTestCase):
             OPENQASM 2.0;
             include "include.qasm";
         """
-        parsed = qiskit.qasm2.loads(program, include_path=(self.tmp_dir,))
+        parsed = self.loads(program, include_path=(self.tmp_dir,))
         qc = QuantumCircuit(QuantumRegister(2, "inner_q"))
         self.assertEqual(parsed, qc)
 
@@ -1134,7 +1133,7 @@ class TestInclude(QiskitTestCase):
             qreg q[2];
             bell q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program, include_path=(self.tmp_dir,))
+        parsed = self.loads(program, include_path=(self.tmp_dir,))
         bell_def = QuantumCircuit([Qubit(), Qubit()])
         bell_def.h(0)
         bell_def.cx(0, 1)
@@ -1158,7 +1157,7 @@ class TestInclude(QiskitTestCase):
             OPENQASM 2.0;
             include "outer.qasm";
         """
-        parsed = qiskit.qasm2.loads(program, include_path=(self.tmp_dir,))
+        parsed = self.loads(program, include_path=(self.tmp_dir,))
         qc = QuantumCircuit(QuantumRegister(2, "q"), ClassicalRegister(2, "c"))
         self.assertEqual(parsed, qc)
 
@@ -1174,7 +1173,7 @@ class TestInclude(QiskitTestCase):
         with open(second / "include.qasm", "w") as fp:
             fp.write("qreg q[2];")
         program = 'include "include.qasm";'
-        parsed = qiskit.qasm2.loads(program, include_path=(empty, first, second))
+        parsed = self.loads(program, include_path=(empty, first, second))
         qc = QuantumCircuit(QuantumRegister(1, "q"))
         self.assertEqual(parsed, qc)
 
@@ -1182,7 +1181,7 @@ class TestInclude(QiskitTestCase):
         with open(self.tmp_dir / "qelib1.inc", "w") as fp:
             fp.write("qreg not_used[2];")
         program = 'include "qelib1.inc";'
-        parsed = qiskit.qasm2.loads(program, include_path=(self.tmp_dir,))
+        parsed = self.loads(program, include_path=(self.tmp_dir,))
         qc = QuantumCircuit()
         self.assertEqual(parsed, qc)
 
@@ -1199,7 +1198,7 @@ class TestInclude(QiskitTestCase):
         prevdir = os.getcwd()
         os.chdir(self.tmp_dir)
         try:
-            parsed = qiskit.qasm2.loads(program)
+            parsed = self.loads(program)
             qc = QuantumCircuit(QuantumRegister(2, "q"))
             self.assertEqual(parsed, qc)
         finally:
@@ -1211,7 +1210,7 @@ class TestInclude(QiskitTestCase):
         program = 'include "include.qasm";'
         with open(self.tmp_dir / "program.qasm", "w") as fp:
             fp.write(program)
-        parsed = qiskit.qasm2.load(self.tmp_dir / "program.qasm")
+        parsed = self.load(self.tmp_dir / "program.qasm")
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         self.assertEqual(parsed, qc)
 
@@ -1225,7 +1224,7 @@ class TestInclude(QiskitTestCase):
         program = 'include "include.qasm";'
         with open(self.tmp_dir / "program.qasm", "w") as fp:
             fp.write(program)
-        parsed = qiskit.qasm2.load(self.tmp_dir / "program.qasm", include_path=(first,))
+        parsed = self.load(self.tmp_dir / "program.qasm", include_path=(first,))
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         self.assertEqual(parsed, qc)
 
@@ -1239,7 +1238,7 @@ class TestInclude(QiskitTestCase):
         program = 'include "include.qasm";'
         with open(self.tmp_dir / "program.qasm", "w") as fp:
             fp.write(program)
-        parsed = qiskit.qasm2.load(
+        parsed = self.load(
             self.tmp_dir / "program.qasm", include_path=(first,), include_input_directory="prepend"
         )
         qc = QuantumCircuit(QuantumRegister(2, "q"))
@@ -1252,11 +1251,11 @@ class TestInclude(QiskitTestCase):
         with open(self.tmp_dir / "program.qasm", "w") as fp:
             fp.write(program)
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "unable to find 'include.qasm'"):
-            qiskit.qasm2.load(self.tmp_dir / "program.qasm", include_input_directory=None)
+            self.load(self.tmp_dir / "program.qasm", include_input_directory=None)
 
 
 @ddt.ddt
-class TestCustomInstructions(QiskitTestCase):
+class TestCustomInstructions(Qasm2TestCase):
     def test_qelib1_include_overridden(self):
         program = """
             OPENQASM 2.0;
@@ -1286,9 +1285,7 @@ class TestCustomInstructions(QiskitTestCase):
             cu1(0.5) q[0], q[1];
             cu3(0.5, 0.25, 0.125) q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(
-            program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS
-        )
+        parsed = self.loads(program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
         qc = QuantumCircuit(QuantumRegister(3, "q"))
         qc.append(lib.U3Gate(0.5, 0.25, 0.125), [0])
         qc.append(lib.U2Gate(0.5, 0.25), [0])
@@ -1350,7 +1347,7 @@ class TestCustomInstructions(QiskitTestCase):
             cu1(0.5) q[0], q[1];
             cu3(0.5, 0.25, 0.125) q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_instructions=[
                 qiskit.qasm2.CustomInstruction("id", 0, 1, lib.IGate),
@@ -1391,9 +1388,7 @@ class TestCustomInstructions(QiskitTestCase):
             opaque my_gate q;
             my_gate q[0];
         """
-        parsed = qiskit.qasm2.loads(
-            program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS
-        )
+        parsed = self.loads(program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
         qc = QuantumCircuit(QuantumRegister(1, "q"))
         qc.append(Gate("my_gate", 1, []), [0])
         self.assertEqual(parsed, qc)
@@ -1420,9 +1415,7 @@ class TestCustomInstructions(QiskitTestCase):
             c3sqrtx q[0], q[1], q[2], q[3];
             c4x q[0], q[1], q[2], q[3], q[4];
         """
-        parsed = qiskit.qasm2.loads(
-            program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS
-        )
+        parsed = self.loads(program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
         qc = QuantumCircuit(QuantumRegister(5, "q"))
         qc.append(lib.UGate(0.5, 0.25, 0.125), [0])
         qc.append(lib.PhaseGate(0.5), [0])
@@ -1447,7 +1440,7 @@ class TestCustomInstructions(QiskitTestCase):
         # There's also the 'u0' gate, but this is weird so we don't wildly care what its definition
         # is and it has no Qiskit equivalent, so we'll just test that it using it doesn't produce an
         # error.
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             "qreg q[1]; u0(1) q[0];", custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS
         )
         self.assertEqual(parsed.data[0].operation.name, "u0")
@@ -1458,9 +1451,7 @@ class TestCustomInstructions(QiskitTestCase):
             qreg q[1];
             delay(1) q[0];
         """
-        parsed = qiskit.qasm2.loads(
-            program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS
-        )
+        parsed = self.loads(program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
         qc = QuantumCircuit(QuantumRegister(1, "q"))
         qc.delay(1, 0, unit="dt")
         self.assertEqual(parsed, qc)
@@ -1471,9 +1462,7 @@ class TestCustomInstructions(QiskitTestCase):
             qreg q[1];
             u0(2) q[0];
         """
-        parsed = qiskit.qasm2.loads(
-            program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS
-        )
+        parsed = self.loads(program, custom_instructions=qiskit.qasm2.LEGACY_CUSTOM_INSTRUCTIONS)
         qc = QuantumCircuit(QuantumRegister(1, "q"))
         qc.id(0)
         qc.id(0)
@@ -1489,7 +1478,7 @@ class TestCustomInstructions(QiskitTestCase):
             def __init__(self, a, b, c):
                 super().__init__("u", 1, [a, b, c])
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_instructions=[qiskit.qasm2.CustomInstruction("U", 3, 1, MyGate, builtin=True)],
         )
@@ -1507,7 +1496,7 @@ class TestCustomInstructions(QiskitTestCase):
             def __init__(self):
                 super().__init__("cx", 2, [])
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_instructions=[qiskit.qasm2.CustomInstruction("CX", 0, 2, MyGate, builtin=True)],
         )
@@ -1538,7 +1527,7 @@ class TestCustomInstructions(QiskitTestCase):
             qiskit.qasm2.CustomInstruction("CX", 0, 2, MyCXGate, builtin=True),
         ]
         custom = order(custom)
-        parsed = qiskit.qasm2.loads(program, custom_instructions=custom)
+        parsed = self.loads(program, custom_instructions=custom)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         qc.append(MyUGate(0.5, 0.25, 0.125), [0])
         qc.append(MyCXGate(), [0, 1])
@@ -1554,7 +1543,7 @@ class TestCustomInstructions(QiskitTestCase):
             def __init__(self, a):
                 super().__init__("builtin", 1, [a])
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_instructions=[
                 qiskit.qasm2.CustomInstruction("builtin", 1, 1, MyGate, builtin=True)
@@ -1575,7 +1564,7 @@ class TestCustomInstructions(QiskitTestCase):
             def __init__(self, a):
                 super().__init__("builtin", 1, [a])
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_instructions=[
                 qiskit.qasm2.CustomInstruction("builtin", 1, 1, MyGate, builtin=True)
@@ -1596,7 +1585,7 @@ class TestCustomInstructions(QiskitTestCase):
             def __init__(self, a):
                 super().__init__("builtin", 1, [a])
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_instructions=[
                 qiskit.qasm2.CustomInstruction("builtin", 1, 1, MyGate, builtin=True)
@@ -1617,7 +1606,7 @@ class TestCustomInstructions(QiskitTestCase):
             def __init__(self, a):
                 super().__init__("my_gate", 1, [a])
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program, custom_instructions=[qiskit.qasm2.CustomInstruction("my_gate", 1, 1, MyGate)]
         )
         qc = QuantumCircuit(QuantumRegister(1, "q"))
@@ -1635,7 +1624,7 @@ class TestCustomInstructions(QiskitTestCase):
             def __init__(self, a):
                 super().__init__("my_gate", 1, [a])
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program, custom_instructions=[qiskit.qasm2.CustomInstruction("my_gate", 1, 1, MyGate)]
         )
         qc = QuantumCircuit(QuantumRegister(1, "q"))
@@ -1657,7 +1646,7 @@ class TestCustomInstructions(QiskitTestCase):
                 self._definition = QuantumCircuit(1)
                 self._definition.z(0)
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program, custom_instructions=[qiskit.qasm2.CustomInstruction("my_gate", 0, 1, MyGate)]
         )
         self.assertEqual(parsed.data[0].operation.definition, MyGate().definition)
@@ -1675,7 +1664,7 @@ class TestCustomInstructions(QiskitTestCase):
         second q[0];
         """
         custom = qiskit.qasm2.CustomInstruction("first", 0, 1, lib.XGate, builtin=True)
-        parsed = qiskit.qasm2.loads(program, custom_instructions=[custom])
+        parsed = self.loads(program, custom_instructions=[custom])
         # Provided definitions for built-in gates are ignored, so it should be an XGate directly.
         self.assertEqual(parsed.data[0].operation, lib.XGate())
         self.assertEqual(parsed.data[1].operation.name, "second")
@@ -1684,7 +1673,7 @@ class TestCustomInstructions(QiskitTestCase):
         self.assertEqual(parsed.data[1].operation.definition, defn)
 
 
-class TestCustomClassical(QiskitTestCase):
+class TestCustomClassical(Qasm2TestCase):
     def test_qiskit_extensions(self):
         program = """
             include "qelib1.inc";
@@ -1693,7 +1682,7 @@ class TestCustomClassical(QiskitTestCase):
             ry(acos(0.3)) q[0];
             rz(atan(0.3)) q[0];
         """
-        parsed = qiskit.qasm2.loads(program, custom_classical=qiskit.qasm2.LEGACY_CUSTOM_CLASSICAL)
+        parsed = self.loads(program, custom_classical=qiskit.qasm2.LEGACY_CUSTOM_CLASSICAL)
         qc = QuantumCircuit(QuantumRegister(1, "q"))
         qc.rx(math.asin(0.3), 0)
         qc.ry(math.acos(0.3), 0)
@@ -1705,7 +1694,7 @@ class TestCustomClassical(QiskitTestCase):
             qreg q[1];
             U(f(), 0, 0) q[0];
         """
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program, custom_classical=[qiskit.qasm2.CustomClassical("f", 0, lambda: 0.2)]
         )
         qc = QuantumCircuit(QuantumRegister(1, "q"))
@@ -1717,7 +1706,7 @@ class TestCustomClassical(QiskitTestCase):
             qreg q[1];
             U(f(0.2), g(0.4, 0.1), h(1, 2, 3)) q[0];
         """
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_classical=[
                 qiskit.qasm2.CustomClassical("f", 1, lambda x: 1 + x),
@@ -1746,7 +1735,7 @@ class TestCustomClassical(QiskitTestCase):
         def g(x):
             return 2 * x
 
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_classical=[
                 qiskit.qasm2.CustomClassical("f", 2, f),
@@ -1777,7 +1766,7 @@ class TestCustomClassical(QiskitTestCase):
 
 
 @ddt.ddt
-class TestStrict(QiskitTestCase):
+class TestStrict(Qasm2TestCase):
     @ddt.data(
         "gate my_gate(p0, p1$) q0, q1 {}",
         "gate my_gate(p0, p1) q0, q1$ {}",
@@ -1789,8 +1778,8 @@ class TestStrict(QiskitTestCase):
         'include "qelib1.inc"; qreg q[1]; rx(sin(pi$)) q[0];',
     )
     def test_trailing_comma(self, program):
-        without = qiskit.qasm2.loads("OPENQASM 2.0;\n" + program.replace("$", ""), strict=True)
-        with_ = qiskit.qasm2.loads(program.replace("$", ","), strict=False)
+        without = self.loads("OPENQASM 2.0;\n" + program.replace("$", ""), strict=True)
+        with_ = self.loads(program.replace("$", ","), strict=False)
         self.assertEqual(with_, without)
 
     def test_trailing_semicolon_after_gate(self):
@@ -1803,7 +1792,7 @@ class TestStrict(QiskitTestCase):
             qreg q[2];
             bell q[0], q[1];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         bell_def = QuantumCircuit([Qubit(), Qubit()])
         bell_def.h(0)
         bell_def.cx(0, 1)
@@ -1824,7 +1813,7 @@ class TestStrict(QiskitTestCase):
             cx q[0], q[1];
             ;;;;
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(2, "q"))
         qc.h(0)
         qc.cx(0, 1)
@@ -1836,7 +1825,7 @@ class TestStrict(QiskitTestCase):
             qreg q[1];
             h q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         qc = QuantumCircuit(QuantumRegister(1, "q"))
         qc.h(0)
         self.assertEqual(parsed, qc)
@@ -1852,7 +1841,7 @@ class TestStrict(QiskitTestCase):
             qreg q[1];
             unitary q[0];
         """
-        parsed = qiskit.qasm2.loads(qasm)
+        parsed = self.loads(qasm)
         self.assertIsInstance(parsed, QuantumCircuit)
         self.assertIsInstance(parsed.data[0].operation, qiskit.qasm2.parse._DefinedGate)
         self.assertEqual(Operator.from_circuit(parsed), Operator.from_circuit(qc))

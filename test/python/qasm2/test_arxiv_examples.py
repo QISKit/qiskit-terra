@@ -21,34 +21,31 @@ import tempfile
 
 import ddt
 
-from qiskit import qasm2
 from qiskit.circuit import QuantumCircuit, QuantumRegister, ClassicalRegister, Qubit
 from qiskit.circuit.library import U1Gate, U3Gate, CU1Gate
-from test import QiskitTestCase
 
-from . import gate_builder
-
-
-def load(string, *args, **kwargs):
-    # We're deliberately not using the context-manager form here because we need to use it in a
-    # slightly odd pattern.
-
-    temp = tempfile.NamedTemporaryFile(mode="w", delete=False)
-    try:
-        temp.write(string)
-        # NamedTemporaryFile claims not to be openable a second time on Windows, so close it
-        # (without deletion) so Rust can open it again.
-        temp.close()
-        return qasm2.load(temp.name, *args, **kwargs)
-    finally:
-        # Now actually clean up after ourselves.
-        os.unlink(temp.name)
+from . import Qasm2TestCase, gate_builder
 
 
 @ddt.ddt
-class TestArxivExamples(QiskitTestCase):
-    @ddt.data(qasm2.loads, load)
-    def test_teleportation(self, parser):
+class TestArxivExamples(Qasm2TestCase):
+    def load_string_via_file(self, string, *args, **kwargs):
+        # We're deliberately not using the context-manager form here because we need to use it in a
+        # slightly odd pattern.
+
+        temp = tempfile.NamedTemporaryFile(mode="w", delete=False)
+        try:
+            temp.write(string)
+            # NamedTemporaryFile claims not to be openable a second time on Windows, so close it
+            # (without deletion) so Rust can open it again.
+            temp.close()
+            return self.load(temp.name, *args, **kwargs)
+        finally:
+            # Now actually clean up after ourselves.
+            os.unlink(temp.name)
+
+    @ddt.data("loads", "load_string_via_file")
+    def test_teleportation(self, loader):
         example = """\
 // quantum teleportation example
 OPENQASM 2.0;
@@ -71,7 +68,7 @@ if(c0==1) z q[2];
 if(c1==1) x q[2];
 post q[2];
 measure q[2] -> c2[0];"""
-        parsed = parser(example)
+        parsed = getattr(self, loader)(example)
 
         post = gate_builder("post", [], QuantumCircuit([Qubit()]))
 
@@ -98,8 +95,8 @@ measure q[2] -> c2[0];"""
 
         self.assertEqual(parsed, qc)
 
-    @ddt.data(qasm2.loads, load)
-    def test_qft(self, parser):
+    @ddt.data("loads", "load_string_via_file")
+    def test_qft(self, loader):
         example = """\
 // quantum Fourier transform
 OPENQASM 2.0;
@@ -120,7 +117,7 @@ cu1(pi/4) q[3],q[1];
 cu1(pi/2) q[3],q[2];
 h q[3];
 measure q -> c;"""
-        parsed = parser(example)
+        parsed = getattr(self, loader)(example)
 
         qc = QuantumCircuit(QuantumRegister(4, "q"), ClassicalRegister(4, "c"))
         qc.x(0)
@@ -140,8 +137,8 @@ measure q -> c;"""
 
         self.assertEqual(parsed, qc)
 
-    @ddt.data(qasm2.loads, load)
-    def test_inverse_qft_1(self, parser):
+    @ddt.data("loads", "load_string_via_file")
+    def test_inverse_qft_1(self, loader):
         example = """\
 // QFT and measure, version 1
 OPENQASM 2.0;
@@ -169,7 +166,7 @@ if(c==6) u1(pi/2+pi/4) q[3];
 if(c==7) u1(pi/2+pi/4+pi/8) q[3];
 h q[3];
 measure q[3] -> c[3];"""
-        parsed = parser(example)
+        parsed = getattr(self, loader)(example)
 
         q = QuantumRegister(4, "q")
         c = ClassicalRegister(4, "c")
@@ -209,8 +206,8 @@ measure q[3] -> c[3];"""
 
         self.assertEqual(parsed, qc)
 
-    @ddt.data(qasm2.loads, load)
-    def test_inverse_qft_2(self, parser):
+    @ddt.data("loads", "load_string_via_file")
+    def test_inverse_qft_2(self, loader):
         example = """\
 // QFT and measure, version 2
 OPENQASM 2.0;
@@ -236,7 +233,7 @@ if(c1==1) u1(pi/4) q[3];
 if(c2==1) u1(pi/2) q[3];
 h q[3];
 measure q[3] -> c3[0];"""
-        parsed = parser(example)
+        parsed = getattr(self, loader)(example)
 
         q = QuantumRegister(4, "q")
         c0 = ClassicalRegister(1, "c0")
@@ -268,8 +265,8 @@ measure q[3] -> c3[0];"""
         qc.measure(q[3], c3[0])
         self.assertEqual(parsed, qc)
 
-    @ddt.data(qasm2.loads, load)
-    def test_ripple_carry_adder(self, parser):
+    @ddt.data("loads", "load_string_via_file")
+    def test_ripple_carry_adder(self, loader):
         example = """\
 // quantum ripple-carry adder from Cuccaro et al, quant-ph/0410184
 OPENQASM 2.0;
@@ -309,7 +306,7 @@ measure b[1] -> ans[1];
 measure b[2] -> ans[2];
 measure b[3] -> ans[3];
 measure cout[0] -> ans[4];"""
-        parsed = parser(example)
+        parsed = getattr(self, loader)(example)
 
         majority_definition = QuantumCircuit([Qubit(), Qubit(), Qubit()])
         majority_definition.cx(2, 1)
@@ -346,8 +343,8 @@ measure cout[0] -> ans[4];"""
 
         self.assertEqual(parsed, qc)
 
-    @ddt.data(qasm2.loads, load)
-    def test_randomised_benchmarking(self, parser):
+    @ddt.data("loads", "load_string_via_file")
+    def test_randomised_benchmarking(self, loader):
         example = """\
 // One randomized benchmarking sequence
 OPENQASM 2.0;
@@ -367,7 +364,7 @@ h q[0];
 barrier q;
 measure q -> c;
         """
-        parsed = parser(example)
+        parsed = getattr(self, loader)(example)
 
         q = QuantumRegister(2, "q")
         c = ClassicalRegister(2, "c")
@@ -387,8 +384,8 @@ measure q -> c;
 
         self.assertEqual(parsed, qc)
 
-    @ddt.data(qasm2.loads, load)
-    def test_process_tomography(self, parser):
+    @ddt.data("loads", "load_string_via_file")
+    def test_process_tomography(self, loader):
         example = """\
 OPENQASM 2.0;
 include "qelib1.inc";
@@ -402,7 +399,7 @@ h q[0];
 barrier q;
 post q[0];
 measure q[0] -> c[0];"""
-        parsed = parser(example)
+        parsed = getattr(self, loader)(example)
 
         pre = gate_builder("pre", [], QuantumCircuit([Qubit()]))
         post = gate_builder("post", [], QuantumCircuit([Qubit()]))
@@ -417,8 +414,8 @@ measure q[0] -> c[0];"""
 
         self.assertEqual(parsed, qc)
 
-    @ddt.data(qasm2.loads, load)
-    def test_error_correction(self, parser):
+    @ddt.data("loads", "load_string_via_file")
+    def test_error_correction(self, loader):
         example = """\
 // Repetition code syndrome measurement
 OPENQASM 2.0;
@@ -440,7 +437,7 @@ if(syn==1) x q[0];
 if(syn==2) x q[2];
 if(syn==3) x q[1];
 measure q -> c;"""
-        parsed = parser(example)
+        parsed = getattr(self, loader)(example)
 
         syndrome_definition = QuantumCircuit([Qubit() for _ in [None] * 5])
         syndrome_definition.cx(0, 3)
