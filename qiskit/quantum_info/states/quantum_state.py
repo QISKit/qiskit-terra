@@ -89,6 +89,11 @@ class QuantumState:
         """Return True if a valid quantum state."""
 
     @abstractmethod
+    def is_entangled(self, epsilon: float = 1e-10):
+        """Returns True is a Statevector is Entangled else False."""
+        pass
+
+    @abstractmethod
     def to_operator(self):
         """Convert state to matrix operator class"""
 
