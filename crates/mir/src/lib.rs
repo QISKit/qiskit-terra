@@ -15,6 +15,12 @@
 //! This is the base crate that defines the IR, its data structures and built-in operations and
 //! algorithms.
 
+// The `MemDbg` derive emits `#[cfg(feature = "offset_of_enum")]` in this crate for every enum it is
+// applied to.  That is an optional `mem_dbg` feature (padding and `DbgFlags::RUST_LAYOUT` for enums)
+// which needs a nightly compiler. At this point we use stable, so we don't declare it and allow the unexpected cfg instead.
+// In addition, we done use `DbgFlags::RUST_LAYOUT` for structs containing eunms (otherwise it would panic).
+#![cfg_attr(feature = "mem_dbg", allow(unexpected_cfgs))]
+
 pub mod instruction;
 pub mod line_graph;
 pub mod mir;

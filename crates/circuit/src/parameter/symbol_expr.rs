@@ -2941,23 +2941,6 @@ impl SymbolExpr {
         }
     }
 
-    // convert sympy compatible format
-    pub fn sympify(&self) -> SymbolExpr {
-        match self {
-            SymbolExpr::Symbol { .. } => self.clone(),
-            SymbolExpr::Value(e) => e.sympify(),
-            SymbolExpr::Unary { op, expr } => SymbolExpr::Unary {
-                op: op.clone(),
-                expr: Arc::new(expr.sympify()),
-            },
-            SymbolExpr::Binary { op, lhs, rhs } => SymbolExpr::Binary {
-                op: op.clone(),
-                lhs: Arc::new(lhs.sympify()),
-                rhs: Arc::new(rhs.sympify()),
-            },
-        }
-    }
-
     fn repr(&self, with_uuid: bool) -> String {
         match self {
             SymbolExpr::Symbol(e) => e.repr(with_uuid),
@@ -3783,21 +3766,6 @@ impl Value {
                 }
             }
             _ => None,
-        }
-    }
-
-    // convert sympy compatible format
-    pub fn sympify(&self) -> SymbolExpr {
-        match self {
-            // imaginary number is converted to value * symbol 'I'
-            Value::Complex(c) => _add(
-                SymbolExpr::Value(Value::Real(c.re)),
-                _mul(
-                    SymbolExpr::Value(Value::Real(c.im)),
-                    SymbolExpr::Symbol(Arc::new(Symbol::standalone("I".to_owned(), None))),
-                ),
-            ),
-            _ => SymbolExpr::Value(*self),
         }
     }
 }
