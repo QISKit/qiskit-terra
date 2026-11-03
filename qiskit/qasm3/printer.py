@@ -445,8 +445,12 @@ class BasicPrinter:
 
     def _visit_QuantumBarrier(self, node: ast.QuantumBarrier) -> None:
         self._start_line()
-        self.stream.write("barrier ")
-        self._visit_sequence(node.indexIdentifierList, separator=", ")
+        if node.indexIdentifierList:
+            self.stream.write("barrier ")
+            self._visit_sequence(node.indexIdentifierList, separator=", ")
+        else:
+            # Global barrier: OpenQASM 3 allows a bare `barrier;` with no operands.
+            self.stream.write("barrier")
         self._end_statement()
 
     def _visit_ProgramBlock(self, node: ast.ProgramBlock) -> None:

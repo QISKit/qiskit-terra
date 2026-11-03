@@ -1110,8 +1110,17 @@ class QASM3Builder:
             elif isinstance(instruction.operation, Gate):
                 nodes = [self.build_gate_call(instruction)]
             elif isinstance(instruction.operation, Barrier):
-                operands = [self._lookup_bit(operand) for operand in instruction.qubits]
-                nodes = [ast.QuantumBarrier(operands)]
+                # Emit a bare `barrier;` when the instruction covers every qubit in
+                # the current scope.  OpenQASM 3 treats that as a global barrier, and
+                # it avoids listing every qubit for wide circuits (see #13485).
+                circuit_qubits = self.scope.circuit.qubits
+                if len(instruction.qubits) == len(circuit_qubits) and set(
+                    instruction.qubits
+                ) == set(circuit_qubits):
+                    nodes = [ast.QuantumBarrier([])]
+                else:
+                    operands = [self._lookup_bit(operand) for operand in instruction.qubits]
+                    nodes = [ast.QuantumBarrier(operands)]
             elif isinstance(instruction.operation, Measure):
                 measurement = ast.QuantumMeasurement(
                     [self._lookup_bit(operand) for operand in instruction.qubits]

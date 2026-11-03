@@ -541,15 +541,20 @@ impl<'a> BasicPrinter<'a> {
 
     fn visit_quantum_barrier(&mut self, instruction: &Barrier) {
         self.start_line();
-        write!(self.stream, "barrier ").unwrap();
-        let index_identifier_vec: Vec<Expression> = instruction
-            .index_identifier_list
-            .iter()
-            .cloned()
-            .map(Expression::IdentifierOrSubscripted)
-            .collect();
-        let index_identifier_list: &[Expression] = &index_identifier_vec;
-        self.visit_expression_sequence(index_identifier_list, "", "", ", ");
+        if instruction.index_identifier_list.is_empty() {
+            // Global barrier: OpenQASM 3 allows a bare `barrier;` with no operands.
+            write!(self.stream, "barrier").unwrap();
+        } else {
+            write!(self.stream, "barrier ").unwrap();
+            let index_identifier_vec: Vec<Expression> = instruction
+                .index_identifier_list
+                .iter()
+                .cloned()
+                .map(Expression::IdentifierOrSubscripted)
+                .collect();
+            let index_identifier_list: &[Expression] = &index_identifier_vec;
+            self.visit_expression_sequence(index_identifier_list, "", "", ", ");
+        }
         self.end_statement();
     }
 

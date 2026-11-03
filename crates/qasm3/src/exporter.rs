@@ -1064,14 +1064,19 @@ impl<'a> QASM3Builder {
             .circuit_data
             .qargs_interner()
             .get(instr.qubits);
-        let mut qubit_ids = Vec::new();
         let qubits_registry = self.circuit_scope.circuit_data.qubits();
 
-        for q in qargs {
-            let id = self.lookup_bit(&BitType::ShareableQubit(
-                qubits_registry.get(*q).unwrap().clone(),
-            ))?;
-            qubit_ids.push(id.to_owned());
+        // Emit a bare `barrier;` when the instruction covers every qubit in the
+        // current scope (OpenQASM 3 global barrier; see #13485).
+        let is_global = qargs.len() == qubits_registry.len();
+        let mut qubit_ids = Vec::new();
+        if !is_global {
+            for q in qargs {
+                let id = self.lookup_bit(&BitType::ShareableQubit(
+                    qubits_registry.get(*q).unwrap().clone(),
+                ))?;
+                qubit_ids.push(id.to_owned());
+            }
         }
         stmts.push(Statement::QuantumInstruction(QuantumInstruction::Barrier(
             Barrier {
