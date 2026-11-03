@@ -1,0 +1,5 @@
+fixes:
+  - |
+    Fixed an issue where UnrollForLoops would unroll a loop whose break clause issue
+    is nested inside a SwitchCaseOp. UnrollForLoops now explicity checks for any
+    SwitchCaseOp and inspects it recursively.

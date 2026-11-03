@@ -165,6 +165,44 @@ class TestUnrollForLoops(QiskitTestCase):
 
         self.assertEqual(result, qc)
 
+    def test_skip_break_in_switch(self):
+        """Unrolling should not rebind a break nested inside a switch."""
+        qc = QuantumCircuit(1, 1)
+        once = range(1)
+
+        with qc.for_loop(once):
+            with qc.for_loop(once):
+                with qc.switch(qc.clbits[0]) as case:
+                    with case(0):
+                        qc.id(0)
+                        qc.break_loop()
+            qc.x(0)
+
+        passmanager = PassManager()
+        passmanager.append(UnrollForLoops(max_target_depth=1))
+        result = passmanager.run(qc)
+
+        self.assertEqual(result, qc)
+
+    def test_skip_continue_in_switch(self):
+        """Unrolling should not rebind a continue nested inside a switch."""
+        qc = QuantumCircuit(1, 1)
+        once = range(1)
+
+        with qc.for_loop(once):
+            with qc.for_loop(once):
+                with qc.switch(qc.clbits[0]) as case:
+                    with case(0):
+                        qc.id(0)
+                        qc.continue_loop()
+            qc.x(0)
+
+        passmanager = PassManager()
+        passmanager.append(UnrollForLoops(max_target_depth=1))
+        result = passmanager.run(qc)
+
+        self.assertEqual(result, qc)
+
     def test_max_target_depth(self):
         """Unrolling should not be done when results over `max_target_depth`"""
 
