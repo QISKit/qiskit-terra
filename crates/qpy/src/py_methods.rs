@@ -587,10 +587,11 @@ pub(crate) fn py_circuit_data_to_quantum_circuit<'py>(
     py: Python<'py>,
     circuit_data: CircuitData,
     packed_circuit: &formats::QPYCircuit,
+    version: u8,
     metadata_deserializer: Option<&Py<PyAny>>,
 ) -> Result<Bound<'py, PyAny>, QpyError> {
     let py_circuit_data: PyCircuitData = circuit_data.into();
-    let unpacked_layout = unpack_layout(py, &packed_circuit.layout, &py_circuit_data)?;
+    let unpacked_layout = unpack_layout(py, &packed_circuit.layout, &py_circuit_data, version)?;
     let metadata =
         deserialize_metadata(py, &packed_circuit.header.metadata, metadata_deserializer)?;
     let circuit = imports::QUANTUM_CIRCUIT

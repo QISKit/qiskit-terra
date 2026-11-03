@@ -837,10 +837,16 @@ pub fn unpack_layout<'py>(
     py: Python<'py>,
     layout: &formats::LayoutV2Pack,
     circuit_data: &PyCircuitData,
+    version: u8,
 ) -> Result<Option<Bound<'py, PyAny>>, QpyError> {
     match layout.exists {
         0 => Ok(None),
-        _ => Ok(Some(unpack_transpile_layout(py, layout, circuit_data)?)),
+        _ => Ok(Some(unpack_transpile_layout(
+            py,
+            layout,
+            circuit_data,
+            version,
+        )?)),
     }
 }
 
@@ -848,6 +854,7 @@ fn unpack_transpile_layout<'py>(
     py: Python<'py>,
     layout: &formats::LayoutV2Pack,
     circuit_data: &PyCircuitData,
+    version: u8,
 ) -> Result<Bound<'py, PyAny>, QpyError> {
     let mut initial_layout = py.None();
     let mut input_qubit_mapping = py.None();
@@ -929,8 +936,21 @@ fn unpack_transpile_layout<'py>(
             }
         })?;
         for (index, bit) in layout.input_mapping_items.iter().enumerate() {
-            let physical_bit = physical_bits.get_item(bit)?.ok_or_else(|| {
-                QpyError::InvalidBit(format!("Could not get physical bit for bit {:?}", bit))
+            // Qiskit 2.6 incorrectly reparsed layouts in custom definitions using the QPY 18
+            // representation after serializing them with the legacy representation.  For an
+            // anonymous bit, the second -1 sentinel was consequently stored as the input mapping
+            // value. The original mapping position is the only possible physical-bit index in
+            // this case, and lets us recover QPY files written by 2.6.0rc1 and 2.6.0.
+            let physical_index = if version == 18 && *bit == u32::MAX {
+                index as u32
+            } else {
+                *bit
+            };
+            let physical_bit = physical_bits.get_item(physical_index)?.ok_or_else(|| {
+                QpyError::InvalidBit(format!(
+                    "Could not get physical bit for bit {:?}",
+                    physical_index
+                ))
             })?;
             input_qubit_mapping_data.set_item(physical_bit, index)?;
         }
@@ -995,8 +1015,14 @@ fn read_custom_instructions(
                 let py_circuit: Py<PyAny> = qpy_data.caller.attach(
                     "custom instruction definition",
                     |py| -> Result<Py<PyAny>, QpyError> {
-                        py_circuit_data_to_quantum_circuit(py, circuit, &packed_definition, None)
-                            .map(Bound::unbind)
+                        py_circuit_data_to_quantum_circuit(
+                            py,
+                            circuit,
+                            &packed_definition,
+                            qpy_data.version,
+                            None,
+                        )
+                        .map(Bound::unbind)
                     },
                 )?;
                 Ok(Some(py_circuit))

@@ -481,8 +481,8 @@ impl BinRead for VirtualQBitPack {
     ) -> BinResult<Self> {
         let first = i32::read_options(reader, endian, ())?;
         if first < 0 {
-            // Anonymous: v<=18 has a second i32 (-1) that we must consume; v>=19 does not
-            if version < 19 {
+            // Anonymous: v<=17 has a second i32 (-1) that we must consume; v>=18 does not
+            if version < 18 {
                 let _ = i32::read_options(reader, endian, ())?;
             }
             Ok(VirtualQBitPack::Anonymous)
@@ -523,7 +523,7 @@ impl BinWrite for VirtualQBitPack {
         match self {
             VirtualQBitPack::Anonymous => {
                 (-1i32).write_options(writer, endian, ())?;
-                if version < 19 {
+                if version < 18 {
                     (-1i32).write_options(writer, endian, ())?;
                 }
             }
