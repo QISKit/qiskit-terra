@@ -46,7 +46,7 @@ circuit::
     pass_manager.run(circuit)  # Run the analysis.
     print(pass_manager.property_set["count_ops"])  # Show the result.
 
-Transformation passes can be combined to build a small custom compilation
+Passes can be combined to build a small custom compilation
 workflow, called `PassManager`. This example removes a barrier and then cancels two adjacent
 self-inverse gates::
 
