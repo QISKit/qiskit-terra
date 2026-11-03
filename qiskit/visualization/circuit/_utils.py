@@ -111,6 +111,8 @@ def get_gate_ctrl_text(op, drawer, style=None):
         if _is_boolean_expression(gate_text, op):
             gate_text = gate_text.replace("~", "$\\neg$").replace("&", "\\&")
             gate_text = f"$\\texttt{{{gate_text}}}$"
+        elif gate_text.startswith("$") and gate_text.endswith("$"):
+            gate_text = gate_text
         # Capitalize if not a user-created gate or instruction
         elif (
             (gate_text == op.name and op_type not in (Gate, Instruction))

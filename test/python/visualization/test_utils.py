@@ -16,8 +16,10 @@ import unittest
 import numpy as np
 
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
-from qiskit.circuit import Qubit, Clbit
+from qiskit.circuit import Qubit, Clbit, Gate
 from qiskit.visualization.circuit import _utils
+from qiskit.visualization.circuit.qcstyle import MPLDefaultStyle, MPLStyleDict
+from qiskit.visualization.style import load_style
 from qiskit.visualization import array_to_latex
 from qiskit.utils import optionals
 from test import QiskitTestCase
@@ -373,6 +375,21 @@ class TestVisualizationUtils(QiskitTestCase):
             "a$bc_{\\ensuremath{\\iiint}}X{\\ensuremath{\\forall}}Y",
             _utils.generate_latex_label(r"$a$bc$_∭X∀Y"),
         )
+
+    @unittest.skipUnless(optionals.HAS_PYLATEX, "needs pylatexenc")
+    def test_get_gate_ctrl_text_preserves_mathmode_gate_name(self):
+        """Test latex gate names preserve user-provided math mode."""
+        gate = Gate(r"$U_{\mathrm{rot}}$", 1, [])
+        style, _ = load_style(
+            style=None,
+            style_dict=MPLStyleDict,
+            default_style=MPLDefaultStyle(),
+            user_config_opt="circuit_mpl_style",
+            user_config_path_opt="circuit_mpl_style_path",
+        )
+        gate_text, _, _ = _utils.get_gate_ctrl_text(gate, "latex", style=style)
+        self.assertEqual(r"$U_{\mathrm{rot}}$", gate_text)
+        self.assertEqual(r"U_{\mathrm{rot}}", _utils.generate_latex_label(gate_text))
 
     @unittest.skipUnless(optionals.HAS_SYMPY, "needs sympy")
     def test_array_to_latex(self):
