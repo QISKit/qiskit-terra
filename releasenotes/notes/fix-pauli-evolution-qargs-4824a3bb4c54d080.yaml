@@ -1,0 +1,6 @@
+fixes:
+  - |
+    Fixed :class:`.FindCommutingPauliEvolutions` reinterpreting the Pauli operands of a
+    :class:`.PauliEvolutionGate` as global qubit indices, which changed the gate when it was
+    applied to qubits in any other order. See
+    `#16860 <https://github.com/Qiskit/qiskit/issues/16860>`.

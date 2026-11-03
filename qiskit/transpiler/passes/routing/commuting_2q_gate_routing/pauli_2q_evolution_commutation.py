@@ -12,10 +12,12 @@
 
 """An analysis pass to find evolution gates in which the Paulis commute."""
 from collections import defaultdict
+from collections.abc import Sequence
 
 import numpy as np
 
 from qiskit.exceptions import QiskitError
+from qiskit.circuit import Qubit
 from qiskit.circuit.library import PauliEvolutionGate
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler import TransformationPass
@@ -58,7 +60,7 @@ class FindCommutingPauliEvolutions(TransformationPass):
                     continue
 
                 if self.summands_commute(node.op.operator):
-                    sub_dag = self._decompose_to_2q(dag, node.op)
+                    sub_dag = self._decompose_to_2q(dag, node.op, node.qargs)
 
                     block_op = Commuting2qBlock(set(sub_dag.op_nodes()))
                     wire_order = {
@@ -126,12 +128,15 @@ class FindCommutingPauliEvolutions(TransformationPass):
 
         return edge
 
-    def _decompose_to_2q(self, dag: DAGCircuit, op: PauliEvolutionGate) -> DAGCircuit:
+    def _decompose_to_2q(
+        self, dag: DAGCircuit, op: PauliEvolutionGate, qargs: Sequence[Qubit]
+    ) -> DAGCircuit:
         """Decompose the SparsePauliOp into two-qubit.
 
         Args:
-            dag: The dag needed to get access to qubits.
+            dag: The dag that the returned sub-dag is modelled on.
             op: The operator with all the Pauli terms we need to apply.
+            qargs: The qubits that ``op`` is applied to, in operand order.
 
         Returns:
             A dag made of two-qubit :class:`.PauliEvolutionGate`.
@@ -144,7 +149,7 @@ class FindCommutingPauliEvolutions(TransformationPass):
             required_paulis[(pauli, edge)] += coeff
 
         for (pauli, edge), coeff in required_paulis.items():
-            qubits = [dag.qubits[edge[0]], dag.qubits[edge[1]]]
+            qubits = [qargs[edge[0]], qargs[edge[1]]]
 
             simple_pauli = Pauli(pauli.to_label().replace("I", ""))
 

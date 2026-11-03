@@ -516,6 +516,24 @@ class TestPauliEvolutionSwapStrategies(QiskitTestCase):
 
         self.assertEqual(circ, self.pm_.run(circ))
 
+    def test_asymmetric_pauli_evolution_reversed_qargs(self):
+        """Test that an asymmetric evolution keeps the qubit order it was applied to."""
+        op = SparsePauliOp.from_list([("XY", 1)])
+
+        circ = QuantumCircuit(2)
+        circ.append(PauliEvolutionGate(op, 0.37), [1, 0])
+
+        swap_strat = SwapStrategy.from_line([0, 1])
+        pm_ = PassManager([FindCommutingPauliEvolutions(), Commuting2qGateRouter(swap_strat)])
+
+        swapped = pm_.run(circ)
+
+        expected = QuantumCircuit(2)
+        expected.append(PauliEvolutionGate(Pauli("XY"), 0.37), (1, 0))
+
+        self.assertEqual(swapped, expected)
+        self.assertEqual(Operator(swapped), Operator(circ))
+
     @data(
         {(0, 1): 0, (2, 3): 0, (1, 2): 1},  # better coloring for the swap strategy
         {(0, 1): 1, (2, 3): 1, (1, 2): 0},  # worse, i.e., less CX cancellation.
