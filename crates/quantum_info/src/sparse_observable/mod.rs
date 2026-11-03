@@ -13,7 +13,7 @@
 mod lookup;
 mod matrix;
 
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use lookup::conjugate_bitterm;
 use ndarray::Array2;
@@ -36,8 +36,10 @@ use pyo3::{
 };
 #[cfg(feature = "python")]
 use qiskit_util::IndexSet;
+use qiskit_util::getenv_use_multiple_threads;
 #[cfg(feature = "python")]
 use qiskit_util::py::{ImportOnceCell, PySequenceIndex, SequenceIndex};
+use rayon::prelude::*;
 #[cfg(feature = "python")]
 use std::ops::{AddAssign, DivAssign, MulAssign, SubAssign};
 #[cfg(feature = "python")]
@@ -640,18 +642,24 @@ impl SparseObservable {
     ///
     /// This function is idempotent.
     pub fn canonicalize(&self, tol: f64) -> SparseObservable {
-        let mut terms = btree_map::BTreeMap::new();
+        let mut terms = HashMap::with_capacity(self.num_terms());
         for term in self.iter() {
             terms
-                .entry((term.indices, term.bit_terms))
+                .entry(term.canonical_key())
                 .and_modify(|c| *c += term.coeff)
                 .or_insert(term.coeff);
         }
+        let mut vec = terms
+            .into_iter()
+            .filter(|(_, coeff)| coeff.norm_sqr() > tol * tol)
+            .collect::<Vec<_>>();
+        if getenv_use_multiple_threads() {
+            vec.par_sort_unstable_by_key(|&(k, _)| k);
+        } else {
+            vec.sort_unstable_by_key(|&(k, _)| k);
+        }
         let mut out = SparseObservable::zero(self.num_qubits);
-        for ((indices, bit_terms), coeff) in terms {
-            if coeff.norm_sqr() <= tol * tol {
-                continue;
-            }
+        for ((indices, bit_terms), coeff) in vec {
             out.coeffs.push(coeff);
             out.bit_terms.extend_from_slice(bit_terms);
             out.indices.extend_from_slice(indices);
@@ -1704,6 +1712,11 @@ impl SparseTermView<'_> {
         format!("({coeff})({paulis})")
     }
 }
+impl<'a> SparseTermView<'a> {
+    fn canonical_key(self) -> (&'a [u32], &'a [BitTerm]) {
+        (self.indices, self.bit_terms)
+    }
+}
 
 /// A mutable view object onto a single term of a [SparseObservable].
 ///
@@ -2056,12 +2069,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for BitTerm {
 ///
 /// These are typically created by indexing into or iterating through a :class:`SparseObservable`.
 #[cfg(feature = "python")]
-#[pyclass(
-    name = "Term",
-    frozen,
-    module = "qiskit.quantum_info",
-    skip_from_py_object
-)]
+#[pyclass(name = "Term", frozen, module = "qiskit.quantum_info")]
 #[derive(Clone, Debug)]
 struct PySparseTerm {
     inner: SparseTerm,
@@ -3501,9 +3509,7 @@ impl PySparseObservable {
     ///         >>> right = SparseObservable.from_list([("XYZ", 1.0/7.0)] * 7)  # doesn't sum to 1.0
     ///         >>> assert left.simplify() != right.simplify()
     ///         >>> assert (left - right).simplify() == SparseObservable.zero(left.num_qubits)
-    #[pyo3(
-        signature = (/, tol=1e-8),
-    )]
+    #[pyo3(signature = (/, tol=1e-8))]
     fn simplify(&self, tol: f64) -> PyResult<Self> {
         let inner = self.inner.read().map_err(|_| InnerReadError)?;
         let simplified = inner.canonicalize(tol);

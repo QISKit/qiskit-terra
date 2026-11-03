@@ -49,7 +49,7 @@ use qiskit_circuit::instruction::{Instruction, Parameters};
 use qiskit_circuit::operations::{Operation, OperationRef, Param, StandardGate};
 use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::{NoBlocks, Qubit};
-use qiskit_util::complex::{C_M_ONE, C_ONE, IM, M_IM, c64};
+use qiskit_util::complex::{C_M_ONE, C_ONE, C_ZERO, IM, M_IM, c64};
 
 /// Errors that can occur during two-qubit basis decomposition.
 #[derive(Error, Debug)]
@@ -123,11 +123,7 @@ static K22R: Matrix2<Complex64> = Matrix2::new(Complex64::ZERO, C_ONE, C_M_ONE, 
 
 #[derive(Clone, Debug)]
 #[allow(non_snake_case)]
-#[pyclass(
-    module = "qiskit._accelerate.two_qubit_decompose",
-    subclass,
-    skip_from_py_object
-)]
+#[pyclass(module = "qiskit._accelerate.two_qubit_decompose", subclass)]
 pub struct TwoQubitBasisDecomposer {
     gate: PackedOperation,
     gate_params: SmallVec<[f64; 3]>,
@@ -353,11 +349,11 @@ impl TwoQubitBasisDecomposer {
 
         let x12 = euler_q0[1][2] + euler_q0[2][0];
         let x12_is_non_zero = !abs_diff_eq!(x12, 0., epsilon = atol);
-        let mut x12_is_old_mult = None;
+        let mut x12_is_odd_mult = None;
         let mut x12_phase = 0.;
         let x12_is_pi_mult = abs_diff_eq!(x12.sin(), 0., epsilon = atol);
         if x12_is_pi_mult {
-            x12_is_old_mult = Some(abs_diff_eq!(x12.cos(), -1., epsilon = atol));
+            x12_is_odd_mult = Some(abs_diff_eq!(x12.cos(), -1., epsilon = atol));
             x12_phase = PI * x12.cos();
         }
         let x02_add = x12 - euler_q0[1][0];
@@ -387,7 +383,7 @@ impl TwoQubitBasisDecomposer {
             if x12_is_non_zero {
                 global_phase += x12_phase;
             }
-            if x12_is_non_zero && x12_is_old_mult.unwrap() {
+            if x12_is_non_zero && x12_is_odd_mult.unwrap() {
                 gates.push((
                     StandardGate::RZ.into(),
                     smallvec![-euler_q0[1][1]],
@@ -406,6 +402,11 @@ impl TwoQubitBasisDecomposer {
             gates.push((StandardGate::SX.into(), smallvec![], smallvec![0]));
             global_phase -= FRAC_PI_4;
         } else if x12_is_non_zero && !x12_is_pi_mult {
+            gates.push((
+                StandardGate::RZ.into(),
+                smallvec![euler_q0[1][1]],
+                smallvec![0],
+            ));
             if self.pulse_optimize.is_none() {
                 self.append_1q_sequence(&mut gates, &mut global_phase, rx_matrix(x12).as_view(), 0);
             } else {
@@ -462,11 +463,14 @@ impl TwoQubitBasisDecomposer {
 
         let out_unitary = compute_unitary(&gates, global_phase);
         // TODO: fix the sign problem to avoid correction here
-        if abs_diff_eq!(
-            target_decomposed.unitary_matrix[(0, 0)],
-            -out_unitary[[0, 0]],
-            epsilon = atol
-        ) {
+        // Compare the first non-zero element in 0-th row, which must exist as the matrix is unitary
+        let row = target_decomposed.unitary_matrix.row(0);
+        if row
+            .iter()
+            .zip(out_unitary.row(0).iter())
+            .find(|(val, _)| !abs_diff_eq!(**val, C_ZERO, epsilon = atol))
+            .is_some_and(|(val, out)| abs_diff_eq!(*val, -*out, epsilon = atol))
+        {
             global_phase += PI;
         }
         Some(TwoQubitGateSequence {

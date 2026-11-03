@@ -734,7 +734,7 @@ class Bloch:
         """
         self.render(title=title)
         if self.fig:
-            plt.show(self.fig)
+            plt.show()
 
     def save(self, name=None, output="png", dirc=None):
         """Saves Bloch sphere to file of type ``format`` in directory ``dirc``.

@@ -147,6 +147,11 @@ fn qsd_inner(
     let dim = mat.shape().0;
     let num_qubits = dim.ilog2() as usize;
     let opt_a1_val = opt_a1.unwrap_or(true);
+    if dim == 1 {
+        // A 1x1 "unitary" is just a global phase acting on zero qubits.
+        let global_phase = mat[(0, 0)].arg();
+        return Ok(CircuitData::new(None, None, Param::Float(global_phase))?);
+    }
     if dim == 2 {
         let array = faer_to_ndarray(mat);
         let sequence =

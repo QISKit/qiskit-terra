@@ -14,13 +14,9 @@
 Mixin for operator scalar multiplication interface.
 """
 
-import sys
 from abc import ABC, abstractmethod
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from typing import Self
 
 
 class MultiplyMixin(ABC):

@@ -457,6 +457,7 @@ use crate::{FN_MACRO};"
                 &qiskit_cext_vtable::FUNCTIONS_TRANSPILE,
             ),
             ("crate::QK_FFI_QI", &qiskit_cext_vtable::FUNCTIONS_QI),
+            ("crate::QK_FFI_MIR", &qiskit_cext_vtable::FUNCTIONS_MIR),
         ];
         for (vtable_name, vtable) in capsules {
             for entry in vtable.exports(0) {

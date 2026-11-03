@@ -29,7 +29,7 @@ static int test_qv(void) {
     QkCircuit *qv = qk_circuit_library_quantum_volume(num_qubits, num_qubits, 42);
     size_t num_instructions = qk_circuit_num_instructions(qv);
     if (num_instructions != 10) {
-        printf("Unexpected number of instructions: %zu\n", num_instructions);
+        fprintf(stderr, "Unexpected number of instructions: %zu\n", num_instructions);
         result = EqualityError;
         goto cleanup;
     }

@@ -470,8 +470,7 @@ impl PhasedQubitSparsePauli {
 #[pyclass(
     name = "PhasedQubitSparsePauli",
     frozen,
-    module = "qiskit.quantum_info",
-    skip_from_py_object
+    module = "qiskit.quantum_info"
 )]
 #[derive(Clone, Debug)]
 pub struct PyPhasedQubitSparsePauli {

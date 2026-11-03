@@ -36,9 +36,7 @@ use crate::circuit::{
 };
 
 use crate::circuit::unitary_from_pointer;
-use crate::pointers::{
-    ExposesOwnedPointers, check_ptr, const_ptr_as_ref, expose_by_box, mut_ptr_as_ref,
-};
+use crate::pointers::{ExposesOwnedPointers, check_ptr, expose_by_box};
 
 // SAFETY: all owned `DAGCircuit` objects are exposed and freed using `Box`.
 const _: () = unsafe { expose_by_box!(DAGCircuit) };
@@ -84,9 +82,9 @@ pub unsafe extern "C" fn qk_dag_add_quantum_register(
     reg: *const QuantumRegister,
 ) {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     // SAFETY: Per documentation, the pointer is to valid data.
-    let qreg = unsafe { const_ptr_as_ref(reg) };
+    let qreg = unsafe { &*reg };
 
     dag.add_qreg(qreg.clone())
         .expect("Invalid register unable to be added to DAG");
@@ -117,9 +115,9 @@ pub unsafe extern "C" fn qk_dag_add_classical_register(
     reg: *const ClassicalRegister,
 ) {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     // SAFETY: Per documentation, the pointer is to valid data.
-    let creg = unsafe { const_ptr_as_ref(reg) };
+    let creg = unsafe { &*reg };
 
     dag.add_creg(creg.clone())
         .expect("Invalid register unable to be added to DAG");
@@ -148,7 +146,7 @@ pub unsafe extern "C" fn qk_dag_add_classical_register(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_num_qubits(dag: *const DAGCircuit) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     dag.num_qubits() as u32
 }
 
@@ -175,7 +173,7 @@ pub unsafe extern "C" fn qk_dag_num_qubits(dag: *const DAGCircuit) -> u32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_num_clbits(dag: *const DAGCircuit) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     dag.num_clbits() as u32
 }
 
@@ -206,7 +204,7 @@ pub unsafe extern "C" fn qk_dag_num_clbits(dag: *const DAGCircuit) -> u32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_num_op_nodes(dag: *const DAGCircuit) -> usize {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     dag.num_ops()
 }
 
@@ -238,7 +236,7 @@ pub unsafe extern "C" fn qk_dag_num_op_nodes(dag: *const DAGCircuit) -> usize {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_global_phase(dag: *const DAGCircuit) -> *mut Param {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     Box::into_raw(Box::new(dag.global_phase().clone()))
 }
 
@@ -277,8 +275,8 @@ pub unsafe extern "C" fn qk_dag_set_global_phase(
     phase: *const Param,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
-    let phase = unsafe { const_ptr_as_ref(phase) };
+    let dag = unsafe { &mut *dag };
+    let phase = unsafe { &*phase };
     // dag.set_global_phase_param(phase.clone())
     //     .expect("Unable to set global phase");
     match dag.set_global_phase_param(phase.clone()) {
@@ -329,7 +327,7 @@ pub enum CDagNodeType {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_node_type(dag: *const DAGCircuit, node: u32) -> CDagNodeType {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     match dag.dag()[NodeIndex::new(node as usize)] {
         NodeType::QubitIn(_) => CDagNodeType::QubitIn,
         NodeType::QubitOut(_) => CDagNodeType::QubitOut,
@@ -355,7 +353,7 @@ pub unsafe extern "C" fn qk_dag_node_type(dag: *const DAGCircuit, node: u32) -> 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_qubit_in_node(dag: *const DAGCircuit, qubit: u32) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     dag.qubit_io_map()[qubit as usize][0].index() as u32
 }
 
@@ -373,7 +371,7 @@ pub unsafe extern "C" fn qk_dag_qubit_in_node(dag: *const DAGCircuit, qubit: u32
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_qubit_out_node(dag: *const DAGCircuit, qubit: u32) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     dag.qubit_io_map()[qubit as usize][1].index() as u32
 }
 
@@ -391,7 +389,7 @@ pub unsafe extern "C" fn qk_dag_qubit_out_node(dag: *const DAGCircuit, qubit: u3
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_clbit_in_node(dag: *const DAGCircuit, clbit: u32) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     dag.clbit_io_map()[clbit as usize][0].index() as u32
 }
 
@@ -409,7 +407,7 @@ pub unsafe extern "C" fn qk_dag_clbit_in_node(dag: *const DAGCircuit, clbit: u32
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_clbit_out_node(dag: *const DAGCircuit, clbit: u32) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     dag.clbit_io_map()[clbit as usize][1].index() as u32
 }
 
@@ -427,7 +425,7 @@ pub unsafe extern "C" fn qk_dag_clbit_out_node(dag: *const DAGCircuit, clbit: u3
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_wire_node_value(dag: *const DAGCircuit, node: u32) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     (match dag.dag()[NodeIndex::new(node as usize)] {
         NodeType::QubitIn(value) => value.index(),
         NodeType::QubitOut(value) => value.index(),
@@ -455,7 +453,7 @@ pub unsafe extern "C" fn qk_dag_wire_node_value(dag: *const DAGCircuit, node: u3
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_op_node_num_qubits(dag: *const DAGCircuit, node: u32) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let instr = dag.dag()[NodeIndex::new(node as usize)].unwrap_operation();
     instr.op.num_qubits()
 }
@@ -476,7 +474,7 @@ pub unsafe extern "C" fn qk_dag_op_node_num_qubits(dag: *const DAGCircuit, node:
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_op_node_num_clbits(dag: *const DAGCircuit, node: u32) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let instr = dag.dag()[NodeIndex::new(node as usize)].unwrap_operation();
     instr.op.num_clbits()
 }
@@ -497,7 +495,7 @@ pub unsafe extern "C" fn qk_dag_op_node_num_clbits(dag: *const DAGCircuit, node:
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_op_node_num_params(dag: *const DAGCircuit, node: u32) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let instr = dag.dag()[NodeIndex::new(node as usize)].unwrap_operation();
     instr.op.num_params()
 }
@@ -519,7 +517,7 @@ pub unsafe extern "C" fn qk_dag_op_node_num_params(dag: *const DAGCircuit, node:
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_op_node_qubits(dag: *const DAGCircuit, node: u32) -> *const u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let instr = dag.dag()[NodeIndex::new(node as usize)].unwrap_operation();
     dag.qargs_interner().get(instr.qubits).as_ptr().cast()
 }
@@ -541,7 +539,7 @@ pub unsafe extern "C" fn qk_dag_op_node_qubits(dag: *const DAGCircuit, node: u32
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_op_node_clbits(dag: *const DAGCircuit, node: u32) -> *const u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let instr = dag.dag()[NodeIndex::new(node as usize)].unwrap_operation();
     dag.cargs_interner().get(instr.clbits).as_ptr().cast()
 }
@@ -592,7 +590,7 @@ pub unsafe extern "C" fn qk_dag_apply_gate(
     front: bool,
 ) -> u32 {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     let qargs: &[Qubit] = if gate.num_qubits() == 0 {
         &[]
     } else {
@@ -664,7 +662,7 @@ pub unsafe extern "C" fn qk_dag_apply_measure(
     front: bool,
 ) -> u32 {
     // SAFETY: per documentation, `dag` points to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     if front {
         dag.apply_operation_front(
             StandardInstruction::Measure.into(),
@@ -719,7 +717,7 @@ pub unsafe extern "C" fn qk_dag_apply_measure(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_apply_reset(dag: *mut DAGCircuit, qubit: u32, front: bool) -> u32 {
     // SAFETY: per documentation, `dag` points to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     if front {
         dag.apply_operation_front(
             StandardInstruction::Reset.into(),
@@ -789,7 +787,7 @@ pub unsafe extern "C" fn qk_dag_apply_barrier(
     front: bool,
 ) -> u32 {
     // SAFETY: per documentation, `dag` points to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     let all_qubits;
     let qubits = if qubits.is_null() {
         all_qubits = (0..dag.num_qubits()).map(Qubit::new).collect::<Vec<_>>();
@@ -860,7 +858,7 @@ pub unsafe extern "C" fn qk_dag_apply_unitary(
     front: bool,
 ) -> u32 {
     // SAFETY: per documentation, `dag` points to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     // SAFETY: per documentation, `matrix` is aligned and valid for `4**num_qubits` reads of
     // initialised data.
     let array = unsafe { unitary_from_pointer(matrix, num_qubits, None) }
@@ -944,7 +942,7 @@ pub unsafe extern "C" fn qk_dag_op_node_gate_op(
     out_params: *mut f64,
 ) -> StandardGate {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let instr = dag[NodeIndex::new(node as usize)].unwrap_operation();
     if !out_params.is_null() {
         let params = instr.params_view();
@@ -986,7 +984,7 @@ pub unsafe extern "C" fn qk_dag_op_node_unitary(
     out: *mut Complex64,
 ) {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let instr = &dag[NodeIndex::new(node as usize)].unwrap_operation();
     let OperationRef::Unitary(unitary) = instr.op.view() else {
         panic!("requested node {node} was not a unitary gate");
@@ -1060,7 +1058,7 @@ pub enum COperationKind {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_op_node_kind(dag: *const DAGCircuit, node: u32) -> COperationKind {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     match dag[NodeIndex::new(node as usize)]
         .unwrap_operation()
         .op
@@ -1129,7 +1127,7 @@ pub struct CDagNeighbors {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_successors(dag: *const DAGCircuit, node: u32) -> CDagNeighbors {
     // SAFETY: Per documentation, the pointers are to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
 
     let successors: Box<[u32]> = dag
         .successors(NodeIndex::new(node as usize))
@@ -1175,7 +1173,7 @@ pub unsafe extern "C" fn qk_dag_successors(dag: *const DAGCircuit, node: u32) ->
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_predecessors(dag: *const DAGCircuit, node: u32) -> CDagNeighbors {
     // SAFETY: Per documentation, the pointers are to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
 
     let predecessors: Box<[u32]> = dag
         .predecessors(NodeIndex::new(node as usize))
@@ -1202,7 +1200,7 @@ pub unsafe extern "C" fn qk_dag_predecessors(dag: *const DAGCircuit, node: u32) 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_neighbors_clear(neighbors: *mut CDagNeighbors) {
     // SAFETY: Per documentation, the pointer is to a valid data.
-    let neighbors = unsafe { mut_ptr_as_ref(neighbors) };
+    let neighbors = unsafe { &mut *neighbors };
 
     if neighbors.num_neighbors > 0 {
         let slice = std::ptr::slice_from_raw_parts_mut(
@@ -1265,7 +1263,7 @@ pub unsafe extern "C" fn qk_dag_get_instruction(
     instruction: *mut CInstruction,
 ) {
     // SAFETY: per documentation, `dag` is a pointer to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let inst = CInstruction::from_packed_instruction_with_numeric(
         dag.dag()[NodeIndex::new(index as usize)].unwrap_operation(),
         dag.qargs_interner(),
@@ -1303,7 +1301,7 @@ pub unsafe extern "C" fn qk_dag_view_instruction(
     out: *mut CInstructionView,
 ) {
     // SAFETY: per documentation, `dag` points to valid initialized data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     //
     let inst = &dag.dag()[NodeIndex::new(index as usize)].unwrap_operation();
     let view =
@@ -1389,9 +1387,9 @@ pub unsafe extern "C" fn qk_dag_compose(
     clbits: *const u32,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     // SAFETY: Per documentation, the pointer is to valid data.
-    let other_dag = unsafe { const_ptr_as_ref(other) };
+    let other_dag = unsafe { &*other };
 
     if other_dag.qubits().len() > dag.qubits().len()
         || other_dag.clbits().len() > dag.clbits().len()
@@ -1483,7 +1481,7 @@ pub unsafe extern "C" fn qk_dag_free(dag: *mut DAGCircuit) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_to_circuit(dag: *const DAGCircuit) -> *mut CircuitData {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     CircuitData::from_dag_ref(dag)
         .expect("Error occurred while converting DAGCircuit to CircuitData")
         .into_leaked()
@@ -1534,7 +1532,7 @@ pub unsafe extern "C" fn qk_dag_to_circuit(dag: *const DAGCircuit) -> *mut Circu
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_dag_topological_op_nodes(dag: *const DAGCircuit, out_order: *mut u32) {
     // SAFETY: Per documentation, ``dag`` is non-null and valid.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
 
     let out_topological_op_nodes = dag.topological_op_nodes(false);
 
@@ -1599,9 +1597,9 @@ pub unsafe extern "C" fn qk_dag_substitute_node_with_dag(
     replacement: *const DAGCircuit,
 ) {
     // SAFETY: Per documentation, ``dag`` is non-null and valid.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
     // SAFETY: Per documentation, ``replacement`` is non-null and valid.
-    let replacement = unsafe { const_ptr_as_ref(replacement) };
+    let replacement = unsafe { &*replacement };
 
     if let Err(e) = dag.substitute_node_with_dag(
         NodeIndex::new(node as usize),
@@ -1662,7 +1660,7 @@ pub unsafe extern "C" fn qk_dag_copy_empty_like(
     blocks_mode: CBlocksMode,
 ) -> *mut DAGCircuit {
     // SAFETY: Per documentation, the pointer is to valid data.
-    let dag = unsafe { const_ptr_as_ref(dag) };
+    let dag = unsafe { &*dag };
     let vars_mode = vars_mode.into();
     let blocks_mode = blocks_mode.into();
 
@@ -1741,7 +1739,7 @@ pub unsafe extern "C" fn qk_dag_replace_block_with_unitary(
     cycle_check: bool,
 ) -> u32 {
     // SAFETY: per documentation, `dag` points to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
 
     // SAFETY: per documentation, `matrix` is aligned and valid for `4**num_qubits` reads of
     // initialized data.
@@ -1836,7 +1834,7 @@ pub unsafe extern "C" fn qk_dag_substitute_node_with_unitary(
     num_qubits: u32,
 ) {
     // SAFETY: per documentation, `dag` points to valid data.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
 
     // SAFETY: per documentation, `matrix` is aligned and valid for `4**num_qubits` reads of
     // initialized data.
@@ -2003,7 +2001,7 @@ pub unsafe extern "C" fn qk_dag_apply_custom_operation(
     let boxed: Box<BoxedCustomOperation> = unsafe { Box::from_raw(operation) };
     let op = PackedOperation::from(boxed);
 
-    let circ = unsafe { mut_ptr_as_ref(dag) };
+    let circ = unsafe { &mut *dag };
 
     // SAFETY: The pointer is either null or non-null and alligned.
     let qargs: &[Qubit] = unsafe { cast_to_bit_slice(qubits, op.num_qubits() as usize) };

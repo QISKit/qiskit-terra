@@ -19,6 +19,8 @@ use hashbrown::{HashMap, HashSet};
 use num_bigint::BigUint;
 #[cfg(feature = "py")]
 use pyo3::prelude::*;
+use qiskit_circuit::operations::Operation;
+use qiskit_circuit::standard_gate::StandardGate;
 
 use crate::bytecode::InternalBytecode;
 use crate::error::{
@@ -30,32 +32,32 @@ use crate::{ClassicalCallableExt, ClassicalEvaluator, CustomClassical, CustomIns
 
 /// The number of gates that are built in to the OpenQASM 2 language.  This is U and CX.
 const N_BUILTIN_GATES: usize = 2;
-/// The "qelib1.inc" special include.  The elements of the tuple are the gate name, the number of
-/// parameters it takes, and the number of qubits it acts on.
-const QELIB1: [(&str, usize, usize); 23] = [
-    ("u3", 3, 1),
-    ("u2", 2, 1),
-    ("u1", 1, 1),
-    ("cx", 0, 2),
-    ("id", 0, 1),
-    ("x", 0, 1),
-    ("y", 0, 1),
-    ("z", 0, 1),
-    ("h", 0, 1),
-    ("s", 0, 1),
-    ("sdg", 0, 1),
-    ("t", 0, 1),
-    ("tdg", 0, 1),
-    ("rx", 1, 1),
-    ("ry", 1, 1),
-    ("rz", 1, 1),
-    ("cz", 0, 2),
-    ("cy", 0, 2),
-    ("ch", 0, 2),
-    ("ccx", 0, 3),
-    ("crz", 1, 2),
-    ("cu1", 1, 2),
-    ("cu3", 3, 2),
+/// The "qelib1.inc" special include, in file order: a gate's `GateId` is its index here, offset
+/// by the builtins.  Names and arities come from the `StandardGate`s themselves.
+pub(crate) const QELIB1: [StandardGate; 23] = [
+    StandardGate::U3,
+    StandardGate::U2,
+    StandardGate::U1,
+    StandardGate::CX,
+    StandardGate::I,
+    StandardGate::X,
+    StandardGate::Y,
+    StandardGate::Z,
+    StandardGate::H,
+    StandardGate::S,
+    StandardGate::Sdg,
+    StandardGate::T,
+    StandardGate::Tdg,
+    StandardGate::RX,
+    StandardGate::RY,
+    StandardGate::RZ,
+    StandardGate::CZ,
+    StandardGate::CY,
+    StandardGate::CH,
+    StandardGate::CCX,
+    StandardGate::CRZ,
+    StandardGate::CU1,
+    StandardGate::CU3,
 ];
 
 const BUILTIN_CLASSICAL: [&str; 6] = ["cos", "exp", "ln", "sin", "sqrt", "tan"];
@@ -784,6 +786,7 @@ impl State {
         bc.push(Some(InternalBytecode::DeclareGate {
             name: name.clone(),
             num_qubits,
+            num_params,
         }));
         // The actual body of the gate.  Most of this is devolved to [Self::parse_gate_application]
         // to do the right thing.
@@ -888,6 +891,7 @@ impl State {
         bc.push(Some(InternalBytecode::DeclareOpaque {
             name: name.clone(),
             num_qubits,
+            num_params,
         }));
         self.define_gate(Some(&opaque_token), name, num_params, num_qubits)?;
         Ok(1)
@@ -1502,7 +1506,7 @@ impl State {
             match qarg {
                 Operand::Single(qubit) => {
                     bc.push(Some(InternalBytecode::Reset { qubit }));
-                    Ok(0)
+                    Ok(1)
                 }
                 Operand::Range(size, start) => {
                     bc.extend((0..size).map(|offset| {
@@ -1601,12 +1605,12 @@ impl State {
         if filename == "qelib1.inc" {
             self.symbols.reserve(QELIB1.len());
             let mut indices = Vec::with_capacity(QELIB1.len());
-            for (i, (name, num_params, num_qubits)) in QELIB1.iter().enumerate() {
+            for (i, gate) in QELIB1.iter().enumerate() {
                 if self.define_gate(
                     Some(&include_token),
-                    name.to_string(),
-                    *num_params,
-                    *num_qubits,
+                    gate.name().to_string(),
+                    gate.num_params() as usize,
+                    gate.num_qubits() as usize,
                 )? {
                     indices.push(i);
                 }

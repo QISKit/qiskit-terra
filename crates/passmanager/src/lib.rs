@@ -11,13 +11,15 @@
 // that they have been altered from the originals.
 
 mod pass;
+mod task;
 
 use anyhow::Context;
 use hashbrown::{HashMap, HashSet};
 use qiskit_util::dyn_types::*;
-use std::{any::Any, fmt, sync::LazyLock};
+use std::{any::Any, sync::LazyLock};
 
 pub use pass::*;
+pub use task::*;
 
 /// The pass manager execution environment.
 ///
@@ -158,75 +160,14 @@ impl<'a> PassContext<'a> {
 /// Types that can be used as an IR by the [`PassManager`].
 pub trait IR: DynTyped + Send + Sync + 'static {}
 
-/// A task in Qiskit's compiler framework.
-///
-/// This is a single unit of execution flow. It describes how work is being executed, ranging
-/// from the simple execution of a single pass, over groups of passes to structured flow control,
-/// such as loops. The [PassManager] stores a vector of [Task]s and executes them.
-#[non_exhaustive]
-pub enum Task {
-    // TODO Add Loop and Switch with conditions that can be set from Python/C and
-    // proper error handlings that occur during the condition evaluation.
-    /// A single pass.
-    Transformation(Box<dyn Pass>),
-
-    /// A group of tasks.
-    Group(Vec<Task>),
-
-    /// A sequence of named tasks.
-    Stages(Vec<(String, Task)>),
-}
-
-impl fmt::Debug for Task {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Task::Transformation(p) => f.debug_tuple("Transformation").field(&p.name()).finish(),
-            Task::Group(tasks) => f.debug_tuple("Group").field(tasks).finish(),
-            Task::Stages(stages) => f.debug_tuple("Stages").field(stages).finish(),
-        }
-    }
-}
-
-impl Task {
-    fn io_types(&self) -> Option<[DynTypeId<'_>; 2]> {
-        // TODO: the implementation of `Task` as a `pub enum` means that nothing enforces the
-        // pipeline (dynamic) type safety of `Group`, `Switch` or `Stages`; these need to be
-        // enforced during construction of the `Task`.  This might motivate a swap to a structure
-        // like
-        //
-        //      enum TaskInner {
-        //          Pass(Box<dyn Pass>),
-        //          Group(Vec<Task>),
-        //          // ...
-        //      }
-        //      pub struct Task(TaskInner);
-        //      impl Task {
-        //          pub fn group(vals: Vec<Task>) -> Result<Self, Vec<Task>) {}
-        //          // ...
-        //      }
-        match self {
-            Task::Transformation(pass) => Some([pass.ir_id_in(), pass.ir_id_out()]),
-            Task::Group(group) => sequence_io_types(group.iter()),
-            Task::Stages(stages) => sequence_io_types(stages.iter().map(|(_name, task)| task)),
-        }
-    }
-}
-
-/// Return the input and output types of a sequence of tasks if non-empty.
-fn sequence_io_types<'a>(
-    tasks: impl DoubleEndedIterator<Item = &'a Task>,
-) -> Option<[DynTypeId<'a>; 2]> {
-    let mut typed = tasks.filter_map(|task| task.io_types());
-    let first = typed.next()?;
-    let last = typed.next_back().unwrap_or(first);
-    Some([first[0], last[1]])
-}
-
 /// Qiskit's pass manager.
+///
+/// A pass manager is responsible for ensuring that its tasks (including all nested
+/// structure) are well-typed at construction time and throughout its lifetime: any
+/// two passes that might be executed sequentially must have equal IR types at the
+/// boundary.
 #[derive(Default, Debug)]
 pub struct PassManager {
-    // It is UNSAFE to directly mutate the task vector since we are checking that the types
-    // match upon construction, hence the tasks are private.
     tasks: Vec<Task>,
 }
 
@@ -289,17 +230,22 @@ impl PassManager {
 
     /// Try to push a [`Task`] onto the end of the task list.
     ///
-    /// Fails, returning the same task back to the caller, if the types are incompatible.
-    pub fn try_push_task(&mut self, task: Task) -> Result<(), Task> {
-        let ours = self.ir_id_out();
-        let theirs = task.io_types().map(|[in_, _]| in_);
-        if let Some((ours, theirs)) = ours.zip(theirs)
-            && ours != theirs
+    /// The task is validated with [`Task::validate`], and its input type is checked against the
+    /// output type of the pipeline so far.
+    ///
+    /// Fails, returning the same task back to the caller along with the reason, if the task is
+    /// ill-typed internally or incompatible with the existing pipeline.
+    pub fn try_push_task(&mut self, task: Task) -> Result<(), (Task, TaskAppendError)> {
+        if let Err(err) = task.validate() {
+            return Err((task, TaskAppendError::Task(err)));
+        }
+        // The existing pipeline is well-typed, and so is the incoming task, so the boundary
+        // between the two is the only place a mismatch can arise.
+        if let Some((output, input)) = self.ir_id_out().zip(task.io_types().map(|[in_, _]| in_))
+            && output != input
         {
-            // We may want to change the error type of this in the future to provide structured
-            // information about _what_ went wrong, but in the first implementation we're just doing
-            // the easy thing.
-            return Err(task);
+            let err = TaskAppendError::boundary(&self.tasks, output, &task, input);
+            return Err((task, err));
         }
         self.tasks.push(task);
         Ok(())
@@ -308,7 +254,7 @@ impl PassManager {
     pub fn try_push_static_pass<In: IR, Out: IR>(
         &mut self,
         ob: impl StaticPass<In, Out>,
-    ) -> Result<(), Task> {
+    ) -> Result<(), (Task, TaskAppendError)> {
         self.try_push_task(Task::Transformation(ob.into_pass()))
     }
 
@@ -336,7 +282,7 @@ fn execute_task(
 
     match task {
         Task::Transformation(pass) => pass.run(ir, context),
-        Task::Group(tasks) => {
+        Task::Sequence(tasks) => {
             for task in tasks.iter() {
                 ir = execute_task(task, ir, context)?;
             }
@@ -421,73 +367,84 @@ mod test {
     }
 
     #[test]
-    fn test_io_types() -> Result<(), PassError> {
-        let uint_ty = DynTypeId::of::<MyUint>();
-        let int_ty = DynTypeId::of::<MyInt>();
-
-        let make_uint_pass = || Task::Transformation(AddOne.into_pass());
-        assert_eq!(make_uint_pass().io_types().unwrap(), [uint_ty, uint_ty]);
-
-        let lower_pass = Task::Transformation(LowerToInt.into_pass());
-        assert_eq!(lower_pass.io_types().unwrap(), [uint_ty, int_ty]);
-
-        let stages = Task::Stages(vec![("one_and_only".to_string(), make_uint_pass())]);
-        assert_eq!(stages.io_types().unwrap(), [uint_ty, uint_ty]);
-
-        let nested = Task::Stages(vec![
-            ("pass".to_string(), make_uint_pass()),
-            ("stages".to_string(), stages),
-        ]);
-        assert_eq!(nested.io_types().unwrap(), [uint_ty, uint_ty]);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_io_types_empty() {
-        assert!(Task::Group(vec![]).io_types().is_none());
-        assert!(Task::Stages(vec![]).io_types().is_none());
-
-        let nested_empty = Task::Group(vec![Task::Stages(vec![(
-            "empty".to_string(),
-            Task::Group(vec![]),
-        )])]);
-        assert!(nested_empty.io_types().is_none());
-    }
-
-    #[test]
-    fn test_io_types_skips_empty_children() {
-        let uint_ty = DynTypeId::of::<MyUint>();
-        let int_ty = DynTypeId::of::<MyInt>();
-
-        let empty = || Task::Group(vec![]);
-        let lower = || Task::Transformation(LowerToInt.into_pass());
-
-        let leading = Task::Group(vec![empty(), lower()]);
-        assert_eq!(leading.io_types().unwrap(), [uint_ty, int_ty]);
-
-        let trailing = Task::Group(vec![lower(), empty()]);
-        assert_eq!(trailing.io_types().unwrap(), [uint_ty, int_ty]);
-
-        let surrounded = Task::Stages(vec![
-            ("before".to_string(), empty()),
-            ("lower".to_string(), lower()),
-            ("after".to_string(), empty()),
-        ]);
-        assert_eq!(surrounded.io_types().unwrap(), [uint_ty, int_ty]);
-    }
-
-    #[test]
     fn test_empty_child_keeps_type_checks() {
         let mut pm = PassManager::new();
         pm.try_push_static_pass(LowerToInt).unwrap();
         assert!(
-            pm.try_push_task(Task::Group(vec![
-                Task::Group(vec![]),
+            pm.try_push_task(Task::Sequence(vec![
+                Task::Sequence(vec![]),
                 Task::Transformation(AddOne.into_pass()),
             ]))
             .is_err()
         );
+    }
+
+    #[test]
+    fn test_push_rejects_ill_typed_task() {
+        let mut pm = PassManager::new();
+        let task = Task::Sequence(vec![
+            Task::Transformation(LowerToInt.into_pass()),
+            Task::Transformation(AddOne.into_pass()),
+        ]);
+        let (task, err) = pm.try_push_task(task).unwrap_err();
+        // The task being appended is itself ill-typed
+        let TaskAppendError::Task(TaskTypeError::Sequence { ends }) = &err else {
+            panic!("expected a sequence mismatch, got {err}");
+        };
+        let [output, input] = &**ends;
+        assert_eq!(output.task().path(), [TaskPathSegment::Index(0)]);
+        assert_eq!(input.task().path(), [TaskPathSegment::Index(1)]);
+        // The task is handed back intact, and the pass manager is unchanged.
+        assert!(matches!(task, Task::Sequence(tasks) if tasks.len() == 2));
+        assert_eq!(pm.num_tasks(), 0);
+    }
+
+    #[test]
+    fn test_push_rejects_boundary_mismatch() {
+        let mut pm = PassManager::new();
+        pm.try_push_static_pass(AddOne).unwrap();
+        pm.try_push_static_pass(LowerToInt).unwrap();
+        let (_task, err) = pm
+            .try_push_task(Task::Transformation(AddOne.into_pass()))
+            .unwrap_err();
+        // The existing end is located in the pass manager, the new end in the rejected task.
+        let TaskAppendError::Boundary { existing, new } = &err else {
+            panic!("expected a boundary mismatch, got {err}");
+        };
+        assert_eq!(existing.task().path(), [TaskPathSegment::Index(1)]);
+        assert_eq!(existing.side(), Side::Output);
+        assert_eq!(existing.ty(), "MyInt");
+        assert_eq!(new.task().path(), []);
+        assert_eq!(new.side(), Side::Input);
+        assert_eq!(new.ty(), "MyUint");
+        assert!(
+            err.to_string().contains("at [1] outputs MyInt")
+                && err
+                    .to_string()
+                    .contains("of the appended task takes MyUint"),
+            "{err}"
+        );
+        assert_eq!(pm.num_tasks(), 2);
+    }
+
+    #[test]
+    fn test_nested_task_executes() {
+        let mut pm = PassManager::new();
+        pm.try_push_task(Task::Stages(vec![
+            (
+                "init".to_string(),
+                Task::Sequence(vec![Task::Transformation(AddOne.into_pass())]),
+            ),
+            ("empty".to_string(), Task::Sequence(vec![])),
+            (
+                "lower".to_string(),
+                Task::Transformation(LowerToInt.into_pass()),
+            ),
+        ]))
+        .unwrap();
+
+        let (MyInt(out), _) = pm.run(MyUint(4)).unwrap();
+        assert_eq!(out, 5);
     }
 
     #[test]
@@ -513,20 +470,20 @@ mod test {
     fn test_task_retrieval() {
         let make_task = || Task::Transformation(AddOne.into_pass());
 
-        let group = Task::Group(vec![make_task(), make_task()]);
+        let sequence = Task::Sequence(vec![make_task(), make_task()]);
         let stages = Task::Stages(vec![("one_and_only".to_string(), make_task())]);
 
         let mut pm = PassManager::new();
         pm.try_push_static_pass(AddOne).unwrap();
-        pm.try_push_task(group).unwrap();
+        pm.try_push_task(sequence).unwrap();
         pm.try_push_task(stages).unwrap();
 
         assert!(matches!(pm.get_task(0), Some(Task::Transformation(_))));
 
-        if let Some(Task::Group(group)) = pm.get_task(1) {
-            assert_eq!(group.len(), 2);
+        if let Some(Task::Sequence(tasks)) = pm.get_task(1) {
+            assert_eq!(tasks.len(), 2);
         } else {
-            panic!("Expected a Task::Group");
+            panic!("Expected a Task::Sequence");
         }
 
         if let Some(Task::Stages(stages)) = pm.get_task(2) {

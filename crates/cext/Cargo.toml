@@ -20,6 +20,7 @@ num-complex.workspace = true
 qiskit-quantum-info.workspace = true
 qiskit-circuit  = { workspace = true, features = ["passmanager"] }
 qiskit-circuit-library.workspace = true
+qiskit-mir.workspace = true
 qiskit-passmanager.workspace = true
 qiskit-transpiler.workspace = true
 qiskit-qpy.workspace = true
@@ -32,7 +33,7 @@ hashbrown.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
 anyhow.workspace = true
-mimalloc = { workspace = true, optional = true }
+mimalloc = { workspace = true, optional = true, features = ["local_dynamic_tls"] }
 uuid.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true

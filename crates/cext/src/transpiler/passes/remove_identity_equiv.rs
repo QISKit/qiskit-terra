@@ -10,8 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
-
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_transpiler::passes::run_remove_identity_equiv;
@@ -49,8 +47,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_remove_identity_equivalen
     approximation_degree: f64,
 ) {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let circuit = unsafe { &mut *circuit };
+    let target = unsafe { &*target };
     let mut dag = match DAGCircuit::from_circuit_data(circuit, false, None, None) {
         Ok(dag) => dag,
         Err(e) => panic!("{}", e),
@@ -147,8 +145,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_remove_identity_equivalent(
     approximation_degree: f64,
 ) {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let dag = unsafe { &mut *dag };
+    let target = unsafe { &*target };
     let approximation_degree = if approximation_degree.is_nan() {
         None
     } else {

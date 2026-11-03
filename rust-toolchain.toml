@@ -1,6 +1,6 @@
 [toolchain]
 # Keep in sync with Cargo.toml's `rust-version`.
-channel = "1.89"
+channel = "1.91"
 components = [
   "cargo",
   "clippy",

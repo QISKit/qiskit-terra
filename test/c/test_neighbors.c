@@ -29,31 +29,31 @@ static int test_all_to_all(void) {
     }
     QkNeighbors neighbors;
     if (!qk_neighbors_from_target(target, &neighbors)) {
-        printf("%s: incorrect return from `qk_neighbors_from_target`\n", __func__);
+        fprintf(stderr, "%s: incorrect return from `qk_neighbors_from_target`\n", __func__);
         res = EqualityError;
         goto cleanup;
     }
     if (!qk_neighbors_is_all_to_all(&neighbors)) {
-        printf("%s: incorrect return from `qk_neighbors_is_all_to_all`\n", __func__);
+        fprintf(stderr, "%s: incorrect return from `qk_neighbors_is_all_to_all`\n", __func__);
         res = EqualityError;
         goto cleanup;
     }
     if (neighbors.neighbors || neighbors.partition) {
-        printf("%s: pointers should be null but are (%p, %p)\n", __func__,
-               (void *)neighbors.neighbors, (void *)neighbors.partition);
+        fprintf(stderr, "%s: pointers should be null but are (%p, %p)\n", __func__,
+                (void *)neighbors.neighbors, (void *)neighbors.partition);
         res = EqualityError;
         goto cleanup;
     }
     if (neighbors.num_qubits != num_qubits) {
-        printf("%s: incorrect num_qubits: %u\n", __func__, neighbors.num_qubits);
+        fprintf(stderr, "%s: incorrect num_qubits: %u\n", __func__, neighbors.num_qubits);
         res = EqualityError;
         goto cleanup;
     }
     // This isn't necessary to call since there's no allocations, but let's call it for coverage.
     qk_neighbors_clear(&neighbors);
     if (neighbors.neighbors || neighbors.partition) {
-        printf("%s: `qk_neighbors_free` wrote non-null pointers (%p, %p)\n", __func__,
-               (void *)neighbors.neighbors, (void *)neighbors.partition);
+        fprintf(stderr, "%s: `qk_neighbors_free` wrote non-null pointers (%p, %p)\n", __func__,
+                (void *)neighbors.neighbors, (void *)neighbors.partition);
         res = EqualityError;
         goto cleanup;
     }
@@ -81,23 +81,23 @@ static int test_multiq(void) {
 
     QkNeighbors neighbors;
     if (qk_neighbors_from_target(target, &neighbors)) {
-        printf("%s: incorrect return from `qk_neighbors_from_target`\n", __func__);
+        fprintf(stderr, "%s: incorrect return from `qk_neighbors_from_target`\n", __func__);
         res = EqualityError;
         goto cleanup_target;
     }
     if (!neighbors.neighbors || !neighbors.partition) {
-        printf("%s: pointers should be non-null but are (%p, %p)\n", __func__,
-               (void *)neighbors.neighbors, (void *)neighbors.partition);
+        fprintf(stderr, "%s: pointers should be non-null but are (%p, %p)\n", __func__,
+                (void *)neighbors.neighbors, (void *)neighbors.partition);
         res = NullptrError;
         goto cleanup_target;
     }
     if (qk_neighbors_is_all_to_all(&neighbors)) {
-        printf("%s: incorrect return from `qk_neighbors_is_all_to_all`\n", __func__);
+        fprintf(stderr, "%s: incorrect return from `qk_neighbors_is_all_to_all`\n", __func__);
         res = EqualityError;
         goto cleanup_neighbors;
     }
     if (neighbors.num_qubits != num_qubits) {
-        printf("%s: incorrect num_qubits: %u\n", __func__, neighbors.num_qubits);
+        fprintf(stderr, "%s: incorrect num_qubits: %u\n", __func__, neighbors.num_qubits);
         res = EqualityError;
         goto cleanup_neighbors;
     }
@@ -105,15 +105,15 @@ static int test_multiq(void) {
     size_t expected_partition[] = {0, 1, 3, 5, 7, 8};
     if (memcmp(expected_partition, neighbors.partition, sizeof(expected_partition)) ||
         memcmp(expected_neighbors, neighbors.neighbors, sizeof(expected_neighbors))) {
-        printf("%s: incorrect data in neighbors\n", __func__);
+        fprintf(stderr, "%s: incorrect data in neighbors\n", __func__);
         res = EqualityError;
         goto cleanup_neighbors;
     }
 cleanup_neighbors:
     qk_neighbors_clear(&neighbors);
     if (neighbors.neighbors || neighbors.partition) {
-        printf("%s: `qk_neighbors_free` wrote non-null pointers (%p, %p)\n", __func__,
-               (void *)neighbors.neighbors, (void *)neighbors.partition);
+        fprintf(stderr, "%s: `qk_neighbors_free` wrote non-null pointers (%p, %p)\n", __func__,
+                (void *)neighbors.neighbors, (void *)neighbors.partition);
         res = EqualityError;
         goto cleanup_target;
     }

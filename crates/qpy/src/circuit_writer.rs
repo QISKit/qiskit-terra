@@ -21,6 +21,7 @@
 use hashbrown::{HashMap, HashSet};
 use num_bigint::BigUint;
 use num_traits::ToPrimitive;
+use pyo3::exceptions::PyUserWarning;
 use qiskit_util::IndexSet;
 use std::sync::Arc;
 
@@ -280,6 +281,25 @@ fn pack_instruction(
     // common data extraction for all instruction types
     if let Some(label) = instruction.label.as_deref() {
         instruction_pack.label = label.clone();
+        if label.len() > u16::MAX as usize {
+            if matches!(qpy_data.caller, QpyCaller::Python) {
+                // if we are in python we can emit warnings
+                // otherwise we just silently truncate the label
+                qpy_data.caller.attach(
+                    "warn about truncated label",
+                    |py| -> Result<_, QpyError> {
+                        imports::WARNINGS_WARN.get_bound(py).call1((
+                            "Label exceeded maximum length and was truncated.",
+                            py.get_type::<PyUserWarning>(),
+                            1,
+                        ))?;
+                        Ok(())
+                    },
+                )?;
+            }
+            instruction_pack.label.truncate(u16::MAX as usize - 3);
+            instruction_pack.label.push_str("...");
+        }
     }
     instruction_pack.bit_data = get_packed_bit_list(instruction, qpy_data.circuit_data);
     if matches!(qpy_data.caller, QpyCaller::Python)
@@ -1199,17 +1219,17 @@ fn pack_custom_instruction(
             base_gate = gate.getattr("base_gate")?.clone();
             let definition: QuantumCircuitData = gate.getattr("_definition")?.extract()?;
             let metadata = serialize_metadata(&definition.metadata, None)?;
-            let layout = serialize(&pack_layout(
+            let layout = pack_layout(
                 definition.transpile_layout.clone(),
                 &definition.data,
                 qpy_data.version,
-            )?)?;
+            )?;
             Some(serialize(&pack_circuit(
                 &definition.data,
                 ExtraCircuitData {
                     name: definition.name,
                     metadata,
-                    layout,
+                    layout: Some(layout),
                 },
                 qpy_data.version,
                 qpy_data.annotation_handler.child()?,
@@ -1224,17 +1244,14 @@ fn pack_custom_instruction(
             .py_definition(py)?
             .map(|defn| {
                 let metadata = serialize_metadata(&defn.metadata, None)?;
-                let layout = serialize(&pack_layout(
-                    defn.transpile_layout.clone(),
-                    &defn.data,
-                    qpy_data.version,
-                )?)?;
+                let layout =
+                    pack_layout(defn.transpile_layout.clone(), &defn.data, qpy_data.version)?;
                 pack_circuit(
                     &defn.data,
                     ExtraCircuitData {
                         name: defn.name,
                         metadata,
-                        layout,
+                        layout: Some(layout),
                     },
                     qpy_data.version,
                     qpy_data.annotation_handler.child()?,
@@ -1412,15 +1429,7 @@ pub(crate) fn pack_circuit(
     let (instructions, mut custom_instructions_hash) = pack_instructions(&mut qpy_data)?;
     let custom_instructions =
         pack_custom_instructions(&mut custom_instructions_hash, &mut qpy_data)?;
-    let layout = if extra.layout.is_empty() {
-        default_layout()
-    } else {
-        crate::value::deserialize_with_args::<formats::LayoutV2Pack, (u8,)>(
-            &extra.layout,
-            (version,),
-        )?
-        .0
-    };
+    let layout = extra.layout.unwrap_or_else(default_layout);
     let state_headers: Vec<formats::AnnotationStateHeaderPack> = qpy_data
         .annotation_handler
         .dump_serializers()?

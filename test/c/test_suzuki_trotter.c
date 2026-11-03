@@ -182,7 +182,7 @@ static int test_tri_ising_hamiltonian(void) {
     const size_t num_types = 7;
     if (counts.len != num_types) {
         result = EqualityError;
-        printf("Expected %zu operations, but found %zu\n", num_types, counts.len);
+        fprintf(stderr, "Expected %zu operations, but found %zu\n", num_types, counts.len);
         // goto cleanup;
     }
 
@@ -196,44 +196,48 @@ static int test_tri_ising_hamiltonian(void) {
             strcmp(count.name, "sxdg") == 0) {
             if (count.count != num_zzz_terms) {
                 result = EqualityError;
-                printf("Expected %zu %s gates, but found %zu\n", num_zzz_terms, count.name,
-                       count.count);
+                fprintf(stderr, "Expected %zu %s gates, but found %zu\n", num_zzz_terms, count.name,
+                        count.count);
                 goto cleanup;
             }
         } else if (strcmp(count.name, "h") == 0) {
             if (count.count != 2 * num_zzz_terms) {
                 result = EqualityError;
-                printf("Expected %zu h gates, but found %zu\n", 2 * num_zzz_terms, count.count);
+                fprintf(stderr, "Expected %zu h gates, but found %zu\n", 2 * num_zzz_terms,
+                        count.count);
                 goto cleanup;
             }
         } else if (strcmp(count.name, "cx") == 0) {
             if (count.count != 4 * num_zzz_terms) {
                 result = EqualityError;
-                printf("Expected %zu cx gates, but found %zu\n", 4 * num_zzz_terms, count.count);
+                fprintf(stderr, "Expected %zu cx gates, but found %zu\n", 4 * num_zzz_terms,
+                        count.count);
                 goto cleanup;
             }
         } else if (strcmp(count.name, "rzz") == 0) {
             if (count.count != num_zz_terms) {
                 result = EqualityError;
-                printf("Expected %zu rzz gates, but found %zu\n", num_zz_terms, count.count);
+                fprintf(stderr, "Expected %zu rzz gates, but found %zu\n", num_zz_terms,
+                        count.count);
                 goto cleanup;
             }
         } else if (strcmp(count.name, "rzz") == 0) {
             if (count.count != num_zz_terms) {
                 result = EqualityError;
-                printf("Expected %zu rzz gates, but found %zu\n", num_zz_terms, count.count);
+                fprintf(stderr, "Expected %zu rzz gates, but found %zu\n", num_zz_terms,
+                        count.count);
                 goto cleanup;
             }
         } else if (strcmp(count.name, "rx") == 0) {
             if (count.count != num_x_terms) {
                 result = EqualityError;
-                printf("Expected %zu rx gates, but found %zu\n", num_x_terms, count.count);
+                fprintf(stderr, "Expected %zu rx gates, but found %zu\n", num_x_terms, count.count);
                 goto cleanup;
             }
         } else {
             // Invalid name in the dictionary.
             result = EqualityError;
-            printf("Invalid operation: %s\n", count.name);
+            fprintf(stderr, "Invalid operation: %s\n", count.name);
             goto cleanup;
         }
     }

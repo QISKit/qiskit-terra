@@ -1,0 +1,12 @@
+---
+fixes:
+  - |
+    Changed the base gate of the :class:`.ControlledGate` subclass :class:`.CUGate`
+    from :class:`.UGate` to :class:`.U4Gate`. This ensures that the parameters of
+    :class:`.CUGate` match those of its underlying base gate.
+    See `#17223  <https://github.com/Qiskit/qiskit/issues/17223>`__.
+
+features_circuits:
+  - |
+    Added :class:`.U4Gate`, which represents a generic :math:`U(2)` operation by extending
+    :class:`.UGate` with an additional global-phase parameter.

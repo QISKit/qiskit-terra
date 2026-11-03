@@ -402,7 +402,7 @@ that will all need to be adjusted in a suitable manner.
    * updates the C API "slots check" file
      <details>
      This updates the C-API slots lint job to use this new release as the base
-     for semver compatibility checks for new PR.
+     for semver compatibility checks for new PRs.
 
      ```bash
      cargo run -p qiskit-bindgen-cli -- show-slots > capi_slots.txt
@@ -573,7 +573,7 @@ the example version number; adjust as appropriate.
      Adjust the base tag (`2.3.0`) and stable branch (`stable/2.3`) as appropriate.
      </details>
 
-   * bumps the package-version defining numbers from the previous (`2.3.0`) to the final (`2.3.0`)
+   * bumps the package-version defining numbers from the previous (`2.3.0`) to the final (`2.3.1`)
      <details>
      This should bump only the places that actually specify the version of the package and not any
      repository-automation or documentation systems.
@@ -640,7 +640,7 @@ Recipe:
 
 5. Announce the release.
 
-   Places to anounce:
+   Places to announce:
 
    * IBM-internal Slack channels (ask if you are unsure).
    * [Public Qiskit Slack channels](https://qiskit.enterprise.slack.com): `#announcements` (final
@@ -693,7 +693,7 @@ messy and you may encounter problems, so watch the output of that command and:
     Similarly, `numpy` depends on PyO3, and the version of PyO3 it uses needs to match the version
     that Qiskit uses.
 
-  * Some libraries use external types from dependencies in their public interfaces, so they need to
+  * Some libraries use external types from dependencies in their public interfaces, so
     Qiskit and that library need to use the same version of the dependency.  This is most common
     with `rustworkx` using `hashbrown` types.  Similar to the previous bullet point, you might have
     to manually edit `Cargo.lock` to fix the situation.

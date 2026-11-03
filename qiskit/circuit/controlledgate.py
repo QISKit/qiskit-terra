@@ -161,14 +161,14 @@ class ControlledGate(Gate):
             return self._name
 
     @name.setter
-    def name(self, name_str):
+    def name(self, name_str: str) -> None:
         """Set the name of the gate. Note the reported name may differ
         from the set name if the gate has open controls.
         """
         self._name = name_str
 
     @property
-    def num_ctrl_qubits(self):
+    def num_ctrl_qubits(self) -> int:
         """Get number of control qubits.
 
         Returns:
@@ -177,7 +177,7 @@ class ControlledGate(Gate):
         return self._num_ctrl_qubits
 
     @num_ctrl_qubits.setter
-    def num_ctrl_qubits(self, num_ctrl_qubits):
+    def num_ctrl_qubits(self, num_ctrl_qubits: int) -> None:
         """Set the number of control qubits.
 
         Args:

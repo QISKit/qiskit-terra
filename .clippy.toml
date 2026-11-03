@@ -1,8 +1,8 @@
 disallowed-types = [
-    "std::collections::HashSet",
-    "std::collections::HashMap",
-    "ahash::HashSet",
-    "ahash::HashMap",
-    "indexmap::IndexMap",
-    "indexmap::IndexSet",
+    { path = "std::collections::HashSet", replacement = "hashbrown::HashSet" },
+    { path = "std::collections::HashMap", replacement = "hashbrown::HashMap" },
+    { path = "ahash::HashSet", replacement = "hashbrown::HashSet" },
+    { path = "ahash::HashMap", replacement = "hashbrown::HashMap" },
+    { path = "indexmap::IndexMap", replacement = "qiskit_util::IndexMap" },
+    { path = "indexmap::IndexSet", replacement = "qiskit_util::IndexSet" },
 ]

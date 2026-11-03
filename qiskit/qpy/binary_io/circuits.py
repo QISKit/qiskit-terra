@@ -58,6 +58,8 @@ from qiskit._accelerate import qpy as _qpy
 if typing.TYPE_CHECKING:
     from qiskit.circuit.annotation import QPYSerializer, Annotation
 
+MAX_LABEL_SIZE = 65535
+
 
 class _AnnotationSerializationState:
     def __init__(self, factories: dict[str, typing.Callable[[], QPYSerializer]]):
@@ -1079,6 +1081,16 @@ def _write_instruction(
     label = getattr(instruction.operation, "label", None)
     if label:
         label_raw = label.encode(common.ENCODE)
+        if len(label_raw) > MAX_LABEL_SIZE:
+            warnings.warn(
+                "Label exceeded maximum length and was truncated.",
+                UserWarning,
+                stacklevel=3,
+            )
+            # Truncation may split UTF-8 characters. re-encode to fix.
+            label = label_raw[: MAX_LABEL_SIZE - 3].decode(common.ENCODE, errors="ignore") + "..."
+            label_raw = label.encode(common.ENCODE)
+
     else:
         label_raw = b""
 

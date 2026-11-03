@@ -1716,7 +1716,6 @@ impl PyParameter {
     module="qiskit._accelerate.circuit",
     extends=PyParameter,
     name="ParameterVectorElement",
-    skip_from_py_object
 )]
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
 // This carries no data in Rust space; `PyParameter`/`Symbol` already has it all.  It's just a
@@ -1810,8 +1809,7 @@ impl PyParameterVectorElement {
 #[pyclass(
     sequence,
     module = "qiskit._accelerate.circuit",
-    name = "ParameterVector",
-    skip_from_py_object
+    name = "ParameterVector"
 )]
 pub struct PyParameterVector {
     base: Arc<SymbolVector>,
@@ -2071,8 +2069,8 @@ unsafe impl ::bytemuck::CheckedBitPattern for OpCode {
 unsafe impl ::bytemuck::NoUninit for OpCode {}
 
 impl OpCode {
-    pub fn from_u8(value: u8) -> PyResult<OpCode> {
-        Ok(bytemuck::checked::cast::<u8, OpCode>(value))
+    pub fn try_from_u8(value: u8) -> Result<OpCode, bytemuck::checked::CheckedCastError> {
+        bytemuck::checked::try_cast::<u8, OpCode>(value)
     }
 }
 
@@ -2231,8 +2229,15 @@ fn qpy_replay_inner(
             // recurse on the parameter expressions
             let lhs = filter_name_map(lhs, name_map);
             let rhs = filter_name_map(rhs, name_map);
-            qpy_replay_inner(&lhs, name_map, replay, unused);
-            qpy_replay_inner(&rhs, name_map, replay, unused);
+            // If the extracted value resolved into a concrete value, we don't need to recurse
+            // into it, since its computed value will be stored along
+            // with the operation in the replay.
+            if matches!(lhs_value, Some(ParameterValueType::Parameter(_)) | None) {
+                qpy_replay_inner(&lhs, name_map, replay, unused);
+            }
+            if matches!(rhs_value, Some(ParameterValueType::Parameter(_)) | None) {
+                qpy_replay_inner(&rhs, name_map, replay, unused);
+            }
 
             // add the expression to the replay
             match lhs_value {
@@ -2322,5 +2327,15 @@ fn qpy_replay_inner(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_op_code_from_u8_invalid_input() {
+        assert!(OpCode::try_from_u8(123).is_err())
     }
 }

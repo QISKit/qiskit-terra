@@ -105,17 +105,17 @@ bool compare_qargs(uint32_t *lhs, uint32_t *rhs, size_t length) {
 
 void print_qargs(uint32_t *qargs, size_t length) {
     if (qargs == NULL) {
-        printf("Global");
+        fprintf(stderr, "Global");
     } else {
-        printf("[");
+        fprintf(stderr, "[");
         for (uint32_t q_idx = 0; q_idx < length; q_idx++) {
             if (q_idx < length - 1) {
-                printf("%u, ", qargs[q_idx]);
+                fprintf(stderr, "%u, ", qargs[q_idx]);
             } else {
-                printf("%u", qargs[q_idx]);
+                fprintf(stderr, "%u", qargs[q_idx]);
             }
         }
-        printf("]");
+        fprintf(stderr, "]");
     }
 }
 
@@ -128,42 +128,42 @@ static int test_empty_target(void) {
     uint32_t num_qubits = qk_target_num_qubits(target);
 
     if (num_qubits != 0) {
-        printf("The number of qubits %u is not 0.", num_qubits);
+        fprintf(stderr, "The number of qubits %u is not 0.", num_qubits);
         result = EqualityError;
         goto cleanup;
     }
 
     double retrieved_dt = qk_target_dt(target);
     if (!isnan(retrieved_dt)) {
-        printf("The dt value of this target %f is not %f.", retrieved_dt, NAN);
+        fprintf(stderr, "The dt value of this target %f is not %f.", retrieved_dt, NAN);
         result = EqualityError;
         goto cleanup;
     }
 
     uint32_t retrieved_granularity = qk_target_granularity(target);
     if (retrieved_granularity != 1) {
-        printf("The granularity %u is not 1.", retrieved_granularity);
+        fprintf(stderr, "The granularity %u is not 1.", retrieved_granularity);
         result = EqualityError;
         goto cleanup;
     }
 
     uint32_t retrieved_min_length = qk_target_min_length(target);
     if (retrieved_min_length != 1) {
-        printf("The min_length %u is not 1.", retrieved_min_length);
+        fprintf(stderr, "The min_length %u is not 1.", retrieved_min_length);
         result = EqualityError;
         goto cleanup;
     }
 
     uint32_t pulse_alignment = qk_target_pulse_alignment(target);
     if (pulse_alignment != 1) {
-        printf("The pulse_alignment values %u is not 1.", pulse_alignment);
+        fprintf(stderr, "The pulse_alignment values %u is not 1.", pulse_alignment);
         result = EqualityError;
         goto cleanup;
     }
 
     uint32_t acquire_alignment = qk_target_acquire_alignment(target);
     if (acquire_alignment != 1) {
-        printf("The acquire_alignment values %u is not 1.", acquire_alignment);
+        fprintf(stderr, "The acquire_alignment values %u is not 1.", acquire_alignment);
         result = EqualityError;
         goto cleanup;
     }
@@ -194,42 +194,42 @@ static int test_target_construct(void) {
 
     uint32_t retrieved_num_qubits = qk_target_num_qubits(target);
     if (retrieved_num_qubits != 2) {
-        printf("The number of qubits %u is not 0.", num_qubits);
+        fprintf(stderr, "The number of qubits %u is not 0.", num_qubits);
         result = EqualityError;
         goto cleanup;
     }
 
     double retrieved_dt = qk_target_dt(target);
     if (retrieved_dt != dt) {
-        printf("The dt value of this target %f is not %f.", retrieved_dt, dt);
+        fprintf(stderr, "The dt value of this target %f is not %f.", retrieved_dt, dt);
         result = EqualityError;
         goto cleanup;
     }
 
     uint32_t retrieved_granularity = qk_target_granularity(target);
     if (retrieved_granularity != 2) {
-        printf("The granularity %u is not 2.", retrieved_granularity);
+        fprintf(stderr, "The granularity %u is not 2.", retrieved_granularity);
         result = EqualityError;
         goto cleanup;
     }
 
     uint32_t retrieved_min_length = qk_target_min_length(target);
     if (retrieved_min_length != 3) {
-        printf("The min_length %u is not 3.", retrieved_min_length);
+        fprintf(stderr, "The min_length %u is not 3.", retrieved_min_length);
         result = EqualityError;
         goto cleanup;
     }
 
     uint32_t pulse_alignment = qk_target_pulse_alignment(target);
     if (pulse_alignment != 4) {
-        printf("The pulse_alignment values %u is not 4.", pulse_alignment);
+        fprintf(stderr, "The pulse_alignment values %u is not 4.", pulse_alignment);
         result = EqualityError;
         goto cleanup;
     }
 
     uint32_t acquire_alignment = qk_target_acquire_alignment(target);
     if (acquire_alignment != 1) {
-        printf("The acquire_alignment values %u is not 1.", acquire_alignment);
+        fprintf(stderr, "The acquire_alignment values %u is not 1.", acquire_alignment);
         result = EqualityError;
         goto cleanup;
     }
@@ -249,7 +249,7 @@ static int test_target_construction_ibm_like_target(void) {
     uint32_t cx_qargs[2] = {0, 1};
     QkExitCode result_prop = qk_target_entry_add_property(cx_entry, cx_qargs, 2, 2.2e-4, 6.2e-9);
     if (result_prop != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding entry.");
+        fprintf(stderr, "Unexpected error occurred when adding entry.");
         qk_target_entry_free(cx_entry);
         result = EqualityError;
         goto cleanup;
@@ -257,7 +257,7 @@ static int test_target_construction_ibm_like_target(void) {
     cx_qargs[0] = 2;
     result_prop = qk_target_entry_add_property(cx_entry, cx_qargs, 2, 3.2e-4, 4.2e-9);
     if (result_prop != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding entry.");
+        fprintf(stderr, "Unexpected error occurred when adding entry.");
         qk_target_entry_free(cx_entry);
         result = EqualityError;
         goto cleanup;
@@ -265,7 +265,7 @@ static int test_target_construction_ibm_like_target(void) {
     cx_qargs[1] = 3;
     result_prop = qk_target_entry_add_property(cx_entry, cx_qargs, 2, 1.2e-4, 4.2e-8);
     if (result_prop != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding entry.");
+        fprintf(stderr, "Unexpected error occurred when adding entry.");
         qk_target_entry_free(cx_entry);
         result = EqualityError;
         goto cleanup;
@@ -273,14 +273,14 @@ static int test_target_construction_ibm_like_target(void) {
     cx_qargs[0] = 4;
     result_prop = qk_target_entry_add_property(cx_entry, cx_qargs, 2, 1.2e-3, 2.2e-8);
     if (result_prop != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding entry.");
+        fprintf(stderr, "Unexpected error occurred when adding entry.");
         qk_target_entry_free(cx_entry);
         result = EqualityError;
         goto cleanup;
     }
     QkExitCode result_cx = qk_target_add_instruction(target, cx_entry);
     if (result_cx != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a CX gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a CX gate.");
         result = EqualityError;
         goto cleanup;
     }
@@ -290,7 +290,7 @@ static int test_target_construction_ibm_like_target(void) {
         uint32_t qargs[1] = {i};
         result_prop = qk_target_entry_add_property(rz_entry, qargs, 1, 0, 0);
         if (result_prop != QkExitCode_Success) {
-            printf("Unexpected error occurred when adding entry.");
+            fprintf(stderr, "Unexpected error occurred when adding entry.");
             result = EqualityError;
             qk_target_entry_free(rz_entry);
             goto cleanup;
@@ -298,7 +298,7 @@ static int test_target_construction_ibm_like_target(void) {
     }
     QkExitCode result_rz = qk_target_add_instruction(target, rz_entry);
     if (result_rz != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a parameterized RZ gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a parameterized RZ gate.");
         result = EqualityError;
         goto cleanup;
     }
@@ -308,7 +308,7 @@ static int test_target_construction_ibm_like_target(void) {
         uint32_t qargs[1] = {i};
         result_prop = qk_target_entry_add_property(sx_entry, qargs, 1, 1.928e-10, 7.9829e-11);
         if (result_prop != QkExitCode_Success) {
-            printf("Unexpected error occurred when adding entry.");
+            fprintf(stderr, "Unexpected error occurred when adding entry.");
             result = EqualityError;
             qk_target_entry_free(sx_entry);
             goto cleanup;
@@ -316,7 +316,7 @@ static int test_target_construction_ibm_like_target(void) {
     }
     QkExitCode result_sx = qk_target_add_instruction(target, sx_entry);
     if (result_sx != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a parameterized RZ gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a parameterized RZ gate.");
         result = EqualityError;
         goto cleanup;
     }
@@ -326,7 +326,7 @@ static int test_target_construction_ibm_like_target(void) {
         uint32_t qargs[1] = {i};
         result_prop = qk_target_entry_add_property(x_entry, qargs, 1, 1.928e-10, 7.9829e-11);
         if (result_prop != QkExitCode_Success) {
-            printf("Unexpected error occurred when adding entry.");
+            fprintf(stderr, "Unexpected error occurred when adding entry.");
             result = EqualityError;
             qk_target_entry_free(x_entry);
             goto cleanup;
@@ -334,7 +334,7 @@ static int test_target_construction_ibm_like_target(void) {
     }
     QkExitCode result_x = qk_target_add_instruction(target, x_entry);
     if (result_x != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a parameterized RZ gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a parameterized RZ gate.");
         result = EqualityError;
         goto cleanup;
     }
@@ -344,7 +344,7 @@ static int test_target_construction_ibm_like_target(void) {
         uint32_t qargs[1] = {i};
         result_prop = qk_target_entry_add_property(measure_entry, qargs, 1, 1.928e-10, 7.9829e-11);
         if (result_prop != QkExitCode_Success) {
-            printf("Unexpected error occurred when adding entry.");
+            fprintf(stderr, "Unexpected error occurred when adding entry.");
             result = EqualityError;
             qk_target_entry_free(measure_entry);
             goto cleanup;
@@ -352,7 +352,7 @@ static int test_target_construction_ibm_like_target(void) {
     }
     QkExitCode result_measure = qk_target_add_instruction(target, measure_entry);
     if (result_measure != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a parameterized RZ gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a parameterized RZ gate.");
         result = EqualityError;
         goto cleanup;
     }
@@ -372,7 +372,8 @@ static int test_target_entry_construction(void) {
     // Test length
     const size_t length = qk_target_entry_num_properties(property_map);
     if (length != 0) {
-        printf("The initial length of the provided property map was not zero: %zu", length);
+        fprintf(stderr, "The initial length of the provided property map was not zero: %zu",
+                length);
         result = EqualityError;
         goto cleanup;
     }
@@ -382,13 +383,13 @@ static int test_target_entry_construction(void) {
 
     QkExitCode result_prop = qk_target_entry_add_property(property_map, qargs, 2, 0.00018, 0.00002);
     if (result_prop != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding entry.");
+        fprintf(stderr, "Unexpected error occurred when adding entry.");
     }
 
     // Test length
     const size_t new_length = qk_target_entry_num_properties(property_map);
     if (new_length != 1) {
-        printf("The initial length of the provided property map was not 1: %zu", length);
+        fprintf(stderr, "The initial length of the provided property map was not 1: %zu", length);
         result = EqualityError;
         goto cleanup;
     }
@@ -400,13 +401,13 @@ static int test_target_entry_construction(void) {
     QkExitCode error_result =
         qk_target_entry_add_property(property_map, invalid_qargs, 3, 0.00018, 0.00002);
     if (error_result != QkExitCode_TargetQargMismatch) {
-        printf("The operation did not fail as expected for invalid qargs.");
+        fprintf(stderr, "The operation did not fail as expected for invalid qargs.");
     }
 
     // Set name for the entry
     QkExitCode set_name_error = qk_target_entry_set_name(property_map, "cx_gate");
     if (set_name_error != QkExitCode_Success) {
-        printf("Unexpected error occurred when setting the name of the entry.\n");
+        fprintf(stderr, "Unexpected error occurred when setting the name of the entry.\n");
         result = EqualityError;
         goto cleanup;
     }
@@ -429,7 +430,7 @@ static int test_target_add_instruction(void) {
     // This operation is global, no property map is provided
     QkExitCode result_x = qk_target_add_instruction(target, qk_target_entry_new(QkGate_X));
     if (result_x != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a global X gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a global X gate.");
         result = EqualityError;
         goto cleanup;
     }
@@ -437,7 +438,7 @@ static int test_target_add_instruction(void) {
     // Re-add same gate, check if it fails
     QkExitCode result_x_readded = qk_target_add_instruction(target, qk_target_entry_new(QkGate_X));
     if (result_x_readded != QkExitCode_TargetInstAlreadyExists) {
-        printf("The addition of a repeated gate did not fail as expected.");
+        fprintf(stderr, "The addition of a repeated gate did not fail as expected.");
         result = EqualityError;
         goto cleanup;
     }
@@ -445,14 +446,15 @@ static int test_target_add_instruction(void) {
     // Number of qubits of the target should not change.
     uint32_t current_num_qubits = qk_target_num_qubits(target);
     if (current_num_qubits != 1) {
-        printf("The number of qubits this target is compatible with is not 1: %u",
-               current_num_qubits);
+        fprintf(stderr, "The number of qubits this target is compatible with is not 1: %u",
+                current_num_qubits);
         result = EqualityError;
         goto cleanup;
     }
     size_t current_size = qk_target_num_instructions(target);
     if (current_size != 1) {
-        printf("The size of this target is not correct: Expected 1, got %zu", current_size);
+        fprintf(stderr, "The size of this target is not correct: Expected 1, got %zu",
+                current_size);
         result = EqualityError;
         goto cleanup;
     }
@@ -468,14 +470,14 @@ static int test_target_add_instruction(void) {
     QkExitCode result_cx_props =
         qk_target_entry_add_property(cx_entry, qargs, 2, inst_duration, inst_error);
     if (result_cx_props != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding property to a CX gate entry.");
+        fprintf(stderr, "Unexpected error occurred when adding property to a CX gate entry.");
         result = EqualityError;
         goto cleanup;
     }
 
     QkExitCode result_cx = qk_target_add_instruction(target, cx_entry);
     if (result_cx != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a CX gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a CX gate.");
         result = EqualityError;
         goto cleanup;
     }
@@ -483,14 +485,15 @@ static int test_target_add_instruction(void) {
     // Number of qubits of the target should change to 2.
     current_num_qubits = qk_target_num_qubits(target);
     if (current_num_qubits != 2) {
-        printf("The number of qubits this target is compatible with is not 2: %u",
-               current_num_qubits);
+        fprintf(stderr, "The number of qubits this target is compatible with is not 2: %u",
+                current_num_qubits);
         result = EqualityError;
         goto cleanup;
     }
     current_size = qk_target_num_instructions(target);
     if (current_size != 2) {
-        printf("The size of this target is not correct: Expected 2, got %zu", current_size);
+        fprintf(stderr, "The size of this target is not correct: Expected 2, got %zu",
+                current_size);
         result = EqualityError;
         goto cleanup;
     }
@@ -506,14 +509,14 @@ static int test_target_add_instruction(void) {
     QkExitCode result_crx_props =
         qk_target_entry_add_property(crx_entry, crx_qargs, 2, crx_inst_duration, crx_inst_error);
     if (result_crx_props != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding property to a CX gate entry.");
+        fprintf(stderr, "Unexpected error occurred when adding property to a CX gate entry.");
         result = EqualityError;
         goto cleanup;
     }
 
     QkExitCode result_crx = qk_target_add_instruction(target, crx_entry);
     if (result_crx != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a CX gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a CX gate.");
         result = EqualityError;
         goto cleanup;
     }
@@ -521,14 +524,15 @@ static int test_target_add_instruction(void) {
     // Number of qubits of the target should change to 3.
     current_num_qubits = qk_target_num_qubits(target);
     if (current_num_qubits != 3) {
-        printf("The number of qubits this target is compatible with is not 3: %d",
-               current_num_qubits);
+        fprintf(stderr, "The number of qubits this target is compatible with is not 3: %d",
+                current_num_qubits);
         result = EqualityError;
         goto cleanup;
     }
     current_size = qk_target_num_instructions(target);
     if (current_size != 3) {
-        printf("The size of this target is not correct: Expected 3, got %zu", current_size);
+        fprintf(stderr, "The size of this target is not correct: Expected 3, got %zu",
+                current_size);
         result = EqualityError;
         goto cleanup;
     }
@@ -541,7 +545,7 @@ static int test_target_add_instruction(void) {
     }
     size_t num_meas = qk_target_entry_num_properties(meas);
     if (num_meas != 3) {
-        printf("Expected 3 measurement entries but got: %zu", num_meas);
+        fprintf(stderr, "Expected 3 measurement entries but got: %zu", num_meas);
         result = EqualityError;
         qk_target_entry_free(meas);
         goto cleanup;
@@ -549,22 +553,23 @@ static int test_target_add_instruction(void) {
 
     QkExitCode result_meas_props = qk_target_add_instruction(target, meas);
     if (result_meas_props != 0) {
-        printf("Failed adding measurement instruction.");
+        fprintf(stderr, "Failed adding measurement instruction.");
         result = EqualityError;
         goto cleanup;
     }
     // Number of qubits of the target should remain 3.
     current_num_qubits = qk_target_num_qubits(target);
     if (current_num_qubits != 3) {
-        printf("The number of qubits this target is compatible with is not 3: %d",
-               current_num_qubits);
+        fprintf(stderr, "The number of qubits this target is compatible with is not 3: %d",
+                current_num_qubits);
         result = EqualityError;
         goto cleanup;
     }
 
     current_size = qk_target_num_instructions(target);
     if (current_size != 4) {
-        printf("The size of this target is not correct: Expected 4, got %zu", current_size);
+        fprintf(stderr, "The size of this target is not correct: Expected 4, got %zu",
+                current_size);
         result = EqualityError;
         goto cleanup;
     }
@@ -577,7 +582,7 @@ static int test_target_add_instruction(void) {
     }
     size_t num_reset = qk_target_entry_num_properties(reset);
     if (num_reset != 3) {
-        printf("Expected 3 reset entries but got: %zu", num_reset);
+        fprintf(stderr, "Expected 3 reset entries but got: %zu", num_reset);
         result = EqualityError;
         qk_target_entry_free(reset);
         goto cleanup;
@@ -586,7 +591,8 @@ static int test_target_add_instruction(void) {
     qk_target_add_instruction(target, reset);
     current_size = qk_target_num_instructions(target);
     if (current_size != 5) {
-        printf("The size of this target is not correct: Expected 5, got %zu", current_size);
+        fprintf(stderr, "The size of this target is not correct: Expected 5, got %zu",
+                current_size);
         result = EqualityError;
         goto cleanup;
     }
@@ -622,7 +628,7 @@ static int test_target_update_instruction(void) {
     QkExitCode result_1 = qk_target_update_property(target, QkGate_CX, qargs, 2,
                                                     cx_new_inst_duration, cx_new_inst_error);
     if (result_1 != QkExitCode_Success) {
-        printf("An unexpected error occurred while modifying the property.");
+        fprintf(stderr, "An unexpected error occurred while modifying the property.");
         result = RuntimeError;
         goto cleanup;
     }
@@ -631,7 +637,8 @@ static int test_target_update_instruction(void) {
     QkExitCode result_2 = qk_target_update_property(target, QkGate_CH, qargs, 2,
                                                     cx_new_inst_duration, cx_new_inst_error);
     if (result_2 != QkExitCode_TargetInvalidInstKey) {
-        printf("The function did not fail as expected when querying the wrong instruction.");
+        fprintf(stderr,
+                "The function did not fail as expected when querying the wrong instruction.");
         result = RuntimeError;
         goto cleanup;
     }
@@ -641,7 +648,7 @@ static int test_target_update_instruction(void) {
     QkExitCode result_3 = qk_target_update_property(target, QkGate_CX, new_qargs, 2,
                                                     cx_new_inst_duration, cx_new_inst_error);
     if (result_3 != QkExitCode_TargetInvalidQargsKey) {
-        printf("The function did not fail as expected when querying with wrong qargs.");
+        fprintf(stderr, "The function did not fail as expected when querying with wrong qargs.");
         result = RuntimeError;
         goto cleanup;
     }
@@ -672,8 +679,8 @@ static int test_target_iteration(void) {
 
         char *name = qk_target_op_name(target, op_idx);
         if (strcmp(name, names[(int)op_idx]) != 0) {
-            printf("Unexpected operation name at index %zu, expected: %s, got %s.\n", op_idx,
-                   names[(int)op_idx], name);
+            fprintf(stderr, "Unexpected operation name at index %zu, expected: %s, got %s.\n",
+                    op_idx, names[(int)op_idx], name);
             result = EqualityError;
             goto cleanup;
         }
@@ -686,29 +693,32 @@ static int test_target_iteration(void) {
             // cx
             if (op_idx == 4) {
                 if (!compare_qargs(qargs, cx_qargs[props_idx], qargs_len)) {
-                    printf(
+                    fprintf(
+                        stderr,
                         "Unexpected qargs found for operation %s at qarg index: %zu. Expected: '",
                         name, props_idx);
                     print_qargs(cx_qargs[props_idx], qargs_len);
-                    printf("', found '");
+                    fprintf(stderr, "', found '");
                     print_qargs(qargs, qargs_len);
-                    printf("'\n");
+                    fprintf(stderr, "'\n");
                     result = EqualityError;
                     goto cleanup;
                 }
 
                 if (props.duration != cx_props[props_idx][0]) {
-                    printf("Unexpected duration value found for operation %s at qarg index: %zu. "
-                           "Expected: %f, got: %f.\n",
-                           name, props_idx, props.duration, cx_props[props_idx][0]);
+                    fprintf(stderr,
+                            "Unexpected duration value found for operation %s at qarg index: %zu. "
+                            "Expected: %f, got: %f.\n",
+                            name, props_idx, props.duration, cx_props[props_idx][0]);
                     result = EqualityError;
                     goto cleanup;
                 }
 
                 if (props.error != cx_props[props_idx][1]) {
-                    printf("Unexpected error value found for operation %s at qarg index: %zu. "
-                           "Expected: %f, got: %f.\n",
-                           name, props_idx, props.error, cx_props[props_idx][1]);
+                    fprintf(stderr,
+                            "Unexpected error value found for operation %s at qarg index: %zu. "
+                            "Expected: %f, got: %f.\n",
+                            name, props_idx, props.error, cx_props[props_idx][1]);
                     result = EqualityError;
                     goto cleanup;
                 }
@@ -716,13 +726,14 @@ static int test_target_iteration(void) {
             // Global y
             else if (op_idx == 5) {
                 if (!compare_qargs(qargs, NULL, 0)) {
-                    printf(
+                    fprintf(
+                        stderr,
                         "Unexpected qargs found for operation %s at qarg index: %zu. Expected: '",
                         name, props_idx);
                     print_qargs(NULL, 0);
-                    printf("', found '");
+                    fprintf(stderr, "', found '");
                     print_qargs(qargs, qargs_len);
-                    printf("'\n");
+                    fprintf(stderr, "'\n");
                     result = EqualityError;
                     goto cleanup;
                 }
@@ -730,13 +741,14 @@ static int test_target_iteration(void) {
             // Global phase
             else if (op_idx == 6) {
                 if (!compare_qargs(qargs, (uint32_t[]){0}, 0)) {
-                    printf(
+                    fprintf(
+                        stderr,
                         "Unexpected qargs found for operation %s at qarg index: %zu. Expected: '",
                         name, props_idx);
                     print_qargs((uint32_t[]){0}, 0);
-                    printf("', found '");
+                    fprintf(stderr, "', found '");
                     print_qargs(qargs, qargs_len);
-                    printf("'\n");
+                    fprintf(stderr, "'\n");
                     result = EqualityError;
                     goto cleanup;
                 }
@@ -744,30 +756,33 @@ static int test_target_iteration(void) {
             // id, rz, sx, x, measure, reset
             else {
                 if (!compare_qargs(qargs, &single_qarg[props_idx], qargs_len)) {
-                    printf(
+                    fprintf(
+                        stderr,
                         "Unexpected qargs found for operation %s at qarg index: %zu. Expected: '",
                         name, props_idx);
                     print_qargs(&single_qarg[props_idx], qargs_len);
-                    printf("', found '");
+                    fprintf(stderr, "', found '");
                     print_qargs(qargs, qargs_len);
-                    printf("'\n");
+                    fprintf(stderr, "'\n");
                     result = EqualityError;
                     goto cleanup;
                 }
 
                 if (op_idx > 6) {
                     if (props.duration != 1e-6) {
-                        printf("Unexpected duration value found for operation %s at qarg index: "
-                               "%zu. Expected: %f, got: %f.\n",
-                               name, props_idx, props.duration, 1e-6);
+                        fprintf(stderr,
+                                "Unexpected duration value found for operation %s at qarg index: "
+                                "%zu. Expected: %f, got: %f.\n",
+                                name, props_idx, props.duration, 1e-6);
                         result = EqualityError;
                         goto cleanup;
                     }
 
                     if (props.error != 1e-4) {
-                        printf("Unexpected error value found for operation %s at qarg index: %zu. "
-                               "Expected: %f, got: %f.\n",
-                               name, props_idx, props.error, 1e-4);
+                        fprintf(stderr,
+                                "Unexpected error value found for operation %s at qarg index: %zu. "
+                                "Expected: %f, got: %f.\n",
+                                name, props_idx, props.error, 1e-4);
                         result = EqualityError;
                         goto cleanup;
                     }
@@ -791,7 +806,7 @@ static int test_target_indexing(void) {
     // Retrieve the index for CX
     size_t cx_idx = qk_target_op_index(target, "cx");
     if (cx_idx != 4) {
-        printf("Invalid index for cx entry: expected %d, got %zu.\n", 4, cx_idx);
+        fprintf(stderr, "Invalid index for cx entry: expected %d, got %zu.\n", 4, cx_idx);
         result = EqualityError;
         goto cleanup;
     }
@@ -799,7 +814,7 @@ static int test_target_indexing(void) {
     // Retrieve the index for cz (should fail).
     size_t cz_idx = qk_target_op_index(target, "cz");
     if (cz_idx != (size_t)-1) {
-        printf("Found index for non-existing cz entry: got %zu.\n", cz_idx);
+        fprintf(stderr, "Found index for non-existing cz entry: got %zu.\n", cz_idx);
         result = EqualityError;
         goto cleanup;
     }
@@ -807,7 +822,7 @@ static int test_target_indexing(void) {
     // Check if qargs [0,1] exist in cx
     uint32_t cx_qargs_query[2] = {0, 1};
     if (qk_target_op_qargs_index(target, cx_idx, cx_qargs_query) != 6) {
-        printf("Couldn't find valid qarg entry [0, 1] for cx.\n");
+        fprintf(stderr, "Couldn't find valid qarg entry [0, 1] for cx.\n");
         result = EqualityError;
         goto cleanup;
     }
@@ -815,7 +830,7 @@ static int test_target_indexing(void) {
     // Check if qargs [2,3] exist in cx (should fail)
     uint32_t cx_qargs_bad_query[2] = {2, 3};
     if (qk_target_op_qargs_index(target, cx_idx, cx_qargs_bad_query) != (size_t)-1) {
-        printf("Found valid qarg entry non-existing qargs [2, 3] for cx.\n");
+        fprintf(stderr, "Found valid qarg entry non-existing qargs [2, 3] for cx.\n");
         result = EqualityError;
         goto cleanup;
     }
@@ -823,7 +838,7 @@ static int test_target_indexing(void) {
     // Since index exists, this should return properly
     size_t cx_qargs_idx = qk_target_op_qargs_index(target, cx_idx, cx_qargs_query);
     if (cx_qargs_idx != 6) {
-        printf("Invalid index for cx qargs [0,1]: expected %d, got %zu.\n", 6, cx_idx);
+        fprintf(stderr, "Invalid index for cx qargs [0,1]: expected %d, got %zu.\n", 6, cx_idx);
         result = EqualityError;
         goto cleanup;
     }
@@ -831,7 +846,7 @@ static int test_target_indexing(void) {
     // Same test on the invalid query
     size_t cx_qargs_bad_idx = qk_target_op_qargs_index(target, cx_idx, cx_qargs_bad_query);
     if (cx_qargs_bad_idx != (size_t)-1) {
-        printf("Found index for non-existing qargs [2,3].\n");
+        fprintf(stderr, "Found index for non-existing qargs [2,3].\n");
         result = EqualityError;
         goto cleanup;
     }
@@ -843,8 +858,8 @@ static int test_target_indexing(void) {
 
     qk_target_op_qargs(target, cx_idx, 1, &cx_qargs, &cx_qargs_len);
     if (!compare_qargs(cx_qargs, (uint32_t[2]){4, 3}, cx_qargs_len)) {
-        printf("Retrieved incorrect qargs, expected [4, 3], got [%u, %u]\n", cx_qargs[0],
-               cx_qargs[1]);
+        fprintf(stderr, "Retrieved incorrect qargs, expected [4, 3], got [%u, %u]\n", cx_qargs[0],
+                cx_qargs[1]);
         result = EqualityError;
         goto cleanup;
     }
@@ -852,13 +867,14 @@ static int test_target_indexing(void) {
     qk_target_op_props(target, cx_idx, 1, &cx_props);
 
     if (cx_props.duration != 3.0577e-11) {
-        printf("Retrieved incorrect duration property, expected 3.0577e-11, got %lf.\n",
-               cx_props.duration);
+        fprintf(stderr, "Retrieved incorrect duration property, expected 3.0577e-11, got %lf.\n",
+                cx_props.duration);
         result = EqualityError;
         goto cleanup;
     }
     if (cx_props.error != 0.00713) {
-        printf("Retrieved incorrect error property, expected 0.00713, got %lf.\n", cx_props.error);
+        fprintf(stderr, "Retrieved incorrect error property, expected 0.00713, got %lf.\n",
+                cx_props.error);
         result = EqualityError;
         goto cleanup;
     }
@@ -866,7 +882,7 @@ static int test_target_indexing(void) {
     // Try retrieving global index for y gate
     size_t y_idx = qk_target_op_index(target, "y");
     if (y_idx != 5) {
-        printf("Invalid index for y entry: expected %d, got %zu.\n", 5, y_idx);
+        fprintf(stderr, "Invalid index for y entry: expected %d, got %zu.\n", 5, y_idx);
         result = EqualityError;
         goto cleanup;
     }
@@ -876,7 +892,7 @@ static int test_target_indexing(void) {
     qk_target_op_qargs(target, y_idx, 0, &y_qargs, &y_qargs_len);
 
     if (y_qargs != NULL) {
-        printf("Obtained non-null global qargs at index 0 for 'y'.\n");
+        fprintf(stderr, "Obtained non-null global qargs at index 0 for 'y'.\n");
         result = EqualityError;
         goto cleanup;
     }
@@ -884,7 +900,7 @@ static int test_target_indexing(void) {
     // Try retrieving [] index for global_phase gate
     size_t gp_idx = qk_target_op_index(target, "global_phase");
     if (gp_idx != 6) {
-        printf("Invalid index for y entry: expected %d, got %zu.\n", 6, gp_idx);
+        fprintf(stderr, "Invalid index for y entry: expected %d, got %zu.\n", 6, gp_idx);
         result = EqualityError;
         goto cleanup;
     }
@@ -894,7 +910,7 @@ static int test_target_indexing(void) {
     qk_target_op_qargs(target, gp_idx, 0, &gp_qargs, &gp_qargs_len);
 
     if (gp_qargs == NULL || gp_qargs_len != 0) {
-        printf("Obtained null or invalid qargs at index 0 for 'global_phase'.\n");
+        fprintf(stderr, "Obtained null or invalid qargs at index 0 for 'global_phase'.\n");
         result = EqualityError;
         goto cleanup;
     }
@@ -924,9 +940,10 @@ int test_target_instruction_supported(void) {
             if (qk_target_instruction_supported(sample_target, gate_names[gate], qargs,
                                                 gate != 3 ? NULL : rz_params) !=
                 (should_be_true || gate == 1)) {
-                printf("This target did not correctly demonstrate compatibility with %s and qargs "
-                       "[%d]",
-                       gate_names[gate], qubit);
+                fprintf(stderr,
+                        "This target did not correctly demonstrate compatibility with %s and qargs "
+                        "[%d]",
+                        gate_names[gate], qubit);
                 result = EqualityError;
                 goto cleanup;
             }
@@ -938,9 +955,10 @@ int test_target_instruction_supported(void) {
                                             (QkParam *[]){
                                                 param,
                                             })) {
-            printf("This target did not correctly demonstrate compatibility with 'rz' and qargs "
-                   "[%d]",
-                   qubit);
+            fprintf(stderr,
+                    "This target did not correctly demonstrate compatibility with 'rz' and qargs "
+                    "[%d]",
+                    qubit);
             result = EqualityError;
             qk_param_free(param);
             goto cleanup;
@@ -950,7 +968,8 @@ int test_target_instruction_supported(void) {
         // Test standard instructions reset and measure
         if (!(qk_target_instruction_supported(sample_target, "measure", qargs, NULL) ==
               (qubit < 2))) {
-            printf(
+            fprintf(
+                stderr,
                 "This target did not correctly demonstrate compatibility with 'measure' and qargs "
                 "[%d]",
                 qubit);
@@ -965,9 +984,11 @@ int test_target_instruction_supported(void) {
     };
     for (int i = 0; i < 8; i++) {
         if (!qk_target_instruction_supported(sample_target, "cx", qarg_samples[i], NULL)) {
-            printf("This target did incorrectly demonstrate compatibility with 'cx' and qargs [%d, "
-                   "%d]",
-                   qarg_samples[i][0], qarg_samples[i][1]);
+            fprintf(
+                stderr,
+                "This target did incorrectly demonstrate compatibility with 'cx' and qargs [%d, "
+                "%d]",
+                qarg_samples[i][0], qarg_samples[i][1]);
             result = EqualityError;
             goto cleanup;
         }
@@ -976,7 +997,8 @@ int test_target_instruction_supported(void) {
     uint32_t cx_qargs[2] = {3, 2};
     // Instruction should not show compatibility with (3, 2)
     if (qk_target_instruction_supported(sample_target, "cx", cx_qargs, NULL)) {
-        printf("This target did incorrectly demonstrate compatibility with 'cx' and qargs [3, 2]");
+        fprintf(stderr,
+                "This target did incorrectly demonstrate compatibility with 'cx' and qargs [3, 2]");
         result = EqualityError;
         goto cleanup;
     }
@@ -1002,8 +1024,8 @@ static int test_target_operation(void) {
         qk_target_op_get(target, inst_idx, &op);
 
         if (strcmp(op.name, names[inst_idx]) != 0) {
-            printf("The operation names did not match. Expected %s, got %s\n", names[inst_idx],
-                   op.name);
+            fprintf(stderr, "The operation names did not match. Expected %s, got %s\n",
+                    names[inst_idx], op.name);
             result = EqualityError;
             break;
         }
@@ -1011,22 +1033,23 @@ static int test_target_operation(void) {
         char *op_types[6] = {"Gate", "Barrier", "Delay", "Measure", "Reset", "Unitary"};
         if (inst_idx < 7) {
             if (op.op_type != QkOperationKind_Gate) {
-                printf("The operation's type did not match, expected Gate, got %s\n",
-                       op_types[(size_t)op.op_type]);
+                fprintf(stderr, "The operation's type did not match, expected Gate, got %s\n",
+                        op_types[(size_t)op.op_type]);
                 result = EqualityError;
                 break;
             }
             QkGate gate = qk_target_op_gate(target, inst_idx);
             if (gate != std_gates[inst_idx]) {
-                printf("The gate type did not match. Expected %i, got %i\n", std_gates[inst_idx],
-                       gate);
+                fprintf(stderr, "The gate type did not match. Expected %i, got %i\n",
+                        std_gates[inst_idx], gate);
                 result = EqualityError;
                 break;
             }
             if (inst_idx == 1) {
                 double param_val = qk_param_as_real(op.params[0]);
                 if (param_val != 3.14) {
-                    printf(
+                    fprintf(
+                        stderr,
                         "The param value for instruction '%s' did not match. Expected %f, got %f\n",
                         op.name, 3.14, param_val);
                     result = EqualityError;
@@ -1034,24 +1057,26 @@ static int test_target_operation(void) {
                 }
             } else {
                 if (op.params == NULL && op.num_params != 0) {
-                    printf("The param values for instruction '%s' did not match. Got length %u for "
-                           "NULL params.\n",
-                           op.name, op.num_params);
+                    fprintf(
+                        stderr,
+                        "The param values for instruction '%s' did not match. Got length %u for "
+                        "NULL params.\n",
+                        op.name, op.num_params);
                     result = EqualityError;
                     break;
                 }
             }
         } else if (inst_idx == 7) {
             if (op.op_type != QkOperationKind_Measure) {
-                printf("The operation's type did not match, expected Measure, got %s\n",
-                       op_types[(size_t)op.op_type]);
+                fprintf(stderr, "The operation's type did not match, expected Measure, got %s\n",
+                        op_types[(size_t)op.op_type]);
                 result = EqualityError;
                 break;
             }
         } else {
             if (op.op_type != QkOperationKind_Reset) {
-                printf("The operation's type did not match, expected Reset, got %s\n",
-                       op_types[(size_t)op.op_type]);
+                fprintf(stderr, "The operation's type did not match, expected Reset, got %s\n",
+                        op_types[(size_t)op.op_type]);
                 result = EqualityError;
                 break;
             }

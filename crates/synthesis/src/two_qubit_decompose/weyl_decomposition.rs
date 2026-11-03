@@ -386,11 +386,7 @@ fn matrixview4_to_faer<T: nalgebra::Scalar + Copy>(mat: MatrixView4<T>) -> MatRe
 
 #[derive(Clone, Debug)]
 #[allow(non_snake_case)]
-#[pyclass(
-    module = "qiskit._accelerate.two_qubit_decompose",
-    subclass,
-    skip_from_py_object
-)]
+#[pyclass(module = "qiskit._accelerate.two_qubit_decompose", subclass)]
 pub struct TwoQubitWeylDecomposition {
     #[pyo3(get)]
     pub(super) a: f64,

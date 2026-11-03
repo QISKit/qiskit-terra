@@ -28,6 +28,8 @@ from qiskit.quantum_info.operators.symplectic import PauliList, SparsePauliOp
 from qiskit.quantum_info.states.densitymatrix import DensityMatrix
 from qiskit.utils import optionals as _optionals
 from qiskit.circuit.tools.pi_check import pi_check
+from qiskit.circuit import Gate, QuantumCircuit
+from qiskit.circuit.library import HGate, SdgGate
 
 from .array import _num_to_latex, array_to_latex
 from .utils import matplotlib_close_if_inline
@@ -1276,26 +1278,95 @@ def _shade_colors(color, normals, lightsource=None):
     return colors
 
 
-def state_to_latex(
-    state: Statevector | DensityMatrix, dims: bool | None = None, convention: str = "ket", **args
-) -> str:
-    """Return a Latex representation of a state. Wrapper function
-    for `qiskit.visualization.array_to_latex` for convention 'vector'.
-    Adds dims if necessary.
-    Intended for use within `state_drawer`.
+def _ket_basis_gates_and_labels(ket_basis: str) -> tuple[list[Gate], tuple[str, str]]:
+    """Return the single-qubit basis-change gates and the ket labels for a given basis.
+
+    Applying the gates in order to every qubit of a state yields its coefficients
+    :math:`\\langle b | \\psi \\rangle` in the requested basis.
 
     Args:
-        state: State to be drawn
-        dims (bool): Whether to display the state's `dims`
-        convention (str): Either 'vector' or 'ket'. For 'ket' plot the state in the ket-notation.
-                Otherwise plot as a vector
-        **args: Arguments to be passed directly to `array_to_latex` for convention 'ket'
+        ket_basis: The ket basis. Must be one of ``'z'``, ``'x'`` or ``'y'``.
 
     Returns:
-        Latex representation of the state
-        MissingOptionalLibrary: If SymPy isn't installed and ``'latex'`` or
-            ``'latex_source'`` is selected for ``output``.
+        A tuple ``(gates, labels)``, where ``gates`` is the sequence of single-qubit gates to apply
+        to each qubit (empty if no change of basis is needed) and ``labels`` is the ``(zero, one)``
+        pair of ket symbols for that basis.
 
+    Raises:
+        VisualizationError: If the ket basis is not supported.
+    """
+    match ket_basis:
+        case "z":
+            return [], ("0", "1")
+        case "x":
+            # <+|psi>, <-|psi> are the rows of H.
+            return [HGate()], ("+", "-")
+        case "y":
+            # <+i|psi>, <-i|psi> are the rows of H @ S^dagger, i.e. apply S^dagger, then H.
+            return [SdgGate(), HGate()], ("+i", "-i")
+        case _:
+            raise VisualizationError(
+                f"Ket basis {ket_basis!r} is not supported. Only 'x', 'y' and 'z' are supported."
+            )
+
+
+def state_to_latex(
+    state: Statevector | DensityMatrix,
+    dims: bool | None = None,
+    convention: str = "ket",
+    ket_basis: str = "z",
+    **args,
+) -> str:
+    r"""Return a LaTeX representation of a quantum state.
+
+    For qubit statevectors using the default ``convention='ket'``, this generates
+    a LaTeX string in ket notation (e.g. :math:`\frac{1}{\sqrt{2}}|0\rangle + \frac{1}{\sqrt{2}}|1\rangle`).
+    Otherwise, or when ``convention='vector'``, it formats the state as an array using
+    :func:`~qiskit.visualization.array_to_latex`. Subsystem dimensions can optionally
+    be displayed alongside the representation.
+
+    Args:
+        state: State to be drawn.
+        dims: Whether to display the state's subsystem dimensions.
+            Defaults to ``True`` for non-qubit systems and ``False`` for qubits.
+        convention: Either ``'ket'`` or ``'vector'``. For ``'ket'`` (default for
+            qubit statevectors), represents the state in ket notation. For ``'vector'``,
+            draws as a column vector.
+        ket_basis: The single-qubit basis the kets are written in. This only applies to the
+            ket convention for qubit statevectors. One of ``'z'`` (default), the computational
+            basis :math:`|0\rangle, |1\rangle`; ``'x'``, the Hadamard basis
+            :math:`|+\rangle, |-\rangle`; or ``'y'``, the basis
+            :math:`|{+}i\rangle, |{-}i\rangle`.
+        **args: Additional keyword arguments passed to the underlying formatting function:
+
+            * When ``convention='ket'`` (qubit statevectors):
+              ``max_size`` (int, default: 12) defines the maximum number of non-zero terms
+              displayed before truncating with an ellipsis (``\ldots``). Set to a larger
+              integer or ``math.inf`` to show all terms. ``prefix`` (str, default: ``""``)
+              is prepended to the expression. ``decimals`` (int, default: 10) controls
+              rounding precision.
+            * When ``convention='vector'``: arguments are forwarded to
+              :func:`~qiskit.visualization.array_to_latex` (such as ``max_size``,
+              ``precision``, and ``prefix``).
+
+    Returns:
+        str: LaTeX representation of the state.
+
+    Raises:
+        MissingOptionalLibraryError: If SymPy is not installed when formatting via
+            :func:`~qiskit.visualization.array_to_latex`.
+        VisualizationError: If ``ket_basis`` is not supported.
+
+    Examples:
+        Write :math:`|0\rangle` in the Hadamard basis:
+
+        .. code-block:: python
+
+            from qiskit.quantum_info import Statevector
+            from qiskit.visualization.state_visualization import state_to_latex
+
+            state_to_latex(Statevector.from_label("0"), ket_basis="x")
+            # \frac{\sqrt{2}}{2} |+\rangle+\frac{\sqrt{2}}{2} |-\rangle
     """
     if dims is None:  # show dims if state is not only qubits
         if set(state.dims()) == {2}:
@@ -1315,7 +1386,15 @@ def state_to_latex(
     # this means the operator shape should have no input dimensions and all output dimensions equal to 2
     is_qubit_statevector = len(operator_shape.dims_r()) == 0 and set(operator_shape.dims_l()) == {2}
     if convention == "ket" and is_qubit_statevector:
-        latex_str = _state_to_latex_ket(state._data, **args)
+        gates, ket_labels = _ket_basis_gates_and_labels(ket_basis)
+        if gates:
+            # Apply the basis-changing gates to every qubit in one call to evolve.
+            basis_change = QuantumCircuit(state.num_qubits)
+            for qubit in range(state.num_qubits):
+                for gate in gates:
+                    basis_change.append(gate, [qubit])
+            state = state.evolve(basis_change)
+        latex_str = _state_to_latex_ket(state._data, ket_labels=ket_labels, **args)
     else:
         latex_str = array_to_latex(state._data, source=True, **args)
     return prefix + latex_str + suffix
@@ -1342,7 +1421,11 @@ def _numbers_to_latex_terms(numbers: list[complex], decimals: int = 10) -> list[
 
 
 def _state_to_latex_ket(
-    data: list[complex], max_size: int = 12, prefix: str = "", decimals: int = 10
+    data: list[complex],
+    max_size: int = 12,
+    prefix: str = "",
+    decimals: int = 10,
+    ket_labels: tuple[str, str] = ("0", "1"),
 ) -> str:
     """Convert state vector to latex representation
 
@@ -1352,14 +1435,16 @@ def _state_to_latex_ket(
                  non-zero terms is larger than the max_size, then the representation is truncated.
         prefix: Latex string to be prepended to the latex, intended for labels.
         decimals: Number of decimal places to round to (default: 10).
+        ket_labels: The ``(zero, one)`` single-qubit symbols used to render each ket.
 
     Returns:
         String with LaTeX representation of the state vector
     """
     num = int(math.log2(len(data)))
+    zero_label, one_label = ket_labels
 
     def ket_name(i):
-        return bin(i)[2:].zfill(num)
+        return "".join(one_label if bit == "1" else zero_label for bit in bin(i)[2:].zfill(num))
 
     data = np.around(data, decimals)
     nonzero_indices = np.where(data != 0)[0].tolist()
@@ -1460,7 +1545,10 @@ def state_drawer(state, output=None, **drawer_args):
             ``qsphere``, ``hinton``, ``bloch``, ``city`` or ``paulivec``.
             Default is `'text`'.
         drawer_args: Arguments to be passed to the relevant drawer. For
-            'latex' and 'latex_source' see ``array_to_latex``
+            ``'latex'`` and ``'latex_source'``, see :func:`~qiskit.visualization.state_to_latex`.
+            For ``'text'``, arguments such as ``max_size`` (default: 8) can be passed to
+            control the display threshold. For Matplotlib figures, see the corresponding
+            plotting function under :mod:`qiskit.visualization`.
 
     Returns:
         :class:`matplotlib.figure` or :class:`str` or

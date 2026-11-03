@@ -966,6 +966,11 @@ class QuantumCircuit(IR):
     .. automethod:: size
     .. automethod:: width
 
+    Comparing circuits
+    ------------------
+
+    .. automethod:: __eq__
+
     Accessing scheduling information
     --------------------------------
 
@@ -1607,6 +1612,56 @@ class QuantumCircuit(IR):
         return str(self.draw(output="text"))
 
     def __eq__(self, other) -> bool:
+        """Check if this circuit is equal to another circuit.
+
+        Equality is determined by comparing the :class:`.DAGCircuit` representation
+        of both circuits, delegating to :meth:`.DAGCircuit.__eq__`. This means that
+        the insertion order of independent operations does not affect equality, as
+        long as the dependency structure between operations is the same.
+
+        For example::
+
+            qc1 = QuantumCircuit(2)
+            qc1.x(0)
+            qc1.x(1)
+
+            qc2 = QuantumCircuit(2)
+            qc2.x(1)
+            qc2.x(0)
+
+            qc1 == qc2  # True, because x(0) and x(1) are independent
+
+        The following are considered when checking equality:
+
+        * DAG structure (gate names, parameters, and qubit dependencies)
+        * Quantum and classical registers
+        * Global phase (:attr:`global_phase`)
+        * Calibrations (:attr:`calibrations`)
+        * Variables (``Var`` nodes)
+
+        The following are **not** considered:
+
+        * Circuit name (:attr:`name`)
+        * Circuit metadata (:attr:`metadata`)
+
+        .. note::
+
+            This does **not** check whether two circuits implement the same unitary.
+            Two circuits with different gate structures may still be unitarily equivalent.
+            To check that, use :class:`.Operator`::
+
+                from qiskit.quantum_info import Operator
+                Operator(qc1) == Operator(qc2)
+
+        Args:
+            other: The object to compare against.
+
+        Returns:
+            bool: ``True`` if the circuits are equal, ``False`` otherwise.
+
+        See Also:
+            :meth:`.DAGCircuit.__eq__`: The underlying equality implementation.
+        """
         if not isinstance(other, QuantumCircuit):
             return False
 
@@ -2871,6 +2926,27 @@ class QuantumCircuit(IR):
             instructions._add_ref(circuit_scope.instructions, len(circuit_scope.instructions) - 1)
         return instructions
 
+    # Overloads for append. Passing an Operation to instruction allows qargs
+    # and cargs to be specified. However, passing a CircuitInstruction will
+    # cause qargs and cargs to be overritten in the implementation.
+    @overload
+    def append(
+        self,
+        instruction: Operation,
+        qargs: Sequence[QubitSpecifier] | None = None,
+        cargs: Sequence[ClbitSpecifier] | None = None,
+        *,
+        copy: bool = True,
+    ) -> InstructionSet: ...
+
+    @overload
+    def append(
+        self,
+        instruction: CircuitInstruction,
+        *,
+        copy: bool = True,
+    ) -> InstructionSet: ...
+
     def append(
         self,
         instruction: Operation | CircuitInstruction,
@@ -2887,8 +2963,8 @@ class QuantumCircuit(IR):
         integer indices) will be resolved into the relevant instances.
 
         If a :class:`.CircuitInstruction` is given, it will be unwrapped, verified in the context of
-        this circuit, and a new object will be appended to the circuit.  In this case, you may not
-        pass ``qargs`` or ``cargs`` separately.
+        this circuit, and a new object will be appended to the circuit.  In this case, passing
+        ``qargs`` or ``cargs`` separately will issue a warning, and their values will be ignored.
 
         Args:
             instruction: :class:`~.circuit.Instruction` instance to append, or a
@@ -2914,6 +2990,12 @@ class QuantumCircuit(IR):
         """
         if isinstance(instruction, CircuitInstruction):
             operation = instruction.operation
+            if qargs is not None or cargs is not None:
+                warnings.warn(
+                    "QuantumCircuit.append() uses qargs/cargs from CircuitInstruction. "
+                    "Any qargs/cargs passed into append() alongside a valid CircuitInstruction will be ignored.",
+                    stacklevel=2,
+                )
             qargs = instruction.qubits
             cargs = instruction.clbits
         else:
