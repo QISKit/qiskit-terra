@@ -521,6 +521,31 @@ class TestNLayout(QiskitTestCase):
         self.assertEqual([layout.virtual_to_physical(x) for x in range(size)], v2p)
         self.assertEqual([roundtripped.virtual_to_physical(x) for x in range(size)], expected)
 
+    def test_from_dict_enforces_bijectivity(self):
+        """Test whether Layout.from_dict enforce bijectivity or not"""
+        qr = QuantumRegister(4, "qr")
+
+        # Valid cases
+        valid = {qr[0]: 0, qr[1]: 1, qr[2]: 2, qr[3]: 3}
+        layout = Layout(valid)
+        self.assertEqual(len(layout), 4)
+
+        # Duplicate physical qubits
+        duplicate_physical_qubit = {qr[0]: 0, qr[1]: 1, qr[2]: 1, qr[3]: 3}
+        with self.assertRaises(LayoutError) as cm:
+            Layout(duplicate_physical_qubit)
+        self.assertIn("Duplicate physical qubit", str(cm.exception))
+
+        # Duplicate physical qubit when virtual=None
+        duplicate_physical_none = {qr[0]: 0, 5: None, 0: None}
+        with self.assertRaises(LayoutError) as cm:
+            Layout(duplicate_physical_none)
+        self.assertIn("Duplicate physical qubit", str(cm.exception))
+
+        # Empty dict should still work
+        empty_layout = Layout({})
+        self.assertEqual(len(empty_layout), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

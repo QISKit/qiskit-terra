@@ -1,0 +1,11 @@
+fixes:
+  - |
+    Fixed issue with class:`~qiskit.transpiler.Layout.from_dict` now 
+    enforces bijectivity, raises `LayoutError` if the input dictionary 
+    contains duplicate virtual qubits or duplicate physical qubits.
+
+    Previously, such invalid inputs were silently accepted, leading to
+    corrupted internal state (`_p2v` / `_v2p`).
+
+    This fix ensures that a `Layout` object always maintains a valid
+    one-to-one mapping between virtual and physical qubits.
