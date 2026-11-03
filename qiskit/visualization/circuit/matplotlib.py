@@ -68,9 +68,12 @@ from ._utils import (
 )
 from ..utils import matplotlib_close_if_inline
 
-# Default gate width and height
+# Default gate width, height and line height
 WID = 0.65
 HIG = 0.65
+LINE_HEIGHT_FS = 0.337
+LINE_HEIGHT_SFS = 0.207
+
 
 # Z dimension order for different drawing types
 PORDER_REGLINE = 1
@@ -481,12 +484,12 @@ class MatplotlibDrawer:
                         param_text, glob_data, fontsize=self._style["sfs"], param=True
                     )
                     if node_data[node]._effectively_vertical:
-                        lines_count, text, avg_char_height = self._vertical_label_neccesities(
+                        lines_count, text = self._vertical_label_lines(
                             param_text, raw_param_width, HIG + span
                         )
                         node_data[node].param_text = text
                         # calculation of param_width driven by the number of lines in the vertical param text
-                        param_width = avg_char_height * lines_count
+                        param_width = (lines_count - 1) * LINE_HEIGHT_SFS
                     else:
                         param_width = raw_param_width + 0.08
                 else:
@@ -679,14 +682,14 @@ class MatplotlibDrawer:
                     )
 
                     if node_data[node]._effectively_vertical:
-                        lines_count, text, _ = self._vertical_label_neccesities(
+                        lines_count, text = self._vertical_label_lines(
                             gate_text, raw_gate_width, HIG + span
                         )
                         gate_text = text
-                        # _get_text_width makes the gate box width incosistent with the number of lines in the vertical gate text
-                        gate_width = WID * lines_count
-                        if node_data[node].param_text.count("\n") > 0:
-                            # needed increasement due to the width calculation of the gate box,
+                        # _get_text_width makes the gate box width inconsistent with the number of lines in the vertical gate text
+                        gate_width = WID + (lines_count - 1) * LINE_HEIGHT_FS
+                        if node_data[node].param_text:
+                            # needed increase due to the width calculation of the gate box,
                             # when param text exists the box should be wider
                             gate_width += param_width
                     else:
@@ -714,7 +717,12 @@ class MatplotlibDrawer:
     def _is_vertical_label(self, node, gate_text, wire_map):
         """Return whether the label belongs to a multiqubit gate and should have vertical text.
         Also return the span of the multiqubit gate."""
-        wire_indices = [wire_map[qarg] for qarg in node.qargs if qarg in self._qubits]
+        num_ctrl_qubits = getattr(node.op, "num_ctrl_qubits", 0)
+        wire_indices = [
+            wire_map[qarg]
+            for qarg in node.qargs[num_ctrl_qubits:]
+            if qarg in self._qubits and qarg in wire_map
+        ]
         span = max(wire_indices) - min(wire_indices)
         op = node.op
         return (
@@ -722,16 +730,16 @@ class MatplotlibDrawer:
             and span > 0
             and gate_text
             and len(gate_text) > 3
-            and "$" not in gate_text[0]
+            and gate_text.count("$") == 0
             and not isinstance(op, (SwapGate, RZZGate)),
             span,
         )
 
-    def _vertical_label_neccesities(self, gate_text_original, full_text_width, HIG):
+    def _vertical_label_lines(self, gate_text_original, full_text_width, available_height):
         """Calculate and return how many lines the vertical label will break into, the lines that
         it will break into and the average character height of the label."""
         avg_char_width = full_text_width / len(gate_text_original)
-        max_chars_for_height = max(1, int(HIG / avg_char_width))
+        max_chars_for_height = max(1, int(available_height / avg_char_width))
 
         lines = []
         current_line = ""
@@ -741,7 +749,7 @@ class MatplotlibDrawer:
             if len(current_line) > max_chars_for_height:
                 break_idx = -1
                 for idx in range(len(current_line) - 2, -1, -1):
-                    if current_line[idx] in " _/.-":
+                    if current_line[idx] in " _/-":
                         break_idx = idx
                         break
 
@@ -755,12 +763,9 @@ class MatplotlibDrawer:
         if current_line:
             lines.append(current_line)
 
-        # height of horizontal char is the width of the vertical char
-        avg_char_height = max(self._char_list[char][1] for line in lines for char in line)
-
         final_text = "\n".join(lines)
 
-        return len(lines), final_text, avg_char_height
+        return len(lines), final_text
 
     def _set_bit_reg_info(self, wire_map, qubits_dict, clbits_dict, glob_data):
         """Get all the info for drawing bit/reg names and numbers"""
@@ -1709,12 +1714,12 @@ class MatplotlibDrawer:
                 count = node_data[node].param_text.count("\n")
                 if count > 0:
                     # Shifting to the left for (almost) centered text
-                    param_xpos -= 0.11 * count + 0.06
+                    param_xpos -= 0.11 * count + 0.04
                     gate_xpos -= 0.11 * count + 0.09
                 else:
                     # Minor shifting
-                    param_xpos -= 0.06
-                    gate_xpos -= 0.09
+                    param_xpos -= 0.07
+                    gate_xpos -= 0.12
 
         return gate_xpos, gate_ypos, param_xpos, param_ypos, rotation
 
