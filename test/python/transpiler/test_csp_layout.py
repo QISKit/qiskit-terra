@@ -316,6 +316,24 @@ class TestCSPLayout(QiskitTestCase):
 
         self.assertNotEqual(layout_1, layout_2)
 
+    def test_3q_gate_on_linear_coupling(self):
+        """A CCX (3-qubit gate) on a linear coupling map should fail gracefully.
+
+        Linear coupling: 0 - 1 - 2
+        CCX requires complete connectivity among its 3 qubits, which a line cannot provide.
+        """
+        qr = QuantumRegister(3, "qr")
+        circuit = QuantumCircuit(qr)
+        circuit.cx(qr[0], qr[1])
+        circuit.ccx(qr[2], qr[0], qr[1])
+
+        dag = circuit_to_dag(circuit)
+        pass_ = CSPLayout(CouplingMap([[0, 1], [1, 2]]), strict_direction=False, seed=self.seed)
+        pass_.run(dag)
+        layout = pass_.property_set["layout"]
+        self.assertIsNone(layout)
+        self.assertEqual(pass_.property_set["CSPLayout_stop_reason"], "3-or-more-qubit gate found")
+
 
 if __name__ == "__main__":
     unittest.main()

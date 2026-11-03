@@ -89,6 +89,11 @@ class CSPLayout(AnalysisPass):
             cxs.add((qubits.index(gate.qargs[0]), qubits.index(gate.qargs[1])))
         edges = set(self.coupling_map.get_edges())
 
+        for gate in dag.gate_nodes():
+            if len(gate.qargs) > 2:
+                self.property_set["CSPLayout_stop_reason"] = "3-or-more-qubit gate found"
+                return
+
         if self.time_limit is None and self.call_limit is None:
             solver = RecursiveBacktrackingSolver()
         else:
