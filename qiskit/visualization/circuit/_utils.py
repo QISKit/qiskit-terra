@@ -44,6 +44,10 @@ from qiskit.converters import circuit_to_dag
 from qiskit.utils import optionals as _optionals
 
 from ..exceptions import VisualizationError
+_LATEX_DAGGER_FALLBACK_LABELS = {
+    "sdg": "S^{\\dagger}",
+    "tdg": "T^{\\dagger}",
+}
 
 
 def _is_boolean_expression(gate_text, op):
@@ -98,7 +102,7 @@ def get_gate_ctrl_text(op, drawer, style=None):
     raw_gate_text = op.name if gate_text == base_name else gate_text
 
     # For mpl and latex drawers, check style['disptex'] in qcstyle.py
-    if drawer != "text" and gate_text in style["disptex"]:
+    if style and drawer != "text" and gate_text in style["disptex"]:
         # First check if this entry is in the old style disptex that
         # included "$\\mathrm{  }$". If so, take it as is.
         if style["disptex"][gate_text][0] == "$" and style["disptex"][gate_text][-1] == "$":
@@ -117,6 +121,8 @@ def get_gate_ctrl_text(op, drawer, style=None):
             or (gate_text == base_name and base_type not in (Gate, Instruction))
         ) and (op_type not in [PauliEvolutionGate, PauliProductMeasurement]):
             gate_text = f"$\\mathrm{{{gate_text.capitalize()}}}$"
+        elif gate_text in _LATEX_DAGGER_FALLBACK_LABELS:
+            gate_text = f"$\\mathrm{{{_LATEX_DAGGER_FALLBACK_LABELS[gate_text]}}}$"
         else:
             gate_text = f"$\\mathrm{{{gate_text}}}$"
             # Remove mathmode _, ^, and - formatting from user names and labels
