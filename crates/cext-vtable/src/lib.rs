@@ -28,7 +28,8 @@ pub static FUNCTIONS_CIRCUIT: ExportedFunctions =
         .add_child(205, &param::FUNCTIONS)
         .add_child(255, &circuit_library::FUNCTIONS)
         .add_child(305, &classical_expr::FUNCTIONS)
-        .add_child(380, &operations::FUNCTIONS);
+        .add_child(380, &operations::FUNCTIONS)
+        .add_child(430, &qasm2::FUNCTIONS);
 pub static FUNCTIONS_QI: ExportedFunctions =
     ExportedFunctions::empty().add_child(0, &sparse_observable::FUNCTIONS);
 pub static FUNCTIONS_QPY: ExportedFunctions = ExportedFunctions::leaves(20, || {
@@ -580,6 +581,22 @@ mod classical_expr {
             export_fn!(qk_stretch_name),
             export_fn!(qk_value_biguint),
             export_fn!(qk_biguint_clear),
+        ]
+    });
+}
+
+mod qasm2 {
+    use crate::impl_::prelude::*;
+    #[cfg(feature = "addr")]
+    use qiskit_cext::qasm2::*;
+
+    pub static FUNCTIONS: ExportedFunctions = ExportedFunctions::leaves(5, || {
+        vec![
+            export_fn!(qk_openqasm2_load),
+            export_fn!(qk_openqasm2_options_new),
+            export_fn!(qk_openqasm2_options_free),
+            export_fn!(qk_openqasm2_options_set_strict),
+            export_fn!(qk_openqasm2_options_append_include_path),
         ]
     });
 }

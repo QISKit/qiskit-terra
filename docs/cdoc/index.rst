@@ -33,6 +33,7 @@ Quantum Circuit
    qk-classical-register
    qk-param
    qk-operation
+   qk-openqasm2
 
 Dynamic Circuits
 ++++++++++++++++

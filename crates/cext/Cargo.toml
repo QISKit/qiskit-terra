@@ -22,6 +22,7 @@ qiskit-circuit  = { workspace = true, features = ["passmanager"] }
 qiskit-circuit-library.workspace = true
 qiskit-mir.workspace = true
 qiskit-passmanager.workspace = true
+qiskit-qasm2 = { workspace = true, default-features = false }
 qiskit-transpiler.workspace = true
 qiskit-qpy.workspace = true
 pyo3 = { workspace = true, optional = true }

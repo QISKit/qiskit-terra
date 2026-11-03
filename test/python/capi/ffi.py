@@ -13,8 +13,11 @@
 """FFI to call qiskit C API."""
 
 import ctypes
+import os
+from collections.abc import Iterable
 
 import qiskit
+import qiskit.qasm2
 from qiskit import capi
 import numpy
 
@@ -104,7 +107,7 @@ def transpile_from_c(
     ]
     options = capi.QkTranspileOptions(*args)
     result = capi.QkTranspileResult(None, None)
-    error = ctypes.pointer(ctypes.c_char())
+    error = ctypes.POINTER(ctypes.c_char)()
     res = capi.qk_transpile(
         capi.qk_circuit_borrow_from_python(circuit._data),
         target,
@@ -114,10 +117,52 @@ def transpile_from_c(
     )
     if res != 0:
         raise qiskit.transpiler.exceptions.TranspilerError(
-            f"Transpilation failed: {error.contents.value.decode('utf8')}"
+            f"Transpilation failed: {ctypes.cast(error, ctypes.c_char_p).value.decode('utf8')}"
         )
     layout = capi.qk_transpile_layout_to_python(result.layout, result.circuit)
     capi.qk_transpile_layout_free(result.layout)
     out = capi.qk_circuit_to_python_full(result.circuit)
     out._layout = layout
     return out
+
+
+def load_qasm2_from_c(
+    program: str,
+    strict: bool = False,
+    include_path: Iterable[str | os.PathLike] = (),
+) -> qiskit.QuantumCircuit:
+    """Load an OpenQASM 2 program through the C API and return it as a Python circuit.
+
+    This is currently the only way to reach the native Rust importer, since
+    :func:`qiskit.qasm2.loads` still goes through the Python-space bytecode interpreter.
+
+    Raises:
+        QASM2ParseError: if the importer rejected the program, carrying its own message so a
+            parse failure surfaces the same way it would from ``qasm2.loads``.
+    """
+    options = capi.qk_openqasm2_options_new()
+    capi.qk_openqasm2_options_set_strict(options, strict)
+    for path in include_path:
+        code = capi.qk_openqasm2_options_append_include_path(
+            options, os.fspath(path).encode("utf-8"), None
+        )
+        if code != capi.QkExitCode.Success.value.value:
+            capi.qk_openqasm2_options_free(options)
+            raise ValueError(f"include path is not valid UTF-8: {path!r}")
+    error = ctypes.POINTER(ctypes.c_char)()
+    circuit = ctypes.POINTER(capi.QkCircuit)()
+    code = capi.qk_openqasm2_load(
+        program.encode("utf-8"),
+        options,
+        ctypes.byref(circuit),
+        ctypes.byref(error),
+    )
+    capi.qk_openqasm2_options_free(options)
+    if code != capi.QkExitCode.Success.value.value:
+        message = ctypes.cast(error, ctypes.c_char_p).value if error else None
+        capi.qk_str_free(error)
+        raise qiskit.qasm2.QASM2ParseError(
+            message.decode("utf-8") if message else f"failed to load the program (code {code})"
+        )
+    # `qk_circuit_to_python_full` takes ownership of the circuit, so it must not be freed here.
+    return capi.qk_circuit_to_python_full(circuit)

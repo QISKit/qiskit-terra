@@ -29,6 +29,7 @@ pub mod exit_codes;
 pub mod operations;
 pub mod param;
 pub mod passmanager;
+pub mod qasm2;
 pub mod qpy;
 pub mod sparse_observable;
 pub mod transpiler;
