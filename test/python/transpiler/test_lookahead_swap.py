@@ -315,6 +315,45 @@ class TestLookaheadSwap(QiskitTestCase):
             mapped_dag.count_ops().get("swap", 0), dag_circuit.count_ops().get("swap", 0) + 1
         )
 
+    def test_preserves_zero_qubit_store(self):
+        """Verify LookaheadSwap preserves zero-qubit Store instructions."""
+        circuit = QuantumCircuit(1, 1)
+        circuit.measure(0, 0)
+        circuit.store(circuit.clbits[0], True)
+        dag_circuit = circuit_to_dag(circuit)
+
+        coupling_map = CouplingMap.from_line(1)
+
+        mapped_dag = LookaheadSwap(coupling_map).run(dag_circuit)
+
+        self.assertEqual(mapped_dag, dag_circuit)
+
+    def test_zero_qubit_store_stays_after_pending_measure(self):
+        """Verify a zero-qubit Store is not mapped ahead of a measure awaiting routing.
+
+        The cx needs a swap, so it and the measure that follows it are both deferred. The
+        store reads the clbit that measure writes, so it has to stay behind the measure.
+        """
+
+        qr = QuantumRegister(3, "q")
+        cr = ClassicalRegister(2)
+        circuit = QuantumCircuit(qr, cr)
+
+        circuit.cx(qr[0], qr[2])
+        circuit.measure(qr[0], cr[0])
+        circuit.store(cr[1], cr[0])
+
+        dag_circuit = circuit_to_dag(circuit)
+
+        coupling_map = CouplingMap([[0, 1], [1, 2]])
+
+        mapped_dag = LookaheadSwap(coupling_map).run(dag_circuit)
+
+        measure_node = next(iter(mapped_dag.named_nodes("measure")))
+        store_node = next(iter(mapped_dag.named_nodes("store")))
+
+        self.assertIn(store_node, mapped_dag.descendants(measure_node))
+
 
 if __name__ == "__main__":
     unittest.main()

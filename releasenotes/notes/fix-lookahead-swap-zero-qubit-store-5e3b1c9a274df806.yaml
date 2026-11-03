@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed :class:`.LookaheadSwap` silently dropping zero-qubit operations such
+    as :class:`.Store` from its output. Such operations are now copied into the
+    routed circuit, and are not moved ahead of earlier gates that are still
+    awaiting routing.
+    Fixes `#16858 <https://github.com/Qiskit/qiskit/issues/16858>`__.
