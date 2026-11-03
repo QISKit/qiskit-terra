@@ -688,6 +688,54 @@ reset q[0];
 reset q[1];"""
         self.assertEqual(qasm2.dumps(qc), expected_qasm)
 
+    def test_initialize_gate_with_reset(self):
+        """Test that Initialize gate with reset operations in its definition is exported correctly."""
+        from qiskit.circuit.library import Initialize
+        import numpy as np
+        
+        # Create a simple state vector
+        state = [1/np.sqrt(2), 1/np.sqrt(2)]
+        
+        # Create Initialize gate
+        init_gate = Initialize(state)
+        circuit = QuantumCircuit(init_gate.num_qubits)
+        circuit.append(init_gate, circuit.qubits)
+        
+        qasm = qasm2.dumps(circuit)
+        
+        # Check that the QASM contains valid reset syntax (flattened inline)
+        self.assertIn("reset q[0];", qasm)
+        
+        # Verify that the generated QASM can be parsed back
+        qc = QuantumCircuit.from_qasm_str(qasm)
+        self.assertEqual(qc.num_qubits, 1)
+
+    def test_custom_gate_with_barrier(self):
+        """Test that custom gates with barrier operations are flattened correctly."""
+        # Create a custom gate with barrier using to_instruction() instead of to_gate()
+        custom_gate = QuantumCircuit(2, name="custom_with_barrier")
+        custom_gate.h(0)
+        custom_gate.barrier()
+        custom_gate.cx(0, 1)
+        custom_gate = custom_gate.to_instruction()
+        
+        circuit = QuantumCircuit(2)
+        circuit.append(custom_gate, [0, 1])
+        
+        qasm = qasm2.dumps(circuit)
+        
+        # Check that the QASM contains flattened operations instead of a gate definition
+        self.assertIn("h q[0];", qasm)
+        self.assertIn("barrier q[0],q[1];", qasm)
+        self.assertIn("cx q[0],q[1];", qasm)
+        
+        # Verify that no gate definition was created for the custom gate
+        self.assertNotIn("gate custom_with_barrier", qasm)
+        
+        # Verify that the generated QASM can be parsed back
+        qc = QuantumCircuit.from_qasm_str(qasm)
+        self.assertEqual(qc.num_qubits, 2)
+
     def test_nested_gate_naming_clashes(self):
         """Test that gates that have naming clashes but only appear in the body of another gate
         still get exported correctly."""

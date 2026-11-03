@@ -288,7 +288,65 @@ _FIXED_PARAMETERS = [Parameter("param0"), Parameter("param1"), Parameter("param2
 
 
 def _custom_operation_statement(instruction, gates_to_define, bit_labels):
+    operation = instruction.operation
+    
+    # _define_custom_operation handles any validation (like classical bit checks)
+    # This ensures that operations with classical bits still raise the appropriate errors
     operation = _define_custom_operation(instruction.operation, gates_to_define)
+    
+    # Check if this operation has a definition with illegal operations
+    if hasattr(operation, "definition") and operation.definition is not None:
+        illegal_ops = {"reset", "measure", "barrier"}
+        has_illegal_ops = any(
+            inst.operation.name in illegal_ops
+            for inst in operation.definition.data
+        )
+        
+        if has_illegal_ops:
+            # If the definition contains illegal operations, flatten it inline
+            # instead of creating a custom gate
+            flattened_instructions = []
+            for inst in operation.definition.data:
+                # Map the qubits from the definition to the actual qubits
+                qubit_mapping = {
+                    def_qubit: actual_qubit
+                    for def_qubit, actual_qubit in zip(operation.definition.qubits, instruction.qubits)
+                }
+                mapped_qubits = [qubit_mapping[q] for q in inst.qubits]
+                
+                # Handle the instruction based on its type
+                if inst.operation.name == "reset":
+                    flattened_instructions.append(f"reset {bit_labels[mapped_qubits[0]]};")
+                elif inst.operation.name == "barrier":
+                    if not mapped_qubits:
+                        flattened_instructions.append("barrier;")
+                    else:
+                        qargs = ",".join(bit_labels[q] for q in mapped_qubits)
+                        flattened_instructions.append(f"barrier {qargs};")
+                elif inst.operation.name == "measure":
+                    qubit = mapped_qubits[0]
+                    clbit = inst.clbits[0] if inst.clbits else None
+                    if clbit is not None:
+                        flattened_instructions.append(f"measure {bit_labels[qubit]} -> {bit_labels[clbit]};")
+                    else:
+                        flattened_instructions.append(f"measure {bit_labels[qubit]};")
+                else:
+                    # For other operations, use the normal custom operation handling
+                    custom_inst = type(inst)(
+                        _define_custom_operation(inst.operation, gates_to_define),
+                        mapped_qubits,
+                        inst.clbits
+                    )
+                    if custom_inst.clbits:
+                        bits = itertools.chain(custom_inst.qubits, custom_inst.clbits)
+                    else:
+                        bits = custom_inst.qubits
+                    bits_qasm = ",".join(bit_labels[j] for j in bits)
+                    flattened_instructions.append(f"{_instruction_call_site(custom_inst.operation)} {bits_qasm};")
+            
+            return " ".join(flattened_instructions)
+    
+    # Normal handling for operations without illegal operations in their definition
     # Insert qasm representation of the original instruction
     if instruction.clbits:
         bits = itertools.chain(instruction.qubits, instruction.clbits)
@@ -380,17 +438,30 @@ def _define_custom_operation(operation, gates_to_define):
             f"opaque {new_name}{parameters_qasm} {qubits_qasm};",
         )
     else:
-        qubit_labels = {bit: f"q{i}" for i, bit in enumerate(parameterized_definition.qubits)}
-        body_qasm = " ".join(
-            _custom_operation_statement(instruction, gates_to_define, qubit_labels)
+        # Check if the definition contains illegal operations for OpenQASM 2 gate definitions
+        illegal_ops = {"reset", "measure", "barrier"}
+        has_illegal_ops = any(
+            instruction.operation.name in illegal_ops
             for instruction in parameterized_definition.data
         )
+        
+        if has_illegal_ops:
+            # If the definition contains illegal operations, we can't define it as a gate
+            # Return the operation as-is so it gets flattened in _custom_operation_statement
+            return operation
+        else:
+            # Only create a gate definition if it doesn't contain illegal operations
+            qubit_labels = {bit: f"q{i}" for i, bit in enumerate(parameterized_definition.qubits)}
+            body_qasm = " ".join(
+                _custom_operation_statement(instruction, gates_to_define, qubit_labels)
+                for instruction in parameterized_definition.data
+            )
 
-        # if an inner operation has the same name as the actual operation, it needs to be renamed
-        if operation.name in gates_to_define:
-            operation = _rename_operation(operation)
-            new_name = operation.name
+            # if an inner operation has the same name as the actual operation, it needs to be renamed
+            if operation.name in gates_to_define:
+                operation = _rename_operation(operation)
+                new_name = operation.name
 
-        definition_qasm = f"gate {new_name}{parameters_qasm} {qubits_qasm} {{ {body_qasm} }}"
-        gates_to_define[new_name] = (parameterized_operation, definition_qasm)
+            definition_qasm = f"gate {new_name}{parameters_qasm} {qubits_qasm} {{ {body_qasm} }}"
+            gates_to_define[new_name] = (parameterized_operation, definition_qasm)
     return operation

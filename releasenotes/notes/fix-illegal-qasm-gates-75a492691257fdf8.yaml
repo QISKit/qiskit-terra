@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed a bug where :func:`qiskit.qasm2.dumps` could generate invalid
+    OpenQASM 2.0 output by placing illegal operations (such as ``reset``,
+    ``measure``, or ``barrier``) inside custom gate definitions.
+    The exporter now flattens such gates, ensuring the output is always
+    valid OpenQASM 2.0.
+    Fixes `#14814 <https://github.com/Qiskit/qiskit/issues/14814>`__.
