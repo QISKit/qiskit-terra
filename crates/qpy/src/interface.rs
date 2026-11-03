@@ -30,10 +30,7 @@ use crate::circuit_writer::{pack_circuit, pack_layout};
 use crate::error::QpyError;
 use crate::formats::{LayoutV2Pack, QPYCircuit, QPYFileHeader};
 use crate::py_methods::{py_circuit_data_to_quantum_circuit, serialize_metadata};
-use crate::value::{
-    ProgramType, QpyCaller, SymbolicEncoding, deserialize, deserialize_with_args,
-    serialize_with_args,
-};
+use crate::value::{ProgramType, QpyCaller, SymbolicEncoding, deserialize, deserialize_with_args};
 use crate::{QPY_READ_MIN_VERSION, QPY_WRITE_MIN_VERSION};
 
 use std::io::{Cursor, Seek, SeekFrom, Write};
