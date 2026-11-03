@@ -276,6 +276,41 @@ class TestControlledGate(QiskitTestCase):
                     # CX is treated like a primitive within Terra, and doesn't have a definition.
                     self.assertTrue(Operator(special_case_gate.definition).equiv(naive_operator))
 
+    def test_inverse_controlled_gate_to_matrix(self):
+        """Test to_matrix for a plain controlled gate returned from inverse()."""
+        gate = CSXGate().inverse()
+        expected = CSXGate().to_matrix().conj().T
+
+        np.testing.assert_allclose(gate.to_matrix(), expected)
+
+    def test_generic_controlled_gate_to_matrix(self):
+        """Test to_matrix for a plain ControlledGate with a matrix-defined base gate."""
+        gate = ControlledGate(
+            "csx",
+            2,
+            [],
+            num_ctrl_qubits=1,
+            ctrl_state=0,
+            base_gate=SXGate(),
+        )
+        expected = _compute_control_matrix(SXGate().to_matrix(), 1, ctrl_state=0)
+
+        np.testing.assert_allclose(gate.to_matrix(), expected)
+
+    def test_controlled_gate_to_matrix_without_base_matrix_raises(self):
+        """Test to_matrix fails if the base gate has no matrix."""
+        gate = ControlledGate("cgate", 2, [], num_ctrl_qubits=1, base_gate=Gate("gate", 1, []))
+
+        with self.assertRaisesRegex(CircuitError, "to_matrix not defined"):
+            gate.to_matrix()
+
+    def test_controlled_gate_to_matrix_with_ancillas_raises(self):
+        """Test to_matrix fails if the controlled gate uses ancilla qubits."""
+        gate = ControlledGate("cgate", 3, [], num_ctrl_qubits=1, base_gate=XGate())
+
+        with self.assertRaisesRegex(CircuitError, "to_matrix not defined"):
+            gate.to_matrix()
+
     def test_global_phase_control(self):
         """Test creation of a GlobalPhaseGate."""
         base = GlobalPhaseGate(np.pi / 7)
