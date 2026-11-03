@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed :class:`.RemoveFinalMeasurements` incorrectly removing measurements whose classical
+    output is consumed by a control-flow condition (``while_loop``, ``if_else``, or
+    ``switch_case``).  Such measurements are not truly final and must be preserved; removing
+    them caused the condition register to always read its default value ``0``, making
+    ``while_loop`` circuits run indefinitely.
+    Fixes `#14319 <https://github.com/Qiskit/qiskit/issues/14319>`__.

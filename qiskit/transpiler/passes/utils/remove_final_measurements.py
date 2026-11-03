@@ -48,6 +48,17 @@ def calc_final_ops(dag: DAGCircuit, final_op_names: set[str]) -> list[DAGOpNode]
                 continue
         if node.name in final_op_names:
             # Current node is either a measure, or a barrier with all final op children.
+            # A measure whose classical output is *read* by a successor (e.g. as a
+            # control-flow condition in while_loop, if_else, or switch_case) is not truly
+            # final — removing it would corrupt that condition.
+            # Exception: a successor that is itself a measure merely overwrites the clbit
+            # rather than branching on it, so it is safe to ignore.  For any other classical
+            # successor we err on the side of preservation (conservative but correct).
+            if any(
+                isinstance(s, DAGOpNode) and s.name != "measure"
+                for s in dag.classical_successors(node)
+            ):
+                continue
             final_ops.append(node)
             to_visit.extend(dag.quantum_predecessors(node))
 

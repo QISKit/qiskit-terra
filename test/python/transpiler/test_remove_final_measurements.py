@@ -304,6 +304,74 @@ class TestRemoveFinalMeasurements(QiskitTestCase):
         final_barriers = calc_final_ops(circuit_to_dag(qc), {"barrier"})
         self.assertEqual(final_barriers, [])
 
+    def test_measure_feeding_while_loop_condition_not_removed(self):
+        """Test that measures feeding a while_loop condition are not removed (#14319)."""
+        qreg = QuantumRegister(2)
+        creg = ClassicalRegister(2)
+        qc = QuantumCircuit(qreg, creg)
+        qc.measure(qreg[0], creg[0])
+        qc.measure(qreg[1], creg[1])
+        with qc.while_loop((creg, 0b00)):
+            qc.x(0)
+
+        result = RemoveFinalMeasurements().run(circuit_to_dag(qc))
+        # Both measures feed the while_loop condition and must be preserved.
+        op_names = [n.name for n in result.topological_op_nodes()]
+        self.assertEqual(op_names.count("measure"), 2)
+        self.assertIn("while_loop", op_names)
+
+    def test_measure_feeding_if_else_condition_not_removed(self):
+        """Test that a measure feeding an if_else condition is not removed (#14319)."""
+        qc = QuantumCircuit(2, 1)
+        qc.h(0)
+        qc.measure(0, 0)
+        with qc.if_test((qc.clbits[0], 1)):
+            qc.x(1)
+
+        result = RemoveFinalMeasurements().run(circuit_to_dag(qc))
+        # The measure feeds the if_else condition (if_test compiles to if_else in the DAG)
+        # and must be preserved.
+        op_names = [n.name for n in result.topological_op_nodes()]
+        self.assertEqual(op_names.count("measure"), 1)
+        self.assertIn("if_else", op_names)
+
+    def test_measure_feeding_switch_case_condition_not_removed(self):
+        """Test that a measure feeding a switch_case discriminant is not removed (#14319)."""
+        qc = QuantumCircuit(2, 1)
+        qc.measure(0, 0)
+        with qc.switch(qc.clbits[0]) as case:
+            with case(0):
+                qc.x(1)
+
+        result = RemoveFinalMeasurements().run(circuit_to_dag(qc))
+        # The measure feeds the switch_case discriminant and must be preserved.
+        op_names = [n.name for n in result.topological_op_nodes()]
+        self.assertEqual(op_names.count("measure"), 1)
+        self.assertIn("switch_case", op_names)
+
+    def test_chained_measures_first_is_removed_second_feeds_condition(self):
+        """Test that when two measures share a clbit, the first (overwritten) is removable (#14319).
+
+        measure q[0] -> c[0]; measure q[1] -> c[0]; while_loop(c[0] == 0, body on q[2])
+        The first measure's value is overwritten by the second, so it is truly final and
+        should be removed.  The second feeds the while_loop and must be preserved.
+        q[2] (not q[0]) is used inside the while_loop so that q[0]'s wire ends at the
+        first measure, making it quantum-final and reachable by the reverse traversal.
+        """
+        qreg = QuantumRegister(3)
+        creg = ClassicalRegister(1)
+        qc = QuantumCircuit(qreg, creg)
+        qc.measure(qreg[0], creg[0])  # overwritten by second measure — truly final
+        qc.measure(qreg[1], creg[0])  # feeds while_loop — must be preserved
+        with qc.while_loop((creg, 0b0)):
+            qc.x(qreg[2])  # uses q[2], not q[0], so q[0]'s wire ends at its measure
+
+        result = RemoveFinalMeasurements().run(circuit_to_dag(qc))
+        op_names = [n.name for n in result.topological_op_nodes()]
+        # First measure (overwritten) is removed; second (feeds condition) is preserved.
+        self.assertEqual(op_names.count("measure"), 1)
+        self.assertIn("while_loop", op_names)
+
 
 if __name__ == "__main__":
     unittest.main()
