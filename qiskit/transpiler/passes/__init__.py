@@ -34,7 +34,7 @@ customize one stage of transpilation.
 For example, an analysis pass can be used to collect information about a
 circuit::
 
-    from qiskit.circuit import QuantumCircuit  # Build circuits.
+    from qiskit.circuit import QuantumCircuit
     from qiskit.transpiler import PassManager  # Run passes.
     from qiskit.transpiler.passes import CountOps  # Count operations.
 
