@@ -25,8 +25,30 @@ from qiskit.result import utils
 class TestCounts(unittest.TestCase):
     def test_just_counts(self):
         raw_counts = {"0x0": 21, "0x2": 12}
-        expected = {"0": 21, "10": 12}
-        result = counts.Counts(raw_counts)
+        expected = {"00": 21, "10": 12}
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            result = counts.Counts(raw_counts)
+        self.assertEqual(expected, result)
+
+    def test_mixed_width_counts_warn_and_pad(self):
+        raw_counts = {"0x0": 50, "0x3": 30}
+        expected = {"00": 50, "11": 30}
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            result = counts.Counts(raw_counts)
+        self.assertEqual(expected, result)
+        self.assertEqual({"0": 50, "1": 30}, utils.marginal_counts(result, indices=[0]))
+
+    def test_single_bit_counts_warn_for_inferred_memory_slots(self):
+        raw_counts = {"0x0": 50, "0x1": 30}
+        expected = {"0": 50, "1": 30}
+        with self.assertWarnsRegex(UserWarning, "inferring the bit width"):
+            result = counts.Counts(raw_counts)
+        self.assertEqual(expected, result)
+
+    def test_counts_creg_sizes_without_memory_slots(self):
+        raw_counts = {"0x0": 4, "0x2": 10}
+        expected = {"0 0": 4, "1 0": 10}
+        result = counts.Counts(raw_counts, creg_sizes=[["c0", 1], ["c1", 1]])
         self.assertEqual(expected, result)
 
     def test_counts_with_exta_formatting_data(self):
@@ -62,33 +84,38 @@ class TestCounts(unittest.TestCase):
     def test_int_outcomes(self):
         raw_counts = {"0x0": 21, "0x2": 12, "0x3": 5, "0x2E": 265}
         expected = {0: 21, 2: 12, 3: 5, 46: 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.int_outcomes()
         self.assertEqual(expected, result)
 
     def test_most_frequent(self):
         raw_counts = {"0x0": 21, "0x2": 12, "0x3": 5, "0x2E": 265}
         expected = "101110"
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.most_frequent()
         self.assertEqual(expected, result)
 
     def test_most_frequent_duplicate(self):
         raw_counts = {"0x0": 265, "0x2": 12, "0x3": 5, "0x2E": 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         self.assertRaises(exceptions.QiskitError, counts_obj.most_frequent)
 
     def test_hex_outcomes(self):
         raw_counts = {"0x0": 21, "0x2": 12, "0x3": 5, "0x2E": 265}
         expected = {"0x0": 21, "0x2": 12, "0x3": 5, "0x2e": 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.hex_outcomes()
         self.assertEqual(expected, result)
 
     def test_just_int_counts(self):
         raw_counts = {0: 21, 2: 12}
-        expected = {"0": 21, "10": 12}
-        result = counts.Counts(raw_counts)
+        expected = {"00": 21, "10": 12}
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            result = counts.Counts(raw_counts)
         self.assertEqual(expected, result)
 
     def test_int_counts_with_exta_formatting_data(self):
@@ -145,26 +172,30 @@ class TestCounts(unittest.TestCase):
 
     def test_int_outcomes_with_int_counts(self):
         raw_counts = {0: 21, 2: 12, 3: 5, 46: 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.int_outcomes()
         self.assertEqual(raw_counts, result)
 
     def test_most_frequent_int_counts(self):
         raw_counts = {0: 21, 2: 12, 3: 5, 46: 265}
         expected = "101110"
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.most_frequent()
         self.assertEqual(expected, result)
 
     def test_most_frequent_duplicate_int_counts(self):
         raw_counts = {0: 265, 2: 12, 3: 5, 46: 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         self.assertRaises(exceptions.QiskitError, counts_obj.most_frequent)
 
     def test_hex_outcomes_int_counts(self):
         raw_counts = {0: 265, 2: 12, 3: 5, 46: 265}
         expected = {"0x0": 265, "0x2": 12, "0x3": 5, "0x2e": 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.hex_outcomes()
         self.assertEqual(expected, result)
 
@@ -304,8 +335,9 @@ class TestCounts(unittest.TestCase):
 
     def test_just_0b_bitstring_counts(self):
         raw_counts = {"0b0": 21, "0b10": 12}
-        expected = {"0": 21, "10": 12}
-        result = counts.Counts(raw_counts)
+        expected = {"00": 21, "10": 12}
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            result = counts.Counts(raw_counts)
         self.assertEqual(expected, result)
 
     def test_0b_bistring_counts_with_exta_formatting_data(self):
@@ -349,26 +381,30 @@ class TestCounts(unittest.TestCase):
     def test_int_outcomes_with_0b_bitstring_counts(self):
         raw_counts = {"0b0": 21, "0b10": 12, "0b11": 5, "0b101110": 265}
         expected = {0: 21, 2: 12, 3: 5, 46: 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.int_outcomes()
         self.assertEqual(expected, result)
 
     def test_most_frequent_0b_bitstring_counts(self):
         raw_counts = {"0b0": 21, "0b10": 12, "0b11": 5, "0b101110": 265}
         expected = "101110"
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.most_frequent()
         self.assertEqual(expected, result)
 
     def test_most_frequent_duplicate_0b_bitstring_counts(self):
         raw_counts = {"0b0": 265, "0b10": 12, "0b11": 5, "0b101110": 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         self.assertRaises(exceptions.QiskitError, counts_obj.most_frequent)
 
     def test_hex_outcomes_0b_bitstring_counts(self):
         raw_counts = {"0b0": 265, "0b10": 12, "0b11": 5, "0b101110": 265}
         expected = {"0x0": 265, "0x2": 12, "0x3": 5, "0x2e": 265}
-        counts_obj = counts.Counts(raw_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts_obj = counts.Counts(raw_counts)
         result = counts_obj.hex_outcomes()
         self.assertEqual(expected, result)
 

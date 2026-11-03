@@ -13,6 +13,7 @@
 """A container class for counts from a circuit execution."""
 
 import re
+import warnings
 
 from qiskit.result import postprocess
 from qiskit import exceptions
@@ -55,7 +56,10 @@ class Counts(dict):
                 classical register size. For example,
                 ``[('c_reg', 2), ('my_creg', 4)]``.
             memory_slots (int): The number of total ``memory_slots`` in the
-                experiment.
+                experiment. If not supplied for integer-like input, this is
+                inferred from ``creg_sizes`` if present. If neither is supplied
+                this is inferred from the maximum observed bit width and a
+                warning is emitted.
         Raises:
             TypeError: If the input key type is not an ``int`` or ``str``, or if the
                 input keys are not all of the same type.
@@ -113,6 +117,21 @@ class Counts(dict):
         if self.creg_sizes:
             header["creg_sizes"] = self.creg_sizes
         self.memory_slots = memory_slots
+        # Derive memory slots before formatting integer-like counts if the user
+        # did not supply them explicitly.
+        if self.int_raw and self.memory_slots is None:
+            if self.creg_sizes:
+                self.memory_slots = sum(size for _, size in self.creg_sizes)
+            else:
+                bit_lengths = {max(value.bit_length(), 1) for value in self.int_raw}
+                self.memory_slots = max(bit_lengths)
+                warnings.warn(
+                    "Counts keys are ambiguous without memory_slots or creg_sizes; "
+                    "inferring the bit width from the largest key value. Keys with "
+                    "different bit widths are padded to the maximum key width.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         if self.memory_slots:
             header["memory_slots"] = self.memory_slots
         if not bin_data:

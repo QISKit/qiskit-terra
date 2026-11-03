@@ -51,14 +51,14 @@ class TestResultOperations(QiskitTestCase):
     def test_counts_no_header(self):
         """Test that counts are extracted properly without header."""
         raw_counts = {"0x0": 4, "0x2": 10}
-        no_header_processed_counts = {
-            bin(int(bs[2:], 16))[2:]: counts for (bs, counts) in raw_counts.items()
-        }
+        no_header_processed_counts = {"00": 4, "10": 10}
         data = models.ExperimentResultData(counts=raw_counts)
         exp_result = models.ExperimentResult(shots=14, success=True, meas_level=2, data=data)
         result = Result(results=[exp_result], **self.base_result_args)
 
-        self.assertEqual(result.get_counts(0), no_header_processed_counts)
+        with self.assertWarnsRegex(UserWarning, "different bit widths"):
+            counts = result.get_counts(0)
+        self.assertEqual(counts, no_header_processed_counts)
 
     def test_counts_header(self):
         """Test that counts are extracted properly with header."""

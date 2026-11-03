@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed :class:`.Counts` so integer-like inputs with mixed bit widths, such
+    as hexadecimal keys, are padded consistently before downstream processing.
+    This prevents :func:`.marginal_counts` from returning unmarginalized
+    results for accepted ``Counts`` inputs such as ``{"0x0": 50, "0x3": 30}``.
+    Fixed `#16190 <https://github.com/Qiskit/qiskit/issues/16190>`__.
