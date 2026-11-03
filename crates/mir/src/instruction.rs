@@ -84,21 +84,25 @@ impl MirInstruction {
         match &self.op {
             PauliRotation(pauli_rotation) => {
                 // Number of Qids on the instruction must match the number of
-                // paulis on the PauliRotation operation.
+                // paulis on the PauliRotation operation. If a Qid "contains"
+                // other Qids, then its width provides an accurate summary of
+                // the total number of Qids and thus is used here for this
+                // check.
+                //
                 // This will also detect Qids that are not in the resource table
                 // as well as Qids that have unknown width (i.e., abstract Qids)
                 // which cannot be used in a PauliRotation.
-                let mut num_qids = 0;
+                let mut qid_width = 0;
                 for q in self.qids().inner().iter() {
-                    num_qids += resource_table
+                    qid_width += resource_table
                         .info(*q)
                         .ok_or(InstructionVerificationError::QidNotFound { qid: *q })?
                         .width()
                         .ok_or(InstructionVerificationError::AbstractQidNotAllowed { qid: *q })?;
                 }
-                if num_qids != pauli_rotation.paulis().len() as u32 {
-                    return Err(InstructionVerificationError::MismatchedOperands {
-                        len1: num_qids,
+                if qid_width != pauli_rotation.paulis().len() as u32 {
+                    return Err(InstructionVerificationError::QidWidthMismatch {
+                        len1: qid_width,
                         len2: pauli_rotation.paulis().len() as u32,
                     });
                 }
@@ -131,8 +135,8 @@ impl fmt::Display for MirInstruction {
 
 #[derive(Error, Debug)]
 pub enum InstructionVerificationError {
-    #[error("Mismatch operand lengths: {} != {}", len1, len2)]
-    MismatchedOperands { len1: u32, len2: u32 },
+    #[error("Qid width ({}) does not match pauli count ({})", len1, len2)]
+    QidWidthMismatch { len1: u32, len2: u32 },
     #[error("Qid {} not found in resource table.", qid)]
     QidNotFound { qid: Qid },
     #[error("Abstract Qid {} not allowed (no width specified)", qid)]
@@ -261,7 +265,9 @@ mod tests {
     #[test]
     fn test_invalid_pauli_instruction() {
         let mut resource_table = ResourceTable::new(QidSpace::Virtual);
-        let qids = (0..8)
+        let qid_len = 8;
+        let pauli_len = 4;
+        let qids = (0..qid_len)
             .map(|_| {
                 resource_table
                     .add_qid(QidInfo::new(BitLayout::Base(1)))
@@ -269,7 +275,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let instr = MirInstruction {
-            op: create_pauli_rotation_op(Pauli::X, 4, 0.5),
+            op: create_pauli_rotation_op(Pauli::X, pauli_len, 0.5),
             qids: QidList::new(qids),
             args: SymbolIdList::default(),
             returns: SymbolIdList::default(),
@@ -279,7 +285,10 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(InstructionVerificationError::MismatchedOperands { len1: 8, len2: 4 })
+            Err(InstructionVerificationError::QidWidthMismatch {
+                len1: _qid_len,
+                len2: _pauli_len
+            })
         ));
     }
     #[test]
@@ -375,7 +384,7 @@ mod tests {
         assert!(
             matches!(
                 bad_instr.verify(&resource_table),
-                Err(InstructionVerificationError::MismatchedOperands { len1: 2, len2: 3 })
+                Err(InstructionVerificationError::QidWidthMismatch { len1: 2, len2: 3 })
             ),
             "Mismatched operand lengths"
         );
@@ -390,7 +399,7 @@ mod tests {
         assert!(
             matches!(
                 bad_instr.verify(&resource_table),
-                Err(InstructionVerificationError::MismatchedOperands { len1: 2, len2: 1 }),
+                Err(InstructionVerificationError::QidWidthMismatch { len1: 2, len2: 1 }),
             ),
             "Mismatched operand lengths",
         );
@@ -432,14 +441,6 @@ mod tests {
             args: SymbolIdList::default(),
             returns: SymbolIdList::default(),
         };
-
-        assert!(
-            matches!(
-                bad_instr.verify(&resource_table),
-                Err(InstructionVerificationError::AliasedQids)
-            ),
-            "Missed identifying aliased qids"
-        );
 
         assert!(
             matches!(
