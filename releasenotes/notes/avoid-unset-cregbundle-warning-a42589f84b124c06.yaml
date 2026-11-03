@@ -1,0 +1,8 @@
+---
+
+
+fixes:
+  - |
+    Avoid throwing warning when drawing circuit without setting cregbundle.
+
+    See `#15949 <https://github.com/Qiskit/qiskit/issues/15949>`__.
