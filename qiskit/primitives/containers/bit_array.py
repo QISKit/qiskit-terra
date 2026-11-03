@@ -182,7 +182,7 @@ class BitArray(ShapedMixin):
     @staticmethod
     def _bytes_to_bitstring(data: bytes, num_bits: int, mask: int) -> str:
         val = int.from_bytes(data, "big") & mask
-        return bin(val)[2:].zfill(num_bits)
+        return bin(val)[2:].zfill(num_bits) if mask else ""
 
     @staticmethod
     def _bytes_to_int(data: bytes, mask: int) -> int:
@@ -191,7 +191,13 @@ class BitArray(ShapedMixin):
     def _get_counts(
         self, *, loc: int | tuple[int, ...] | None, converter: Callable[[bytes], str | int]
     ) -> dict[str, int] | dict[int, int]:
-        arr = self._array.reshape(-1, self._array.shape[-1]) if loc is None else self._array[loc]
+        if loc is None:
+            _order = self._array.shape[-1]
+            arr = self._array.reshape(-1, _order) if _order else self._array
+        else:
+            arr = self._array[loc]
+            if isinstance(arr, np.uint8):
+                arr = np.array([self._array[loc]])
 
         counts = defaultdict(int)
         for shot_row in arr:
@@ -405,7 +411,13 @@ class BitArray(ShapedMixin):
         """
         mask = 2**self.num_bits - 1
         converter = partial(self._bytes_to_bitstring, num_bits=self.num_bits, mask=mask)
-        arr = self._array.reshape(-1, self._array.shape[-1]) if loc is None else self._array[loc]
+        if loc is None:
+            _order = self._array.shape[-1]
+            arr = self._array.reshape(-1, _order) if _order else self._array
+        else:
+            arr = self._array[loc]
+            if isinstance(arr, np.uint8) or arr.size == 0:
+                arr = np.array([self._array[loc]])
         return [converter(shot_row.tobytes()) for shot_row in arr]
 
     def reshape(self, *shape: ShapeInput) -> BitArray:

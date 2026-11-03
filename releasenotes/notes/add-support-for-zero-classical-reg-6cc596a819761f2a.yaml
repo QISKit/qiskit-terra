@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed an issue where :func:`get_counts()`, :func:`get_int_counts()` and
+    :func:`get_bitstrings()` from :class:`.BitArray` would raise a `ValueError`
+    exception upon initialising :class:`.BitArray` with zero classical registers.
+    Fixed `#12062 <https://github.com/Qiskit/qiskit-terra/issues/12062>`__
