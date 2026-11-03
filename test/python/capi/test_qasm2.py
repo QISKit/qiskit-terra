@@ -79,7 +79,6 @@ class TestQasm2CParity(QiskitTestCase):
         from_python = qiskit.qasm2.loads(program)
         from_c = ffi.load_qasm2_from_c(program)
 
-        # Compared structurally: Python builds a `_DefinedGate`, Rust a custom operation.
         self.assertEqual(from_python.num_qubits, from_c.num_qubits)
         self.assertEqual(from_python.num_clbits, from_c.num_clbits)
         self.assertEqual(
