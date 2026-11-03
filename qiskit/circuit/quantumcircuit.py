@@ -3995,6 +3995,15 @@ class QuantumCircuit(IR):
 
         return circuit_to_dag(self, copy_operations=copy_operations)
 
+    def _repr_png_(self):
+        if self.width() > 50 or self.size() > 50 or self.depth() > 25:
+            return None
+        import io
+
+        img_byte = io.BytesIO()
+        self.draw("mpl").savefig(img_byte, format="PNG")
+        return img_byte.getvalue()
+
     def draw(
         self,
         output: str | None = None,
