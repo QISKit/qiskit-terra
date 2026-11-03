@@ -62,6 +62,8 @@ impl SymbolTableErrorKind {
     }
 }
 
+/// The kind of classical value a symbol holds.
+/// This classifies the data a symbol represents, independent to its id or its name.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SymbolType {
     Bool,
@@ -114,6 +116,8 @@ impl fmt::Display for Symbol {
     }
 }
 
+/// An opaque, cheap reference to a symbol in the SymbolTable.
+/// Instructions and other constructs refer to symbols by SymbolId.
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct SymbolId(usize);
 

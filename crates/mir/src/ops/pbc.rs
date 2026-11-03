@@ -106,6 +106,15 @@ impl fmt::Display for PauliRotation {
     }
 }
 
+/// A Pauli-product measurement: measures the eigenvalue of a multi-qubit Pauli
+/// operator (the product of all Paulis, one per qid).
+/// This is a multi-qubit operation, which produces a single classical bit.
+/// Unlike a destructive measurement of each qubit individually, this doesn't
+/// collapse each qubit on its own - only the joint parity of the product.
+/// `neg` used to flip the result when set.  
+/// When used in a `MirInstruction`, the instruction `qids` must have the same
+/// length as `paulis` (one qid per Pauli), `args` must be empty, and `returns`
+/// must contain exactly one `SymbolId` for the boolean result.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PauliMeasure {
     paulis: PauliString,

@@ -82,8 +82,6 @@ impl MirInstructionIndex {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_eq, vec};
-
     use super::*;
     use crate::line_graph::LineGraph;
     use crate::ops::pbc::{AngleType, Pauli, PauliMeasure, PauliRotation, PauliString};
