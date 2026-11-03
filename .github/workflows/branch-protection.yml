@@ -64,7 +64,6 @@ jobs:
     with:
       python-version: ${{ needs.config.outputs.python-new }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
-    secrets: inherit
 
   lint:
     name: Lint

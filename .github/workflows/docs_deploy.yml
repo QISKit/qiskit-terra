@@ -45,4 +45,3 @@ jobs:
       python-version: ${{ needs.config.outputs.python-new }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
       base-branch: ${{ needs.resolve.outputs.base-branch }}
-    secrets: inherit
