@@ -231,6 +231,24 @@ class TestLightConePass(QiskitTestCase):
 
         self.assertEqual(expected, new_circuit)
 
+    @ddt.data("if_test", "while_loop", "switch")
+    def test_measurement_result_used_by_control_flow(self, control_flow):
+        """Keep measurements that feed control flow on another qubit."""
+        qc = QuantumCircuit(2, 2)
+        qc.x(0)
+        qc.measure(0, 0)
+        if control_flow == "switch":
+            with qc.switch(qc.clbits[0]) as case, case(True):
+                qc.x(1)
+        else:
+            with getattr(qc, control_flow)((qc.clbits[0], True)):
+                qc.x(1)
+                if control_flow == "while_loop":
+                    qc.break_loop()
+        qc.measure(1, 1)
+
+        self.assertEqual(qc, PassManager([LightCone()]).run(qc))
+
     @ddt.data(SparsePauliOp("IX"), SparseObservable("I+"))
     def test_parameter_expression(self, sparse_object):
         """Test for Parameter expressions."""
@@ -353,6 +371,18 @@ class TestLightConePass(QiskitTestCase):
             ValueError, msg="The circuit contains measurements and an observable has been given"
         ):
             light_cone.run(dag)
+
+    def test_raise_error_when_feedforward_measurement_and_observable_present(self):
+        """A measurement feeding control flow still conflicts with an observable."""
+        qc = QuantumCircuit(2, 1)
+        qc.measure(0, 0)
+        with qc.if_test((qc.clbits[0], True)):
+            qc.x(1)
+
+        with self.assertRaisesRegex(
+            ValueError, "The circuit contains measurements and an observable has been given"
+        ):
+            LightCone(bit_terms="X", indices=[1]).run(circuit_to_dag(qc))
 
 
 if __name__ == "__main__":

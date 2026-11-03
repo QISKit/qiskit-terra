@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed :meth:`.QuantumCircuit.remove_final_measurements` and the
+    :class:`.RemoveFinalMeasurements` transpiler pass removing a measurement whose
+    result is read by a later instruction, such as the condition of an
+    :meth:`~.QuantumCircuit.if_test` block.  Such measurements are now retained,
+    preserving the behavior of feed-forward circuits.
+    Fixed `#16998 <https://github.com/Qiskit/qiskit/issues/16998>`__.

@@ -16,6 +16,7 @@ import unittest
 
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit
 from qiskit.circuit import Clbit
+from qiskit.circuit.classical import expr
 from qiskit.transpiler.passes import RemoveFinalMeasurements
 from qiskit.converters import circuit_to_dag
 from qiskit.transpiler.passes.utils.remove_final_measurements import calc_final_ops
@@ -263,6 +264,59 @@ class TestRemoveFinalMeasurements(QiskitTestCase):
         dag = circuit_to_dag(qc)
         dag = RemoveFinalMeasurements().run(dag)
 
+        self.assertEqual(dag, expected_dag())
+
+    def test_measure_read_by_later_op_not_removed(self):
+        """A measurement whose result is read by a later operation is not final.
+
+        See https://github.com/Qiskit/qiskit/issues/16998.
+        """
+
+        def if_else(qc):
+            with qc.if_test((qc.clbits[0], True)):
+                qc.h(1)
+
+        def while_loop(qc):
+            with qc.while_loop((qc.clbits[0], True)):
+                qc.h(1)
+
+        def switch_case(qc):
+            with qc.switch(qc.clbits[0]) as case, case(case.DEFAULT):
+                qc.h(1)
+
+        def store(qc):
+            qc.store(qc.add_var("a", expr.lift(False)), expr.lift(qc.clbits[0]))
+
+        for builder in (if_else, while_loop, switch_case, store):
+            with self.subTest(builder.__name__):
+                qc = QuantumCircuit(2, 1)
+                qc.h(0)
+                qc.measure(0, 0)
+                builder(qc)
+
+                dag = RemoveFinalMeasurements().run(circuit_to_dag(qc))
+                self.assertEqual(dag, circuit_to_dag(qc))
+
+    def test_final_measure_removed_alongside_read_measure(self):
+        """A genuinely final measurement is still removed when another is read."""
+        q0 = QuantumRegister(2, "q0")
+        c0 = ClassicalRegister(1, "c0")
+        c1 = ClassicalRegister(1, "c1")
+
+        def expected_dag():
+            qc = QuantumCircuit(q0, c0)
+            qc.measure(q0[0], c0[0])
+            with qc.if_test((c0[0], True)):
+                qc.h(q0[1])
+            return circuit_to_dag(qc)
+
+        qc = QuantumCircuit(q0, c0, c1)
+        qc.measure(q0[0], c0[0])
+        with qc.if_test((c0[0], True)):
+            qc.h(q0[1])
+        qc.measure(q0[1], c1[0])
+
+        dag = RemoveFinalMeasurements().run(circuit_to_dag(qc))
         self.assertEqual(dag, expected_dag())
 
     def test_calc_final_ops(self):

@@ -18,6 +18,12 @@ from qiskit.dagcircuit import DAGCircuit, DAGOpNode
 
 def calc_final_ops(dag: DAGCircuit, final_op_names: set[str]) -> list[DAGOpNode]:
     """Find the final operations of a circuit of a given type.
+
+    An operation is final if every one of its successors, on classical wires as well as
+    quantum ones, is either the end of that wire or a final operation itself.  In
+    particular a measurement is not final if a later operation reads the clbit it wrote
+    to, such as a control-flow block conditioned on that clbit.
+
     Args:
         dag: the DAG circuit
         final_op_names: names of the operations to find at the end of the circuit.
@@ -27,29 +33,27 @@ def calc_final_ops(dag: DAGCircuit, final_op_names: set[str]) -> list[DAGOpNode]
     """
     final_ops = []
 
-    to_visit = [next(dag.predecessors(dag.output_map[qubit])) for qubit in dag.qubits]
-    barrier_encounters_remaining = {}
+    # Walk backwards from the end of every wire.  A node is reached once via each of its
+    # successors, so we track how many times we still need to encounter it before we know
+    # that all of them are final.
+    to_visit = [next(dag.predecessors(out_node)) for out_node in dag.output_map.values()]
+    encounters_remaining = {}
 
     while to_visit:
         node = to_visit.pop()
         if not isinstance(node, DAGOpNode):
             continue
 
-        if node.name == "barrier":
-            # Barrier is final if all children are final, so we track
-            # how many times we still need to encounter each barrier
-            # via a child node.
-            if node not in barrier_encounters_remaining:
-                barrier_encounters_remaining[node] = sum(1 for _ in dag.quantum_successors(node))
-            if barrier_encounters_remaining[node] - 1 > 0:
-                # We've encountered the barrier, but not (yet) via all children.
-                # Record the encounter, and bail!
-                barrier_encounters_remaining[node] -= 1
-                continue
+        if node not in encounters_remaining:
+            encounters_remaining[node] = sum(1 for _ in dag.successors(node))
+        encounters_remaining[node] -= 1
+        if encounters_remaining[node] > 0:
+            # We've encountered the node, but not (yet) via all of its successors.
+            continue
+
         if node.name in final_op_names:
-            # Current node is either a measure, or a barrier with all final op children.
             final_ops.append(node)
-            to_visit.extend(dag.quantum_predecessors(node))
+            to_visit.extend(dag.predecessors(node))
 
     return final_ops
 
@@ -61,6 +65,8 @@ class RemoveFinalMeasurements(TransformationPass):
     unused classical registers and bits they are connected to.
     Measurements and barriers are considered final if they are
     followed by no other operations (aside from other measurements or barriers.)
+    A measurement whose result is read by a later operation, such as the condition
+    of a control-flow block, is therefore not final.
 
     Classical registers are removed iff they reference at least one bit
     that has become unused by the circuit as a result of the operation, and all

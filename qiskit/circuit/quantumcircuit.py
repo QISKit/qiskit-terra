@@ -4785,6 +4785,8 @@ class QuantumCircuit(IR):
 
         Measurements and barriers are considered final if they are
         followed by no other operations (aside from other measurements or barriers.)
+        A measurement whose result is read by a later operation, such as the condition
+        of a control-flow block, is therefore not final.
 
         .. note::
             This method has rather complex behavior, particularly around the removal of newly idle

@@ -16,9 +16,8 @@ from __future__ import annotations
 from qiskit.circuit import Gate, Qubit
 from qiskit.circuit.commutation_library import SessionCommutationChecker as scc
 from qiskit.circuit.library import PauliGate, ZGate
-from qiskit.dagcircuit import DAGCircuit
+from qiskit.dagcircuit import DAGCircuit, DAGOpNode
 from qiskit.transpiler.basepasses import TransformationPass
-from qiskit.transpiler.passes.utils.remove_final_measurements import calc_final_ops
 
 translation_table = str.maketrans({"+": "X", "-": "X", "l": "Y", "r": "Y", "0": "Z", "1": "Z"})
 
@@ -55,10 +54,13 @@ class LightCone(TransformationPass):
 
     @staticmethod
     def _find_measurement_qubits(dag: DAGCircuit) -> set[Qubit]:
-        final_nodes = calc_final_ops(dag, {"measure"})
+        # Measurements at the end of a quantum wire seed the light-cone even when
+        # their classical output is used by a later operation.
         qubits_measured = set()
-        for node in final_nodes:
-            qubits_measured |= set(node.qargs)
+        for qubit in dag.qubits:
+            node = next(dag.predecessors(dag.output_map[qubit]))
+            if isinstance(node, DAGOpNode) and node.name == "measure":
+                qubits_measured.add(qubit)
         return qubits_measured
 
     def _get_initial_lightcone(
