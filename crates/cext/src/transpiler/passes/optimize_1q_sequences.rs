@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
 use qiskit_circuit::{circuit_data::CircuitData, dag_circuit::DAGCircuit};
 use qiskit_transpiler::{
     passes::{Optimize1qGatesDecompositionState, run_optimize_1q_gates_decomposition},
@@ -84,10 +83,10 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_optimize_1q_sequences(
         None
     } else {
         // SAFETY: Per documentation, the pointer is non-null and aligned.
-        Some(unsafe { const_ptr_as_ref(target) })
+        Some(unsafe { &*target })
     };
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    let circuit = unsafe { &mut *circuit };
 
     // Convert the circuit to a DAG.
     let mut circuit_as_dag = DAGCircuit::from_circuit_data(circuit, false, None, None)
@@ -173,10 +172,10 @@ pub unsafe extern "C" fn qk_transpiler_pass_optimize_1q_sequences(
         None
     } else {
         // SAFETY: Per documentation, the pointer is non-null and aligned.
-        Some(unsafe { const_ptr_as_ref(target) })
+        Some(unsafe { &*target })
     };
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
 
     let state = Optimize1qGatesDecompositionState::new(
         target

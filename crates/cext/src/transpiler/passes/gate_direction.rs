@@ -10,8 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
-
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_transpiler::passes::{check_direction_target, fix_direction_target};
@@ -35,8 +33,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_check_gate_direction(
     target: *const Target,
 ) -> bool {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { const_ptr_as_ref(circuit) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let circuit = unsafe { &*circuit };
+    let target = unsafe { &*target };
 
     let dag = DAGCircuit::from_circuit_data(circuit, false, None, None)
         .expect("Circuit to DAG conversion failed");
@@ -61,8 +59,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_gate_direction(
     target: *const Target,
 ) {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let circuit = unsafe { &mut *circuit };
+    let target = unsafe { &*target };
 
     let mut dag = DAGCircuit::from_circuit_data(circuit, false, None, None)
         .expect("Circuit to DAG conversion failed");
@@ -111,8 +109,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_check_gate_direction(
     target: *const Target,
 ) -> bool {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let dag = unsafe { const_ptr_as_ref(dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let dag = unsafe { &*dag };
+    let target = unsafe { &*target };
 
     check_direction_target(dag, target).expect("Unexpected error occurred in CheckGateDirection")
 }
@@ -141,7 +139,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_check_gate_direction(
 /// QkDag *dag = qk_dag_new();
 /// QkQuantumRegister *qr = qk_quantum_register_new(3, "qr");
 /// qk_dag_add_quantum_register(dag, qr);
-/// qk_dag_apply_gate(dag, QkGate_CX, (uint32_t[]){1,0}, NULL, false);  
+/// qk_dag_apply_gate(dag, QkGate_CX, (uint32_t[]){1,0}, NULL, false);
 ///
 /// qk_transpiler_pass_gate_direction(dag, target);
 /// qk_quantum_register_free(qr);
@@ -158,8 +156,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_gate_direction(
     target: *const Target,
 ) {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let dag = unsafe { &mut *dag };
+    let target = unsafe { &*target };
 
     fix_direction_target(dag, target).expect("Unexpected error occurred in GateDirection");
 }

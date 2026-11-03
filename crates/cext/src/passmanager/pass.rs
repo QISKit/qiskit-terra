@@ -16,9 +16,7 @@ use std::{mem, ptr};
 
 use super::{CompilationError, IrHandle};
 use crate::dyn_types::*;
-use crate::pointers::{
-    ExposesOwnedPointers, arc_clone_from_raw, const_ptr_as_ref, expose_by_arc, expose_by_box,
-};
+use crate::pointers::{ExposesOwnedPointers, arc_clone_from_raw, expose_by_arc, expose_by_box};
 use qiskit_passmanager::{IR, Pass, PassContext, PassError};
 use qiskit_util::dyn_types::*;
 
@@ -150,9 +148,9 @@ pub unsafe extern "C" fn qk_pass_vtable_new(
         .to_string_lossy()
         .into_owned();
     // SAFETY: per documentation, `ir_in` points to a valid `IrHandle` object.
-    let ir_in = unsafe { const_ptr_as_ref(ir_in) };
+    let ir_in = unsafe { &*ir_in };
     // SAFETY: per documentation, `ir_out` points to a valid `IrHandle` object.
-    let ir_out = unsafe { const_ptr_as_ref(ir_out) };
+    let ir_out = unsafe { &*ir_out };
     let mut partial = PassVtablePartial::new(name, Arc::clone(&ir_in.0), Arc::clone(&ir_out.0));
     loop {
         // SAFETY: per documentation, `table` is valid for reads until we see the sentinel all-ones

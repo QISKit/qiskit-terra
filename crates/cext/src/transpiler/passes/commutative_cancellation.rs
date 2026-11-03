@@ -11,7 +11,6 @@
 // that they have been altered from the originals.
 
 use crate::exit_codes::ExitCode;
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
 
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
@@ -64,12 +63,12 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_commutative_cancellation(
     approximation_degree: f64,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    let circuit = unsafe { &mut *circuit };
     let target = if target.is_null() {
         None
     } else {
         // SAFETY: Per documentation, the pointer is non-null and aligned.
-        Some(unsafe { const_ptr_as_ref(target) })
+        Some(unsafe { &*target })
     };
     if !(0.0..=1.0).contains(&approximation_degree) {
         panic!(

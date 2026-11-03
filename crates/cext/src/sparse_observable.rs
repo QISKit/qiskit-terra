@@ -13,10 +13,7 @@
 use std::ffi::{CString, c_char};
 
 use crate::exit_codes::{CInputError, ExitCode};
-use crate::pointers::{
-    ExposesOwnedPointers, const_ptr_as_ref, expose_by_box, mut_ptr_as_ref, slice_from_ptr,
-    try_slice_from_ptr,
-};
+use crate::pointers::{ExposesOwnedPointers, expose_by_box, slice_from_ptr, try_slice_from_ptr};
 use crate::util;
 use num_complex::Complex64;
 
@@ -251,8 +248,8 @@ pub unsafe extern "C" fn qk_obs_add_term(
     cterm: *const CSparseTerm,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let obs = unsafe { mut_ptr_as_ref(obs) };
-    let cterm = unsafe { const_ptr_as_ref(cterm) };
+    let obs = unsafe { &mut *obs };
+    let cterm = unsafe { &*cterm };
 
     let view = match cterm.try_into() {
         Ok(view) => view,
@@ -300,8 +297,8 @@ pub unsafe extern "C" fn qk_obs_term(
     out: *mut CSparseTerm,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let out = unsafe { mut_ptr_as_ref(out) };
-    let obs = unsafe { mut_ptr_as_ref(obs) };
+    let out = unsafe { &mut *out };
+    let obs = unsafe { &mut *obs };
 
     let index = index as usize;
     if index > obs.num_terms() {
@@ -339,7 +336,7 @@ pub unsafe extern "C" fn qk_obs_term(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_num_terms(obs: *const SparseObservable) -> usize {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { const_ptr_as_ref(obs) };
+    let obs = unsafe { &*obs };
 
     obs.num_terms()
 }
@@ -363,7 +360,7 @@ pub unsafe extern "C" fn qk_obs_num_terms(obs: *const SparseObservable) -> usize
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_num_qubits(obs: *const SparseObservable) -> u32 {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { const_ptr_as_ref(obs) };
+    let obs = unsafe { &*obs };
 
     obs.num_qubits()
 }
@@ -387,7 +384,7 @@ pub unsafe extern "C" fn qk_obs_num_qubits(obs: *const SparseObservable) -> u32 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_len(obs: *const SparseObservable) -> usize {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { const_ptr_as_ref(obs) };
+    let obs = unsafe { &*obs };
 
     obs.bit_terms().len()
 }
@@ -419,7 +416,7 @@ pub unsafe extern "C" fn qk_obs_len(obs: *const SparseObservable) -> usize {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_coeffs(obs: *mut SparseObservable) -> *mut Complex64 {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { mut_ptr_as_ref(obs) };
+    let obs = unsafe { &mut *obs };
 
     obs.coeffs_mut().as_mut_ptr()
 }
@@ -461,7 +458,7 @@ pub unsafe extern "C" fn qk_obs_coeffs(obs: *mut SparseObservable) -> *mut Compl
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_indices(obs: *mut SparseObservable) -> *mut u32 {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { mut_ptr_as_ref(obs) };
+    let obs = unsafe { &mut *obs };
 
     // SAFETY: Mutating the indices can leave the observable in an incoherent state.
     unsafe { obs.indices_mut() }.as_mut_ptr()
@@ -502,7 +499,7 @@ pub unsafe extern "C" fn qk_obs_indices(obs: *mut SparseObservable) -> *mut u32 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_boundaries(obs: *mut SparseObservable) -> *mut usize {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { mut_ptr_as_ref(obs) };
+    let obs = unsafe { &mut *obs };
 
     // SAFETY: Modifying the boundaries can leave the observable in an incoherent state. It is
     // the responsibility of the user that the data is coherent.
@@ -547,7 +544,7 @@ pub unsafe extern "C" fn qk_obs_boundaries(obs: *mut SparseObservable) -> *mut u
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_bit_terms(obs: *mut SparseObservable) -> *mut BitTerm {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { mut_ptr_as_ref(obs) };
+    let obs = unsafe { &mut *obs };
 
     obs.bit_terms_mut().as_mut_ptr()
 }
@@ -578,8 +575,8 @@ pub unsafe extern "C" fn qk_obs_multiply(
     coeff: *const Complex64,
 ) -> *mut SparseObservable {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let obs = unsafe { const_ptr_as_ref(obs) };
-    let coeff = unsafe { const_ptr_as_ref(coeff) };
+    let obs = unsafe { &*obs };
+    let coeff = unsafe { &*coeff };
 
     (obs * (*coeff)).into_leaked()
 }
@@ -608,8 +605,8 @@ pub unsafe extern "C" fn qk_obs_multiply_inplace(
     coeff: *const Complex64,
 ) {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let obs = unsafe { mut_ptr_as_ref(obs) };
-    let coeff = unsafe { const_ptr_as_ref(coeff) };
+    let obs = unsafe { &mut *obs };
+    let coeff = unsafe { &*coeff };
 
     *obs *= *coeff;
 }
@@ -639,8 +636,8 @@ pub unsafe extern "C" fn qk_obs_add(
     right: *const SparseObservable,
 ) -> *mut SparseObservable {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let left = unsafe { const_ptr_as_ref(left) };
-    let right = unsafe { const_ptr_as_ref(right) };
+    let left = unsafe { &*left };
+    let right = unsafe { &*right };
 
     (left + right).into_leaked()
 }
@@ -668,8 +665,8 @@ pub unsafe extern "C" fn qk_obs_add_inplace(
     right: *const SparseObservable,
 ) {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let left = unsafe { mut_ptr_as_ref(left) };
-    let right = unsafe { const_ptr_as_ref(right) };
+    let left = unsafe { &mut *left };
+    let right = unsafe { &*right };
 
     *left += right;
 }
@@ -702,9 +699,9 @@ pub unsafe extern "C" fn qk_obs_scaled_add(
     factor: *const Complex64,
 ) -> *mut SparseObservable {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let left = unsafe { const_ptr_as_ref(left) };
-    let right = unsafe { const_ptr_as_ref(right) };
-    let factor = unsafe { const_ptr_as_ref(factor) };
+    let left = unsafe { &*left };
+    let right = unsafe { &*right };
+    let factor = unsafe { &*factor };
 
     left.scaled_add(right, *factor).into_leaked()
 }
@@ -735,9 +732,9 @@ pub unsafe extern "C" fn qk_obs_scaled_add_inplace(
     factor: *const Complex64,
 ) {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let left = unsafe { mut_ptr_as_ref(left) };
-    let right = unsafe { const_ptr_as_ref(right) };
-    let factor = unsafe { const_ptr_as_ref(factor) };
+    let left = unsafe { &mut *left };
+    let right = unsafe { &*right };
+    let factor = unsafe { &*factor };
 
     left.scaled_add_inplace(right, *factor);
 }
@@ -768,8 +765,8 @@ pub unsafe extern "C" fn qk_obs_compose(
     second: *const SparseObservable,
 ) -> *mut SparseObservable {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let first = unsafe { const_ptr_as_ref(first) };
-    let second = unsafe { const_ptr_as_ref(second) };
+    let first = unsafe { &*first };
+    let second = unsafe { &*second };
 
     first.compose(second).into_leaked()
 }
@@ -808,8 +805,8 @@ pub unsafe extern "C" fn qk_obs_compose_map(
     qargs: *const u32,
 ) -> *mut SparseObservable {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let first = unsafe { const_ptr_as_ref(first) };
-    let second = unsafe { const_ptr_as_ref(second) };
+    let first = unsafe { &*first };
+    let second = unsafe { &*second };
 
     // SAFETY: per documentation, `qargs` is valid for `second.num_qubits()` reads.
     let qargs = unsafe { slice_from_ptr(qargs, second.num_qubits() as usize) };
@@ -889,7 +886,7 @@ pub unsafe extern "C" fn qk_obs_apply_layout(
     num_qubits: u32,
 ) -> ExitCode {
     // SAFETY: Per documentation, this is a valid, non-null pointer.
-    let obs = unsafe { mut_ptr_as_ref(obs) };
+    let obs = unsafe { &mut *obs };
 
     let layout = if layout.is_null() {
         None
@@ -941,7 +938,7 @@ pub unsafe extern "C" fn qk_obs_canonicalize(
     tol: f64,
 ) -> *mut SparseObservable {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { const_ptr_as_ref(obs) };
+    let obs = unsafe { &*obs };
 
     obs.canonicalize(tol).into_leaked()
 }
@@ -965,7 +962,7 @@ pub unsafe extern "C" fn qk_obs_canonicalize(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_copy(obs: *const SparseObservable) -> *mut SparseObservable {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { const_ptr_as_ref(obs) };
+    let obs = unsafe { &*obs };
 
     obs.clone().into_leaked()
 }
@@ -998,8 +995,8 @@ pub unsafe extern "C" fn qk_obs_equal(
     other: *const SparseObservable,
 ) -> bool {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let obs = unsafe { const_ptr_as_ref(obs) };
-    let other = unsafe { const_ptr_as_ref(other) };
+    let obs = unsafe { &*obs };
+    let other = unsafe { &*other };
 
     obs.eq(other)
 }
@@ -1032,7 +1029,7 @@ pub unsafe extern "C" fn qk_obs_equal(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obs_str(obs: *const SparseObservable) -> *mut c_char {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let obs = unsafe { const_ptr_as_ref(obs) };
+    let obs = unsafe { &*obs };
 
     let num_terms = obs.num_terms();
     let num_qubits = obs.num_qubits();
@@ -1114,7 +1111,7 @@ pub unsafe extern "C" fn qk_str_free(string: *mut c_char) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_obsterm_str(term: *const CSparseTerm) -> *mut c_char {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let term = unsafe { const_ptr_as_ref(term) };
+    let term = unsafe { &*term };
 
     let view: SparseTermView = term.try_into().unwrap();
 
@@ -1157,7 +1154,6 @@ pub extern "C" fn qk_bitterm_label(bit_term: BitTerm) -> u8 {
 
 #[cfg(feature = "python_binding")]
 mod py {
-    use crate::pointers::mut_ptr_as_ref;
     use pyo3::exceptions::PyRuntimeError;
     use pyo3::prelude::*;
     use qiskit_quantum_info::sparse_observable::{PySparseObservable, SparseObservable};
@@ -1193,7 +1189,7 @@ mod py {
         obs: *mut SparseObservable,
     ) -> *mut ::pyo3::ffi::PyObject {
         // SAFETY: Per documentation, the pointer is aligned and points to valid owned data.
-        let obs = unsafe { Box::from_raw(mut_ptr_as_ref(obs)) };
+        let obs = unsafe { Box::from_raw(&mut *obs) };
         // SAFETY: Per documentation, we are attached to a Python interpreter.
         let py = unsafe { Python::assume_attached() };
         match Bound::new(py, PySparseObservable::from(*obs)) {

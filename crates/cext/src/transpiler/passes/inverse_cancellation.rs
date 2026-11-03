@@ -10,8 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::mut_ptr_as_ref;
-
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_transpiler::passes::run_inverse_cancellation_standard_gates;
@@ -66,7 +64,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_inverse_cancellation(
     circuit: *mut CircuitData,
 ) {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    let circuit = unsafe { &mut *circuit };
     let mut dag = match DAGCircuit::from_circuit_data(circuit, false, None, None) {
         Ok(dag) => dag,
         Err(_) => panic!("Internal Circuit -> DAG conversion failed"),
