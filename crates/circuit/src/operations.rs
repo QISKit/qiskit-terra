@@ -39,7 +39,7 @@ use nalgebra::{Matrix2, Matrix4};
 use ndarray::{Array1, Array2, ArrayView2, Dim, ShapeBuilder, array};
 use num_bigint::BigUint;
 use num_complex::{Complex64, c64};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 
 use numpy::{PyArray1, PyReadonlyArray2, ToPyArray};
 use pyo3::exceptions::{PyTypeError, PyValueError};
@@ -1971,6 +1971,19 @@ impl PauliProductRotation {
             None
         }
     }
+
+    /// Returns an inverted version of this instruction and the computed parameters.
+    pub fn inverse(&self) -> Option<(PackedOperation, SmallVec<[Param; 3]>)> {
+        let new_angle = multiply_param(&self.angle, -1.0);
+        Some((
+            PauliBased::PauliProductRotation(PauliProductRotation {
+                angle: new_angle.clone(),
+                ..self.clone()
+            })
+            .into(),
+            smallvec![new_angle],
+        ))
+    }
 }
 
 impl PartialEq for PauliProductRotation {
@@ -2298,6 +2311,12 @@ impl From<Box<dyn CustomOperation>> for BoxedCustomOperation {
 
 #[cfg(test)]
 mod test {
+    use crate::{
+        Clbit, Qubit,
+        circuit_data::CircuitData,
+        instruction::Parameters,
+        operations::{Operation, OperationRef},
+    };
     use approx::assert_abs_diff_eq;
     use ndarray::{Array2, arr2, linalg::kron};
     use qiskit_util::complex::{C_ONE, C_ZERO, IM};
@@ -2334,6 +2353,97 @@ mod test {
         for i in 0..dim {
             for j in 0..dim {
                 assert_abs_diff_eq!(expected_matrix[(i, j)], matrix[(i, j)], epsilon = epsilon);
+            }
+        }
+    }
+
+    #[test]
+    fn test_ppr_inverse() {
+        let z = vec![true, false];
+        let x = vec![false, true];
+        let angle = Param::Float(1.0);
+
+        let ppr = PauliProductRotation { z, x, angle };
+        let num_qubits = ppr.num_qubits() as usize;
+
+        let (inverse, _) = ppr
+            .clone()
+            .inverse()
+            .expect("Inverse of PPR should have been built");
+
+        let OperationRef::PauliProductRotation(inverse) = inverse.view() else {
+            panic!("Gate should be PauliProductRotation");
+        };
+
+        let dot_product = ppr
+            .matrix()
+            .expect("Matrix of PPR should have been built")
+            .dot(
+                &inverse
+                    .matrix()
+                    .expect("Matrix of PPR inverse should have been built"),
+            );
+        let identity = Array2::eye(num_qubits);
+
+        // Loosen the tolerance in Miri mode allows for larger roundoff errors
+        // to mimic different hardware / OS configs, but keep 1e-17 for tight checks
+        let epsilon = if cfg!(miri) { 1e-12 } else { 1e-17 };
+
+        for i in 0..num_qubits {
+            for j in 0..num_qubits {
+                assert_abs_diff_eq!(dot_product[(i, j)], identity[(i, j)], epsilon = epsilon);
+            }
+        }
+    }
+
+    #[test]
+    fn test_ppr_inverse_with_circuit_addition() {
+        let z = vec![true, false, true, true];
+        let x = vec![false, true, false, true];
+        let angle = Param::Float(1.2345);
+
+        let ppr = PauliProductRotation { z, x, angle };
+
+        let num_qubits = ppr.num_qubits() as usize;
+        let qubits: Vec<Qubit> = (0..ppr.num_qubits()).map(Qubit).collect();
+        let clbits: Vec<Clbit> = (0..ppr.num_clbits()).map(Clbit).collect();
+
+        let mut circuit =
+            CircuitData::with_capacity(num_qubits as u32, ppr.num_clbits(), 1, 0.0.into())
+                .expect("Circuit with parameters from PPR should be built.");
+
+        let (inversed, params) = ppr
+            .inverse()
+            .expect("The inverse of PPR should have been built");
+
+        circuit
+            .push_packed_operation(inversed, Some(Parameters::Params(params)), &qubits, &clbits)
+            .expect("Operation should be added to circuit.");
+
+        // Retrieve operation
+        let retrieved_gate = &circuit.data()[0];
+
+        let OperationRef::PauliProductRotation(inverse) = retrieved_gate.op.view() else {
+            panic!("Gate should be a PauliProductRotation");
+        };
+
+        // Loosen the tolerance in Miri mode allows for larger roundoff errors
+        // to mimic different hardware / OS configs, but keep 1e-17 for tight checks
+        let epsilon = if cfg!(miri) { 1e-12 } else { 1e-17 };
+
+        let dot_product = ppr
+            .matrix()
+            .expect("Matrix of PPR should have been built")
+            .dot(
+                &inverse
+                    .matrix()
+                    .expect("Matrix of PPR inverse should have been built"),
+            );
+        let identity = Array2::eye(num_qubits);
+
+        for i in 0..num_qubits {
+            for j in 0..num_qubits {
+                assert_abs_diff_eq!(dot_product[(i, j)], identity[(i, j)], epsilon = epsilon);
             }
         }
     }
