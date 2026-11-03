@@ -10,6 +10,8 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+use std::io;
+
 use binrw::{BinRead, BinWrite, binrw};
 use hashbrown::HashMap;
 use nalgebra::{Matrix2, Matrix3};
@@ -129,23 +131,25 @@ impl From<&GateSequence> for SerializableGateSequence {
     }
 }
 
-impl From<&SerializableGateSequence> for GateSequence {
-    fn from(value: &SerializableGateSequence) -> Self {
+impl TryFrom<&SerializableGateSequence> for GateSequence {
+    type Error = bytemuck::checked::CheckedCastError;
+
+    fn try_from(value: &SerializableGateSequence) -> Result<Self, Self::Error> {
         // map u8 back into StandardGate
-        let gates = value
+        let gates: Vec<StandardGate> = value
             .gates
             .iter()
-            .map(|gate_id| ::bytemuck::checked::cast::<_, StandardGate>(*gate_id))
-            .collect::<Vec<StandardGate>>();
+            .map(|gate_id| ::bytemuck::checked::try_cast::<_, StandardGate>(*gate_id))
+            .collect::<Result<_, Self::Error>>()?;
 
         // map serialized matrix back into Matrix3
         let matrix_so3 = Matrix3::from_iterator(value.matrix_so3.clone());
 
-        Self {
+        Ok(Self {
             gates,
             matrix_so3,
             phase: value.phase,
-        }
+        })
     }
 }
 
@@ -523,8 +527,9 @@ impl BasicApproximations {
         // construct the GateSequence from its serializable version
         let approximations = serializable_approx
             .iter()
-            .map(|(key, value)| (*key, GateSequence::from(value)))
-            .collect::<HashMap<usize, GateSequence>>();
+            .map(|(key, value)| GateSequence::try_from(value).map(|seq| (*key, seq)))
+            .collect::<Result<HashMap<usize, GateSequence>, _>>()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         // build the RTree from the sequences
         let mut points: RTree<BasicPoint> = RTree::new();
@@ -542,4 +547,40 @@ impl BasicApproximations {
 #[inline]
 fn matrix3_from_pyreadonly(array: &PyReadonlyArray2<f64>) -> Matrix3<f64> {
     Matrix3::from_fn(|i, j| *array.get((i, j)).unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Miri is isolated from non-deterministic filesystem interactions by default.  This test
+    // doesn't need unsafe, so better to skip Miri than relax the rules everywhere.
+    #[cfg(not(miri))]
+    #[test]
+    fn invalid_approximations_do_not_panic() {
+        // This unfortunately has to couple to the internal details of `save`, but there's little
+        // other way to do the direct test of "a file that _looks_ right except for corrupt data".
+        let approx =
+            BasicApproximations::generate_from(&[StandardGate::H, StandardGate::T], 1, None)
+                .unwrap();
+        let bad_sequence = |seq: &GateSequence| {
+            let mut seq = SerializableGateSequence::from(seq);
+            if let Some(first) = seq.gates.first_mut() {
+                *first = u8::MAX;
+            }
+            seq
+        };
+        let bad_serialized = SerializableHashMap::from_hashmap(
+            approx
+                .approximations
+                .iter()
+                .map(|(key, seq)| (*key, bad_sequence(seq)))
+                .collect(),
+        );
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        bad_serialized.write(tmp.as_file_mut()).unwrap();
+        let path = tmp.into_temp_path();
+        let loaded = BasicApproximations::load(path.to_str().unwrap());
+        assert_eq!(loaded.unwrap_err().kind(), io::ErrorKind::InvalidData);
+    }
 }

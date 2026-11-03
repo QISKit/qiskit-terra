@@ -2069,8 +2069,8 @@ unsafe impl ::bytemuck::CheckedBitPattern for OpCode {
 unsafe impl ::bytemuck::NoUninit for OpCode {}
 
 impl OpCode {
-    pub fn from_u8(value: u8) -> PyResult<OpCode> {
-        Ok(bytemuck::checked::cast::<u8, OpCode>(value))
+    pub fn try_from_u8(value: u8) -> Result<OpCode, bytemuck::checked::CheckedCastError> {
+        bytemuck::checked::try_cast::<u8, OpCode>(value)
     }
 }
 
@@ -2327,5 +2327,15 @@ fn qpy_replay_inner(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_op_code_from_u8_invalid_input() {
+        assert!(OpCode::try_from_u8(123).is_err())
     }
 }

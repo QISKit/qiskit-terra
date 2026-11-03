@@ -10,8 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::const_ptr_as_ref;
-
 use qiskit_circuit::VirtualQubit;
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
@@ -43,7 +41,7 @@ pub struct VF2LayoutResult(Vf2PassReturn);
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_vf2_layout_result_has_match(layout: *const VF2LayoutResult) -> bool {
     // SAFETY: per documentation this is a valid pointer to a layout.
-    let layout = unsafe { const_ptr_as_ref(layout) };
+    let layout = unsafe { &*layout };
     layout.0 != Vf2PassReturn::NoSolution
 }
 
@@ -63,7 +61,7 @@ pub unsafe extern "C" fn qk_vf2_layout_result_has_improvement(
     layout: *const VF2LayoutResult,
 ) -> bool {
     // SAFETY: per documentation this is a valid pointer to a layout.
-    let layout = unsafe { const_ptr_as_ref(layout) };
+    let layout = unsafe { &*layout };
     matches!(layout.0, Vf2PassReturn::Solution(_))
 }
 
@@ -86,7 +84,7 @@ pub unsafe extern "C" fn qk_vf2_layout_result_map_virtual_qubit(
     qubit: u32,
 ) -> u32 {
     // SAFETY: per documentation this is a valid pointer to a layout.
-    let layout = unsafe { const_ptr_as_ref(layout) };
+    let layout = unsafe { &*layout };
     match &layout.0 {
         Vf2PassReturn::NoSolution => panic!("There was no layout found!"),
         // It's undefined behaviour to pass a qubit that's out of range, so it's not our problem
@@ -351,8 +349,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_vf2_layout_average(
     strict_direction: bool,
 ) -> *mut VF2LayoutResult {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { const_ptr_as_ref(circuit) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let circuit = unsafe { &*circuit };
+    let target = unsafe { &*target };
     let dag = match DAGCircuit::from_circuit_data(circuit, false, None, None) {
         Ok(dag) => dag,
         Err(e) => panic!("{}", e),
@@ -362,7 +360,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_vf2_layout_average(
         &config_default
     } else {
         // SAFETY: per documentation this is a valid pointer to a configuration.
-        unsafe { &const_ptr_as_ref(config).0 }
+        unsafe { &(*config).0 }
     };
     vf2_layout_pass_average(&dag, target, config, strict_direction, None)
         .map(|result| Box::into_raw(Box::new(VF2LayoutResult(result))))
@@ -441,8 +439,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_vf2_layout_exact(
     config: *const VF2LayoutConfiguration,
 ) -> *mut VF2LayoutResult {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { const_ptr_as_ref(circuit) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let circuit = unsafe { &*circuit };
+    let target = unsafe { &*target };
     let dag = match DAGCircuit::from_circuit_data(circuit, false, None, None) {
         Ok(dag) => dag,
         Err(e) => panic!("{}", e),
@@ -451,7 +449,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_vf2_layout_exact(
     let config = if config.is_null() {
         &config_default
     } else {
-        unsafe { &const_ptr_as_ref(config).0 }
+        unsafe { &(*config).0 }
     };
     vf2_layout_pass_exact(&dag, target, config)
         .map(|result| Box::into_raw(Box::new(VF2LayoutResult(result))))

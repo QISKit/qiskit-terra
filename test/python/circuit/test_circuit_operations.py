@@ -246,6 +246,22 @@ class TestCircuitOperations(QiskitTestCase):
         with self.assertRaisesRegex(CircuitError, "The amount of qubit arguments"):
             qc.append(Barrier(4), bad_arg)
 
+    def test_append_warns_when_ignoring_qargs(self):
+        """Test that a warning is raised if qargs are passed when appending a CircuitInstruction."""
+        qr = QuantumRegister(2)
+        qc = QuantumCircuit(qr)
+
+        with self.assertWarnsRegex(
+            UserWarning,
+            r"Any qargs/cargs passed into append\(\) alongside a valid CircuitInstruction will be ignored",
+        ):
+            qc.append(CircuitInstruction(HGate(), [qr[0]], []), qargs=[qr[1]])
+
+        expected_qc = QuantumCircuit(qr)
+        expected_qc.h(0)
+
+        self.assertEqual(qc, expected_qc)
+
     def test_anding_self(self):
         """Test that qc &= qc finishes, which can be prone to infinite while-loops.
 

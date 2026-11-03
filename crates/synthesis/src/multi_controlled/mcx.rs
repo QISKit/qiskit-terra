@@ -1086,7 +1086,7 @@ pub fn synth_mcx_n_dirty_m15(num_controls: usize) -> Result<CircuitData, Circuit
 
     for forward_pass in [true, false] {
         // Items 2 and 6 of Proposition 5, with adjacent RTS pairs replaced by RT4S.
-        let first_unpaired = if n % 2 == 0 {
+        let first_unpaired = if n.is_multiple_of(2) {
             circuit.compose(
                 &rts_gate,
                 &[
@@ -1141,7 +1141,7 @@ pub fn synth_mcx_n_dirty_m15(num_controls: usize) -> Result<CircuitData, Circuit
                 &[],
             )?;
         }
-        if n % 2 == 0 {
+        if n.is_multiple_of(2) {
             let k = n - 4;
             circuit.compose(
                 &rts_inverse,

@@ -2926,6 +2926,27 @@ class QuantumCircuit(IR):
             instructions._add_ref(circuit_scope.instructions, len(circuit_scope.instructions) - 1)
         return instructions
 
+    # Overloads for append. Passing an Operation to instruction allows qargs
+    # and cargs to be specified. However, passing a CircuitInstruction will
+    # cause qargs and cargs to be overritten in the implementation.
+    @overload
+    def append(
+        self,
+        instruction: Operation,
+        qargs: Sequence[QubitSpecifier] | None = None,
+        cargs: Sequence[ClbitSpecifier] | None = None,
+        *,
+        copy: bool = True,
+    ) -> InstructionSet: ...
+
+    @overload
+    def append(
+        self,
+        instruction: CircuitInstruction,
+        *,
+        copy: bool = True,
+    ) -> InstructionSet: ...
+
     def append(
         self,
         instruction: Operation | CircuitInstruction,
@@ -2942,8 +2963,8 @@ class QuantumCircuit(IR):
         integer indices) will be resolved into the relevant instances.
 
         If a :class:`.CircuitInstruction` is given, it will be unwrapped, verified in the context of
-        this circuit, and a new object will be appended to the circuit.  In this case, you may not
-        pass ``qargs`` or ``cargs`` separately.
+        this circuit, and a new object will be appended to the circuit.  In this case, passing
+        ``qargs`` or ``cargs`` separately will issue a warning, and their values will be ignored.
 
         Args:
             instruction: :class:`~.circuit.Instruction` instance to append, or a
@@ -2969,6 +2990,12 @@ class QuantumCircuit(IR):
         """
         if isinstance(instruction, CircuitInstruction):
             operation = instruction.operation
+            if qargs is not None or cargs is not None:
+                warnings.warn(
+                    "QuantumCircuit.append() uses qargs/cargs from CircuitInstruction. "
+                    "Any qargs/cargs passed into append() alongside a valid CircuitInstruction will be ignored.",
+                    stacklevel=2,
+                )
             qargs = instruction.qubits
             cargs = instruction.clbits
         else:

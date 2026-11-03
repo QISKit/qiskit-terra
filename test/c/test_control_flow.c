@@ -31,11 +31,11 @@
 // +-------+------------------+---------------------------------------------------------------
 // |   0   | Box              | Box mapped to qubits [2,0], clbit [1], duration=0.1s
 // |   1   | For Loop         | Loop over [1,2], If-Else(clbit: Break, else: Continue), param
-// |   2   | Switch           | Target: ClassicalRegister, 2 Cases and Default 
-// |   3   | While Loop       | Condition: clbit 
-// |   4   | While Loop       | Condition: ClassicalRegister 
-// |   5   | While Loop       | Condition: expression 
-// |   6   | Switch           | Target: clbit 
+// |   2   | Switch           | Target: ClassicalRegister, 2 Cases and Default
+// |   3   | While Loop       | Condition: clbit
+// |   4   | While Loop       | Condition: ClassicalRegister
+// |   5   | While Loop       | Condition: expression
+// |   6   | Switch           | Target: clbit
 // |   7   | Switch           | Target: expression
 // |   8   | For Loop         | Loop over Range(1, 10, 3), variable loop param
 // |   9   | Switch           | Target: ClassicalRegister, condition width 80 bits
@@ -545,6 +545,13 @@ static int test_while_on_register(void) {
 
     uint64_t cond_val = qk_control_flow_condition_reg_cond_uint(cf_inst);
     if (cond_val != 7) {
+        fprintf(stderr, "Expected condition value 7, got %" PRIu64 "\n", cond_val);
+        result = EqualityError;
+        goto cleanup;
+    }
+
+    QkBigUint cond_val_biguint = qk_control_flow_condition_reg_cond_biguint(cf_inst);
+    if (!(cond_val_biguint.num_limbs == 1 && cond_val_biguint.limbs[0] == 7)) {
         fprintf(stderr, "Expected condition value 7, got %" PRIu64 "\n", cond_val);
         result = EqualityError;
         goto cleanup;

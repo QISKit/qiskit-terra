@@ -14,8 +14,10 @@ use num_bigint::BigUint;
 #[cfg(feature = "py")]
 use pyo3::prelude::*;
 
+use crate::error::ParseError;
 use crate::expr::Expr;
-use crate::parse::{ClbitId, CregId, GateId, QubitId};
+use crate::ext::ClassicalEvaluator;
+use crate::parse::{ClbitId, CregId, GateId, QubitId, State};
 
 /// An internal representation of the bytecode that will later be converted to the more free-form
 /// [Bytecode] Python-space objects.  This is fairly tightly coupled to Python space; the intent is
@@ -73,6 +75,7 @@ pub enum InternalBytecode {
     DeclareGate {
         name: String,
         num_qubits: usize,
+        num_params: usize,
     },
     GateInBody {
         id: GateId,
@@ -83,10 +86,62 @@ pub enum InternalBytecode {
     DeclareOpaque {
         name: String,
         num_qubits: usize,
+        num_params: usize,
     },
     SpecialInclude {
         indices: Vec<usize>,
     },
+}
+
+/// Hands out one statement's bytecode at a time; `parse_next` leaves unused slots as `None`.
+pub(crate) struct Iter {
+    state: State,
+    buffer: Vec<Option<InternalBytecode>>,
+    handed_out: usize,
+    evaluator: ClassicalEvaluator<'static>,
+    exhausted: bool,
+}
+
+impl Iter {
+    pub(crate) fn new(state: State) -> Self {
+        Self {
+            state,
+            buffer: Vec::new(),
+            handed_out: 0,
+            evaluator: ClassicalEvaluator::detached(),
+            exhausted: false,
+        }
+    }
+}
+
+impl Iterator for Iter {
+    type Item = Result<InternalBytecode, ParseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            while self.handed_out < self.buffer.len() {
+                let instruction = self.buffer[self.handed_out].take();
+                self.handed_out += 1;
+                if let Some(instruction) = instruction {
+                    return Some(Ok(instruction));
+                }
+            }
+            if self.exhausted {
+                return None;
+            }
+            self.buffer.clear();
+            self.handed_out = 0;
+            match self.state.parse_next(&mut self.buffer, self.evaluator) {
+                Ok(Some(_)) => (),
+                Ok(None) => self.exhausted = true,
+                Err(err) => {
+                    self.buffer.clear();
+                    self.exhausted = true;
+                    return Some(Err(err));
+                }
+            }
+        }
+    }
 }
 
 #[cfg(feature = "py")]
@@ -165,7 +220,12 @@ impl<'py> IntoPyObject<'py> for InternalBytecode {
                     opcode: OpCode::DeclareCreg,
                     operands: (name, size).into_pyobject(py)?.into_any().unbind(),
                 },
-                InternalBytecode::DeclareGate { name, num_qubits } => Bytecode {
+                // `num_params` isn't forwarded: `parse.py` infers it from the call site.
+                InternalBytecode::DeclareGate {
+                    name,
+                    num_qubits,
+                    num_params: _,
+                } => Bytecode {
                     opcode: OpCode::DeclareGate,
                     operands: (name, num_qubits).into_pyobject(py)?.into_any().unbind(),
                 },
@@ -187,7 +247,11 @@ impl<'py> IntoPyObject<'py> for InternalBytecode {
                     opcode: OpCode::EndDeclareGate,
                     operands: ().into_pyobject(py)?.into_any().unbind(),
                 },
-                InternalBytecode::DeclareOpaque { name, num_qubits } => Bytecode {
+                InternalBytecode::DeclareOpaque {
+                    name,
+                    num_qubits,
+                    num_params: _,
+                } => Bytecode {
                     opcode: OpCode::DeclareOpaque,
                     operands: (name, num_qubits).into_pyobject(py)?.into_any().unbind(),
                 },
