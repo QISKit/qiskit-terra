@@ -103,19 +103,22 @@ pub enum InstructionType {
 
 fn deserialize_standard_instruction(
     instruction: &formats::CircuitInstructionV2Pack,
+    qpy_data: &mut QPYReadData,
 ) -> Option<StandardInstruction> {
     match instruction.gate_class_name.as_str() {
         "Barrier" => Some(StandardInstruction::Barrier(instruction.num_qargs)),
         "Measure" => Some(StandardInstruction::Measure),
         "Reset" => Some(StandardInstruction::Reset),
-        // TODO it seems currently delays are not treated correctly, and the unit is not stored
-        // even in Python QPY. We need to fix the writer to correctly store the delay unit as second parameter
         "Delay" => {
             let unit = if !instruction.params.is_empty() {
                 if instruction.params.len() >= 2 {
-                    // both duration and unit params; extract the unit param
-                    // TODO: for now returning default value; this should be fixed as part of the fix mentioned above
-                    qiskit_circuit::operations::DelayUnit::DT
+                    unpack_generic_value(&instruction.params[1], qpy_data, ValueEndian::Big)
+                        .ok()
+                        .and_then(|value| value.as_typed::<String>().ok().flatten())
+                        .and_then(|unit| {
+                            qiskit_circuit::operations::DelayUnit::from_str(&unit).ok()
+                        })
+                        .unwrap_or(qiskit_circuit::operations::DelayUnit::DT)
                 } else {
                     // only duration; check whether it's an expression
                     if [
@@ -443,7 +446,8 @@ fn unpack_standard_instruction(
     instruction: &formats::CircuitInstructionV2Pack,
     qpy_data: &mut QPYReadData,
 ) -> Result<(PackedOperation, Vec<GenericValue>), QpyError> {
-    let op = if let Some(std_instruction) = deserialize_standard_instruction(instruction) {
+    let op = if let Some(std_instruction) = deserialize_standard_instruction(instruction, qpy_data)
+    {
         // TODO: can we avoid this call? {
         PackedOperation::from_standard_instruction(std_instruction)
     } else {
@@ -452,8 +456,13 @@ fn unpack_standard_instruction(
             instruction.gate_class_name
         )));
     };
-    let param_values =
+    let mut param_values =
         get_instruction_values(instruction, qpy_data, ValueEndian::LittleForV17AndBelow)?;
+
+    // Delay instructions store the unit as a second temporary parameter which should be removed
+    if instruction.gate_class_name == "Delay" && param_values.len() >= 2 {
+        param_values.remove(1);
+    }
     Ok((op, param_values))
 }
 

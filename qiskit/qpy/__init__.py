@@ -485,6 +485,14 @@ Version 18 also corrects the encoding of integer and float ``INSTRUCTION_PARAM``
 to big-endian byte order, consistent with the rest of the QPY specification. In versions
 1–17 these were mistakenly written in little-endian.
 
+Delay units
+~~~~~~~~~~~
+Version 18 stores the unit of a :class:`.Delay` as a second instruction parameter containing
+the unit's string representation. This parameter is removed while deserializing the instruction,
+and is not part of the :attr:`~.Instruction.params` attribute of the loaded instruction
+In previous versions the unit was not stored, so all deserialized delays were interpreted as having the :attr:`.DelayUnit.DT` unit.
+This behavior is retained when the unit is :attr:`.DelayUnit.DT` and the second parameter is omitted.
+
 PARAMETER_VECTOR_TABLE
 ~~~~~~~~~~~~~~~~~~~~~~
 Version 18 stores each :class:`.ParameterVector` once per circuit payload and has its elements refer

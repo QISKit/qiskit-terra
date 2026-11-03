@@ -1,0 +1,8 @@
+---
+upgrade_qpy:
+  - |
+    QPY version 18 stores the unit of the duration for a :class:`.Delay`.
+    Previously due to a bug in the format, the units were not saved and every delay
+    was assumed to be in :attr:`.DelayUnit.DT`. Now the unit is stored as a string parameter
+    of the instruction (removed during deserialization) with the exception of DT,
+    which is still the default and not stored to save space.
