@@ -3173,7 +3173,7 @@ pub unsafe extern "C" fn qk_circuit_get_custom_operation(
         return std::ptr::null();
     };
 
-    custom as *const BoxedCustomOperation
+    custom
 }
 
 #[cfg(test)]

@@ -2076,5 +2076,5 @@ pub unsafe extern "C" fn qk_dag_get_custom_operation(
         return null();
     };
 
-    custom as *const BoxedCustomOperation
+    custom
 }

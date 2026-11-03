@@ -696,6 +696,9 @@ pub unsafe extern "C" fn qk_custom_operation_vtable_free(v_table: *const CustomO
 ///
 /// Returns the name of an instance of ``QkCustomOp``.
 ///
+/// The returned string is allocated in memory and needs to be freed via
+/// `qk_str_free`.
+///
 /// This method is guaranteed to return a string containing the operation name
 /// as it is a required method for any defined operation.
 ///
@@ -710,14 +713,17 @@ pub unsafe extern "C" fn qk_custom_operation_vtable_free(v_table: *const CustomO
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_custom_operation_name(
     inst: *const BoxedCustomOperation,
-) -> *const c_char {
+) -> *mut c_char {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
     let borrowed_inst = unsafe { &*inst };
 
     if let Some(as_custom_op) = borrowed_inst.downcast_ref::<CustomOp>() {
         // Use vtable directly to avoid converting
-        unsafe { (as_custom_op.v_table.name)(as_custom_op.orig) }
+        // SAFETY: As per construction of a `QkCustomOpVtable`, the name attribute
+        // should point to a valid function that returns a pointer to a `char` array.
+        let string = unsafe { CStr::from_ptr((as_custom_op.v_table.name)(as_custom_op.orig)) };
+        string.to_owned().into_raw()
     } else {
         crate::util::cstring_from_utf8_lossy(borrowed_inst.name()).into_raw()
     }
@@ -888,6 +894,9 @@ pub unsafe extern "C" fn qk_custom_operation_num_ctrl_qubits(
 ///
 /// Returns the label of an instance of ``QkCustomOp`` .
 ///
+/// The returned string is allocated in memory and needs to be freed via
+/// `qk_str_free`.
+///
 /// This method is not required for every ``QkCustomOp`` definition. Therefoere,
 /// it may return a null pointer instead of a string.
 ///
@@ -902,18 +911,26 @@ pub unsafe extern "C" fn qk_custom_operation_num_ctrl_qubits(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_custom_operation_label(
     inst: *const BoxedCustomOperation,
-) -> *const c_char {
+) -> *mut c_char {
     // SAFETY: As per the docstring, this is a non-null
     // and alligned pointer to a `QkCustomOp` instance.
     let borrowed_inst = unsafe { &*inst };
 
     if let Some(as_custom_op) = borrowed_inst.downcast_ref::<CustomOp>() {
         // Use vtable directly to avoid converting
-        unsafe { (as_custom_op.v_table.label)(as_custom_op.orig) }
+        // SAFETY: As per construction of a vtable, the label attribute should point
+        // to a valid function that returns a pointer to a `char` array.
+        let label = unsafe { (as_custom_op.v_table.label)(as_custom_op.orig) };
+        if label.is_null() {
+            return null_mut();
+        }
+        // SAFETY: Label should point to a nul-terminated valid `char` pointer.
+        let label = unsafe { CStr::from_ptr(label) };
+        label.to_owned().into_raw()
     } else if let Some(label) = borrowed_inst.label() {
         crate::util::cstring_from_utf8_lossy(label).into_raw()
     } else {
-        null()
+        null_mut()
     }
 }
 
@@ -922,18 +939,20 @@ pub unsafe extern "C" fn qk_custom_operation_label(
 /// Returns the definition of an instance of `QkCustomOp` if the correct
 /// parameters are provided.
 ///
-/// When an operation is structurally complex, it may be broken down into a `QkCircuit`
-/// made of other operations that perform the same transformations and result in the
-/// same state. This is what we call the gate's deifnition.
+/// When an operation is structurally complex, it may be broken down into a
+/// `QkCircuit` made of other operations that perform the same transformations
+/// and result in the same state. This is what we call the gate's deifnition.
 ///
 /// This method is not required for every ``QkCustomOp``. Therefoere,
 /// it may return a null pointer instead of a Circuit.
 ///
 /// @param inst A pointer to the ``QkCustomOp`` instance.
-/// @param params A pointer to an array of `QkParam` pointers.
+/// @param params A pointer to an array of `QkParam` pointers. The number of
+/// parameters must be checked to match the return value of calling
+/// ``qk_custom_operation_num_params`` on the ``QkCustomOp`` instance.
 ///
-/// @return The instruction's definition if it was defined and the correct parameters are passed,
-/// otherwise, a `NULL` pointer.
+/// @return The instruction's definition if it was defined and the correct
+/// parameters are passed, otherwise, a `NULL` pointer.
 ///
 /// # Safety
 ///
