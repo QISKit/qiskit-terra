@@ -1,8 +1,0 @@
-name: qiskit-terra-binder-test
-channels:
-  - defaults
-  - conda-forge
-dependencies:
-  - rust
-  - graphviz
-  - pip
