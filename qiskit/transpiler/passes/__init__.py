@@ -26,55 +26,52 @@ They operate on Qiskit's internal :class:`~qiskit.dagcircuit.DAGCircuit`
 representation, but users typically run them through a pass manager using
 :class:`~qiskit.circuit.QuantumCircuit` inputs.
 
+For an overview of transpilation, preset pass managers, and compilation
+stages, see :mod:`qiskit.transpiler`.
+
 For complete device-aware compilation, start with
 :func:`~qiskit.transpiler.generate_preset_pass_manager`. The passes below are
 useful when you want to inspect a circuit, build a smaller custom workflow, or
 customize one stage of transpilation.
 
-For example, a pass can be used to collect information about a
-circuit::
+For example, a pass can collect information about a circuit. Here,
+:class:`CountOps` stores operation counts in the pass manager's property set::
 
     from qiskit.circuit import QuantumCircuit
-    from qiskit.transpiler import PassManager  # Run passes.
-    from qiskit.transpiler.passes import CountOps  # Count operations.
+    from qiskit.transpiler import PassManager
+    from qiskit.transpiler.passes import CountOps
 
-    circuit = QuantumCircuit(2)  # Make a 2-qubit circuit.
-    circuit.h(0)  # Add an H gate.
-    circuit.cx(0, 1)  # Add a CX gate.
+    circuit = QuantumCircuit(2)
+    circuit.h(0)
+    circuit.cx(0, 1)
 
-    pass_manager = PassManager([CountOps()])  # Create the workflow.
-    pass_manager.run(circuit)  # Run the analysis.
-    print(pass_manager.property_set["count_ops"])  # Show the result.
+    pass_manager = PassManager([CountOps()])
+    pass_manager.run(circuit)
+    print(pass_manager.property_set["count_ops"])
 
-Passes can be combined to build a small custom compilation
-workflow, called `PassManager`. This example removes a barrier and then cancels two adjacent
-self-inverse gates::
+Passes can be combined in a :class:`~qiskit.transpiler.PassManager` to build a
+small custom compilation workflow. This example removes the barrier so that
+the two H gates can cancel each other::
 
-    from qiskit.circuit import QuantumCircuit  # Build circuits.
-    from qiskit.circuit.library import HGate  # Name the H gate.
-    from qiskit.transpiler import PassManager  # Run passes.
-    from qiskit.transpiler.passes import InverseCancellation, RemoveBarriers  # Import passes.
+    from qiskit.circuit import QuantumCircuit
+    from qiskit.circuit.library import HGate
+    from qiskit.transpiler import PassManager
+    from qiskit.transpiler.passes import InverseCancellation, RemoveBarriers
 
-    circuit = QuantumCircuit(1)  # Make a 1-qubit circuit.
-    circuit.h(0)  # Add the first H gate.
-    circuit.barrier()  # Add a barrier.
-    circuit.h(0)  # Add the second H gate.
+    circuit = QuantumCircuit(1)
+    circuit.h(0)
+    circuit.barrier()
+    circuit.h(0)
 
-    pass_manager = PassManager(  # Create the workflow.
-        [  # Set the pass order.
-            RemoveBarriers(),  # Remove the barrier.
-            InverseCancellation([HGate()]),  # Cancel adjacent H gates.
-        ]  # End the pass list.
-    )  # End the workflow.
-    simplified = pass_manager.run(circuit)  # Run the transforms.
+    pass_manager = PassManager([RemoveBarriers(), InverseCancellation([HGate()])])
+    simplified = pass_manager.run(circuit)
 
 Pass categories
 ===============
 
-The categories below group passes by the role they usually play in a
-transpilation workflow. A preset pass manager may use passes from several
-categories in one stage, run a category more than once, or skip a category when
-it is not needed for the target.
+The passes below are loosely grouped by typical use to help readers navigate
+this page. These groups are for documentation purposes only, and some passes
+may fit into more than one group.
 
 Layout Selection (Placement)
 ============================
@@ -240,9 +237,9 @@ The synthesis transpiler plugin documentation can be found in the
 Post Layout
 ===========
 
-Post-layout passes run after an initial layout has been chosen. They can refine
-or validate the selected physical qubits before later routing and optimization
-stages.
+Post-layout passes refine the choice of physical qubits for an already-routed
+circuit. For example, :class:`VF2PostLayout` searches for a lower-error layout
+and records it in the property set for :class:`ApplyLayout` to apply.
 
 .. autosummary::
    :toctree: ../stubs/
