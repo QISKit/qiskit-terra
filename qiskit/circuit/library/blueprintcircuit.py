@@ -18,6 +18,8 @@ import copy as _copy
 
 from qiskit._accelerate.circuit import CircuitData
 from qiskit.circuit import QuantumRegister, ClassicalRegister
+from qiskit.circuit.instruction import Instruction
+from qiskit.circuit.instructionset import CircuitInstruction
 from qiskit.circuit.parametertable import ParameterView
 from qiskit.circuit.quantumcircuit import QuantumCircuit, _copy_metadata
 from qiskit.utils.deprecation import deprecate_func
@@ -318,6 +320,20 @@ class BlueprintCircuit(QuantumCircuit, ABC):
         cpy._data = self._data.copy()
 
         if name is not None:
+            cpy._base_name = name
             cpy.name = name
+
+        # Recreate instructions inside CircuitData with updated names
+        for idx, inst in enumerate(cpy._data):
+            op = inst.operation
+            # Create a new Instruction with the same definition but new name
+            new_inst = Instruction(name=name,
+                                    num_qubits=op.num_qubits,
+                                    num_clbits=op.num_clbits,
+                                    params=op.params)
+            ci = CircuitInstruction(operation=new_inst,
+                                     qubits=inst.qubits,
+                                     clbits=inst.clbits)
+            cpy._data[idx] = ci
 
         return cpy
