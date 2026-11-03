@@ -298,7 +298,7 @@ class CPhaseGate(ControlledGate):
 
     def power(self, exponent: float, annotated: bool = False):
         (theta,) = self.params
-        return CPhaseGate(exponent * theta)
+        return CPhaseGate(exponent * theta, ctrl_state=self.ctrl_state)
 
     def __eq__(self, other):
         if isinstance(other, CPhaseGate):

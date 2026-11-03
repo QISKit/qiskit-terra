@@ -14,6 +14,10 @@
 
 use std::{cmp, fmt, num};
 
+pub mod table;
+
+pub use table::ResourceTable;
+
 /// A single quantum identifier, representing some sort of "quantum resource" which follows the
 /// [quantum semantics](#quantum-semantics) defined below.
 ///
@@ -40,6 +44,7 @@ use std::{cmp, fmt, num};
 /// leave reachable instructions in place that violate the overlap rules.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, bytemuck::Zeroable)]
 #[repr(transparent)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct Qid(u32);
 impl Qid {
     /// The bitwidth allowed for use by values.
@@ -130,6 +135,7 @@ impl Qid {
         }
     }
 }
+
 /// SAFETY: `Qid` is a transparent wrapper of `u32` in the exact range `0..=Self::MAX_RAW`; the
 /// range is inhabited; all distinct bit patterns compare unequal.
 unsafe impl bytemuck::Contiguous for Qid {
@@ -159,6 +165,7 @@ impl fmt::Display for Qid {
 ///
 /// The semantics of the [`Qid`] in a complete program varies based on what space it is in.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bytemuck::Zeroable, bytemuck::Contiguous)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 #[repr(u8)]
 pub enum QidSpace {
     /// Qids that can be freely created and manipulated within transformations on MIR itself.
@@ -192,6 +199,7 @@ impl QidSpace {
 /// Logically this is just a two-tuple of `(Qid, u32)`, but with an internal trick to make
 /// `Option<QidBit>` the same size as `QidBit`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct QidBit {
     qid: Qid,
     /// The bitwise negation of the index.
@@ -255,13 +263,15 @@ impl Ord for QidBit {
 ///
 /// In general, the validity of this object is dependent on the rest of the context for the [`Qid`]s
 /// it refers to.  You can construct a [`BitLayout`] that does not follow the rules, but
-/// `ResourceTable` methods will reject them.
+/// [`ResourceTable`] methods will reject them.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub enum BitLayout {
     /// A [`Qid`] that has undefined size.
     ///
     /// These qids can have "overlap" with other qids, but the containing relationships must be
-    /// explicitly added to a `ResourceTable`.
+    /// explicitly added to a [`ResourceTable`] using
+    /// [`mark_contains`](ResourceTable::mark_contains).
     Abstract,
     /// A [`Qid`] that can be the base of other [`Qid`]s' bit layouts.
     Base(u32),
@@ -272,7 +282,7 @@ pub enum BitLayout {
     /// qids whose layouts are the [`Base`](Self::Base) variant of this object, and all bits in that
     /// base [`Qid`] should be used by the layout.
     ///
-    /// The contained [`Qid`]s are automatically tracked in a `ResourceTable`.  Additional
+    /// The contained [`Qid`]s are automatically tracked in a [`ResourceTable`].  Additional
     /// "abstract" mutual-exclusion relationships can be added on top of this, similarly to the
     /// [`Abstract`](Self::Abstract) variant.
     ///
@@ -296,6 +306,7 @@ impl BitLayout {
 /// suitable; the API split between "abstractly described in MIR" and "concretely described by
 /// custom backend target descriptors" is not clear yet.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct QidInfo {
     layout: BitLayout,
 }
@@ -315,6 +326,25 @@ impl QidInfo {
     #[inline]
     pub const fn layout(&self) -> &BitLayout {
         &self.layout
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
+pub struct QidList(Vec<Qid>);
+
+impl QidList {
+    pub fn new(qids: Vec<Qid>) -> Self {
+        QidList(qids)
+    }
+    pub fn inner(&self) -> &Vec<Qid> {
+        &self.0
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 

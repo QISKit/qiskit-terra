@@ -13,8 +13,6 @@
 use qiskit_circuit::{circuit_data::CircuitData, dag_circuit::DAGCircuit};
 use qiskit_transpiler::{passes::run_consolidate_blocks, target::Target};
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
-
 /// @ingroup QkTranspilerPassesStandalone
 /// Run the ConsolidateBlocks pass on a circuit.
 ///
@@ -40,12 +38,12 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_consolidate_blocks(
     force_consolidate: bool,
 ) {
     // SAFETY: Per documentation, the pointer is not null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    let circuit = unsafe { &mut *circuit };
     let target = if target.is_null() {
         None
     } else {
         // SAFETY: Per documentation, the pointer is not null and aligned.
-        Some(unsafe { const_ptr_as_ref(target) })
+        Some(unsafe { &*target })
     };
     let approximation_degree = if approximation_degree.is_nan() {
         1.0

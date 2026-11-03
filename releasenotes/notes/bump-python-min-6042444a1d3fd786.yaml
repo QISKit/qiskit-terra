@@ -1,0 +1,5 @@
+---
+upgrade_misc:
+  - The minimum supported Python version has been raised to Python 3.11.0. This change
+    was necessary because Python 3.10 has reached EoL in the upstream CPython
+    project and is no longer supported.

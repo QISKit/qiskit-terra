@@ -10,10 +10,9 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use pyo3::prelude::*;
 use pyo3::types::PyAnyMethods;
 use pyo3::{PyResult, Python};
-use qiskit_circuit::circuit_data::{CircuitData, CircuitDataError, PyCircuitData};
+use qiskit_circuit::circuit_data::{CircuitData, CircuitDataError};
 use qiskit_circuit::operations::{
     Operation, OperationRef, Param, PyInstruction, PyOpKind, StandardGate, multiply_param,
 };
@@ -33,9 +32,8 @@ pub fn ccx() -> CircuitData {
 }
 
 /// Definition circuit for C3X.
-#[pyfunction]
-pub fn c3x() -> PyCircuitData {
-    StandardGate::C3X.definition(&[]).unwrap().into()
+pub fn c3x() -> CircuitData {
+    StandardGate::C3X.definition(&[]).unwrap()
 }
 
 /// Definition circuit for RCCX.
@@ -265,8 +263,11 @@ impl CircuitDataForSynthesis for CircuitData {
 }
 
 /// Efficient synthesis for 4-controlled X-gate.
-#[pyfunction]
-pub fn c4x() -> Result<PyCircuitData, CircuitDataError> {
+pub fn c4x() -> CircuitData {
+    c4x_inner().expect("c4x is a fixed circuit with valid qubit indices and float parameters")
+}
+
+fn c4x_inner() -> Result<CircuitData, CircuitDataError> {
     let mut circuit = CircuitData::with_capacity(5, 0, 0, Param::Float(0.0))?;
     circuit.h(4)?;
     circuit.cp(PI2, 3, 4)?;
@@ -281,7 +282,7 @@ pub fn c4x() -> Result<PyCircuitData, CircuitDataError> {
         &[],
     )?;
     circuit.compose(&c3sx(), &[Qubit(0), Qubit(1), Qubit(2), Qubit(4)], &[])?;
-    Ok(circuit.into())
+    Ok(circuit)
 }
 
 /// Adds gates of the "action gadget" to the circuit
@@ -335,18 +336,8 @@ pub fn synth_mcx_n_dirty_i15(
     relative_phase: bool,
     action_only: bool,
 ) -> Result<CircuitData, CircuitDataError> {
-    if num_controls == 0 {
-        let mut circuit = CircuitData::with_capacity(1, 0, 1, Param::Float(0.0))?;
-        circuit.x(0)?;
-        Ok(circuit)
-    } else if num_controls == 1 {
-        let mut circuit = CircuitData::with_capacity(2, 0, 1, Param::Float(0.0))?;
-        circuit.cx(0, 1)?;
-        Ok(circuit)
-    } else if num_controls == 2 {
-        Ok(ccx())
-    } else if num_controls == 3 && !relative_phase {
-        Ok(c3x().into())
+    if num_controls <= 2 || (num_controls == 3 && !relative_phase) {
+        synth_mcx_explicit(num_controls)
     } else {
         let num_ancillas = num_controls - 2;
         let num_qubits = num_controls + 1 + num_ancillas;
@@ -771,20 +762,8 @@ pub fn synth_mcx_mcp_noaux(
     py: Python,
     num_controls: usize,
 ) -> Result<CircuitData, CircuitDataError> {
-    if num_controls == 0 {
-        let mut circuit = CircuitData::with_capacity(1, 0, 1, Param::Float(0.0))?;
-        circuit.x(0)?;
-        Ok(circuit)
-    } else if num_controls == 1 {
-        let mut circuit = CircuitData::with_capacity(2, 0, 1, Param::Float(0.0))?;
-        circuit.cx(0, 1)?;
-        Ok(circuit)
-    } else if num_controls == 2 {
-        Ok(ccx())
-    } else if num_controls == 3 {
-        Ok(c3x().into())
-    } else if num_controls == 4 {
-        c4x().map(Into::into)
+    if num_controls <= 4 {
+        synth_mcx_explicit(num_controls)
     } else {
         let num_qubits = (num_controls + 1) as u32;
         let target = num_controls as u32;
@@ -839,20 +818,8 @@ pub fn synth_mcx_mcp_noaux(
 /// 2. Iten et al., *Quantum Circuits for Isometries*, Phys. Rev. A 93, 032318 (2016),
 ///    [arXiv:1501.06911] (https://arxiv.org/abs/1501.06911).
 pub fn synth_mcx_1_clean_b95(num_controls: usize) -> Result<CircuitData, CircuitDataError> {
-    if num_controls == 0 {
-        let mut circuit = CircuitData::with_capacity(1, 0, 1, Param::Float(0.0))?;
-        circuit.x(0)?;
-        Ok(circuit)
-    } else if num_controls == 1 {
-        let mut circuit = CircuitData::with_capacity(2, 0, 1, Param::Float(0.0))?;
-        circuit.cx(0, 1)?;
-        Ok(circuit)
-    } else if num_controls == 2 {
-        Ok(ccx())
-    } else if num_controls == 3 {
-        Ok(c3x().into())
-    } else if num_controls == 4 {
-        Ok(c4x()?.into())
+    if num_controls <= 4 {
+        synth_mcx_explicit(num_controls)
     } else {
         // k >= 5: 1-clean-ancilla construction (Barenco et al. 1995, Lemma 7.3)
         // decompose the gate into two halves and add 2 qubits, target and ancilla
@@ -971,16 +938,8 @@ fn rt4s() -> Result<CircuitData, CircuitDataError> {
 ///    relative-phase Toffoli gates with an application to multiple control Toffoli optimization",
 ///    [arXiv:1508.03273](https://arxiv.org/abs/1508.03273).
 pub fn synth_mcx_n_clean_m15(num_controls: usize) -> Result<CircuitData, CircuitDataError> {
-    if num_controls == 0 {
-        let mut circuit = CircuitData::with_capacity(1, 0, 1, Param::Float(0.0))?;
-        circuit.x(0)?;
-        Ok(circuit)
-    } else if num_controls == 1 {
-        let mut circuit = CircuitData::with_capacity(2, 0, 1, Param::Float(0.0))?;
-        circuit.cx(0, 1)?;
-        Ok(circuit)
-    } else if num_controls == 2 {
-        Ok(ccx())
+    if num_controls <= 2 {
+        synth_mcx_explicit(num_controls)
     } else {
         let num_ancillas = (num_controls - 1) / 2;
         let num_qubits = num_controls + 1 + num_ancillas;
@@ -1073,16 +1032,8 @@ pub fn synth_mcx_n_clean_m15(num_controls: usize) -> Result<CircuitData, Circuit
 ///    multiple control Toffoli optimization*, Phys. Rev. A 93, 022311 (2016),
 ///    [arXiv:1508.03273](https://arxiv.org/abs/1508.03273).
 pub fn synth_mcx_n_dirty_m15(num_controls: usize) -> Result<CircuitData, CircuitDataError> {
-    if num_controls == 0 {
-        let mut circuit = CircuitData::with_capacity(1, 0, 1, Param::Float(0.0))?;
-        circuit.x(0)?;
-        return Ok(circuit);
-    } else if num_controls == 1 {
-        let mut circuit = CircuitData::with_capacity(2, 0, 1, Param::Float(0.0))?;
-        circuit.cx(0, 1)?;
-        return Ok(circuit);
-    } else if num_controls == 2 {
-        return Ok(ccx());
+    if num_controls <= 2 {
+        return synth_mcx_explicit(num_controls);
     }
 
     let srts_gate = srts()?;
@@ -1135,7 +1086,7 @@ pub fn synth_mcx_n_dirty_m15(num_controls: usize) -> Result<CircuitData, Circuit
 
     for forward_pass in [true, false] {
         // Items 2 and 6 of Proposition 5, with adjacent RTS pairs replaced by RT4S.
-        let first_unpaired = if n % 2 == 0 {
+        let first_unpaired = if n.is_multiple_of(2) {
             circuit.compose(
                 &rts_gate,
                 &[
@@ -1190,7 +1141,7 @@ pub fn synth_mcx_n_dirty_m15(num_controls: usize) -> Result<CircuitData, Circuit
                 &[],
             )?;
         }
-        if n % 2 == 0 {
+        if n.is_multiple_of(2) {
             let k = n - 4;
             circuit.compose(
                 &rts_inverse,
@@ -1647,16 +1598,12 @@ fn increment_2_dirty(n: u32, flag_add: bool) -> PyResult<CircuitData> {
 /// 1. Huang and Palsberg, *Compiling Conditional Quantum Gates without Using Helper Qubits*, PLDI (2024),
 ///    https://dl.acm.org/doi/10.1145/3656436.
 pub fn synth_mcx_noaux_hp24(num_controls: usize) -> PyResult<CircuitData> {
-    let n = num_controls + 1;
-
-    let mut circuit = CircuitData::with_capacity(n as u32, 0, 0, Param::Float(0.0))?;
-
-    // Handle small cases explicitly
-    if n == 1 {
-        circuit.x(0)?;
-    } else if n == 2 {
-        circuit.cx(0, 1)?;
+    // Handle small cases explicitly.
+    if num_controls <= 1 {
+        synth_mcx_explicit(num_controls).map_err(Into::into)
     } else {
+        let n: usize = num_controls + 1;
+        let mut circuit = CircuitData::with_capacity(n as u32, 0, 0, Param::Float(0.0))?;
         circuit.h(num_controls as u32)?;
 
         // The construction described in Fig.7 of the paper only works for even values of n.
@@ -1720,9 +1667,8 @@ pub fn synth_mcx_noaux_hp24(num_controls: usize) -> PyResult<CircuitData> {
         }
 
         circuit.h(num_controls as u32)?;
+        Ok(circuit)
     }
-
-    Ok(circuit)
 }
 
 /// Synthesize a multi-controlled X gate with :math:`k` controls using the relation
@@ -1781,7 +1727,7 @@ pub fn synth_mcx_noaux_sp22(num_ctrl_qubits: usize) -> Result<CircuitData, Circu
 /// # Returns
 ///
 /// The synthesized quantum circuit.
-fn synth_mcx_explicit(num_ctrl_qubits: usize) -> Result<CircuitData, CircuitDataError> {
+pub fn synth_mcx_explicit(num_ctrl_qubits: usize) -> Result<CircuitData, CircuitDataError> {
     assert!(
         num_ctrl_qubits <= 4,
         "synth_mcx_explicit called with num_ctrl_qubits = {num_ctrl_qubits}, expected <= 4"
@@ -1798,8 +1744,8 @@ fn synth_mcx_explicit(num_ctrl_qubits: usize) -> Result<CircuitData, CircuitData
             Ok(circuit)
         }
         2 => Ok(ccx()),
-        3 => Ok(c3x().into()),
-        4 => Ok(c4x()?.into()),
+        3 => Ok(c3x()),
+        4 => Ok(c4x()),
         _ => unreachable!(),
     }
 }

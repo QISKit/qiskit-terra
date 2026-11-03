@@ -37,6 +37,7 @@ use std::{mem, num, ops};
 /// The various iteration methods typically have an [`indexed`](iter::Iter::indexed) method, which
 /// attaches the [`Index`] of each node, similar to [`Iterator::enumerate`].
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct LineGraph<T> {
     /// The individual slots that make up the graph.
     ///
@@ -425,6 +426,7 @@ impl<T> ops::IndexMut<Index> for LineGraph<T> {
 
 /// A slot in the graph.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 enum Slot<T> {
     /// Actual data.
     Data(Node<T>),
@@ -447,6 +449,7 @@ enum Slot<T> {
 // The use of `NonZeroU32` is not intended to be API exposed or binding.  It would be better to use
 // `u32::MAX` as the sentinel "bad" value, but it's hard to spell that _and_ permit the `Option<T>`
 // niche optimisation that `Node` relies on to avoid being too large.
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct Index(num::NonZeroU32);
 impl Index {
     /// Construct a new index from a regular numeric value.
@@ -491,6 +494,7 @@ unsafe impl bytemuck::PodInOption for Index {}
 ///
 /// This includes references to the node weight and its predecessor and successor edges (if any).
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct Node<T> {
     weight: T,
     next: Option<Index>,

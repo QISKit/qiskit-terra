@@ -212,10 +212,8 @@ impl PyPass {
             return Ok(());
         };
         visit.call(&inner.ob)?;
-        // `PyVisit` derives `Copy` in https://github.com/PyO3/pyo3/pull/6412, which is due for
-        // release in PyO3 0.30.  The clone is cheap.
-        inner.ir_in.gc_traverse(visit.clone())?;
-        inner.ir_out.gc_traverse(visit.clone())?;
+        inner.ir_in.gc_traverse(visit)?;
+        inner.ir_out.gc_traverse(visit)?;
         Ok(())
     }
     // We are not required to do anything in `__clear__` because our Python references are all
@@ -427,8 +425,8 @@ impl PyPassManager {
             .ok_or_else(|| PyRuntimeError::new_err("pass was already consumed"))?;
         match self.0.try_push_task(Task::Transformation(Box::new(pass))) {
             Ok(()) => Ok(()),
-            Err(e) => {
-                let Task::Transformation(pass) = e else {
+            Err((task, err)) => {
+                let Task::Transformation(pass) = task else {
                     panic!("internal logic error: we got back something we didn't put in");
                 };
                 // Restore the object to Python space, to assist debugging.
@@ -437,7 +435,7 @@ impl PyPassManager {
                         .downcast::<PyPassInner>()
                         .expect("this came from a `PyPassInner`"),
                 );
-                Err(PyTypeError::new_err("IR types mismatched"))
+                Err(PyTypeError::new_err(err.to_string()))
             }
         }
     }

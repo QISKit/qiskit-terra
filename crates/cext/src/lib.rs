@@ -10,10 +10,14 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+// The actual configuration of `clippy::disallowed_methods` is in the crate-local `clipppy.toml`.
+#![warn(clippy::disallowed_methods)]
+
 mod extras;
 mod pointers;
 #[cfg(feature = "python_binding")]
 mod py;
+mod util;
 
 pub mod circuit;
 pub mod circuit_library;

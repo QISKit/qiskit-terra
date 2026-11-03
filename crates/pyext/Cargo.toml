@@ -45,4 +45,4 @@ qiskit-transpiler.workspace = true
 qiskit-util.workspace = true
 qiskit-quantum-info = { workspace = true, features = ["python"] }
 qiskit-synthesis.workspace = true
-mimalloc = { workspace = true, optional = true }
+mimalloc = { workspace = true, optional = true, features = ["local_dynamic_tls"] }

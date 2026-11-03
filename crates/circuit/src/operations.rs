@@ -11,7 +11,7 @@
 // that they have been altered from the originals.
 
 use approx::relative_eq;
-use qiskit_quantum_info::sparse_pauli_op::MatrixCompressedPaulis;
+use qiskit_quantum_info::matrix_compressed_pauli::MatrixCompressedPaulis;
 use std::any::Any;
 use std::fmt::Debug;
 use std::num::NonZero;

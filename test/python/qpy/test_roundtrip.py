@@ -287,6 +287,23 @@ class TestQPYRoundtrip(QiskitTestCase):
             qc.x(0)
         self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
 
+    @all_qpy_combinations(QPY_RUST_READ_MIN_VERSION)
+    def test_large_generic_instruction_label(self, version, write_with, read_with):
+        """Test round-tripping a library instruction with a large label."""
+
+        label = "x" * 10000000
+        gate = PauliEvolutionGate(
+            SparsePauliOp.from_list([("Z", 1)]),
+            label=label,
+        )
+        qc = QuantumCircuit(1)
+        qc.append(gate, [0])
+        self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+        qpy_file = io.BytesIO()
+        with self.assertWarns(UserWarning):
+            dump(qc, qpy_file, version=version)
+
     @all_qpy_combinations(17)
     def test_evolutiongate_sparse_observable(self, version, write_with, read_with):
         """Test loading a circuit with an evolution gate over a SparseObservable works.

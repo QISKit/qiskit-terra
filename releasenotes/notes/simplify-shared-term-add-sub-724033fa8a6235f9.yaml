@@ -1,0 +1,15 @@
+---
+features_circuits:
+  - |
+    Improved the eager simplification of :class:`.ParameterExpression` addition and subtraction.
+    When both operands are a constant plus a shared term, the constants are now folded, where previously 
+    this only happened if they cancelled to zero::
+
+        from qiskit.circuit import Parameter
+
+        x = Parameter("x")
+        (x + 1) + (x + 2)    # now "3 + 2*x", previously "1 + x + 2 + x"
+        (x + 1) + (-x + 1)   # now "2", previously "1 + x + 1 - x"
+
+    Expressions of this shape previously needed :meth:`.ParameterExpression.simplify` to reach the 
+    same form.
