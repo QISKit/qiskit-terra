@@ -1483,7 +1483,7 @@ static int test_dag_pbc_instructions(void) {
         goto cleanup;
     }
 
-    // querying a node of the wrong kind returns an error and writes nothing
+    // querying a node of the wrong kind returns an error
     if (qk_dag_op_node_pauli_product_rotation(dag, meas_idx, &wrong_rot) !=
         QkExitCode_InvalidOperationKind) {
         fprintf(stderr, "Expected InvalidOperationKind for node %u\n", meas_idx);
