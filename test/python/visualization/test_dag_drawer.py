@@ -127,6 +127,24 @@ class TestDagDrawer(QiskitVisualizationTestCase):
 
     @unittest.skipUnless(_optionals.HAS_GRAPHVIZ, "Graphviz not installed")
     @unittest.skipUnless(_optionals.HAS_PIL, "PIL not installed")
+    def test_node_indices(self):
+        """Test the `node_indices` keyword argument functions."""
+        from PIL import Image  # pylint: disable=import-error
+
+        qc = QuantumCircuit(2, 2)
+        qc.h(0)
+        qc.cx(0, 1)
+        qc.measure(qc.qubits, qc.clbits)
+        dag = circuit_to_dag(qc)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            tmp_path = os.path.join(tmpdirname, "dag.png")
+            dag.draw(filename=tmp_path, node_indices=True)
+            image_ref = path_to_diagram_reference("dag_node_indices.png")
+            image = Image.open(tmp_path)
+            self.assertImagesAreEqual(image, image_ref, 0.1)
+
+    @unittest.skipUnless(_optionals.HAS_GRAPHVIZ, "Graphviz not installed")
+    @unittest.skipUnless(_optionals.HAS_PIL, "PIL not installed")
     def test_dag_drawer_with_dag_dep(self):
         """Test dag dependency visualization."""
         from PIL import Image

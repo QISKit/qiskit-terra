@@ -4553,16 +4553,17 @@ impl PyDAGCircuit {
     /// Returns:
     ///     Ipython.display.Image: if in Jupyter notebook and not saving to file,
     ///     otherwise None.
-    #[pyo3(signature=(scale=0.7, filename=None, style="color"))]
+    #[pyo3(signature=(scale=0.7, filename=None, style="color", node_indices=false))]
     fn draw<'py>(
         slf: PyRef<'py, Self>,
         py: Python<'py>,
         scale: f64,
         filename: Option<&str>,
         style: &str,
+        node_indices: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let module = PyModule::import(py, "qiskit.visualization.dag_visualization")?;
-        module.call_method1("dag_drawer", (slf, scale, filename, style))
+        module.call_method1("dag_drawer", (slf, scale, filename, style, node_indices))
     }
 
     #[pyo3(signature=(graph_attrs=None, node_attrs=None, edge_attrs=None))]

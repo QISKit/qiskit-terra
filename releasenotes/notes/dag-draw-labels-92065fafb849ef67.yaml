@@ -1,0 +1,5 @@
+---
+features_visualization:
+  - |
+    The :class:`.DAGCircuit` drawer (acccessed via :meth:`.DAGCircuit.draw` and :func:`.dag_drawer`)
+    can now include the node indices in the node labels, if the ``node_indices`` argument is set ``True``.
