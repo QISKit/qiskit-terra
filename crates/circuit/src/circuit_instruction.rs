@@ -76,9 +76,9 @@ use smallvec::{SmallVec, smallvec};
     freelist = 20,
     sequence,
     module = "qiskit._accelerate.circuit",
-    from_py_object
+    skip_from_py_object
 )]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CircuitInstruction {
     pub operation: PackedOperation,
     /// A sequence of the qubits that the operation is applied to.
@@ -91,6 +91,23 @@ pub struct CircuitInstruction {
     pub label: Option<Box<String>>,
     #[cfg(feature = "cache_pygates")]
     pub py_op: OnceLock<Py<PyAny>>,
+}
+
+impl<'py> FromPyObject<'_, 'py> for CircuitInstruction {
+    type Error = PyErr;
+
+    fn extract(obj: pyo3::Borrowed<'_, 'py, pyo3::PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(obj) = obj.cast::<Self>() {
+            let borrowed = obj.borrow();
+            let py = borrowed.py();
+            Ok(borrowed.copy(py))
+        } else {
+            Err(PyTypeError::new_err(format!(
+                "Invalid type, expected CircuitInstruction found {}",
+                obj.get_type().name()?
+            )))
+        }
+    }
 }
 
 impl CircuitInstruction {
@@ -175,8 +192,23 @@ impl CircuitInstruction {
     ///
     /// Returns:
     ///     CircuitInstruction: The shallow copy.
-    pub fn copy(&self) -> Self {
-        self.clone()
+    pub fn copy(&self, py: Python) -> Self {
+        Self {
+            operation: self.operation.clone(),
+            qubits: self.qubits.clone_ref(py),
+            clbits: self.clbits.clone_ref(py),
+            params: self.params.clone(),
+            label: self.label.clone(),
+            #[cfg(feature = "cache_pygates")]
+            py_op: match self.py_op.get() {
+                Some(x) => {
+                    let out = OnceLock::new();
+                    let _ = out.set(x.clone_ref(py));
+                    out
+                }
+                None => OnceLock::new(),
+            },
+        }
     }
 
     /// The logical operation that this instruction represents an execution of.
