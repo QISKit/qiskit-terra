@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed an issue with :class:`.GenericBackendV2` which randomly generated :class:`.Target` with different
+    error_rates and durations for the bi-directional gates for any given qubit pairs from the :class:`.CouplingMap`.
+    Refer to `qiskit/#14223 <https://github.com/Qiskit/qiskit/issues/14223>`__ for more information.
+

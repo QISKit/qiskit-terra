@@ -67,6 +67,8 @@ _QUBIT_PROPERTIES = {
     "frequency": (5e9, 5.5e9),
 }
 
+_BI_DIRECTIONAL_GATES = {"cz", "cp", "cu1", "cs", "csdg", "rzz", "rxx", "ryy"}
+
 
 class GenericBackendV2(BackendV2):
     """Generic :class:`~.BackendV2` implementation with a configurable constructor. This class will
@@ -151,8 +153,12 @@ class GenericBackendV2(BackendV2):
         self._supported_gates = get_standard_gate_name_mapping()
         self._noise_info = noise_info
 
+        # Boolean indicating if the coupling map has a bi-directional edge
+        self._has_bi_dir_edge = False
+
         if coupling_map is None:
             self._coupling_map = CouplingMap().from_full(num_qubits)
+            self._has_bi_dir_edge = True
         else:
             if isinstance(coupling_map, CouplingMap):
                 self._coupling_map = coupling_map
@@ -164,6 +170,14 @@ class GenericBackendV2(BackendV2):
                     f"The number of qubits (got {num_qubits}) must match "
                     f"the size of the provided coupling map (got {self._coupling_map.size()})."
                 )
+
+        # checking if the coupling map has a bi-directional edge
+        if not self._has_bi_dir_edge:
+            for cp in self._coupling_map:
+                cp_rev = cp[::-1]
+                if cp_rev in self._coupling_map:
+                    self._has_bi_dir_edge = True
+                    break
 
         self._basis_gates = (
             basis_gates if basis_gates is not None else ["cx", "id", "rz", "sx", "x"]
@@ -287,22 +301,49 @@ class GenericBackendV2(BackendV2):
                 qargs = tuple(qarg)
             except TypeError:
                 qargs = (qarg,)
-            duration, error = (
-                noise_params
-                if len(noise_params) == 2
-                else (
-                    self._rng.uniform(*noise_params[:2]),
-                    self._rng.uniform(*noise_params[2:]),
-                )
-            )
 
-            if duration is not None and len(noise_params) > 2:
-                # Ensure exact conversion of duration from seconds to dt
-                dt = _QUBIT_PROPERTIES["dt"]
-                rounded_duration = round(duration / dt) * dt
-                # Clamp rounded duration to be between min and max values
-                duration = max(noise_params[0], min(rounded_duration, noise_params[1]))
-            props.update({qargs: InstructionProperties(duration, error)})
+            # If the coupling map has a bi-directional edge, for bi-directional instructions the
+            # durations and error-rates for both the combinations of a given pair of qubits
+            # should be the same.
+            if self._has_bi_dir_edge and instruction.name in _BI_DIRECTIONAL_GATES:
+                qargs_rev = qargs[::-1]
+                if qargs_rev in props:
+                    props.update({qargs: props[qargs_rev]})
+                else:
+                    duration, error = (
+                        noise_params
+                        if len(noise_params) == 2
+                        else (
+                            self._rng.uniform(*noise_params[:2]),
+                            self._rng.uniform(*noise_params[2:]),
+                        )
+                    )
+
+                    if duration is not None and len(noise_params) > 2:
+                        # Ensure exact conversion of duration from seconds to dt
+                        dt = _QUBIT_PROPERTIES["dt"]
+                        rounded_duration = round(duration / dt) * dt
+                        # Clamp rounded duration to be between min and max values
+                        duration = max(noise_params[0], min(rounded_duration, noise_params[1]))
+                    props.update({qargs: InstructionProperties(duration, error)})
+            else:
+                duration, error = (
+                    noise_params
+                    if len(noise_params) == 2
+                    else (
+                        self._rng.uniform(*noise_params[:2]),
+                        self._rng.uniform(*noise_params[2:]),
+                    )
+                )
+
+                if duration is not None and len(noise_params) > 2:
+                    # Ensure exact conversion of duration from seconds to dt
+                    dt = _QUBIT_PROPERTIES["dt"]
+                    rounded_duration = round(duration / dt) * dt
+                    # Clamp rounded duration to be between min and max values
+                    duration = max(noise_params[0], min(rounded_duration, noise_params[1]))
+
+                props.update({qargs: InstructionProperties(duration, error)})
 
         self._target.add_instruction(instruction, props)
 
