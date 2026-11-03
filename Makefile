@@ -166,7 +166,11 @@ c: cheader clib
 
 .PHONY: ctest
 # Use ctest to run C API tests.
+ifdef $(SKIP_BUILD)
+ctest:
+else
 ctest: cheader build-clib-dev
+endif
 # `-S` specifies the source (including the `CMakeLists.txt` file, `-B` is where
 # to put the build files, including the generated CMake stuff.  See the
 # `CMakeLists.txt` file for the build variables.

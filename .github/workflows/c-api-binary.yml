@@ -1,0 +1,166 @@
+name: Upload C API Binaries
+on:
+  push:
+    tags:
+      - "*"
+jobs:
+  c-api-binary-linux:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/pypa/manylinux_2_28
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cbindgen
+        run: |
+          cargo install cbindgen
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Set Environment Variables
+        run: |
+          QISKIT_CEXT_DIR="qiskit-c-api-${{ github.ref_name }}-linux-amd64"
+          echo "QISKIT_CEXT_DIR=${QISKIT_CEXT_DIR}" >> $GITHUB_ENV
+          echo "C_DIR_OUT=${QISKIT_CEXT_DIR}/dist/c" >> $GITHUB_ENV
+          echo "C_DIR_OUT: $C_DIR_OUT"
+      - name: Build Binary
+        run: |
+          dnf install -y python3.12 python3.12-pip python3.12-devel
+          export LD_LIBRARY_PATH="$(python3.12 -c 'import sys; print(sys.base_prefix)')/lib:$LD_LIBRARY_PATH"
+          echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+
+          # Compile Qiskit C API with PGO profile enabled
+          export C_LIB_RUSTC_FLAGS="-Cprofile-generate=/tmp/pgo-data"
+          make c \
+            C_DIR_OUT="${{ env.C_DIR_OUT }}"
+
+          # Compile PGO script
+          gcc tools/pgo_scripts/test_utility_scale.c \
+            -o test_utility_scale.o \
+            -O0 \
+            -I ${{ env.C_DIR_OUT }}/include \
+            -L ${{ env.C_DIR_OUT }}/lib \
+            -lqiskit \
+            -Wl,-rpath,${{ env.C_DIR_OUT }}/lib
+
+          # Generate PGO profile
+          ./test_utility_scale.o
+
+          # Merge PGO profile data
+          rustup component add llvm-tools-preview
+          PROFDATA="$(find ~/.rustup -name 'llvm-profdata')"
+          ${PROFDATA} merge -o ./merged.profdata /tmp/pgo-data
+
+          # Re-compile Qiskit C API with merged PGO data
+          make cclean
+          export C_LIB_RUSTC_FLAGS="-Cprofile-use=merged.profdata"
+          make c \
+            C_DIR_OUT="${{ env.C_DIR_OUT }}" \
+            QISKIT_BUILD_WITH_MIMALLOC="1"
+      - name: Validate Binaries
+        run: |
+          make ctest \
+            SKIP_BUILD=1 \
+            C_DIR_OUT_INCLUDE="${{ env.C_DIR_OUT }}/include" \
+            C_DIR_OUT_LIB="${{ env.C_DIR_OUT }}/lib"
+      - name: Archive Binaries
+        run: |
+          tar czf ${{ env.QISKIT_CEXT_DIR }}.tar.gz ${{ env.QISKIT_CEXT_DIR }}
+      - name: Release
+        run: |
+          # Install gh-cli
+          dnf update --refresh -y
+          dnf install -y git-all
+          dnf install -y 'dnf-command(config-manager)'
+          dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+          dnf install -y gh --repo gh-cli
+
+          # Compress pre-built binaries
+          TARFILE="${{ env.QISKIT_CEXT_DIR }}.tar.gz"
+
+          if [[ ! -f "$TARFILE" ]];
+          then
+          echo "File not found: $TARFILE"
+            exit 1
+          fi
+
+          # Attach tarfile to release
+          gh release upload \
+            --repo ${{ github.repository }} \
+            ${{ github.ref_name }} \
+            ${{ env.QISKIT_CEXT_DIR }}.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  c-api-binary-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cbindgen
+        run: |
+          cargo install cbindgen
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Set Environment Variables
+        run: |
+          QISKIT_CEXT_DIR="qiskit-c-api-${{ github.ref_name }}-macos-arm64"
+          echo "QISKIT_CEXT_DIR=${QISKIT_CEXT_DIR}" >> $GITHUB_ENV
+          echo "C_DIR_OUT=${QISKIT_CEXT_DIR}/dist/c" >> $GITHUB_ENV
+          echo "C_DIR_OUT: $C_DIR_OUT"
+      - name: Build Binary
+        run: |
+          # Compile Qiskit C API with PGO profile enabled
+          export C_LIB_RUSTC_FLAGS="-Cprofile-generate=/tmp/pgo-data"
+          make c \
+            C_DIR_OUT="${{ env.C_DIR_OUT }}"
+
+          # Compile PGO script
+          clang tools/pgo_scripts/test_utility_scale.c \
+            -o test_utility_scale.o \
+            -O0 \
+            -I ${{ env.C_DIR_OUT }}/include \
+            -L ${{ env.C_DIR_OUT }}/lib \
+            -lqiskit \
+            -Wl,-rpath,${{ env.C_DIR_OUT }}/lib
+
+          # Generate PGO profile
+          ./test_utility_scale.o
+
+          # Merge PGO profile data
+          rustup component add llvm-tools-preview
+          PROFDATA="$(find ~/.rustup -name 'llvm-profdata')"
+          ${PROFDATA} merge -o ./merged.profdata /tmp/pgo-data
+
+          # Re-compile Qiskit C API with merged PGO data
+          make cclean
+          export C_LIB_RUSTC_FLAGS="-Cprofile-use=merged.profdata"
+          make c \
+            C_DIR_OUT="${{ env.C_DIR_OUT }}" \
+            QISKIT_BUILD_WITH_MIMALLOC="1"
+      - name: Validate Binaries
+        run: |
+          make ctest \
+            SKIP_BUILD=1 \
+            C_DIR_OUT_INCLUDE="${{ env.C_DIR_OUT }}/include" \
+            C_DIR_OUT_LIB="${{ env.C_DIR_OUT }}/lib"
+      - name: Archive Binaries
+        run: |
+          # macos requires the dylib name to be changed separately
+          # install_name_tool -id libqiskit.dylib ${{ env.C_DIR_OUT }}/lib/libqiskit.dylib
+
+          # macos requires that rpath is added separately (enables using `-Wl,-rpath` in place of setting DYLD_LIBRARY_PATH)
+          # install_name_tool -add_rpath ${{ env.C_DIR_OUT }}/lib ${{ env.C_DIR_OUT }}/lib/libqiskit.dylib
+          tar czf ${{ env.QISKIT_CEXT_DIR }}.tar.gz ${{ env.QISKIT_CEXT_DIR }}
+      - name: Release
+        run: |
+          TARFILE="${{ env.QISKIT_CEXT_DIR }}.tar.gz"
+
+          if [[ ! -f "$TARFILE" ]];
+          then
+          echo "File not found: $TARFILE"
+            exit 1
+          fi
+
+          gh release upload \
+            --repo ${{ github.repository }} \
+            ${{ github.ref_name }} \
+            ${{ env.QISKIT_CEXT_DIR }}.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
