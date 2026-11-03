@@ -278,12 +278,12 @@ class TestStatevectorEstimator(QiskitTestCase):
         theta1 = self.theta[0]
         job = estimator.run([(psi1, hamiltonian1, [theta1])])
         result = job.result()
-        np.testing.assert_allclose(result[0].data.evs, [1.901141473854881])
+        np.testing.assert_allclose(result[0].data.evs, [1.537818491149677])
         # The result of the second run is the same
         job = estimator.run([(psi1, hamiltonian1, [theta1]), (psi1, hamiltonian1, [theta1])])
         result = job.result()
-        np.testing.assert_allclose(result[0].data.evs, [1.901141473854881])
-        np.testing.assert_allclose(result[1].data.evs, [1.901141473854881])
+        np.testing.assert_allclose(result[0].data.evs, [1.537818491149677])
+        np.testing.assert_allclose(result[1].data.evs, [1.537818491149677])
         # precision=0 implies the exact expectation value
         job = estimator.run([(psi1, hamiltonian1, [theta1])], precision=0)
         result = job.result()

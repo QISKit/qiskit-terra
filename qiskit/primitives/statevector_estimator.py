@@ -29,8 +29,7 @@ from .utils import _statevector_from_circuit
 
 
 class StatevectorEstimator(BaseEstimatorV2):
-    """
-    Simple implementation of :class:`BaseEstimatorV2` with full state vector simulation.
+    r"""Simple implementation of :class:`BaseEstimatorV2` with full state vector simulation.
 
     This class is implemented via :class:`~.Statevector` which turns provided circuits into
     pure state vectors. These states are subsequently acted on by :class:`~.SparsePauliOp`,
@@ -41,11 +40,56 @@ class StatevectorEstimator(BaseEstimatorV2):
     called an estimator primitive unified bloc (PUB), produces its own array-based result. The
     :meth:`~.StatevectorEstimator.run` method can be given a sequence of pubs to run in one call.
 
+    The default precision value used by this estimator, ``default_precision=0.0``, results in
+    exact expecation value estimates for unitary circuits, up to numerical precision. If a
+    positive value is provided, then it is used to add artificial noise to the exact estimates
+    by drawing a random variates whose mean values are equal to the exact values, and whose
+    standard deviations are equal to ``precision`` clipped to the largest value consistent with
+    the expectation value's space of support. The method of doing so is described below.
+
+    When an observable is an n-qubit Pauli, its expectation value must live in the interval
+    :math:`[-1, 1]`, so that it is natural for this estimator implementation to always report
+    estimates in :math:`[-1,1]` even when the precision is set to a positive value. More
+    generally, for a multi-term observable :math:`A=\sum_k b_k P_k` expanded in the Pauli basis
+    and a quantum state :math:`\rho`, using Hölder's inequality and the triangle inequality, the
+    expectation value is bounded by
+    
+    .. math::
+
+        |\mathrm{Tr}(\rho A)|
+        \leq \left\lVert \rho \right\rVert_1 \left\lVert B \right\rVert_\infty
+        \leq \sum_k |b_k|.
+
+    While this inequality is loose, in the sense that for a particular observable :math:`A` one
+    can generally not find a state :math:`\rho` for which the inequality is saturated, it is
+    still useful, because, in practical experiments, expectation values are often estimated
+    term-by-term such that the right-hand-side naturally represents a typical bound seen
+    experimentally.
+
+    This class chooses to use the Beta distribution to bound returned estimates to the interval
+    :math:`[-b, b]` when non-zero precision is present, where :math:`b=\sum_k |b_k|`. Since the
+    Beta distribution has support on the interval :math:`[0, 1]`, it is used in conjunction with
+    an affine transformation between :math:`[-b, b]` and :math:`[0, 1]`. In particular, given an
+    exact expecation value :math:`a`, setting
+
+    .. math::
+
+        \mu = \frac{a + b}{2b} \\
+        \sigma^2 = \frac{\mathrm{min}(\mu(1-\mu), \mathrm{precision}^2)}{4b^2} \\
+        \alpha = \frac{\mu^2(1-\mu)}{\sigma^2} - \mu \\
+        \beta = \frac{\mu(1-\mu)^2}{\sigma^2} - (1-\mu)
+
+    and drawing :math:`\hat{a} \sim \mathrm{Beta}(\alpha, \beta)` leads to 
+    :math:`\mathbb{E}[\hat{a}]=a`, :math:`\mathbb{V}[\hat{a}]=\mathrm{precision}^2`, and 
+    :math:`-b\leq \hat{a} \leq b`. The minimum with $\mu(1-\mu)$ is taken in $\sigma^2$ because
+    no random variable with support on a unit-length interval can have a variance greater 
+    than $\mu(1-\mu)$, where $\mu$ is its mean value; failing to do this would lead to negative
+    values of $\alpha$ or $\beta$.
 
     .. note::
-        The result of this class is exact if the circuit contains only unitary operations.
-        On the other hand, the result could be stochastic if the circuit contains a non-unitary
-        operation such as a reset for some subsystems.
+        Assuming the precision is set to zero, the result of this class is exact if the circuit 
+        contains only unitary operations. On the other hand, the result could be stochastic if 
+        the circuit contains a non-unitary operation such as a reset for some subsystems.
         The stochastic result can be made reproducible by setting ``seed``, e.g.,
         ``StatevectorEstimator(seed=123)``.
 
@@ -109,6 +153,7 @@ class StatevectorEstimator(BaseEstimatorV2):
         for idx, pauli in enumerate(observables):
             plt.plot(result.data.evs[idx], label=pauli)
         plt.legend()
+        
     """
 
     def __init__(
@@ -167,7 +212,14 @@ class StatevectorEstimator(BaseEstimatorV2):
             if precision != 0:
                 if not np.isreal(expectation_value):
                     raise ValueError("Given operator is not Hermitian and noise cannot be added.")
-                expectation_value = rng.normal(expectation_value, precision)
+
+                bound = np.abs(coeffs).sum()
+                mu = (expectation_value + bound) / (2 * bound)
+                s2 = min(mu * (1 - mu), precision**2) / (4 * bound**2)
+                alpha = mu**2 * (1 - mu) / s2 - mu
+                beta = mu * (1 - mu) ** 2 / s2 - (1 - mu)
+                expectation_value = 2 * bound * rng.beta(alpha, beta) - bound
+
             evs[index] = expectation_value
 
         data = DataBin(evs=evs, stds=stds, shape=evs.shape)
