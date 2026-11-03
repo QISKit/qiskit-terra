@@ -31,7 +31,7 @@ For complete device-aware compilation, start with
 useful when you want to inspect a circuit, build a smaller custom workflow, or
 customize one stage of transpilation.
 
-For example, an analysis pass can be used to collect information about a
+For example, a pass can be used to collect information about a
 circuit::
 
     from qiskit.circuit import QuantumCircuit
