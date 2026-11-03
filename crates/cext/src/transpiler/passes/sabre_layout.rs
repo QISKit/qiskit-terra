@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
 use rand::prelude::*;
 use rand::rngs::SysRng;
 use rand_pcg::Pcg64Mcg;
@@ -111,9 +110,9 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_sabre_layout(
     options: *const SabreLayoutOptions,
 ) -> *mut TranspileLayout {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
-    let target = unsafe { const_ptr_as_ref(target) };
-    let options = unsafe { const_ptr_as_ref(options) };
+    let circuit = unsafe { &mut *circuit };
+    let target = unsafe { &*target };
+    let options = unsafe { &*options };
     let mut dag = DAGCircuit::from_circuit_data(circuit, false, None, None)
         .unwrap_or_else(|_| panic!("Internal circuit to DAG conversion failed."));
     let heuristic = heuristic::Heuristic::new(

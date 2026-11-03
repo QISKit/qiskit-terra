@@ -29,7 +29,6 @@ use qiskit_transpiler::transpiler::{
 use crate::exit_codes::CInputError;
 use crate::exit_codes::ExitCode;
 use crate::pointers::check_ptr;
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
 use crate::util;
 
 /// The container result object from ``qk_transpile``
@@ -126,7 +125,7 @@ pub unsafe extern "C" fn qk_transpile_state_free(state: *mut TranspilerStageStat
 pub unsafe extern "C" fn qk_transpile_state_layout(
     state: *mut TranspilerStageState,
 ) -> *mut TranspileLayout {
-    let borrowed_state = unsafe { mut_ptr_as_ref(state) };
+    let borrowed_state = unsafe { &mut *state };
 
     match borrowed_state.layout.as_mut() {
         Some(layout) => layout,
@@ -155,7 +154,7 @@ pub unsafe extern "C" fn qk_transpile_state_layout_set(
     layout: *mut TranspileLayout,
 ) {
     // SAFETY: As per documentation, the pointer should be non-null and aligned.
-    let state = unsafe { mut_ptr_as_ref(state) };
+    let state = unsafe { &mut *state };
 
     if layout.is_null() {
         state.layout = None;
@@ -257,8 +256,8 @@ pub unsafe extern "C" fn qk_transpile_stage_init(
     error: *mut *mut c_char,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let dag = unsafe { &mut *dag };
+    let target = unsafe { &*target };
     let mut out_layout = TranspileLayout::new(
         None,
         None,
@@ -271,7 +270,7 @@ pub unsafe extern "C" fn qk_transpile_stage_init(
     } else {
         // SAFETY: We checked the pointer is not null, then, per documentation, it is a valid
         // and aligned pointer.
-        unsafe { const_ptr_as_ref(options) }
+        unsafe { &*options }
     };
 
     let approximation_degree = if options.approximation_degree.is_nan() {
@@ -313,7 +312,7 @@ pub unsafe extern "C" fn qk_transpile_stage_init(
                     }))
                 }
             } else {
-                let borrowed = unsafe { mut_ptr_as_ref(*state) };
+                let borrowed = unsafe { &mut **state };
                 borrowed.layout.replace(out_layout);
             }
             ExitCode::Success
@@ -394,14 +393,14 @@ pub unsafe extern "C" fn qk_transpile_stage_routing(
     error: *mut *mut c_char,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers is non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let dag = unsafe { &mut *dag };
+    let target = unsafe { &*target };
     let options = if options.is_null() {
         &TranspileOptions::default()
     } else {
         // SAFETY: We checked the pointer is not null, then, per documentation, it is a valid
         // and aligned pointer.
-        unsafe { const_ptr_as_ref(options) }
+        unsafe { &*options }
     };
     let seed = if options.seed < 0 {
         None
@@ -428,7 +427,7 @@ pub unsafe extern "C" fn qk_transpile_stage_routing(
         }
     };
     // SAFETY: Per the documentation this is a valid pointer to a transpile layout
-    let borrowed_state = unsafe { mut_ptr_as_ref(state) };
+    let borrowed_state = unsafe { &mut *state };
     let out_layout = borrowed_state
         .layout
         .as_mut()
@@ -522,9 +521,9 @@ pub unsafe extern "C" fn qk_transpile_stage_optimization(
     state: *mut TranspilerStageState,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
-    let state = unsafe { mut_ptr_as_ref(state) };
+    let dag = unsafe { &mut *dag };
+    let target = unsafe { &*target };
+    let state = unsafe { &mut *state };
     let layout = state
         .layout
         .as_mut()
@@ -534,7 +533,7 @@ pub unsafe extern "C" fn qk_transpile_stage_optimization(
     } else {
         // SAFETY: We checked the pointer is not null, then, per documentation, it is a valid
         // and aligned pointer.
-        unsafe { const_ptr_as_ref(options) }
+        unsafe { &*options }
     };
     let approximation_degree = if options.approximation_degree.is_nan() {
         None
@@ -634,14 +633,14 @@ pub unsafe extern "C" fn qk_transpile_stage_translation(
     error: *mut *mut c_char,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let dag = unsafe { &mut *dag };
+    let target = unsafe { &*target };
     let options = if options.is_null() {
         &TranspileOptions::default()
     } else {
         // SAFETY: We checked the pointer is not null, then, per documentation, it is a valid
         // and aligned pointer.
-        unsafe { const_ptr_as_ref(options) }
+        unsafe { &*options }
     };
 
     let approximation_degree = if options.approximation_degree.is_nan() {
@@ -742,15 +741,15 @@ pub unsafe extern "C" fn qk_transpile_stage_layout(
     error: *mut *mut c_char,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointers are non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let dag = unsafe { &mut *dag };
+    let target = unsafe { &*target };
 
     let options = if options.is_null() {
         &TranspileOptions::default()
     } else {
         // SAFETY: We checked the pointer is not null, then, per documentation, it is a valid
         // and aligned pointer.
-        unsafe { const_ptr_as_ref(options) }
+        unsafe { &*options }
     };
 
     let seed = if options.seed < 0 {
@@ -831,7 +830,7 @@ pub unsafe extern "C" fn qk_transpile_stage_layout(
             Err(e) => err(e),
         }
     } else {
-        let layout_inner = unsafe { mut_ptr_as_ref(*state) };
+        let layout_inner = unsafe { &mut **state };
         if let Some(layout) = layout_inner.layout.as_mut() {
             match layout_stage(
                 dag,
@@ -920,14 +919,14 @@ pub unsafe extern "C" fn qk_transpile(
     error: *mut *mut c_char,
 ) -> ExitCode {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let qc = unsafe { const_ptr_as_ref(qc) };
-    let target = unsafe { const_ptr_as_ref(target) };
+    let qc = unsafe { &*qc };
+    let target = unsafe { &*target };
     let options = if options.is_null() {
         &TranspileOptions::default()
     } else {
         // SAFETY: We checked the pointer is not null, then, per documentation, it is a valid
         // and aligned pointer.
-        unsafe { const_ptr_as_ref(options) }
+        unsafe { &*options }
     };
 
     if !(0..=3u8).contains(&options.optimization_level) {

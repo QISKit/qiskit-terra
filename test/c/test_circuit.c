@@ -1298,7 +1298,7 @@ static int test_circuit_draw(void) {
     QkPauliProductMeasurement ppm = {z, x, 4, true};
     qk_circuit_pauli_product_measurement(circuit, &ppm, qubits, 0);
 
-    QkCircuitDrawerConfig config = {false, true, 80, 0};
+    QkCircuitDrawerConfig config = {false, true, 80, 0, false};
 
     char *circ_str = qk_circuit_draw(circuit, &config);
 
@@ -1311,7 +1311,7 @@ static int test_circuit_draw(void) {
 
 static int test_circuit_draw_empty(void) {
     QkCircuit *circuit = qk_circuit_new(0, 0);
-    QkCircuitDrawerConfig config = {false, true, 80, 0};
+    QkCircuitDrawerConfig config = {false, true, 80, 0, true};
 
     char *circ_str = qk_circuit_draw(circuit, &config);
     if (circ_str == NULL || strcmp(circ_str, "") != 0) {

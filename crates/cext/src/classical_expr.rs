@@ -12,7 +12,6 @@
 
 use std::ptr;
 
-use crate::pointers::const_ptr_as_ref;
 use crate::util;
 use num_bigint::BigUint;
 use num_traits::{ToPrimitive, Zero};
@@ -445,7 +444,7 @@ impl From<CDurationInfo> for Duration {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_kind(expr: *const Expr) -> CExprNodeKind {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     CExprNodeKind::from(expr)
 }
@@ -474,7 +473,7 @@ pub unsafe extern "C" fn qk_expr_kind(expr: *const Expr) -> CExprNodeKind {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_binary_info(expr: *const Expr) -> CBinaryExprInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Binary(binary) = expr else {
         panic!("qk_expr_binary_info called on non-binary expression")
@@ -511,7 +510,7 @@ pub unsafe extern "C" fn qk_expr_binary_info(expr: *const Expr) -> CBinaryExprIn
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_unary_info(expr: *const Expr) -> CUnaryExprInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Unary(unary) = expr else {
         panic!("qk_expr_unary_info called on non-unary expression")
@@ -547,7 +546,7 @@ pub unsafe extern "C" fn qk_expr_unary_info(expr: *const Expr) -> CUnaryExprInfo
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_cast_info(expr: *const Expr) -> CCastExprInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Cast(cast) = expr else {
         panic!("qk_expr_cast_info called on non-cast expression")
@@ -584,7 +583,7 @@ pub unsafe extern "C" fn qk_expr_cast_info(expr: *const Expr) -> CCastExprInfo {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_index_info(expr: *const Expr) -> CIndexExprInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Index(index) = expr else {
         panic!("qk_expr_index_info called on non-index expression")
@@ -618,7 +617,7 @@ pub unsafe extern "C" fn qk_expr_index_info(expr: *const Expr) -> CIndexExprInfo
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_as_value(expr: *const Expr) -> *const Value {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Value(val) = expr else {
         panic!("qk_expr_as_value called on non-value expression")
@@ -647,7 +646,7 @@ pub unsafe extern "C" fn qk_expr_as_value(expr: *const Expr) -> *const Value {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_as_var(expr: *const Expr) -> *const Var {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Var(var) = expr else {
         panic!("qk_expr_as_var called on non-variable expression")
@@ -676,7 +675,7 @@ pub unsafe extern "C" fn qk_expr_as_var(expr: *const Expr) -> *const Var {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_expr_as_stretch(expr: *const Expr) -> *const Stretch {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let expr = unsafe { const_ptr_as_ref(expr) };
+    let expr = unsafe { &*expr };
 
     let Expr::Stretch(stretch) = expr else {
         panic!("qk_expr_as_stretch called on non-stretch expression")
@@ -703,7 +702,7 @@ pub unsafe extern "C" fn qk_expr_as_stretch(expr: *const Expr) -> *const Stretch
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_type_info(value: *const Value) -> CExprTypeInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     match value {
         Value::Duration(_) => CExprTypeInfo {
@@ -734,7 +733,7 @@ pub unsafe extern "C" fn qk_value_type_info(value: *const Value) -> CExprTypeInf
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_duration_info(value: *const Value) -> CDurationInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     let Value::Duration(duration) = value else {
         panic!("qk_value_duration_info called on non-duration value")
@@ -763,7 +762,7 @@ pub unsafe extern "C" fn qk_value_duration_info(value: *const Value) -> CDuratio
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_float(value: *const Value) -> f64 {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     let Value::Float {
         raw,
@@ -800,7 +799,7 @@ pub unsafe extern "C" fn qk_value_float(value: *const Value) -> f64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_uint(value: *const Value) -> u64 {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     let Value::Uint {
         raw,
@@ -812,6 +811,119 @@ pub unsafe extern "C" fn qk_value_uint(value: *const Value) -> u64 {
 
     raw.to_u64()
         .expect("Integer value too large to fit in uint64_t")
+}
+
+/// Representation of big-integer data.
+///
+/// The slice ``self.limbs[0..self.num_limbs]`` holds the limbs (big-digits) of the unsigned bigint in
+/// little-endian order. Each limb itself is encoded in native-endian.
+///
+/// Trailing limbs where the value is zero will not be included. Notice that this implies that the
+/// buffer may be smaller than what you expect by inspecting the bit-width from `QkExprTypeInfo`.
+///
+/// **Ownership**: When constructed by calling `qk_value_biguint`, the caller owns the memory, and
+/// is responsible for calling `qk_biguint_clear` to free it at the end of use.
+#[repr(C)]
+pub struct CBigUint {
+    /// A buffer containing the bigint data, where each ``uint64_t`` element represents a limb
+    /// (big-digit) of the bigint.
+    limbs: *mut u64,
+    /// Number of limbs.
+    num_limbs: usize,
+}
+
+impl CBigUint {
+    const ZERO: CBigUint = CBigUint {
+        limbs: ptr::null_mut(),
+        num_limbs: 0,
+    };
+
+    /// Convert BigUint to an CBigUint that owns its allocation.
+    pub(crate) fn from_biguint(biguint: &BigUint) -> Self {
+        let boxed_slice = biguint.to_u64_digits().into_boxed_slice();
+        // An empty boxed slice has a dangling non-null pointer; give C `NULL` instead.
+        if boxed_slice.is_empty() {
+            return CBigUint::ZERO;
+        }
+        let num_limbs = boxed_slice.len();
+        let limbs: *mut u64 = Box::into_raw(boxed_slice).cast::<u64>();
+        CBigUint { limbs, num_limbs }
+    }
+
+    /// Free the limb buffer allocation.
+    pub(crate) unsafe fn free(self) {
+        let slice = ptr::slice_from_raw_parts_mut(self.limbs, self.num_limbs);
+        // SAFETY: Caller must pass a valid allocation.
+        drop(unsafe { Box::from_raw(slice) });
+    }
+}
+
+/// @ingroup QkClassicalExpressions
+/// Extract the unsigned bigint value from a ``QkValue``. The data is copied
+/// to a freshly allocated `QkBigUint` which the caller owns after calling
+/// this function.
+///
+/// @param value A pointer to a uint value.
+///
+/// @return A `QkBigUint` that contains a copy of the big-integer data. Value is owned by the caller
+///     and should be freed with `qk_biguint_clear` when no longer in use.
+///
+/// When ``value`` does not point to a ``QkExprType_Uint`` variant, returns zero.
+///
+/// # Example
+/// ```c
+/// QkBigUint biguint = qk_value_biguint(value);
+/// for (size_t i = 0; i< biguint.num_limbs; i++)
+///     printf("biguint.limbs[i] = %lx\n", biguint.limbs[i]);
+/// qk_biguint_clear(&biguint);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``value`` is not a valid, non-null pointer to a ``QkValue``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_value_biguint(value: *const Value) -> CBigUint {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let value = unsafe { &*value };
+
+    let biguint = match value {
+        Value::Uint {
+            raw,
+            ty: Type::Uint(_),
+        } => raw,
+        _ => &BigUint::ZERO,
+    };
+
+    CBigUint::from_biguint(biguint)
+}
+
+/// @ingroup QkClassicalExpressions
+/// Clear a `QkBigUint`.
+///
+/// This function frees the buffer. The pointer is then set to null, and the length is
+/// set to zero.
+///
+/// Calling with null or a zero value (``biguint.limbs == NULL``) is a no-op.
+///
+/// @param biguint Nullable pointer to `QkBigUint`.
+///
+/// # Safety
+///
+/// Behavior is undefined if ``biguint`` is not a valid pointer to a `QkBigUint` or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_biguint_clear(biguint: *mut CBigUint) {
+    if biguint.is_null() {
+        return;
+    }
+
+    // SAFETY: Checked for null above.
+    let biguint = unsafe { &mut *biguint };
+    if biguint.limbs.is_null() {
+        return;
+    }
+
+    // SAFETY: Per documentation, the allocation is valid and we can free it.
+    unsafe { std::mem::replace(biguint, CBigUint::ZERO).free() };
 }
 
 /// @ingroup QkClassicalExpressions
@@ -834,7 +946,7 @@ pub unsafe extern "C" fn qk_value_uint(value: *const Value) -> u64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_value_bool(value: *const Value) -> bool {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let value = unsafe { const_ptr_as_ref(value) };
+    let value = unsafe { &*value };
 
     let Value::Uint {
         raw,
@@ -871,7 +983,7 @@ pub unsafe extern "C" fn qk_value_bool(value: *const Value) -> bool {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_var_name(var: *const Var) -> *mut c_char {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let var = unsafe { const_ptr_as_ref(var) };
+    let var = unsafe { &*var };
     match var {
         Var::Standalone { name, .. } => util::cstring_from_utf8_lossy(name).into_raw(),
         Var::Register { .. } | Var::Bit { .. } => ptr::null_mut(),
@@ -898,7 +1010,7 @@ pub unsafe extern "C" fn qk_var_name(var: *const Var) -> *mut c_char {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_var_type_info(var: *const Var) -> CExprTypeInfo {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let var = unsafe { const_ptr_as_ref(var) };
+    let var = unsafe { &*var };
 
     let ty = match var {
         Var::Standalone { ty, .. } => ty,
@@ -936,7 +1048,7 @@ pub unsafe extern "C" fn qk_var_type_info(var: *const Var) -> CExprTypeInfo {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_stretch_name(stretch: *const Stretch) -> *mut c_char {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let stretch = unsafe { const_ptr_as_ref(stretch) };
+    let stretch = unsafe { &*stretch };
     util::cstring_from_utf8_lossy(&stretch.name).into_raw()
 }
 
@@ -1142,6 +1254,47 @@ pub unsafe extern "C" fn inner_test_value(
 
 /// cbindgen:qk-vtable-rules=[no-export]
 /// cbindgen:no-export
+///
+/// Create [`Value::Uint`] with big values for testing.
+///
+/// Copies `buf[0..len]` to a new [`Value::Uint`]. Note that `buf: *const u8` is agnostic regarding
+/// endianness -- unlike the inner representation of [`Value::Uint`] and [`QkBigUint`].
+///
+/// If `bit_width_auto` is true, calculate the bit-width metadata in `value::uint { ty: uint(_), .. }`
+/// according to the buffer size `len`, and ignore the `bit_width` parameter. Otherwise, use the
+/// `bit_width` parameter. Note that this stored bit-width metadata is treated as a hint, and we
+/// avoid relying on it for operations where using a wrong value may cause memory-unsafety.
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn inner_test_value_biguint(
+    buf: *const u8,
+    len: usize,
+    bit_width_auto: bool,
+    bit_width: u32,
+) -> *mut Value {
+    let bytes: &[u8] = if len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(buf, len) }
+    };
+    let raw = BigUint::from_bytes_le(bytes);
+
+    let bit_width = if bit_width_auto {
+        u32::try_from(len).unwrap() * u64::BITS
+    } else {
+        bit_width
+    };
+
+    let value = Value::Uint {
+        raw,
+        ty: Type::Uint(bit_width),
+    };
+
+    Box::into_raw(Box::new(value))
+}
+
+/// cbindgen:qk-vtable-rules=[no-export]
+/// cbindgen:no-export
 #[allow(clippy::missing_safety_doc)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inned_test_old_style_vars(out_vars: *mut *mut Expr) {
@@ -1167,4 +1320,12 @@ pub unsafe extern "C" fn inned_test_old_style_vars(out_vars: *mut *mut Expr) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn inner_expr_free(expr: *mut Expr) {
     drop(unsafe { Box::from_raw(expr) })
+}
+
+/// cbindgen:qk-vtable-rules=[no-export]
+/// cbindgen:no-export
+#[allow(clippy::missing_safety_doc)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn inner_value_free(value: *mut Value) {
+    drop(unsafe { Box::from_raw(value) })
 }

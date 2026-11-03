@@ -55,8 +55,8 @@ pub struct ExtraCircuitData {
     pub name: Option<String>,
     /// The serialized Python metadata mapping.
     pub metadata: Bytes,
-    /// The serialized transpiler-layout data.
-    pub layout: Bytes,
+    /// The transpiler layout data.
+    pub layout: Option<LayoutV2Pack>,
 }
 
 /// Parses an ASCII decimal string as a `u8` during compile-time evaluation.
@@ -200,14 +200,13 @@ pub fn py_dump_qpy(
     let circuits: Vec<QuantumCircuitData> = programs.extract()?;
     let data = circuits.iter().map(|circuit| {
         let metadata = serialize_metadata(&circuit.metadata, metadata_serializer.as_ref())?;
-        let layout = pack_layout(circuit.transpile_layout.clone(), &circuit.data, version)
-            .and_then(|layout| serialize_with_args::<LayoutV2Pack, (u8,)>(&layout, (version,)))?;
+        let layout = pack_layout(circuit.transpile_layout.clone(), &circuit.data, version)?;
         Ok::<_, QpyError>((
             &circuit.data,
             ExtraCircuitData {
                 name: circuit.name.clone(),
                 metadata,
-                layout,
+                layout: Some(layout),
             },
         ))
     });
@@ -289,7 +288,7 @@ pub fn native_dump_qpy(
                 // The default Python QPY metadata codec is JSON, so an empty mapping must still be
                 // represented by valid JSON for files produced through non-Python interfaces.
                 metadata: Bytes::from("{}"),
-                layout: Bytes::new(),
+                layout: None,
             },
         ))
     });
@@ -421,12 +420,12 @@ pub fn load_qpy(
 ///
 /// Returns
 /// A list of Python `QuantumCircuit` objects reconstructed from the QPY payload.
-pub fn py_load_qpy(
-    py: Python,
+pub fn py_load_qpy<'py>(
+    py: Python<'py>,
     file_obj: &Bound<PyAny>,
     metadata_deserializer: Option<Bound<PyAny>>,
     annotation_factories: Option<Bound<PyDict>>,
-) -> Result<Vec<Py<PyAny>>, QpyError> {
+) -> Result<Vec<Bound<'py, PyAny>>, QpyError> {
     let annotation_factories = annotation_factories.unwrap_or(PyDict::new(py));
     // Read all data from file object
     let data: Bytes = file_obj.call_method0("read")?.extract()?;
@@ -472,7 +471,7 @@ mod tests {
             // Circuit metadata is always decoded with `json.loads`, and older Qiskit
             // releases require the decoded value to be a dictionary.
             metadata: "{}".into(),
-            layout: serialize(&pack_layout(None, circuit, version).unwrap()).unwrap(),
+            layout: Some(pack_layout(None, circuit, version).unwrap()),
         }
     }
 

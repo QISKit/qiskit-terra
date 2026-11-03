@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use qiskit_circuit::circuit_data::CircuitData;
 
 use crate::exit_codes::ExitCode;
-use crate::pointers::{ExposesOwnedPointers, check_ptr, const_ptr_as_ref, mut_ptr_as_ref};
+use crate::pointers::{ExposesOwnedPointers, check_ptr};
 use crate::util;
 
 /// Options for the OpenQASM 2 importer.
@@ -96,7 +96,7 @@ pub unsafe extern "C" fn qk_openqasm2_options_set_strict(
     strict: bool,
 ) {
     // SAFETY: per documentation, `options` is a valid handle.
-    unsafe { mut_ptr_as_ref(options) }.strict = strict;
+    unsafe { &mut *options }.strict = strict;
 }
 
 /// @ingroup QkOpenQasm2
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn qk_openqasm2_options_append_include_path(
         };
     };
     // SAFETY: per documentation, `options` is a valid handle.
-    unsafe { mut_ptr_as_ref(options) }
+    unsafe { &mut *options }
         .include_path
         .push(PathBuf::from(path));
     ExitCode::Success
@@ -207,7 +207,7 @@ pub unsafe extern "C" fn qk_openqasm2_load(
     } else {
         // SAFETY: we checked the pointer is not null, then, per documentation, it is a valid and
         // aligned pointer.
-        unsafe { const_ptr_as_ref(options) }
+        unsafe { &*options }
     };
 
     // SAFETY: per documentation, `program` points to a nul-terminated string.

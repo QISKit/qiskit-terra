@@ -97,8 +97,7 @@ static int test_parse_error(void) {
     QkOpenQasm2Options *options = qk_openqasm2_options_new();
     QkCircuit *parsed = NULL;
     char *error = NULL;
-    QkExitCode code =
-        qk_openqasm2_load("qreg q[2]; not_a_gate q[0];", options, &parsed, &error);
+    QkExitCode code = qk_openqasm2_load("qreg q[2]; not_a_gate q[0];", options, &parsed, &error);
     qk_openqasm2_options_free(options);
     if (code != QkExitCode_CInputError) {
         fprintf(stderr, "%s: expected an input error, got exit code %u\n", __func__,
