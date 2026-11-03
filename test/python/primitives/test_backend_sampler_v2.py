@@ -913,6 +913,43 @@ class TestBackendSamplerV2(QiskitTestCase):
         self.assertEqual(result[0].metadata, {"shots": 10, "circuit_metadata": qc.metadata})
         self.assertEqual(result[1].metadata, {"shots": 20, "circuit_metadata": qc2.metadata})
 
+    def test_backend_with_counts_only_no_memory(self):
+        """Regression test for #15694: BackendV2 that returns only counts (no memory)."""
+        from qiskit.providers.basic_provider import BasicProviderJob
+        from qiskit.result import Result
+        from qiskit.result.models import ExperimentResult, ExperimentResultData
+
+        class CountsOnlyBackend(GenericBackendV2):
+            """Backend that returns only counts, no memory (e.g. IQM-style)."""
+
+            def run(self, run_input, **options):
+                shots = options.get("shots", 1024)
+                circuits = run_input if isinstance(run_input, list) else [run_input]
+                results = []
+                for circ in circuits:
+                    n = circ.num_clbits
+                    c0, c1 = shots // 2, shots - shots // 2
+                    data = ExperimentResultData(counts={"0x0": c0, hex((1 << n) - 1): c1})
+                    results.append(ExperimentResult(shots=shots, success=True, data=data))
+                result = Result(
+                    backend_name="counts_only",
+                    backend_version="0.1",
+                    job_id="test",
+                    success=True,
+                    results=results,
+                )
+                return BasicProviderJob(self, "test", result)
+
+        backend = CountsOnlyBackend(num_qubits=2)
+        qc = QuantumCircuit(2, 2)
+        qc.measure([0, 1], [0, 1])
+        sampler = BackendSamplerV2(backend=backend)
+        result = sampler.run([qc], shots=1000).result()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].metadata["shots"], 1000)
+        counts = next(iter(result[0].data.values())).get_counts()
+        self.assertEqual(sum(counts.values()), 1000)
+
 
 if __name__ == "__main__":
     unittest.main()

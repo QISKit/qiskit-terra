@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import re
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass
@@ -113,7 +114,10 @@ class BackendSamplerV2(BaseSamplerV2):
 
     .. note::
 
-        This class requires a backend that supports ``memory`` option.
+        When the backend does not support the ``memory`` run option, per-shot
+        samples are derived from the returned counts. This preserves outcome
+        frequencies, but the order of samples does not reflect backend shot
+        order.
 
     """
 
@@ -185,15 +189,23 @@ class BackendSamplerV2(BaseSamplerV2):
         for circuits in bound_circuits:
             flatten_circuits.extend(np.ravel(circuits).tolist())
 
-        run_opts = self._options.run_options or {}
+        run_opts = dict(self._options.run_options or {})
+        # Keep the existing memory=True path for backends that support it,
+        # but avoid passing it to minimal BackendV2 implementations that do
+        # not advertise a memory run option.
+        if "memory" in self._backend.options:
+            run_opts.setdefault("memory", True)
+        else:
+            run_opts.pop("memory", None)
+        run_opts.pop("seed_simulator", None)
+        run_opts.setdefault("shots", shots)
+        if self._options.seed_simulator is not None:
+            run_opts["seed_simulator"] = self._options.seed_simulator
         # run circuits
         results, _ = _run_circuits(
             flatten_circuits,
             self._backend,
             clear_metadata=False,
-            memory=True,
-            shots=shots,
-            seed_simulator=self._options.seed_simulator,
             **run_opts,
         )
         result_memory = _prepare_memory(results)
@@ -293,25 +305,103 @@ def _analyze_circuit(circuit: QuantumCircuit) -> tuple[list[_MeasureInfo], int]:
 
 
 def _prepare_memory(results: list[Result]) -> list[ResultMemory]:
-    """Joins split results if exceeding max_experiments"""
+    """Joins split results if exceeding max_experiments.
+
+    When the backend does not support the ``memory`` run option (not part of
+    BackendV2 abstract interface), per-shot data is derived from counts so
+    that BackendSamplerV2 works with any BackendV2.
+    """
     lst = []
     for res in results:
         for exp in res.results:
             if hasattr(exp.data, "memory") and exp.data.memory:
                 lst.append(exp.data.memory)
+            elif hasattr(exp.data, "counts") and exp.data.counts:
+                # Backend did not return memory; expand counts to per-shot list
+                lst.append(_counts_to_memory(exp.data.counts, exp.shots))
             else:
                 # no measure in a circuit
                 lst.append(["0x0"] * exp.shots)
     return lst
 
 
+def _counts_to_memory(counts: dict, shots: int) -> list[str]:
+    """Expand a counts dict (outcome -> count) to a list of hex strings.
+
+    Keys may be hex strings (e.g. "0x0"), binary (e.g. "0b011"), bit strings
+    (e.g. "011"), or ints. They are normalized to hex strings for downstream
+    use, following the same semantics as :class:`qiskit.result.Counts`.
+    Produces a list of length shots with deterministic ordering (sorted
+    numerically) so that results are reproducible.
+    """
+    # Match Counts: bit strings are [01] plus optional spaces/underscores
+    _bitstring_re = re.compile(r"^[01\s_]+$")
+
+    def _key_to_int(outcome: str | int) -> int:
+        if isinstance(outcome, int):
+            return outcome
+        if outcome.startswith("0x"):
+            return int(outcome, 0)
+        if outcome.startswith("0b"):
+            return int(outcome, 0)
+        if _bitstring_re.match(outcome):
+            return int(outcome.replace(" ", "").replace("_", ""), 2)
+        return int(outcome, 16)
+
+    memory = []
+    for outcome in sorted(counts.keys(), key=_key_to_int):
+        hex_outcome = hex(_key_to_int(outcome))
+        memory.extend([hex_outcome] * counts[outcome])
+    if len(memory) < shots:
+        memory.extend(["0x0"] * (shots - len(memory)))
+    return memory[:shots]
+
+
 def _memory_array(results: list[list[str]], num_bytes: int) -> NDArray[np.uint8]:
-    """Converts the memory data into an array in an unpacked way."""
+    """Converts the memory data into an array in an unpacked way.
+
+    The ``num_bytes`` argument is the *minimum* number of bytes required to
+    represent the classical bits in the circuit (derived from the cregs).
+    Some backends, however, may include additional classical memory slots in
+    their returned memory values (for example, extra bits in ``memory_slots``),
+    which means the values can require more bytes than ``num_bytes``.
+
+    To avoid ``OverflowError`` when converting these values to bytes, this
+    function computes the number of bytes actually required by the data and
+    uses ``max(num_bytes, required_bytes)`` as the byte width. Extra high-order
+    bits are ignored later when we slice out the bits corresponding to the
+    circuit's classical registers in :func:`_samples_to_packed_array`.
+    """
     lst = []
     for memory in results:
         if num_bytes > 0:
-            data = b"".join(int(i, 16).to_bytes(num_bytes, "big") for i in memory)
-            data = np.frombuffer(data, dtype=np.uint8).reshape(-1, num_bytes)
+            parsed_values: list[int] = []
+            required_bytes = 0
+
+            for value in memory:
+                if isinstance(value, int):
+                    as_int = value
+                else:
+                    v = str(value).strip().replace(" ", "").replace("_", "")
+                    if not v:
+                        as_int = 0
+                    elif v.startswith(("0x", "0X", "0b", "0B")):
+                        as_int = int(v, 0)
+                    elif re.fullmatch(r"[01]+", v):
+                        as_int = int(v, 2)
+                    elif re.fullmatch(r"[0-9]+", v):
+                        as_int = int(v, 10)
+                    else:
+                        as_int = int(v, 16)
+
+                parsed_values.append(as_int)
+                bits = max(1, as_int.bit_length())
+                needed = (bits + 7) // 8
+                required_bytes = max(required_bytes, needed)
+
+            width = max(num_bytes, required_bytes)
+            data = b"".join(v.to_bytes(width, "big") for v in parsed_values)
+            data = np.frombuffer(data, dtype=np.uint8).reshape(-1, width)
         else:
             # no measure in a circuit
             data = np.zeros((len(memory), num_bytes), dtype=np.uint8)
