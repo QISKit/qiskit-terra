@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    ``Gate.control`` now correctly raises :exc:`.CircuitError` on too-short bitstrings. See
+    `#17228 <https://github.com/Qiskit/qiskit/issues/17228>`__.

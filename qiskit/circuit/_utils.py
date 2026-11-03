@@ -82,7 +82,7 @@ def _ctrl_state_to_int(ctrl_state, num_ctrl_qubits):
     if isinstance(ctrl_state, str):
         try:
             if len(ctrl_state) != num_ctrl_qubits:
-                CircuitError("Invalid number of ctrl qubits for given ctrl state")
+                raise CircuitError("Invalid number of ctrl qubits for given ctrl state")
             ctrl_state = int(ctrl_state, 2)
         except ValueError as ex:
             raise CircuitError("invalid control bit string: " + ctrl_state) from ex

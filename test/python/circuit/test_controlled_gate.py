@@ -185,6 +185,15 @@ class TestControlledGate(QiskitTestCase):
             CCXGate().control(2, ctrl_state=3, annotated=False),
         )
 
+    @data("1", "111")
+    def test_control_parameters_reject_mismatched_string_length(self, ctrl_state):
+        with self.assertRaisesRegex(CircuitError, "Invalid number of ctrl qubits"):
+            HGate().control(
+                num_ctrl_qubits=2,
+                ctrl_state=ctrl_state,
+                annotated=False,
+            )
+
     def test_controlled_ry(self):
         """Test the creation of a controlled RY gate."""
         theta = 0.5
