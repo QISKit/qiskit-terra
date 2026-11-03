@@ -50,6 +50,7 @@ cbindgen = "0.29.4"
 mimalloc = "0.1.52"
 npyz = { version = "0.9.1", features = ["complex"] }
 tempfile = "3.0"
+mem_dbg = { version = "0.2", features = ["derive"] }
 
 # Most of the crates don't need the feature `extension-module`, since only `qiskit-pyext` builds an
 # actual C extension (the feature disables linking in `libpython`, which is forbidden in Python

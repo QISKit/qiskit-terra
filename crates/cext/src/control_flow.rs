@@ -27,7 +27,7 @@ use qiskit_circuit::parameter::symbol_expr::Symbol;
 use qiskit_circuit::{Clbit, Qubit};
 use uuid::Uuid;
 
-use crate::classical_expr::{CDurationInfo, CDurationType, CDurationValue};
+use crate::classical_expr::{CBigUint, CDurationInfo, CDurationType, CDurationValue};
 use crate::util;
 use num_traits::ToPrimitive;
 
@@ -702,6 +702,49 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_uint(
     };
 
     value.to_u64().unwrap_or(u64::MAX)
+}
+
+/// @ingroup QkControlFlow
+/// Get the condition value of the classical register condition for a control flow instruction.
+///
+/// Extracts the condition as an unsigned integer value from an IfElse or While
+/// instruction that has a classical register condition.
+///
+/// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
+///     an IfElse or While instruction with a classical register condition.
+///
+/// @return The condition value.
+///
+/// Panics if `cf_inst` is not an IfElse or While control flow instruction where the condition is a
+/// register type.
+///
+/// # Example
+/// ```c
+/// // Assuming cf_inst is an IfElse or While instruction with a register condition
+/// QkBigUint reg_cond_value = qk_control_flow_condition_reg_cond_uint(cf_inst);
+/// // Use reg_cond_value...
+/// qk_biguint_clear(&reg_cond_value);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``cf_inst`` is not a valid pointer to a ``QkControlFlowInstruction``.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_biguint(
+    cf_inst: *const CControlFlowInstruction,
+) -> CBigUint {
+    // SAFETY: Per documentation, cf_inst is a valid pointer to a CControlFlowInstruction.
+    let cf_inst = unsafe { &*cf_inst };
+
+    let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
+        return CBigUint::ZERO;
+    };
+
+    let Condition::Register(_, value) = condition else {
+        return CBigUint::ZERO;
+    };
+
+    CBigUint::from_biguint(value)
 }
 
 /// @ingroup QkControlFlow
