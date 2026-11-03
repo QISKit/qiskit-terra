@@ -494,7 +494,7 @@ pub unsafe extern "C" fn qk_control_flow_clbit_map(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction.
 ///
-/// @return The condition type if `cf_inst` if an if-else block or while loop, otherwise
+/// @return The condition type if `cf_inst` is the expected instruction, otherwise
 ///         `QkConditionType_Unknown`.
 ///
 /// # Example
@@ -524,7 +524,7 @@ pub unsafe extern "C" fn qk_control_flow_condition_type(
     // SAFETY: Per documentation, cf_inst is a valid pointer to a CControlFlowInstruction.
     let cf_inst = unsafe { &*cf_inst };
 
-    if let Some(condition) = if_else_or_while_condition(cf_inst.control_flow_inst()) {
+    if let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) {
         CConditionType::from(condition)
     } else {
         CConditionType::Unknown
@@ -560,21 +560,21 @@ pub unsafe extern "C" fn qk_control_flow_condition_bit_info(
     // SAFETY: Per documentation, cf_inst is a valid pointer to a CControlFlowInstruction.
     let cf_inst = unsafe { &*cf_inst };
 
-    const NOT_CONDITION: CConditionBitInfo = CConditionBitInfo {
+    const UNEXPECTED: CConditionBitInfo = CConditionBitInfo {
         clbit: u32::MAX,
         condition: false,
     };
 
-    let Some(condition) = if_else_or_while_condition(cf_inst.control_flow_inst()) else {
-        return NOT_CONDITION;
+    let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
+        return UNEXPECTED;
     };
 
     let Condition::Bit(clbit, condition) = condition else {
-        return NOT_CONDITION;
+        return UNEXPECTED;
     };
 
     let Some(clbit) = cf_inst.circuit().clbit_index(clbit) else {
-        return NOT_CONDITION;
+        return UNEXPECTED;
     };
 
     CConditionBitInfo {
@@ -612,7 +612,7 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_bit_width(
     // SAFETY: Per documentation, cf_inst is a valid pointer to a CControlFlowInstruction.
     let cf_inst = unsafe { &*cf_inst };
 
-    let Some(condition) = if_else_or_while_condition(cf_inst.control_flow_inst()) else {
+    let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
         return u64::MAX;
     };
 
@@ -653,7 +653,7 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg(
     // SAFETY: Per documentation, cf_inst is a valid pointer to a CControlFlowInstruction.
     let cf_inst = unsafe { &*cf_inst };
 
-    let Some(condition) = if_else_or_while_condition(cf_inst.control_flow_inst()) else {
+    let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
         return ptr::null();
     };
 
@@ -693,7 +693,7 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_uint(
     // SAFETY: Per documentation, cf_inst is a valid pointer to a CControlFlowInstruction.
     let cf_inst = unsafe { &*cf_inst };
 
-    let Some(condition) = if_else_or_while_condition(cf_inst.control_flow_inst()) else {
+    let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
         return u64::MAX;
     };
 
@@ -736,7 +736,7 @@ pub unsafe extern "C" fn qk_control_flow_condition_expr(
     // SAFETY: Per documentation, cf_inst is a valid pointer to a CControlFlowInstruction.
     let cf_inst = unsafe { &*cf_inst };
 
-    let Some(condition) = if_else_or_while_condition(cf_inst.control_flow_inst()) else {
+    let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
         return ptr::null();
     };
 
@@ -2272,7 +2272,7 @@ pub unsafe extern "C" fn inner_test_control_flow_circuit() -> *mut CircuitData {
     Box::into_raw(Box::new(circuit))
 }
 
-fn if_else_or_while_condition(instruction: &ControlFlowInstruction) -> Option<&'_ Condition> {
+fn extract_if_while_condition(instruction: &ControlFlowInstruction) -> Option<&'_ Condition> {
     match &instruction.control_flow {
         ControlFlow::IfElse { condition } | ControlFlow::While { condition } => Some(condition),
         _ => None,

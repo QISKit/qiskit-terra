@@ -417,10 +417,10 @@ impl From<&Duration> for CDurationInfo {
 
 #[derive(Debug, Error)]
 #[error("duration is unknown")]
-pub struct TryFromCDurationInfoError;
+pub struct TryFromCDurationError;
 
 impl TryFrom<CDurationInfo> for Duration {
-    type Error = TryFromCDurationInfoError;
+    type Error = TryFromCDurationError;
 
     fn try_from(value: CDurationInfo) -> Result<Self, Self::Error> {
         let duration = match value.ty {
@@ -431,7 +431,7 @@ impl TryFrom<CDurationInfo> for Duration {
             CDurationType::Us => Duration::us(unsafe { value.value.time }),
             CDurationType::Ms => Duration::ms(unsafe { value.value.time }),
             CDurationType::S => Duration::s(unsafe { value.value.time }),
-            CDurationType::Unknown => return Err(TryFromCDurationInfoError),
+            CDurationType::Unknown => return Err(TryFromCDurationError),
         };
 
         Ok(duration)
@@ -1138,7 +1138,7 @@ pub unsafe extern "C" fn inner_test_value(
             ty: Type::Bool,
         },
         CExprType::Duration => {
-            let duration = duration.try_into().expect("duration not unknown");
+            let duration = duration.try_into().expect("duration should not be unknown");
             Value::Duration(duration)
         }
         CExprType::Float => Value::Float {
