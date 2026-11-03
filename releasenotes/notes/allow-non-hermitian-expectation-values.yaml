@@ -1,0 +1,9 @@
+---
+features:
+  - |
+    Added ``allow_non_hermitian`` parameter to
+    :meth:`.BitArray.expectation_values`. When ``True``, non-Hermitian
+    observables with complex coefficients are accepted and the method
+    returns ``complex128`` arrays. Requires both
+    ``ObservablesArray(obs, validate=False)`` (to bypass Hermiticity
+    enforcement) and ``allow_non_hermitian=True`` for complex return.

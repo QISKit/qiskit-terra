@@ -14,6 +14,7 @@
 """
 ND-Array container class for Estimator observables.
 """
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -28,7 +29,6 @@ from qiskit.quantum_info import Pauli, PauliList, SparsePauliOp, SparseObservabl
 
 from .object_array import object_array
 from .shape import ShapedMixin, shape_tuple
-
 
 if TYPE_CHECKING:
     from qiskit.transpiler.layout import TranspileLayout
@@ -122,6 +122,29 @@ class ObservablesArray(ShapedMixin):
             # because the observable is guaranteed to be simplified
             result[full_pauli_str] = np.real(coeff)
 
+        return result
+
+    @staticmethod
+    def _obs_to_complex_dict(obs: SparseObservable) -> Mapping[str, complex]:
+        """Convert a sparse observable to a mapping from Pauli strings to
+        coefficients, preserving complex values (no ``np.real()`` strip)."""
+        result = {}
+        for sparse_pauli_str, pauli_qubits, coeff in obs.to_sparse_list():
+            if len(sparse_pauli_str) == 0:
+                full_pauli_str = "I" * obs.num_qubits
+            else:
+                sorted_lists = sorted(zip(pauli_qubits, sparse_pauli_str))
+                string_fragments = []
+                prev_qubit = -1
+                for qubit, pauli in sorted_lists:
+                    string_fragments.append("I" * (qubit - prev_qubit - 1) + pauli)
+                    prev_qubit = qubit
+                string_fragments.append("I" * (obs.num_qubits - max(pauli_qubits) - 1))
+                full_pauli_str = "".join(string_fragments)[::-1]
+            # Unlike _obs_to_dict (which operates on pre-simplified observables),
+            # _obs_to_complex_dict may receive unsimplified observables with
+            # repeated Pauli terms — accumulate coefficients to avoid data loss.
+            result[full_pauli_str] = result.get(full_pauli_str, 0) + coeff
         return result
 
     def __repr__(self):

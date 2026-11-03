@@ -642,3 +642,19 @@ class ObservablesArrayTestCase(QiskitTestCase):
         invalid_basis = {1: "value", 2: "another_value"}  # Invalid keys (integers)
         with self.assertRaises(TypeError):
             ObservablesArray.coerce_observable(invalid_basis)
+
+    def test_obs_to_complex_dict_accumulates_duplicates(self):
+        """Duplicate Pauli terms in unsimplified observables must be
+        accumulated, not silently overwritten."""
+        obs = qi.SparseObservable.from_list([("Z", 1j), ("Z", 2 + 3j), ("Z", -1j)])
+        result = ObservablesArray._obs_to_complex_dict(obs)
+        # 1j + (2+3j) + (-1j) = 2+3j
+        self.assertEqual(result["Z"], 2 + 3j)
+        # All three terms collapse to one key
+        self.assertEqual(len(result), 1)
+
+    def test_obs_to_complex_dict_cancellation(self):
+        """Terms that cancel to zero should be preserved as 0j, not dropped."""
+        obs = qi.SparseObservable.from_list([("X", 1 + 2j), ("X", -1 - 2j)])
+        result = ObservablesArray._obs_to_complex_dict(obs)
+        self.assertEqual(result["X"], 0j)

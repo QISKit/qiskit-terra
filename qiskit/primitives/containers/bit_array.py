@@ -617,25 +617,28 @@ class BitArray(ShapedMixin):
             num_bits=self.num_bits,
         )
 
-    def expectation_values(self, observables: ObservablesArrayLike) -> NDArray[np.float64]:
+    def expectation_values(
+        self,
+        observables: ObservablesArrayLike,
+        allow_non_hermitian: bool = False,
+    ) -> NDArray[np.float64] | NDArray[np.complex128]:
         """Compute the expectation values of the provided observables, broadcasted against
         this bit array.
-
-        .. note::
-
-            This method returns the real part of the expectation value even if
-            the operator has complex coefficients due to the specification of
-            :func:`~.sampled_expectation_value`.
 
         Args:
             observables: The observable(s) to take the expectation value of.
                 Must have a shape broadcastable with this bit array and
                 the same number of qubits as the number of bits of this bit array.
                 The observables must be diagonal (I, Z, 0 or 1) too.
+            allow_non_hermitian: If True, non-Hermitian observables with complex
+                coefficients are accepted. When passed, the return type becomes
+                ``NDArray[np.complex128]`` for complex-valued coefficients.
+                Default: False.
 
         Returns:
             An array of expectation values whose shape is the broadcast shape of ``observables``
-            and this bit array.
+            and this bit array. The dtype is ``float64``; when ``allow_non_hermitian=True``
+            and the input has complex coefficients, returns ``complex128``.
 
         Raises:
             ValueError: If the provided observables does not have a shape broadcastable with
@@ -643,12 +646,23 @@ class BitArray(ShapedMixin):
             ValueError: If the provided observables does not have the same number of qubits as
                 the number of bits of this bit array.
             ValueError: If the provided observables are not diagonal.
+            ValueError: If ``allow_non_hermitian=False`` and the input is non-Hermitian.
         """
         observables = ObservablesArray.coerce(observables)
         arr_indices = np.fromiter(np.ndindex(self.shape), dtype=object).reshape(self.shape)
         bc_indices, bc_obs = np.broadcast_arrays(arr_indices, observables)
         counts = {}
-        arr = np.zeros_like(bc_indices, dtype=float)
+        arr = np.zeros_like(bc_indices, dtype=complex)
+
+        if allow_non_hermitian:
+            # Rebuild dicts from raw SparseObservable to keep complex coeffs.
+            # Copy bc_obs since broadcast_arrays returns read-only views.
+            bc_obs = bc_obs.copy()
+            raw_obs = observables.sparse_observables_array()  # type: ignore[union-attr]
+            bc_raw = np.broadcast_to(raw_obs, bc_obs.shape)
+            for ndi in np.ndindex(bc_obs.shape):
+                bc_obs[ndi] = ObservablesArray._obs_to_complex_dict(bc_raw[ndi])
+
         for index in np.ndindex(bc_indices.shape):
             loc = bc_indices[index]
             for pauli, coeff in bc_obs[index].items():
@@ -659,7 +673,7 @@ class BitArray(ShapedMixin):
                 except QiskitError as ex:
                     raise ValueError(ex.message) from ex
                 arr[index] += expval * coeff
-        return arr
+        return np.real_if_close(arr)
 
     @staticmethod
     def concatenate(bit_arrays: Sequence[BitArray], axis: int = 0) -> BitArray:
