@@ -227,6 +227,55 @@ class TestPlotHistogram(QiskitVisualizationTestCase):
             "Plot should have the same number of legend items as defined",
         )
 
+    def test_distribution_with_leading_trailing_int_zeros(self):
+        """Test that distributions with int zeros at start/end are detected correctly.
+
+        Regression test for https://github.com/Qiskit/qiskit/issues/11949
+        When a probability distribution has integer zeros at the beginning
+        (before float probabilities), plot_histogram should still detect it
+        as a distribution and not coerce values to integers.
+        """
+        # This distribution has int zeros at the start and end, with float
+        # probabilities in the middle. The old code only checked the first
+        # value's type, incorrectly detecting this as "counts" mode.
+        dist = {
+            0: 0,
+            1: 0,
+            2: 0,
+            3: 0.25,
+            4: 0.50,
+            5: 0.25,
+            6: 0,
+            7: 0,
+        }
+        fig = plot_histogram(dist)
+        self.assertIsInstance(fig, mpl.figure.Figure)
+        # Verify the y-axis label indicates distribution mode, not counts
+        self.assertEqual(fig.axes[0].get_ylabel(), "Quasi-probability")
+        mpl.pyplot.close(fig)
+
+    def test_distribution_detection_with_mixed_int_float_zeros(self):
+        """Test distribution detection with mix of int 0 and float 0.0 values."""
+        # Mix of int 0 and float 0.0 - should be detected as distribution
+        dist = {
+            "00": 0,      # int zero
+            "01": 0.0,    # float zero
+            "10": 0.5,    # float
+            "11": 0.5,    # float
+        }
+        fig = plot_histogram(dist)
+        self.assertIsInstance(fig, mpl.figure.Figure)
+        self.assertEqual(fig.axes[0].get_ylabel(), "Quasi-probability")
+        mpl.pyplot.close(fig)
+
+    def test_pure_counts_still_detected_as_counts(self):
+        """Test that pure integer counts are still detected as counts mode."""
+        counts = {"00": 50, "01": 25, "10": 15, "11": 10}
+        fig = plot_histogram(counts)
+        self.assertIsInstance(fig, mpl.figure.Figure)
+        self.assertEqual(fig.axes[0].get_ylabel(), "Count")
+        mpl.pyplot.close(fig)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

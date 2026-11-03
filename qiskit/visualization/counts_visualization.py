@@ -49,8 +49,8 @@ def _is_deprecated_data_format(data) -> bool:
     if not isinstance(data, list):
         data = [data]
     for dat in data:
-        if isinstance(dat, (QuasiDistribution, ProbDistribution)) or isinstance(
-            next(iter(dat.values())), float
+        if isinstance(dat, (QuasiDistribution, ProbDistribution)) or any(
+            isinstance(v, float) for v in dat.values()
         ):
             return True
     return False
@@ -143,8 +143,8 @@ def plot_histogram(
 
     kind = "counts"
     for dat in data:
-        if isinstance(dat, (QuasiDistribution, ProbDistribution)) or isinstance(
-            next(iter(dat.values())), float
+        if isinstance(dat, (QuasiDistribution, ProbDistribution)) or any(
+            isinstance(v, float) for v in dat.values()
         ):
             kind = "distribution"
     return _plotting_core(

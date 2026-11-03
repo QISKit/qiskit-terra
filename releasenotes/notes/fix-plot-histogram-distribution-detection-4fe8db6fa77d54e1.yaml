@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Fixed an issue where :func:`~qiskit.visualization.plot_histogram` would
+    incorrectly detect probability distributions as counts when the dictionary
+    contained integer zeros before float probability values. The function now
+    checks all values in the dictionary to determine if any are floats, rather
+    than only checking the first value. This fixes cases where distributions
+    like ``{0: 0, 1: 0, 2: 0.5, 3: 0.5}`` were incorrectly treated as counts
+    and had their values coerced to integers, resulting in an empty plot.
+    Fixes `#11949 <https://github.com/Qiskit/qiskit/issues/11949>`__.
