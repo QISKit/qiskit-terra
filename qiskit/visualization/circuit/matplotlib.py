@@ -625,8 +625,8 @@ class MatplotlibDrawer:
                                 raw_gate_width += width
                                 # This is necessary to prevent 1 being added to the width of a
                                 # BoxOp in layer_widths at the end of this method
-                                if isinstance(node.op, BoxOp):
-                                    raw_gate_width -= 0.001
+                                # if isinstance(node.op, BoxOp):  # GJL
+                                #     raw_gate_width -= 0.001
 
                         # Need extra incr of 1.0 for else and case boxes
                         gate_width += raw_gate_width + (1.0 if circ_num > 0 else 0.0)
@@ -774,7 +774,8 @@ class MatplotlibDrawer:
                     node_data[node].inside_flow = True
                     # front_space provides a space for 'If', 'While', etc. which is not
                     # necessary for a BoxOp
-                    front_space = 0 if isinstance(flow_parent.op, BoxOp) else 1
+                    front_space = 1
+#                    front_space = 0 if isinstance(flow_parent.op, BoxOp) else 1
                     node_data[node].x_index = (
                         node_data[flow_parent].x_index + curr_x_index + front_space
                     )
@@ -1607,7 +1608,9 @@ class MatplotlibDrawer:
 
         # If a BoxOp, bring the right side back tight against the gates to allow for
         # better spacing
-        if_width = node_data[node].width[0] + (WID if not isinstance(node.op, BoxOp) else -0.19)
+        # GJL
+#        if_width = node_data[node].width[0] + (WID if not isinstance(node.op, BoxOp) else -0.19)
+        if_width = node_data[node].width[0] + WID
         box_width = if_width
         # Add the else and case widths to the if_width
         for ewidth in node_data[node].width[1:]:
@@ -1643,11 +1646,19 @@ class MatplotlibDrawer:
                 flow_text = " For"
             elif isinstance(node.op, SwitchCaseOp):
                 flow_text = "Switch"
-            elif isinstance(node.op, BoxOp):
-                flow_text = ""
+            elif isinstance(node.op, BoxOp): # GJL
+                if (label := node.op.label) is None:
+                    flow_text = ""
+                else:
+                    flow_text = label
             else:
                 raise RuntimeError(f"unhandled control-flow op: {node.name}")
 
+            if isinstance(node.op, BoxOp): # GJL
+                nlines = flow_text.count("\n") + 1
+                opname_shift = 0.2 * (2 - nlines)
+            else:
+                opname_shift = 0.2
             # Some spacers. op_spacer moves 'Switch' back a bit for alignment,
             # expr_spacer moves the expr over to line up with 'Switch' and
             # empty_default_spacer makes the switch box longer if the default
@@ -1656,13 +1667,14 @@ class MatplotlibDrawer:
                 op_spacer = 0.04
                 expr_spacer = 0.0
                 empty_default_spacer = 0.3 if len(node.op.blocks[-1]) == 0 else 0.0
-            elif isinstance(node.op, BoxOp):
-                # Move the X start position back for a BoxOp, since there is no
-                # leading text. This tightens the BoxOp with other ops.
-                xpos -= 0.15
-                op_spacer = 0.0
-                expr_spacer = 0.0
-                empty_default_spacer = 0.0
+            # GJL
+            # elif isinstance(node.op, BoxOp):
+            #     # Move the X start position back for a BoxOp, since there is no
+            #     # leading text. This tightens the BoxOp with other ops.
+            #     xpos -= 0.15
+            #     op_spacer = 0.0
+            #     expr_spacer = 0.0
+            #     empty_default_spacer = 0.0
             else:
                 op_spacer = 0.08
                 expr_spacer = 0.02
@@ -1684,7 +1696,8 @@ class MatplotlibDrawer:
             # Indicate type of ControlFlowOp and if expression used, print below
             self._ax.text(
                 xpos - x_shift - op_spacer,
-                ypos_max + 0.2 - y_shift,
+                ypos_max + opname_shift - y_shift,
+#                ypos_max + 0.2 - y_shift, # GJL
                 flow_text,
                 ha="left",
                 va="center",
@@ -1699,7 +1712,8 @@ class MatplotlibDrawer:
                 node_data[node].expr_text,
                 ha="left",
                 va="center",
-                fontsize=self._style["sfs"],
+                fontsize=self._style[node_data[node].expr_fontsize],
+#                fontsize=self._style["sfs"],
                 color=node_data[node].tc,
                 clip_on=True,
                 zorder=PORDER_FLOW,
@@ -2075,6 +2089,7 @@ class NodeData:
         self.nest_depth = 0
         self.expr_width = 0.0
         self.expr_text = ""
+        self.expr_fontsize = "sfs"
         self.inside_flow = False
         self.indexset = ()  # List of indices used for ForLoopOp
         self.jump_values = []  # List of jump values used for SwitchCaseOp
