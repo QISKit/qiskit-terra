@@ -66,6 +66,17 @@ impl MirInstruction {
         &self.returns
     }
 
+    /// Run verification on an Mir instruction.
+    ///
+    /// This verification ensures that assumptions for each instruction, and its
+    /// containing operation, hold. Requirements for each operation differ, and
+    /// are described specifically below.
+    ///
+    /// # [`PauliRotation`] Operation
+    ///   1. The number of [`Qid`]s for the instruction match the number of [Pauli](crate::ops::pbc::Pauli)s on the [`PauliRotation`] Operation.
+    ///   2. The [`Qid`]s must in the [`ResourceTable`].
+    ///   3. The [`Qid`]s must have known width (i.e., they cannot be abstract).
+    ///   4. The [`Qid`]s must not be aliased.
     pub fn verify(
         &self,
         resource_table: &ResourceTable,
