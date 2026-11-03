@@ -1501,6 +1501,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "mem_dbg"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83623b4167d3fbfb0f60eaa0cfd0f303a44e50f35a41b8d6bce87ad9d3e81410"
+dependencies = [
+ "bitflags 2.13.2",
+ "mem_dbg-derive",
+]
+
+[[package]]
+name = "mem_dbg-derive"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ac4642a5a1615ce3cdd3479f8d03c05068aab5a285a0722a24d5080d3f3e22"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2358,7 +2379,6 @@ dependencies = [
  "pyo3",
  "qiskit-circuit",
  "qiskit-circuit-library",
- "qiskit-mir",
  "qiskit-passmanager",
  "qiskit-qpy",
  "qiskit-quantum-info",
@@ -2447,6 +2467,7 @@ dependencies = [
  "bytemuck",
  "hashbrown 0.17.1",
  "itertools 0.15.0",
+ "mem_dbg",
  "qiskit-util",
  "rustworkx-core",
  "thiserror 2.0.21",
@@ -2493,7 +2514,6 @@ dependencies = [
  "qiskit-cext-vtable",
  "qiskit-circuit",
  "qiskit-circuit-library",
- "qiskit-mir",
  "qiskit-passmanager",
  "qiskit-qasm2",
  "qiskit-qasm3",
@@ -2575,7 +2595,6 @@ dependencies = [
  "rand_distr 0.6.0",
  "rand_pcg",
  "rayon",
- "rustworkx-core",
  "thiserror 2.0.21",
 ]
 
