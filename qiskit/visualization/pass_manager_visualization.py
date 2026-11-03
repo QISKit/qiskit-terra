@@ -315,7 +315,8 @@ def make_output(graph, raw, filename):
         # pylint says this isn't a method - it is
         graph.write_png(tmppath)
 
-        image = Image.open(tmppath)
+        with Image.open(tmppath) as test_image:
+            image = test_image.copy()
         os.remove(tmppath)
         if filename:
             image.save(filename, "PNG")
