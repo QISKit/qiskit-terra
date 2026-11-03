@@ -76,8 +76,9 @@ handling.*
 
 ## Functions
 
-C FFI functions must use the unsafe `no_mangle` attribute and `extern "C"`
-keyword. The `pub` keyword serves as documentation.
+C FFI functions need `extern "C"` and the unsafe `no_mangle` attribute.
+`no_mangle` turns off name mangling so that callers have a well defined
+symbol to link. The `pub` keyword serves as documentation.
 
 ```rust
 #[unsafe(no_mangle)]
@@ -196,7 +197,7 @@ functions often write to an `out` parameter for the success case. Given an
 `ExitCode`, the callers should have access to a human readable error message.
 
 ```rust
-extern "C" fn qk_obs_matrix(
+pub extern "C" fn qk_obs_matrix(
     obs: &QkObs,
     out: &mut *mut Matrix,
 ) -> ExitCode {
@@ -213,15 +214,21 @@ extern "C" fn qk_obs_matrix(
 }
 ```
 
+### Better Messages
+
+`ExitCode` isn't always enough. To remedy this, some Qiskit functions accept
+`char **`, optionally allocating a message on error. For example,
+`qk_transpile` follows this pattern. The caller is responsible for calling
+`qk_str_free` on the allocated message.
+
 ### Don't Panic!
 
 You can almost always do better than panicking based on caller input. For
 short-lived, experimental programs, panic could be acceptable. However,
 consider that some long-running, production program could depend on Qiskit.
-If a small piece of our hypothetical program uses a Qiskit API incorrectly, it
-would be very unfriendly to crash the entire program! Your code may panic
-without you realizing. For example, the operation `a[i]` panics in the
-out-of-bounds case. 
+If a small part of it uses Qiskit incorrectly, it would be very unfriendly to
+crash the entire program! Your code may panic without you realizing. For
+example, the operation `a[i]` panics in the out-of-bounds case. 
 
 ## Versioning & Backwards Compatibility
 
@@ -292,8 +299,8 @@ file.
 
 C syntax cannot express ownership semantics, so the ownership contract must be
 documented explicitly. Phrases like "takes ownership" or "consumes" aren't
-meaningful to every reader. Instead of, or alongside, those phrases, state what
-the caller _must not_ do for each outcome.
+meaningful to every reader. Alongside those phrases, state what the caller
+_must not_ do for each outcome.
 
 In the example below, `qk_target_add_instruction` takes ownership of `entry`
 only when the instruction is successfully added to the target. The `entry`
@@ -323,7 +330,7 @@ in a **safety comment** so that future readers understand the assumptions you
 made.
 
 ```rust
-unsafe extern "C" fn qk_circuit_free(circuit: *mut Circuit) {
+pub unsafe extern "C" fn qk_circuit_free(circuit: *mut Circuit) {
     if !circuit.is_null() {
         // SAFETY: `circuit` is non-null in this block.
         let circuit = unsafe { Box::from_raw(circuit) };
