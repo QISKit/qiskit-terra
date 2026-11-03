@@ -21,6 +21,7 @@ import warnings
 from unittest.mock import patch
 
 from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister, visualization
+from qiskit.circuit import BoxOp
 from qiskit.utils import optionals
 from qiskit.visualization.circuit import styles, text
 from qiskit.visualization.exceptions import VisualizationError
@@ -28,6 +29,7 @@ from test import QiskitTestCase
 
 if optionals.HAS_MATPLOTLIB:
     from matplotlib import figure
+    from matplotlib.patches import FancyBboxPatch, Rectangle
 if optionals.HAS_PIL:
     from PIL import Image
 
@@ -84,6 +86,28 @@ class TestCircuitDrawer(QiskitTestCase):
                 with self.assertWarnsRegex(UserWarning, "Style JSON file.*not found"):
                     fig = visualization.circuit_drawer(circuit)
                 self.assertIsInstance(fig, figure.Figure)
+
+    @unittest.skipUnless(optionals.HAS_MATPLOTLIB, "Skipped because matplotlib is not available")
+    def test_mpl_empty_box_width(self):
+        """Test an empty `box` with no content is still drawn and has the same footprint as a
+        single-qubit gate."""
+        circuit = QuantumCircuit(1)
+        circuit.append(BoxOp(QuantumCircuit(1)), [0])
+        circuit.x(0)
+
+        ax = visualization.circuit_drawer(circuit, output="mpl").axes[0]
+        # Flow ops (the box) are drawn as `FanceBboxPatch`, plain gates as `Rectangle`. The
+        # axes holds a large negatively-sized background rectangle that is filtered out.
+        boxes = [patch for patch in ax.patches if isinstance(patch, FancyBboxPatch)]
+        gates = [
+            patch
+            for patch in ax.patches
+            if isinstance(patch, Rectangle) and patch.get_width() > 0.0
+        ]
+        self.assertEqual(len(boxes), 1)
+        self.assertEqual(len(gates), 1)
+        self.assertAlmostEqual(boxes[0].get_width(), gates[0].get_width())
+        self.assertAlmostEqual(boxes[0].get_height(), gates[0].get_height())
 
     @unittest.skipUnless(optionals.HAS_MATPLOTLIB, "Skipped because matplotlib is not available")
     def test_user_config_default_output(self):

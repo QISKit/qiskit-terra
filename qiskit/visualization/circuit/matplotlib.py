@@ -1605,9 +1605,15 @@ class MatplotlibDrawer:
         ypos = min(y[1] for y in xy)
         ypos_max = max(y[1] for y in xy)
 
-        # If a BoxOp, bring the right side back tight against the gates to allow for
-        # better spacing
-        if_width = node_data[node].width[0] + (WID if not isinstance(node.op, BoxOp) else -0.19)
+        if not isinstance(node.op, BoxOp):
+            if_width = node_data[node].width[0] + WID
+        elif node_data[node].width[0] > 0.0:
+            # Bring the right side back tight gates to allow for better spacing
+            if_width = node_data[node].width[0] - 0.19
+        else:
+            # Empty BoxOp has no contents so default to single-qubit gate width
+            if_width = WID
+
         box_width = if_width
         # Add the else and case widths to the if_width
         for ewidth in node_data[node].width[1:]:
@@ -1626,11 +1632,12 @@ class MatplotlibDrawer:
             self._style["cc"],
         ]
         # To fold box onto next lines, draw it repeatedly, shifting
-        # it left by x_shift and down by y_shift
+        # it left by x_shift and down by y_shift. Must be drawn at least once
+        # before testing to ensure narrow box in first column does not end at
+        # negative x, resulting in it not being drawn
         fold_level = 0
-        end_x = xpos + box_width
 
-        while end_x > 0.0:
+        while True:
             x_shift = fold_level * self._fold
             y_shift = fold_level * (glob_data["n_lines"] + 1)
             end_x = xpos + box_width - x_shift if self._fold > 0 else 0.0
@@ -1780,6 +1787,8 @@ class MatplotlibDrawer:
                 ewidth_incr += ewidth + 1
 
             fold_level += 1
+            if end_x <= 0.0:
+                break
 
     def _control_gate(self, node, node_data, glob_data, mod_control):
         """Draw a controlled gate"""
