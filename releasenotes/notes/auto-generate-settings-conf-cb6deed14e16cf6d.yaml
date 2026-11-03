@@ -1,0 +1,4 @@
+---
+features_misc:
+  - |
+    Added auto-generation of the ``~/.qiskit/settings.conf`` file with commented-out default configurations if the file does not already exist. Fixed `#12539 <https://github.com/Qiskit/qiskit/issues/12539>`__.

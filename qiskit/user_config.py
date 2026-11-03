@@ -20,6 +20,22 @@ from qiskit import exceptions
 
 DEFAULT_FILENAME = os.path.join(os.path.expanduser("~"), ".qiskit", "settings.conf")
 
+DEFAULT_CONFIG_TEMPLATE = """# This is the auto-generated Qiskit configuration file.
+# To override default settings, uncomment the relevant lines.
+
+[default]
+# circuit_drawer = mpl
+# circuit_mpl_style = default
+# circuit_mpl_style_path = ~/.qiskit:<default location>
+# circuit_reverse_bits = True
+# circuit_idle_wires = False
+# transpile_optimization_level = 1
+# parallel = False
+# num_processes = 4
+# sabre_all_threads = true
+# min_qpy_version = 13
+"""
+
 
 class UserConfig:
     """Class representing a user config file
@@ -309,9 +325,20 @@ def get_config():
     """
     if os.getenv("QISKIT_IGNORE_USER_SETTINGS", "false").lower() == "true":
         return {}
+
     filename = os.getenv("QISKIT_SETTINGS", DEFAULT_FILENAME)
+
     if not os.path.isfile(filename):
+        # Auto-generate the default configuration file if it doesn't exist.
+        try:
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            with open(filename, "w") as cfgfile:
+                cfgfile.write(DEFAULT_CONFIG_TEMPLATE)
+        except OSError:
+            # Silently pass if the user doesn't have write permissions in this environment
+            pass
         return {}
+
     user_config = UserConfig(filename)
     user_config.read_config_file()
     return user_config.settings

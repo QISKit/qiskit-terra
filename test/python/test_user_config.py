@@ -13,6 +13,7 @@
 
 import os
 import configparser as cp
+import tempfile
 from uuid import uuid4
 from unittest import mock
 
@@ -30,6 +31,24 @@ class TestUserConfig(QiskitTestCase):
         config = user_config.UserConfig(self.file_path)
         config.read_config_file()
         self.assertEqual({}, config.settings)
+
+    def test_auto_generate_settings_conf(self):
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fake_settings_path = os.path.join(temp_dir, ".qiskit", "settings.conf")
+            env_vars = {
+                "QISKIT_SETTINGS": fake_settings_path,
+                "QISKIT_IGNORE_USER_SETTINGS": "FALSE",
+            }
+            with mock.patch.dict(os.environ, env_vars):
+                config = user_config.get_config()
+                self.assertEqual({}, config)
+                self.assertTrue(os.path.isfile(fake_settings_path))
+                with open(fake_settings_path) as f:
+                    content = f.read()
+                self.assertIn("[default]", content)
+                self.assertIn("# circuit_drawer = mpl", content)
+                self.assertIn("# transpile_optimization_level = 1", content)
 
     def test_invalid_optimization_level(self):
         test_config = """
