@@ -75,6 +75,24 @@ impl Mir {
         &mut self.symbol_table
     }
 
+    /// Run verification on components that make up Mir.
+    ///
+    /// This walks the data structures for Mir and runs verification on them.
+    /// Some of these verifications will require access to additional data
+    /// structures managed by Mir (e.g., [`MirInstruction::verify()`] requires
+    /// access to the [`ResourceTable`]), thus providing some amount of
+    /// cross-structure consistency and correctness.
+
+    /// Current verification walks
+    /// the instructions list, and for each [`MirInstruction`] verifies that it is
+    /// correct. This should be extended to run similar verification on the
+    /// [`SymbolTable`], and possibly the [`ResourceTable`], ensuring that assumptions
+    /// for each of those data structures are met.
+    ///
+    /// This can be run after individual passes, or after collections of passes,
+    /// to ensure Mir remains consistent throughout the compilation.
+    ///
+    /// This is not intended to be run *during* a pass to ensure correctness.
     pub fn verify(&self) -> Result<(), MirVerificationError> {
         Ok(self
             .instructions
