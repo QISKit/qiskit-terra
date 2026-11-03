@@ -256,7 +256,6 @@ class TestEvolutionGate(QiskitTestCase):
         """Test the evolution circuit of Suzuki Trotter against a manually constructed circuit."""
         qdrift = QDrift(reps=reps, seed=self.seed)
         evo_gate = PauliEvolutionGate(op, time, synthesis=qdrift)
-        evo_gate.definition.decompose()
 
         # manually construct expected evolution
         expected = QuantumCircuit(1)

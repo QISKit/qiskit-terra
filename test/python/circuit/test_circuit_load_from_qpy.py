@@ -328,7 +328,7 @@ class TestLoadFromQPY(QiskitTestCase):
             qc.cx(i, i + 1)
         qc.h(0)
         qc.measure(0, 0)
-        qc.assign_parameters({theta: 3.14})
+        qc.assign_parameters({theta: 3.14}, inplace=True)
 
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)

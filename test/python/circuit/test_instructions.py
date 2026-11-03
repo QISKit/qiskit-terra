@@ -262,7 +262,6 @@ class TestInstructions(QiskitTestCase):
         circ.t(q)
         gate = circ.to_instruction()
         circ = QuantumCircuit(q, name="circ")
-        circ.inverse()
         circ.tdg(q)
         circ.t(q)
         circ.s(q)

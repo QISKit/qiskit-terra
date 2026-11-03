@@ -285,11 +285,11 @@ class TestSabreSwap(QiskitTestCase):
         """Test that SabreSwap doesn't reorder measurements to the same classical bit.
 
         With the particular coupling map used in this test and the 3q ccx gate, the routing would
-        invariably the measurements if the classical successors are not accurately tracked.
+        invariably reorder the measurements if the classical successors are not accurately tracked.
         Regression test of gh-7950."""
         coupling = CouplingMap([(0, 2), (2, 0), (1, 2), (2, 1)])
         qc = QuantumCircuit(3, 1)
-        qc.compose(CCXGate().definition, [0, 1, 2], [])  # Unroll CCX to 2q operations.
+        qc.compose(CCXGate().definition, [0, 1, 2], [], inplace=True)  # Unroll CCX to 2q operations
         qc.h(0)
         qc.barrier()
         qc.measure(0, 0)  # This measure is 50/50 between the Z states.
