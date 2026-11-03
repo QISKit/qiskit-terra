@@ -82,12 +82,12 @@ impl Mir {
     /// structures managed by Mir (e.g., [`MirInstruction::verify()`] requires
     /// access to the [`ResourceTable`]), thus providing some amount of
     /// cross-structure consistency and correctness.
-
-    /// Current verification walks
-    /// the instructions list, and for each [`MirInstruction`] verifies that it is
-    /// correct. This should be extended to run similar verification on the
-    /// [`SymbolTable`], and possibly the [`ResourceTable`], ensuring that assumptions
-    /// for each of those data structures are met.
+    ///
+    /// Current verification walks the instructions list, and for each
+    /// [`MirInstruction`] verifies that it is correct. This should be extended
+    /// to run similar verification on the [`SymbolTable`], and possibly the
+    /// [`ResourceTable`], ensuring that assumptions for each of those data
+    /// structures are met.
     ///
     /// This can be run after individual passes, or after collections of passes,
     /// to ensure Mir remains consistent throughout the compilation.
