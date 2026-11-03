@@ -221,7 +221,7 @@ Synthesis
 =========
 
 Synthesis passes replace high-level objects, unitaries, or arithmetic
-operations with lower-level circuits. They are commonly used before or during
+operations with lower-level instructions. They are commonly used before or during
 basis translation.
 
 The synthesis transpiler plugin documentation can be found in the
