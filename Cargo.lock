@@ -2379,7 +2379,6 @@ dependencies = [
  "pyo3",
  "qiskit-circuit",
  "qiskit-circuit-library",
- "qiskit-mir",
  "qiskit-passmanager",
  "qiskit-qpy",
  "qiskit-quantum-info",
@@ -2515,7 +2514,6 @@ dependencies = [
  "qiskit-cext-vtable",
  "qiskit-circuit",
  "qiskit-circuit-library",
- "qiskit-mir",
  "qiskit-passmanager",
  "qiskit-qasm2",
  "qiskit-qasm3",
@@ -2597,7 +2595,6 @@ dependencies = [
  "rand_distr 0.6.0",
  "rand_pcg",
  "rayon",
- "rustworkx-core",
  "thiserror 2.0.21",
 ]
 
