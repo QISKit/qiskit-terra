@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.ConsolidateBlocks` where setting
+    ``approximation_degree=0.0`` was treated as if it were ``1.0`` (no
+    approximation) when the pass was constructed with loose ``basis_gates``.
+    The two-qubit decomposer used to estimate the size of consolidated blocks
+    now receives the requested approximation degree exactly.
+    Fixed `#8642 <https://github.com/Qiskit/qiskit/issues/8642>`__.

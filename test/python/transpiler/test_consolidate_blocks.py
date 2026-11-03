@@ -452,6 +452,23 @@ class TestConsolidateBlocks(QiskitTestCase):
             out = pm.run(qc)
             self.assertEqual(out, QuantumCircuit(1))
 
+    def test_approximation_degree_zero(self):
+        """Test that approximation degree 0 is not mistaken for the default 1.0.
+
+        Regression test of gh-8642.
+        """
+        qc = QuantumCircuit(2)
+        qc.cx(0, 1)
+
+        pm = PassManager(
+            [
+                Collect2qBlocks(),
+                ConsolidateBlocks(basis_gates=["cx", "u"], approximation_degree=0.0),
+            ]
+        )
+        out = pm.run(qc)
+        self.assertNotIn("cx", out.count_ops())
+
     def test_identity_1q_unitary_is_removed(self):
         """Test that a 1q identity unitary is removed without a basis."""
         qc = QuantumCircuit(5)
