@@ -1,6 +1,13 @@
+# Default all text files to use LF line endings
+* text eol=lf
+
+# Mark PNG files as binary so git doesn't try to mess with the line endings
+*.png binary
+
 # Exclude benchmark qasm and reference text:
 test/benchmarks/qasm/** linguist-generated
 test/python/visualization/references/*.tex linguist-generated
 test/python/visualization/references/*.txt linguist-generated
+
 # Mark qasm libs as qasm not c++
 *.inc linguist-language=OpenQASM
