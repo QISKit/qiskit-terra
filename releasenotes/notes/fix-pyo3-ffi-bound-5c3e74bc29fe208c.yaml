@@ -1,0 +1,3 @@
+fixes:
+  - |
+    Removed the PyO3 upper version bound from ``qiskit-pyo3-ffi``.

@@ -20,5 +20,5 @@ name = "qiskit_pyo3_ffi"
 [dependencies]
 # We don't inherit from the workspace because this crate is intended for distribution to others to
 # use as a dependency.  For PyO3 in particular, we don't want to hard-pin the required version.
-pyo3.version = ">=0.22,<=0.28"
+pyo3.version = ">=0.22"
 num-complex.version = "0.4"
