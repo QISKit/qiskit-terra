@@ -143,6 +143,17 @@ class StatevectorSampler(BaseSamplerV2):
         self._default_shots = default_shots
         self._seed = seed
 
+    def __repr__(self) -> str:
+        """Return a representation of the StatevectorSampler.
+
+        Returns:
+            A string representation showing the default shots and seed information.
+        """
+        return (
+            f"<{self.__class__.__name__} with "
+            f"default_shots={self._default_shots}, seed={self._seed}>"
+        )
+
     @property
     def default_shots(self) -> int:
         """Return the default shots"""

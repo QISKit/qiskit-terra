@@ -1,0 +1,73 @@
+---
+features_circuits:
+  - |
+    Added ``__repr__`` methods to :class:`~qiskit.circuit.Gate` and
+    :class:`~qiskit.circuit.ControlledGate` to provide more informative
+    string representations when inspecting gate objects in interactive
+    environments.
+
+    The :class:`~qiskit.circuit.Gate` representation shows the gate name,
+    label (if set), number of qubits/clbits, and parameters::
+
+        from qiskit.circuit.library import HGate
+
+        h_gate = HGate(label='my_hadamard')
+        print(repr(h_gate))
+        # Output: <HGate 'h' labeled 'my_hadamard' with 1 qubits, 0 clbits and params=[]>
+
+    The :class:`~qiskit.circuit.ControlledGate` representation shows the gate
+    name, label (if set), number of control qubits, control state, and
+    parameters::
+
+        from qiskit.circuit.library import CXGate
+
+        cx_gate = CXGate(label='my_cnot')
+        print(repr(cx_gate))
+        # Output: <CXGate 'cx' labeled 'my_cnot' with 1 control qubits, control state = 1 and params=[]>
+
+    Added ``__repr__`` method to :class:`~qiskit.circuit.QuantumCircuit` to
+    provide a concise summary of the circuit::
+
+        from qiskit.circuit import QuantumCircuit
+
+        qc = QuantumCircuit(2, 2, name='Bell')
+        qc.h(0)
+        qc.cx(0, 1)
+        print(repr(qc))
+        # Output: <QuantumCircuit 'Bell' with 2 qubits, 2 clbits, 2 instructions, and global_phase=0.0>
+
+features_primitives:
+  - |
+    Added ``__repr__`` methods to :class:`~qiskit.primitives.StatevectorSampler`
+    and :class:`~qiskit.primitives.StatevectorEstimator` to show their
+    configuration::
+
+        from qiskit.primitives import StatevectorSampler, StatevectorEstimator
+
+        sampler = StatevectorSampler(default_shots=2048, seed=42)
+        print(repr(sampler))
+        # Output: <StatevectorSampler with default_shots=2048, seed=42>
+
+        estimator = StatevectorEstimator(default_precision=0.01, seed=123)
+        print(repr(estimator))
+        # Output: <StatevectorEstimator with default_precision=0.01, seed=123>
+
+features_transpiler:
+  - |
+    Added ``__repr__`` method to :class:`~qiskit.transpiler.PassManager` to
+    show the number of pass sets, total passes, max iterations, and property
+    information::
+
+        from qiskit.transpiler import PassManager
+        from qiskit.transpiler.passes import Optimize1qGates
+
+        pm = PassManager(Optimize1qGates(), max_iteration=5)
+        print(repr(pm))
+        # Output: <PassManager with 1 sets, 1 passes, 5 max iterations, and 0 properties>
+
+    These representations use the ``<ClassName ...>`` format to provide
+    useful debugging information without attempting to be eval-able, which
+    is more practical for complex objects.
+
+    This addresses issue `#8594 <https://github.com/Qiskit/qiskit/issues/8594>`__.
+

@@ -51,6 +51,33 @@ class PassManager(BasePassManager):
             max_iteration=max_iteration,
         )
 
+    def __repr__(self) -> str:
+        """Return a representation of the PassManager.
+
+        Returns:
+            A string representation showing the number of pass sets, total passes,
+            max iterations, and property information.
+        """
+        if self.property_set is None or len(self.property_set) == 0:
+            properties = "0 properties"
+        else:
+            prop_keys = list(self.property_set.keys())
+            nprops = len(prop_keys)
+            if nprops > 3:
+                _plist = "', '".join(prop_keys[0:3]) + "', ..."
+            else:
+                _plist = "', '".join(prop_keys) + "'"
+            properties = f"{nprops} properties ('{_plist})"
+
+        # _tasks is a list of lists of Task objects
+        npass = sum(len(task_list) for task_list in self._tasks)
+
+        return (
+            f"<{type(self).__name__} with "
+            f"{len(self._tasks)} sets, {npass} passes, "
+            f"{self.max_iteration} max iterations, and {properties}>"
+        )
+
     def _passmanager_frontend(
         self,
         input_program: QuantumCircuit,

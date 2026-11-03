@@ -1608,6 +1608,19 @@ class QuantumCircuit(IR):
             raise TypeError("Only a dictionary is accepted for circuit metadata")
         self._metadata = metadata
 
+    def __repr__(self) -> str:
+        """Return a representation of the QuantumCircuit.
+
+        Returns:
+            A string representation showing the circuit's name, number of qubits,
+            number of classical bits, number of instructions, and global phase.
+        """
+        return (
+            f"<QuantumCircuit '{self.name}' with "
+            f"{self.num_qubits} qubits, {self.num_clbits} clbits, "
+            f"{len(self._data)} instructions, and global_phase={self.global_phase}>"
+        )
+
     def __str__(self) -> str:
         return str(self.draw(output="text"))
 

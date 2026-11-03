@@ -123,6 +123,17 @@ class StatevectorEstimator(BaseEstimatorV2):
         self._default_precision = default_precision
         self._seed = seed
 
+    def __repr__(self) -> str:
+        """Return a representation of the StatevectorEstimator.
+
+        Returns:
+            A string representation showing the default precision and seed information.
+        """
+        return (
+            f"<{self.__class__.__name__} with "
+            f"default_precision={self._default_precision}, seed={self._seed}>"
+        )
+
     @property
     def default_precision(self) -> float:
         """Return the default precision"""
