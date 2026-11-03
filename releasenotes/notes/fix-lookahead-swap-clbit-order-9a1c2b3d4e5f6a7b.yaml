@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    Fixed :class:`.LookaheadSwap` reversing the order of two operations that
+    write to the same classical bit. When an earlier two-qubit operation was
+    temporarily blocked because its qubits were not adjacent, a later operation
+    on independent qubits writing to the same clbit could be mapped ahead of it,
+    reordering the write-after-write dependency on the classical wire. The pass
+    now tracks classical-bit dependencies alongside qubit dependencies.
+    Fixed `#16870 <https://github.com/Qiskit/qiskit/issues/16870>`__.

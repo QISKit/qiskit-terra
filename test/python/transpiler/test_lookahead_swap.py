@@ -19,8 +19,9 @@ from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.passes import LookaheadSwap
 from qiskit.transpiler import CouplingMap, Target
 from qiskit.converters import circuit_to_dag
-from qiskit.circuit.library import CXGate
+from qiskit.circuit.library import CXGate, PauliProductMeasurement
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit
+from qiskit.quantum_info import Pauli
 from test import QiskitTestCase
 
 from ..legacy_cmaps import MELBOURNE_CMAP
@@ -314,6 +315,23 @@ class TestLookaheadSwap(QiskitTestCase):
         self.assertEqual(
             mapped_dag.count_ops().get("swap", 0), dag_circuit.count_ops().get("swap", 0) + 1
         )
+
+    def test_preserves_classical_write_after_write_order(self):
+        """Two operations writing the same clbit must keep their relative order.
+
+        A two-qubit operation on non-adjacent qubits is initially blocked, but a later
+        operation on an independent qubit writing to the same clbit must not be mapped
+        ahead of it, as that reverses the write-after-write order on the classical bit.
+        """
+        circuit = QuantumCircuit(3, 1)
+        circuit.append(PauliProductMeasurement(Pauli("ZZ")), [0, 2], [0])
+        circuit.measure(1, 0)
+        dag_circuit = circuit_to_dag(circuit)
+
+        mapped_dag = LookaheadSwap(CouplingMap.from_line(3)).run(dag_circuit)
+
+        writers = [node.op.name for node in mapped_dag.topological_op_nodes() if node.cargs]
+        self.assertEqual(writers, ["pauli_product_measurement", "measure"])
 
 
 if __name__ == "__main__":

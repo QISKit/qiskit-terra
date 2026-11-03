@@ -289,22 +289,27 @@ def _map_free_gates(state, gates):
             remaining_gates (list): gates that cannot be executed on the layout.
     """
     blocked_qubits = set()
+    blocked_clbits = set()
 
     mapped_gates = []
     remaining_gates = []
     layout_map = state.layout._v2p
 
     for gate in gates:
+        op_node = _first_op_node(gate["graph"])
+        clbits = op_node.cargs
+
         # Gates without a partition (barrier, snapshot, save, load, noise) may
         # still have associated qubits. Look for them in the qargs.
         if not gate["partition"]:
-            qubits = _first_op_node(gate["graph"]).qargs
+            qubits = op_node.qargs
 
             if not qubits:
                 continue
 
-            if blocked_qubits.intersection(qubits):
+            if blocked_qubits.intersection(qubits) or blocked_clbits.intersection(clbits):
                 blocked_qubits.update(qubits)
+                blocked_clbits.update(clbits)
                 remaining_gates.append(gate)
             else:
                 mapped_gate = _transform_gate_for_system(gate, state)
@@ -313,8 +318,9 @@ def _map_free_gates(state, gates):
 
         qubits = gate["partition"][0]
 
-        if blocked_qubits.intersection(qubits):
+        if blocked_qubits.intersection(qubits) or blocked_clbits.intersection(clbits):
             blocked_qubits.update(qubits)
+            blocked_clbits.update(clbits)
             remaining_gates.append(gate)
         elif len(qubits) == 1:
             mapped_gate = _transform_gate_for_system(gate, state)
@@ -324,6 +330,7 @@ def _map_free_gates(state, gates):
             mapped_gates.append(mapped_gate)
         else:
             blocked_qubits.update(qubits)
+            blocked_clbits.update(clbits)
             remaining_gates.append(gate)
 
     return mapped_gates, remaining_gates
