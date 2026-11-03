@@ -16,10 +16,11 @@ Circuit synthesis for the CNOTDihedral class for all-to-all connectivity.
 from qiskit.circuit import QuantumCircuit
 from qiskit.quantum_info import CNOTDihedral
 
-from qiskit.synthesis.cnotdihedral.cnotdihedral_decompose_two_qubits import (
-    synth_cnotdihedral_two_qubits,
+from qiskit._accelerate.synthesis.cnotdihedral import (
+    synth_cnotdihedral_full as synth_cnotdihedral_full_inner,
 )
-from qiskit.synthesis.cnotdihedral.cnotdihedral_decompose_general import synth_cnotdihedral_general
+
+from qiskit.synthesis.cnotdihedral.cnotdihedral_decompose_general import _dihedral_parts
 
 
 def synth_cnotdihedral_full(elem: CNOTDihedral) -> QuantumCircuit:
@@ -43,10 +44,6 @@ def synth_cnotdihedral_full(elem: CNOTDihedral) -> QuantumCircuit:
            *Scalable randomized benchmarking of non-Clifford gates*,
            npj Quantum Inf 2, 16012 (2016).
     """
-
-    num_qubits = elem.num_qubits
-
-    if num_qubits < 3:
-        return synth_cnotdihedral_two_qubits(elem)
-
-    return synth_cnotdihedral_general(elem)
+    return QuantumCircuit._from_circuit_data(
+        synth_cnotdihedral_full_inner(*_dihedral_parts(elem)), legacy_qubits=True
+    )

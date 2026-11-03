@@ -1,0 +1,6 @@
+---
+features_synthesis:
+  - |
+    The functions :func:`.synth_cnotdihedral_two_qubits`, :func:`.synth_cnotdihedral_general`
+    and :func:`.synth_cnotdihedral_full` that synthesize :class:`.CNOTDihedral` elements were
+    ported to Rust, leading to a significant increase in performance.

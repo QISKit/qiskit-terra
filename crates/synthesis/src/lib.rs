@@ -11,6 +11,7 @@
 // that they have been altered from the originals.
 
 pub mod clifford;
+pub mod cnotdihedral;
 pub mod discrete_basis;
 pub mod euler_one_qubit_decomposer;
 pub mod evolution;
@@ -48,6 +49,10 @@ pub fn synthesis(m: &Bound<PyModule>) -> PyResult<()> {
     let clifford_mod = PyModule::new(m.py(), "clifford")?;
     clifford::clifford(&clifford_mod)?;
     m.add_submodule(&clifford_mod)?;
+
+    let cnotdihedral_mod = PyModule::new(m.py(), "cnotdihedral")?;
+    cnotdihedral::cnotdihedral(&cnotdihedral_mod)?;
+    m.add_submodule(&cnotdihedral_mod)?;
 
     let mc_mod = PyModule::new(m.py(), "multi_controlled")?;
     multi_controlled::multi_controlled(&mc_mod)?;
