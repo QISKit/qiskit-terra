@@ -645,12 +645,12 @@ static int test_custom_operation_query(void) {
     uint64_t fee_type = (uint64_t)fee_vtable;
 
     if (foo_vtable == NULL) {
-        printf("Retrieved a Null pointer instead of a Vtable pointer for foo_gate.");
+        fprintf(stderr, "Retrieved a Null pointer instead of a Vtable pointer for foo_gate.");
         res = NullptrError;
         goto exit;
     }
     if (fee_vtable == NULL) {
-        printf("Retrieved a Null pointer instead of a Vtable pointer for fee_gate.");
+        fprintf(stderr, "Retrieved a Null pointer instead of a Vtable pointer for fee_gate.");
         res = NullptrError;
         goto exit;
     }
@@ -678,38 +678,38 @@ static int test_custom_operation_query(void) {
     char *retrieved_name = qk_custom_operation_name(op);
     const char *orig_name = foo_name(gate);
     if (strcmp(retrieved_name, orig_name)) {
-        printf("Retrieved incorrect instruction name. Expected '%s', got '%s'.\n", orig_name,
-               retrieved_name);
+        fprintf(stderr, "Retrieved incorrect instruction name. Expected '%s', got '%s'.\n",
+                orig_name, retrieved_name);
         res = EqualityError;
         goto cleanup_name;
     }
     uint32_t retrieved_num_qubits = qk_custom_operation_num_qubits(op);
     uint32_t orig_num_qubits = foo_num_qubits(gate);
     if (retrieved_num_qubits != orig_num_qubits) {
-        printf("Retrieved incorrect num_qubits for '%s'. Expected %u, got %u.\n", retrieved_name,
-               orig_num_qubits, retrieved_num_qubits);
+        fprintf(stderr, "Retrieved incorrect num_qubits for '%s'. Expected %u, got %u.\n",
+                retrieved_name, orig_num_qubits, retrieved_num_qubits);
         res = EqualityError;
         goto cleanup_name;
     }
     uint32_t retrieved_num_clbits = qk_custom_operation_num_clbits(op);
     uint32_t orig_num_clbits = foo_num_clbits(gate);
     if (retrieved_num_clbits != orig_num_clbits) {
-        printf("Retrieved incorrect num_clbits for '%s'. Expected %u, got %u.\n", retrieved_name,
-               orig_num_clbits, retrieved_num_clbits);
+        fprintf(stderr, "Retrieved incorrect num_clbits for '%s'. Expected %u, got %u.\n",
+                retrieved_name, orig_num_clbits, retrieved_num_clbits);
         res = EqualityError;
         goto cleanup_name;
     }
     uint32_t retrieved_num_params = qk_custom_operation_num_params(op);
     uint32_t orig_num_params = foo_num_params(gate);
     if (retrieved_num_params != orig_num_params) {
-        printf("Retrieved incorrect num_params for '%s'. Expected %u, got %u.\n", retrieved_name,
-               orig_num_params, retrieved_num_params);
+        fprintf(stderr, "Retrieved incorrect num_params for '%s'. Expected %u, got %u.\n",
+                retrieved_name, orig_num_params, retrieved_num_params);
         res = EqualityError;
         goto cleanup_name;
     }
 
     if (qk_custom_operation_is_unitary(op) != true) {
-        printf("Unexpected non-unitary instruction for '%s'.\n", retrieved_name);
+        fprintf(stderr, "Unexpected non-unitary instruction for '%s'.\n", retrieved_name);
         res = EqualityError;
         goto cleanup_name;
     }
@@ -720,10 +720,10 @@ static int test_custom_operation_query(void) {
     char *orig_drawing_foo =
         qk_circuit_draw(qk_custom_operation_definition(op, (const QkParam **)params), NULL);
     if (strcmp(retrieved_drawing_foo, orig_drawing_foo) != 0) {
-        printf("Definitions are not simlar for '%s'.\n", retrieved_name);
-        printf("Expected.\n");
+        fprintf(stderr, "Definitions are not simlar for '%s'.\n", retrieved_name);
+        fprintf(stderr, "Expected.\n");
         print_circuit(retrieved_definition_foo);
-        printf("Got.\n");
+        fprintf(stderr, "Got.\n");
         print_circuit(orig_definition_foo);
         res = EqualityError;
         goto cleanup_definitions;
@@ -731,8 +731,9 @@ static int test_custom_operation_query(void) {
 
     uint64_t retreived_foo_type = qk_custom_operation_type_id(op);
     if (retreived_foo_type != foo_type) {
-        printf("Unexpected type retrieved for '%s'.\n, expected: %" PRIu64 ", got %" PRIu64 "",
-               retrieved_name, foo_type, retreived_foo_type);
+        fprintf(stderr,
+                "Unexpected type retrieved for '%s'.\n, expected: %" PRIu64 ", got %" PRIu64 "",
+                retrieved_name, foo_type, retreived_foo_type);
         res = EqualityError;
         goto cleanup_definitions;
     }
@@ -740,20 +741,20 @@ static int test_custom_operation_query(void) {
     // Should result in corrupted data if wrong.
     struct foo_gate *cast_foo = (struct foo_gate *)qk_custom_operation_raw(op);
     if (cast_foo->num_clbits != test_3q_op.num_clbits) {
-        printf("Unexpected num_clbits retrieved for '%s' pointer.\n, expected: %d, got %d",
-               retrieved_name, test_3q_op.num_clbits, cast_foo->num_clbits);
+        fprintf(stderr, "Unexpected num_clbits retrieved for '%s' pointer.\n, expected: %d, got %d",
+                retrieved_name, test_3q_op.num_clbits, cast_foo->num_clbits);
         res = EqualityError;
         goto cleanup_definitions;
     }
     if (cast_foo->num_qubits != test_3q_op.num_qubits) {
-        printf("Unexpected num_qubits retrieved for '%s' pointer.\n, expected: %d, got %d",
-               retrieved_name, test_3q_op.num_qubits, cast_foo->num_qubits);
+        fprintf(stderr, "Unexpected num_qubits retrieved for '%s' pointer.\n, expected: %d, got %d",
+                retrieved_name, test_3q_op.num_qubits, cast_foo->num_qubits);
         res = EqualityError;
         goto cleanup_definitions;
     }
     if (cast_foo->num_params != test_3q_op.num_params) {
-        printf("Unexpected num_params retrieved for '%s' pointer.\n, expected: %d, got %d",
-               retrieved_name, test_3q_op.num_params, cast_foo->num_params);
+        fprintf(stderr, "Unexpected num_params retrieved for '%s' pointer.\n, expected: %d, got %d",
+                retrieved_name, test_3q_op.num_params, cast_foo->num_params);
         res = EqualityError;
         goto cleanup_definitions;
     }
@@ -768,38 +769,38 @@ static int test_custom_operation_query(void) {
     char *retrieved_name_1 = qk_custom_operation_name(op);
     const char *orig_name_1 = fee_name(gate);
     if (strcmp(retrieved_name_1, orig_name_1)) {
-        printf("Retrieved incorrect instruction name. Expected '%s', got '%s'.\n", orig_name_1,
-               retrieved_name_1);
+        fprintf(stderr, "Retrieved incorrect instruction name. Expected '%s', got '%s'.\n",
+                orig_name_1, retrieved_name_1);
         res = EqualityError;
         goto cleanup_name_1;
     }
     retrieved_num_qubits = qk_custom_operation_num_qubits(op);
     orig_num_qubits = fee_num_qubits(gate);
     if (retrieved_num_qubits != orig_num_qubits) {
-        printf("Retrieved incorrect num_qubits for '%s'. Expected %u, got %u.\n", retrieved_name_1,
-               orig_num_qubits, retrieved_num_qubits);
+        fprintf(stderr, "Retrieved incorrect num_qubits for '%s'. Expected %u, got %u.\n",
+                retrieved_name_1, orig_num_qubits, retrieved_num_qubits);
         res = EqualityError;
         goto cleanup_name_1;
     }
     retrieved_num_clbits = qk_custom_operation_num_clbits(op);
     orig_num_clbits = fee_num_clbits(gate);
     if (retrieved_num_clbits != orig_num_clbits) {
-        printf("Retrieved incorrect num_clbits for '%s'. Expected %u, got %u.\n", retrieved_name_1,
-               orig_num_clbits, retrieved_num_clbits);
+        fprintf(stderr, "Retrieved incorrect num_clbits for '%s'. Expected %u, got %u.\n",
+                retrieved_name_1, orig_num_clbits, retrieved_num_clbits);
         res = EqualityError;
         goto cleanup_name_1;
     }
     retrieved_num_params = qk_custom_operation_num_params(op);
     orig_num_params = fee_num_params(gate);
     if (retrieved_num_params != orig_num_params) {
-        printf("Retrieved incorrect num_params for '%s'. Expected %u, got %u.\n", retrieved_name_1,
-               orig_num_params, retrieved_num_params);
+        fprintf(stderr, "Retrieved incorrect num_params for '%s'. Expected %u, got %u.\n",
+                retrieved_name_1, orig_num_params, retrieved_num_params);
         res = EqualityError;
         goto cleanup_name_1;
     }
 
     if (qk_custom_operation_is_unitary(op) != true) {
-        printf("Unexpected non-unitary instruction for '%s'.\n", retrieved_name_1);
+        fprintf(stderr, "Unexpected non-unitary instruction for '%s'.\n", retrieved_name_1);
         res = EqualityError;
         goto cleanup_name_1;
     }
@@ -807,8 +808,8 @@ static int test_custom_operation_query(void) {
     char *retrieved_label = qk_custom_operation_label(op);
     const char *orig_label = fee_label(gate);
     if (strcmp(retrieved_label, orig_label)) {
-        printf("Retrieved incorrect instruction label. Expected '%s', got '%s'.\n", orig_label,
-               retrieved_label);
+        fprintf(stderr, "Retrieved incorrect instruction label. Expected '%s', got '%s'.\n",
+                orig_label, retrieved_label);
         res = EqualityError;
         goto cleanup_label;
     }
@@ -820,10 +821,10 @@ static int test_custom_operation_query(void) {
     char *orig_drawing =
         qk_circuit_draw(qk_custom_operation_definition(op, (const QkParam **)params), NULL);
     if (strcmp(retrieved_drawing, orig_drawing) != 0) {
-        printf("Definitions are not simlar for '%s'.\n", retrieved_name_1);
-        printf("Expected.\n");
+        fprintf(stderr, "Definitions are not simlar for '%s'.\n", retrieved_name_1);
+        fprintf(stderr, "Expected.\n");
         print_circuit(retrieved_definition);
-        printf("Got.\n");
+        fprintf(stderr, "Got.\n");
         print_circuit(orig_definition);
         res = EqualityError;
         goto cleanup_definitions_1;
@@ -831,8 +832,9 @@ static int test_custom_operation_query(void) {
 
     uint64_t retreived_fee_type = qk_custom_operation_type_id(op);
     if (retreived_fee_type != fee_type) {
-        printf("Unexpected type retrieved for '%s'.\n, expected: %" PRIu64 ", got %" PRIu64 "",
-               retrieved_name, fee_type, retreived_fee_type);
+        fprintf(stderr,
+                "Unexpected type retrieved for '%s'.\n, expected: %" PRIu64 ", got %" PRIu64 "",
+                retrieved_name, fee_type, retreived_fee_type);
         res = EqualityError;
         goto cleanup_definitions_1;
     }
@@ -840,8 +842,8 @@ static int test_custom_operation_query(void) {
     // Should result in corrupted data if wrong.
     struct fee_gate *cast_fee = (struct fee_gate *)qk_custom_operation_raw(op);
     if (strcmp(cast_fee->label, test_2q_op.label) != 0) {
-        printf("Unexpected label retrieved for '%s' pointer.\n, expected: %s, got %s",
-               retrieved_name, test_2q_op.label, cast_fee->label);
+        fprintf(stderr, "Unexpected label retrieved for '%s' pointer.\n, expected: %s, got %s",
+                retrieved_name, test_2q_op.label, cast_fee->label);
         res = EqualityError;
         goto cleanup_definitions_1;
     }
@@ -873,7 +875,7 @@ static int test_custom_operation_eq(void) {
 
     const QkCustomOpVtable *vtable = qk_custom_operation_vtable_new(foo_entries);
     if (vtable == NULL) {
-        printf("Retrieved a Null pointer instead of a Vtable pointer.");
+        fprintf(stderr, "Retrieved a Null pointer instead of a Vtable pointer.");
         return NullptrError;
     }
 
@@ -888,18 +890,18 @@ static int test_custom_operation_eq(void) {
     QkCustomOp *op_c = qk_custom_operation_new(foo_clone(&c), vtable);
 
     if (!qk_custom_operation_eq(op_a, op_b)) {
-        printf("Expected operations with equal attributes to compare equal.\n");
+        fprintf(stderr, "Expected operations with equal attributes to compare equal.\n");
         res = EqualityError;
         goto cleanup;
     }
     // Equality should be reflexive and symmetric.
     if (!qk_custom_operation_eq(op_a, op_a) || !qk_custom_operation_eq(op_b, op_a)) {
-        printf("Expected equality to be reflexive and symmetric.\n");
+        fprintf(stderr, "Expected equality to be reflexive and symmetric.\n");
         res = EqualityError;
         goto cleanup;
     }
     if (qk_custom_operation_eq(op_a, op_c)) {
-        printf("Expected operations with different attributes to compare unequal.\n");
+        fprintf(stderr, "Expected operations with different attributes to compare unequal.\n");
         res = EqualityError;
         goto cleanup;
     }
@@ -919,7 +921,7 @@ static int test_custom_operation_type_id(void) {
     const QkCustomOpVtable *foo_vtable = qk_custom_operation_vtable_new(foo_entries);
     const QkCustomOpVtable *fee_vtable = qk_custom_operation_vtable_new(fee_entries);
     if (foo_vtable == NULL || fee_vtable == NULL) {
-        printf("Retrieved a Null pointer instead of a Vtable pointer.");
+        fprintf(stderr, "Retrieved a Null pointer instead of a Vtable pointer.");
         return NullptrError;
     }
 
@@ -936,14 +938,15 @@ static int test_custom_operation_type_id(void) {
     uint64_t id_f = qk_custom_operation_type_id(op_f);
 
     if (id_a != id_b) {
-        printf("Expected equal type ids for operations sharing a vtable. Got %" PRIu64
-               " and %" PRIu64 ".\n",
-               id_a, id_b);
+        fprintf(stderr,
+                "Expected equal type ids for operations sharing a vtable. Got %" PRIu64
+                " and %" PRIu64 ".\n",
+                id_a, id_b);
         res = EqualityError;
         goto cleanup;
     }
     if (id_a == id_f) {
-        printf("Expected different type ids for operations with different vtables.\n");
+        fprintf(stderr, "Expected different type ids for operations with different vtables.\n");
         res = EqualityError;
         goto cleanup;
     }
@@ -964,7 +967,7 @@ static int test_custom_operation_num_ctrl_qubits(void) {
     const QkCustomOpVtable *ctrl_vtable = qk_custom_operation_vtable_new(ctrl_entries);
     const QkCustomOpVtable *foo_vtable = qk_custom_operation_vtable_new(foo_entries);
     if (ctrl_vtable == NULL || foo_vtable == NULL) {
-        printf("Retrieved a Null pointer instead of a Vtable pointer.");
+        fprintf(stderr, "Retrieved a Null pointer instead of a Vtable pointer.");
         return NullptrError;
     }
 
@@ -976,15 +979,15 @@ static int test_custom_operation_num_ctrl_qubits(void) {
 
     uint32_t ctrl = qk_custom_operation_num_ctrl_qubits(op_ctrl);
     if (ctrl != cg.num_ctrl_qubits) {
-        printf("Retrieved incorrect num_ctrl_qubits. Expected %u, got %u.\n", cg.num_ctrl_qubits,
-               ctrl);
+        fprintf(stderr, "Retrieved incorrect num_ctrl_qubits. Expected %u, got %u.\n",
+                cg.num_ctrl_qubits, ctrl);
         res = EqualityError;
         goto cleanup;
     }
     // ``foo_gate`` does not provide slot 6, so it should default to 0.
     uint32_t foo_ctrl = qk_custom_operation_num_ctrl_qubits(op_foo);
     if (foo_ctrl != 0) {
-        printf("Expected default num_ctrl_qubits of 0, got %u.\n", foo_ctrl);
+        fprintf(stderr, "Expected default num_ctrl_qubits of 0, got %u.\n", foo_ctrl);
         res = EqualityError;
         goto cleanup;
     }
@@ -1003,7 +1006,7 @@ static int test_custom_operation_directive(void) {
 
     const QkCustomOpVtable *dir_vtable = qk_custom_operation_vtable_new(dir_entries);
     if (dir_vtable == NULL) {
-        printf("Retrieved a Null pointer instead of a Vtable pointer.");
+        fprintf(stderr, "Retrieved a Null pointer instead of a Vtable pointer.");
         return NullptrError;
     }
 
@@ -1011,12 +1014,12 @@ static int test_custom_operation_directive(void) {
     QkCustomOp *op = qk_custom_operation_new(&dg, dir_vtable);
 
     if (!qk_custom_operation_directive(op)) {
-        printf("Expected operation to be a directive.\n");
+        fprintf(stderr, "Expected operation to be a directive.\n");
         qk_custom_operation_free(op);
         return EqualityError;
     }
     if (qk_custom_operation_is_unitary(op)) {
-        printf("Expected directive operation to be non-unitary.\n");
+        fprintf(stderr, "Expected directive operation to be non-unitary.\n");
         qk_custom_operation_free(op);
         return EqualityError;
     }
@@ -1029,17 +1032,17 @@ static int test_custom_operation_directive(void) {
 
     const QkCustomOp *retrieved = qk_circuit_get_custom_operation(circuit, 0);
     if (retrieved == NULL) {
-        printf("Retrieved a Null pointer instead of a custom operation.\n");
+        fprintf(stderr, "Retrieved a Null pointer instead of a custom operation.\n");
         res = NullptrError;
         goto cleanup;
     }
     if (!qk_custom_operation_directive(retrieved)) {
-        printf("Expected retrieved operation to be a directive.\n");
+        fprintf(stderr, "Expected retrieved operation to be a directive.\n");
         res = EqualityError;
         goto cleanup;
     }
     if (qk_custom_operation_is_unitary(retrieved)) {
-        printf("Expected retrieved directive operation to be non-unitary.\n");
+        fprintf(stderr, "Expected retrieved directive operation to be non-unitary.\n");
         res = EqualityError;
         goto cleanup;
     }
@@ -1062,7 +1065,7 @@ static int test_custom_vtable_missing_required_slot(void) {
 
     const QkCustomOpVtable *vtable = qk_custom_operation_vtable_new(bad_entries);
     if (vtable != NULL) {
-        printf("Expected a null vtable when a required slot is missing.\n");
+        fprintf(stderr, "Expected a null vtable when a required slot is missing.\n");
         res = RuntimeError;
     }
 
@@ -1076,7 +1079,7 @@ static int test_custom_operation_defaults(void) {
 
     const QkCustomOpVtable *dir_vtable = qk_custom_operation_vtable_new(dir_entries);
     if (dir_vtable == NULL) {
-        printf("Retrieved a Null pointer instead of a Vtable pointer.");
+        fprintf(stderr, "Retrieved a Null pointer instead of a Vtable pointer.");
         return NullptrError;
     }
 
@@ -1084,17 +1087,17 @@ static int test_custom_operation_defaults(void) {
     QkCustomOp *op = qk_custom_operation_new(&dir_g, dir_vtable);
 
     if (qk_custom_operation_num_ctrl_qubits(op) != 0) {
-        printf("Expected default num_ctrl_qubits of 0.\n");
+        fprintf(stderr, "Expected default num_ctrl_qubits of 0.\n");
         res = EqualityError;
         goto cleanup;
     }
     if (qk_custom_operation_label(op) != NULL) {
-        printf("Expected default label to be NULL.\n");
+        fprintf(stderr, "Expected default label to be NULL.\n");
         res = EqualityError;
         goto cleanup;
     }
     if (qk_custom_operation_definition(op, NULL) != NULL) {
-        printf("Expected default definition to be NULL.\n");
+        fprintf(stderr, "Expected default definition to be NULL.\n");
         res = EqualityError;
         goto cleanup;
     }
@@ -1111,7 +1114,7 @@ static int test_custom_operation_in_dag_query(void) {
 
     const QkCustomOpVtable *fee_vtable = qk_custom_operation_vtable_new(fee_entries);
     if (fee_vtable == NULL) {
-        printf("Retrieved a Null pointer instead of a Vtable pointer.");
+        fprintf(stderr, "Retrieved a Null pointer instead of a Vtable pointer.");
         return NullptrError;
     }
 
@@ -1129,41 +1132,41 @@ static int test_custom_operation_in_dag_query(void) {
     // NOTE: this consumes ``op``, so it must not be freed afterwards.
     if (qk_dag_apply_custom_operation(dag, op, qubits, NULL, (QkParam **)params, &idx, false) !=
         QkExitCode_Success) {
-        printf("Unable to add custom operation to dag.\n");
+        fprintf(stderr, "Unable to add custom operation to dag.\n");
         res = RuntimeError;
         goto cleanup;
     }
 
     if (qk_dag_op_node_kind(dag, idx) != QkOperationKind_Unknown) {
-        printf("Expected a custom (unknown) operation kind.\n");
+        fprintf(stderr, "Expected a custom (unknown) operation kind.\n");
         res = EqualityError;
         goto cleanup;
     }
 
     const QkCustomOp *retrieved = qk_dag_get_custom_operation(dag, idx);
     if (retrieved == NULL) {
-        printf("Retrieved a Null pointer instead of a custom operation.\n");
+        fprintf(stderr, "Retrieved a Null pointer instead of a custom operation.\n");
         res = NullptrError;
         goto cleanup;
     }
 
     char *retrieved_name = qk_custom_operation_name(retrieved);
     if (strcmp(retrieved_name, fee_name(&fg))) {
-        printf("Retrieved incorrect name. Expected '%s', got '%s'.\n", fee_name(&fg),
-               retrieved_name);
+        fprintf(stderr, "Retrieved incorrect name. Expected '%s', got '%s'.\n", fee_name(&fg),
+                retrieved_name);
         res = EqualityError;
         goto cleanup_name;
     }
     if (qk_custom_operation_num_qubits(retrieved) != fee_num_qubits(&fg)) {
-        printf("Retrieved incorrect num_qubits. Expected %u, got %u.\n", fee_num_qubits(&fg),
-               qk_custom_operation_num_qubits(retrieved));
+        fprintf(stderr, "Retrieved incorrect num_qubits. Expected %u, got %u.\n",
+                fee_num_qubits(&fg), qk_custom_operation_num_qubits(retrieved));
         res = EqualityError;
         goto cleanup_name;
     }
     char *retrieved_label = qk_custom_operation_label(retrieved);
     if (strcmp(retrieved_label, fee_label(&fg))) {
-        printf("Retrieved incorrect label. Expected '%s', got '%s'.\n", fee_label(&fg),
-               retrieved_label);
+        fprintf(stderr, "Retrieved incorrect label. Expected '%s', got '%s'.\n", fee_label(&fg),
+                retrieved_label);
         res = EqualityError;
         goto cleanup_label;
     }
@@ -1173,17 +1176,17 @@ static int test_custom_operation_in_dag_query(void) {
         qk_custom_operation_definition(retrieved, (const QkParam **)params);
     QkCircuit *orig_definition = fee_definition(&fg, (const QkParam **)params);
     if (retrieved_definition == NULL) {
-        printf("Expected a non-null definition.\n");
+        fprintf(stderr, "Expected a non-null definition.\n");
         res = NullptrError;
         goto cleanup_definitions;
     }
     char *retrieved_drawing = qk_circuit_draw(retrieved_definition, NULL);
     char *orig_drawing = qk_circuit_draw(orig_definition, NULL);
     if (strcmp(retrieved_drawing, orig_drawing) != 0) {
-        printf("Definitions are not similar for '%s'.\n", retrieved_name);
-        printf("Expected.\n");
+        fprintf(stderr, "Definitions are not similar for '%s'.\n", retrieved_name);
+        fprintf(stderr, "Expected.\n");
         print_circuit(orig_definition);
-        printf("Got.\n");
+        fprintf(stderr, "Got.\n");
         print_circuit(retrieved_definition);
         res = EqualityError;
     }
