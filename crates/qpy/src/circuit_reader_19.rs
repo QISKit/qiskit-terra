@@ -616,7 +616,7 @@ fn unpack_param_data_v19(
         formats::ParamDataPack::Float64(value) => GenericValue::Float64(*value),
         formats::ParamDataPack::Complex64(value) => GenericValue::Complex64(*value),
         formats::ParamDataPack::CaseDefault => GenericValue::CaseDefault,
-        formats::ParamDataPack::Range(start, stop, step) => GenericValue::Range(PyRange {
+        formats::ParamDataPack::Range { start, stop, step } => GenericValue::Range(PyRange {
             start: isize::try_from(*start).map_err(|_| {
                 QpyError::InvalidParameter("range start does not fit in isize".to_string())
             })?,
