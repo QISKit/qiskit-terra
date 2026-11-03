@@ -14,6 +14,7 @@
 
 import unittest
 import os
+import sys
 
 from qiskit.transpiler import CouplingMap, Layout
 from qiskit.transpiler.passmanager import PassManager
@@ -98,6 +99,10 @@ class TestPassManagerDrawer(QiskitVisualizationTestCase):
         finally:
             os.remove(filename)
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "Requires the Windows PermissionError fix in Qiskit/qiskit#17031",
+    )
     def test_pass_manager_drawer_pygraphviz_render(self):
         """Test pass manager drawing with pygraphviz rendering directly to an image."""
         from PIL import Image
