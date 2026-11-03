@@ -20,7 +20,6 @@ num-complex.workspace = true
 qiskit-quantum-info.workspace = true
 qiskit-circuit  = { workspace = true, features = ["passmanager"] }
 qiskit-circuit-library.workspace = true
-qiskit-mir.workspace = true
 qiskit-passmanager.workspace = true
 qiskit-transpiler.workspace = true
 qiskit-qpy.workspace = true
