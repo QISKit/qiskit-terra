@@ -443,7 +443,6 @@ pub fn native_load_qpy(data: &[u8]) -> Result<Vec<CircuitData>, QpyError> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::value::serialize;
     use qiskit_circuit::Qubit;
     use qiskit_circuit::operations::{DelayUnit, OperationRef, Param, StandardInstruction};
     use qiskit_circuit::packed_instruction::PackedOperation;
