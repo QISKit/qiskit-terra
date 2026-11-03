@@ -26,3 +26,4 @@ pub mod split_2q_unitaries;
 pub mod two_qubit_peephole;
 pub mod unitary_synthesis;
 pub mod vf2;
+pub mod wrap_angles;
