@@ -73,10 +73,10 @@ pub(crate) fn pack_expression_value(
             )
         }
     };
-    Ok(PackedExpression::Value {
-        kind: pack_expression_type(ty),
-        value: value_pack,
-    })
+    Ok(PackedExpression::Value(
+        pack_expression_type(ty),
+        value_pack,
+    ))
 }
 
 pub(crate) fn unpack_expression_value(
@@ -117,20 +117,17 @@ pub(crate) fn pack_expression_var(
         ),
         Var::Standalone { uuid, name, ty } => (
             ty,
-            ExpressionVarElementPack::Index(
-                *qpy_data.standalone_var_indices.get(uuid).ok_or_else(|| {
+            ExpressionVarElementPack::Uuid(*qpy_data.standalone_var_indices.get(uuid).ok_or_else(
+                || {
                     QpyError::InvalidParameter(format!(
                         "Could not find standalone variable {:?} in the qpy data",
                         name
                     ))
-                })?,
-            ),
+                },
+            )?),
         ),
     };
-    Ok(PackedExpression::Var {
-        kind: pack_expression_type(ty),
-        value: value_pack,
-    })
+    Ok(PackedExpression::Var(pack_expression_type(ty), value_pack))
 }
 
 pub(crate) fn unpack_expression_var(
@@ -147,7 +144,7 @@ pub(crate) fn unpack_expression_var(
             register: creg_by_name(&packed_register.name, qpy_data)?,
             ty,
         }),
-        ExpressionVarElementPack::Index(key) => {
+        ExpressionVarElementPack::Uuid(key) => {
             let var = qpy_data.standalone_vars.get(&key).ok_or_else(|| {
                 QpyError::InvalidParameter("Standalone var not found in qpy data".to_string())
             })?; // note: this is not an actual expr::Var; merely a key for this var inside the circuit data
@@ -173,9 +170,9 @@ pub(crate) fn pack_expression(
     Ok(match exp {
         Expr::Value(value) => pack_expression_value(value, qpy_data)?,
         Expr::Var(var) => pack_expression_var(var, qpy_data)?,
-        Expr::Stretch(stretch) => PackedExpression::Stretch {
-            kind: ExpressionTypePack::Duration,
-            index: *qpy_data
+        Expr::Stretch(stretch) => PackedExpression::Stretch(
+            ExpressionTypePack::Duration,
+            *qpy_data
                 .standalone_var_indices
                 .get(&stretch.uuid)
                 .ok_or_else(|| {
@@ -184,28 +181,28 @@ pub(crate) fn pack_expression(
                         stretch.name
                     ))
                 })?,
-        },
-        Expr::Index(node) => PackedExpression::Index {
-            kind: pack_expression_type(&node.ty),
-            target: Box::new(pack_expression(&node.target, qpy_data)?),
-            index: Box::new(pack_expression(&node.index, qpy_data)?),
-        },
-        Expr::Cast(node) => PackedExpression::Cast {
-            kind: pack_expression_type(&node.ty),
-            implicit: node.implicit as u8,
-            operand: Box::new(pack_expression(&node.operand, qpy_data)?),
-        },
-        Expr::Unary(node) => PackedExpression::Unary {
-            kind: pack_expression_type(&node.ty),
-            op: node.op as u8,
-            operand: Box::new(pack_expression(&node.operand, qpy_data)?),
-        },
-        Expr::Binary(node) => PackedExpression::Binary {
-            kind: pack_expression_type(&node.ty),
-            op: node.op as u8,
-            left: Box::new(pack_expression(&node.left, qpy_data)?),
-            right: Box::new(pack_expression(&node.right, qpy_data)?),
-        },
+        ),
+        Expr::Index(node) => PackedExpression::Index(
+            pack_expression_type(&node.ty),
+            Box::new(pack_expression(&node.target, qpy_data)?),
+            Box::new(pack_expression(&node.index, qpy_data)?),
+        ),
+        Expr::Cast(node) => PackedExpression::Cast(
+            pack_expression_type(&node.ty),
+            node.implicit as u8,
+            Box::new(pack_expression(&node.operand, qpy_data)?),
+        ),
+        Expr::Unary(node) => PackedExpression::Unary(
+            pack_expression_type(&node.ty),
+            node.op as u8,
+            Box::new(pack_expression(&node.operand, qpy_data)?),
+        ),
+        Expr::Binary(node) => PackedExpression::Binary(
+            pack_expression_type(&node.ty),
+            node.op as u8,
+            Box::new(pack_expression(&node.left, qpy_data)?),
+            Box::new(pack_expression(&node.right, qpy_data)?),
+        ),
     })
 }
 
@@ -214,17 +211,17 @@ pub(crate) fn unpack_expression(
     qpy_data: &QPYReadData,
 ) -> Result<Expr, QpyError> {
     match packed {
-        PackedExpression::Value { kind, value } => {
-            Ok(Expr::Value(unpack_expression_value(kind, value)))
-        }
-        PackedExpression::Var { kind, value } => {
-            Ok(Expr::Var(unpack_expression_var(kind, value, qpy_data)?))
-        }
-        PackedExpression::Stretch { kind: _, index } => {
-            let stretch = qpy_data.standalone_stretches.get(&index).ok_or_else(|| {
+        PackedExpression::Value(value_type_pack, value_element_pack) => Ok(Expr::Value(
+            unpack_expression_value(value_type_pack, value_element_pack),
+        )),
+        PackedExpression::Var(var_type_pack, var_element_pack) => Ok(Expr::Var(
+            unpack_expression_var(var_type_pack, var_element_pack, qpy_data)?,
+        )),
+        PackedExpression::Stretch(_stretch_type_pack, key) => {
+            let stretch = qpy_data.standalone_stretches.get(&key).ok_or_else(|| {
                 QpyError::InvalidParameter(format!(
                     "Standalone stretch with key {} not found in qpy data",
-                    index
+                    key
                 ))
             })?;
             Ok(Expr::Stretch(
@@ -239,36 +236,28 @@ pub(crate) fn unpack_expression(
                     .clone(),
             )) // TODO: can we avoid cloning?
         }
-        PackedExpression::Index {
-            kind,
-            target,
-            index,
-        } => {
+        PackedExpression::Index(index_type_pack, target, index) => {
             let target = unpack_expression(*target, qpy_data)?;
             let index = unpack_expression(*index, qpy_data)?;
             let constant = target.is_const() && index.is_const();
             Ok(Expr::Index(Box::new(Index {
                 target,
                 index,
-                ty: unpack_expression_type(kind),
+                ty: unpack_expression_type(index_type_pack),
                 constant,
             })))
         }
-        PackedExpression::Cast {
-            kind,
-            implicit,
-            operand,
-        } => {
+        PackedExpression::Cast(cast_type_pack, implicit, operand) => {
             let operand = unpack_expression(*operand, qpy_data)?;
             let constant = operand.is_const();
             Ok(Expr::Cast(Box::new(Cast {
                 operand,
-                ty: unpack_expression_type(kind),
+                ty: unpack_expression_type(cast_type_pack),
                 constant,
                 implicit: implicit != 0,
             })))
         }
-        PackedExpression::Unary { kind, op, operand } => {
+        PackedExpression::Unary(unary_type_pack, op, operand) => {
             let operand = unpack_expression(*operand, qpy_data)?;
             let constant = operand.is_const();
             Ok(Expr::Unary(Box::new(Unary {
@@ -277,16 +266,11 @@ pub(crate) fn unpack_expression(
                     actual: op.to_string(),
                 })?,
                 operand,
-                ty: unpack_expression_type(kind),
+                ty: unpack_expression_type(unary_type_pack),
                 constant,
             })))
         }
-        PackedExpression::Binary {
-            kind,
-            op,
-            left,
-            right,
-        } => {
+        PackedExpression::Binary(binary_type_pack, op, left, right) => {
             let left = unpack_expression(*left, qpy_data)?;
             let right = unpack_expression(*right, qpy_data)?;
             let constant = left.is_const() && right.is_const();
@@ -297,7 +281,7 @@ pub(crate) fn unpack_expression(
                 })?,
                 left,
                 right,
-                ty: unpack_expression_type(kind),
+                ty: unpack_expression_type(binary_type_pack),
                 constant,
             })))
         }

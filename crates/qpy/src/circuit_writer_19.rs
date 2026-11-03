@@ -43,8 +43,7 @@ use crate::py_methods::{
 };
 use crate::value::{
     CircuitInstructionType, GenericValue, ParamRegisterValue, QPYWriteData, QpyCaller,
-    StringU16Pack, clbit_index, deserialize_with_args, get_circuit_type_key, pack_array_type,
-    pack_duration, serialize,
+    StringU16Pack, clbit_index, get_circuit_type_key, pack_array_type, pack_duration,
 };
 
 use crate::expr::pack_expression;
@@ -64,17 +63,17 @@ fn generic_value_to_param_data_pack(
         GenericValue::Float64(value) => formats::ParamDataPack::Float64(*value),
         GenericValue::Complex64(value) => formats::ParamDataPack::Complex64(*value),
         GenericValue::CaseDefault => formats::ParamDataPack::CaseDefault,
-        GenericValue::Range(value) => formats::ParamDataPack::Range(
-            i64::try_from(value.start).map_err(|_| {
+        GenericValue::Range(value) => formats::ParamDataPack::Range {
+            start: i64::try_from(value.start).map_err(|_| {
                 QpyError::InvalidParameter("range start does not fit in i64".to_string())
             })?,
-            i64::try_from(value.stop).map_err(|_| {
+            stop: i64::try_from(value.stop).map_err(|_| {
                 QpyError::InvalidParameter("range stop does not fit in i64".to_string())
             })?,
-            i64::try_from(value.step.get()).map_err(|_| {
+            step: i64::try_from(value.step.get()).map_err(|_| {
                 QpyError::InvalidParameter("range step does not fit in i64".to_string())
             })?,
-        ),
+        },
         GenericValue::NumpyObject(data) => {
             formats::ParamDataPack::NumpyObject { data: data.clone() }
         }
@@ -132,7 +131,7 @@ fn circuit_data_to_param_data_pack(
     circuit_data: &CircuitData,
     qpy_data: &mut QPYWriteData,
 ) -> Result<formats::ParamDataPack, QpyError> {
-    let layout = serialize(&pack_layout(None, circuit_data, qpy_data.version)?)?;
+    let layout = Some(pack_layout(None, circuit_data, qpy_data.version)?);
     Ok(formats::ParamDataPack::Circuit(Box::new(pack_circuit(
         circuit_data,
         ExtraCircuitData {
@@ -728,11 +727,7 @@ pub(crate) fn pack_circuit_v19(
         Some(custom_instruction_names),
         &mut qpy_data,
     )?;
-    let layout = if extra.layout.is_empty() {
-        default_layout()
-    } else {
-        deserialize_with_args::<formats::LayoutV2Pack, (u8,)>(&extra.layout, (version,))?.0
-    };
+    let layout = extra.layout.unwrap_or_else(default_layout);
     let state_headers: Vec<formats::AnnotationStateHeaderPack> = qpy_data
         .annotation_handler
         .dump_serializers()?

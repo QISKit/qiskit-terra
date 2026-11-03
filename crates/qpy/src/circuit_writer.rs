@@ -57,9 +57,9 @@ use crate::py_methods::{
 };
 use crate::value::{
     BitType, CircuitInstructionType, ExpressionVarDeclaration, GenericValue, ParamRegisterValue,
-    QPYWriteData, QpyCaller, RegisterType, ValueEndian, deserialize_with_args,
-    get_circuit_type_key, pack_for_collection, pack_generic_value, pack_standalone_var,
-    pack_stretch, serialize, serialize_param_register_value, serialize_with_args,
+    QPYWriteData, QpyCaller, RegisterType, ValueEndian, get_circuit_type_key, pack_for_collection,
+    pack_generic_value, pack_standalone_var, pack_stretch, serialize,
+    serialize_param_register_value, serialize_with_args,
 };
 
 use qiskit_circuit::var_stretch_container::{StretchType, VarType};
