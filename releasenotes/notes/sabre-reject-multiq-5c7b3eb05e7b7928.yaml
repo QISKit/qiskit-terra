@@ -1,0 +1,7 @@
+---
+upgrade_transpiler:
+  - |
+    :class:`.SabreSwap` and :class:`.SabreLayout` will now raise a :exc:`.TranspilerError` if they
+    encounter a multi-qubit gate.  The algorithms previously silently treated these as if they were
+    "directives" with no routing considerations (with documentation implying that the circuit
+    should have been decomposed into single- and two-qubit gates).

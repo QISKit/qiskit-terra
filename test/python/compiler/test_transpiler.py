@@ -82,7 +82,7 @@ from qiskit.circuit.library import (
 )
 from qiskit.compiler import transpile
 from qiskit.converters import circuit_to_dag
-from qiskit.dagcircuit import DAGOpNode, DAGOutNode, DAGCircuit
+from qiskit.dagcircuit import DAGOpNode, DAGCircuit
 from qiskit.exceptions import QiskitError
 from qiskit.providers.backend import BackendV2
 from qiskit.providers.fake_provider import GenericBackendV2
@@ -927,23 +927,6 @@ class TestTranspile(QiskitTestCase):
         resources_after = out_circuit.count_ops()
 
         self.assertDictEqual(resources_before, resources_after)
-
-    def test_move_measurements(self):
-        """Measurements applied AFTER swap mapping."""
-        cmap = CouplingMap.from_line(16)
-        qasm_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "qasm")
-        circ = QuantumCircuit.from_qasm_file(os.path.join(qasm_dir, "move_measurements.qasm"))
-
-        lay = [0, 1, 15, 2, 14, 3, 13, 4, 12, 5, 11, 6]
-        out = transpile(circ, initial_layout=lay, coupling_map=cmap, routing_method="sabre")
-        out_dag = circuit_to_dag(out)
-        meas_nodes = out_dag.named_nodes("measure")
-        for meas_node in meas_nodes:
-            is_last_measure = all(
-                isinstance(after_measure, DAGOutNode)
-                for after_measure in out_dag.quantum_successors(meas_node)
-            )
-            self.assertTrue(is_last_measure)
 
     @data(0, 1, 2, 3)
     def test_init_resets_kept_preset_passmanagers(self, optimization_level):

@@ -402,6 +402,14 @@ class TestSabreSwap(QiskitTestCase):
         with self.assertRaisesRegex(TranspilerError, "Fewer qubits in the circuit"):
             pass_(qc)
 
+    def test_multiq_rejected(self):
+        """The Sabre algorithm doesn't make sense with multi-q gates."""
+        pass_ = SabreSwap(CouplingMap.from_line(3))
+        qc = QuantumCircuit(3)
+        qc.ccx(0, 1, 2)
+        with self.assertRaisesRegex(TranspilerError, "multi-qubit operation"):
+            pass_(qc)
+
 
 @ddt.ddt
 class TestSabreSwapControlFlow(QiskitTestCase):

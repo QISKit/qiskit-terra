@@ -40,9 +40,8 @@ class SabreSwap(TransformationPass):
 
     This algorithm starts from an initial layout of virtual qubits onto physical
     qubits, and iterates over the circuit DAG until all gates are exhausted,
-    inserting SWAPs along the way. It only considers 2-qubit gates as only those
-    are germane for the mapping problem (it is assumed that 3+ qubit gates are
-    already decomposed).
+    inserting SWAPs along the way.  The routing algorithm cannot reason about multi-qubit gates;
+    these must have been decomposed into single- and two-qubit gates before calling this pass.
 
     In each iteration, it will first check if there are any gates in the
     ``front_layer`` that can be directly applied. If so, it will apply them and
