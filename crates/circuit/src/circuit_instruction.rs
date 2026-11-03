@@ -36,6 +36,7 @@ use crate::operations::{
 };
 use crate::packed_instruction::PackedOperation;
 use crate::parameter::parameter_expression::ParameterExpression;
+use crate::py_convertible::get_extractor;
 use nalgebra::{Dyn, MatrixView2, MatrixView4};
 use num_complex::Complex64;
 use smallvec::{SmallVec, smallvec};
@@ -946,6 +947,19 @@ impl<'a, 'py, T: CircuitBlock> FromPyObject<'a, 'py> for OperationFromPython<T> 
                 params: None,
                 label: extract_label()?,
             });
+        } else if let Some(extract_custom) = get_extractor(&ob_name) {
+            // Finds the Python-to-Rust extractor registered for `ob_name`.
+            // If an extractor declines the object or if there is a label, the operation
+            // is handled by the generic `PyInstruction` handling below.
+            if extract_label()?.is_none()
+                && let Some(custom) = extract_custom(ob)?
+            {
+                return Ok(OperationFromPython {
+                    operation: PackedOperation::from_custom_operation(custom),
+                    params: None,
+                    label: None,
+                });
+            }
         }
 
         let Some(kind) = PyOpKind::from_type(ob_type.as_borrowed())? else {

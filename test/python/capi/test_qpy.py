@@ -17,7 +17,7 @@ from pathlib import Path
 import tempfile
 
 from qiskit import QuantumCircuit, capi, qpy
-from qiskit.circuit.library import PermutationGate, QFTGate, SdgGate
+from qiskit.circuit.library import PermutationGate, SdgGate, MCXGate
 from qiskit.qpy import dump, common as qpy_common
 from test import QiskitTestCase
 
@@ -151,8 +151,8 @@ class TestQpyCAPI(QiskitTestCase):
         capi.qk_str_free(error)
 
     def test_python_defined_op_with_valid_params(self):
-        circuit = QuantumCircuit(3)
-        circuit.append(QFTGate(3), range(3))
+        circuit = QuantumCircuit(4)
+        circuit.append(MCXGate(3), range(4))
         circuit_ptrs = (ctypes.POINTER(capi.QkCircuit) * 1)(
             capi.qk_circuit_borrow_from_python(circuit._data)
         )

@@ -14,6 +14,7 @@ use pyo3::import_exception;
 use pyo3::prelude::*;
 
 pub mod blocks;
+pub mod custom_operations;
 pub mod entanglement;
 pub mod iqp;
 pub mod multi_local;
@@ -35,6 +36,11 @@ pub fn circuit_library(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(quantum_volume::quantum_volume))?;
     m.add_wrapped(wrap_pyfunction!(multi_local::py_n_local))?;
     m.add_class::<blocks::Block>()?;
+    m.add_class::<custom_operations::qft::PyQftGate>()?;
+
+    // Teach `qiskit-circuit` how to convert this crate's custom operations from
+    // Python to Rust and vice versa.
+    custom_operations::register_custom_operations()?;
 
     Ok(())
 }

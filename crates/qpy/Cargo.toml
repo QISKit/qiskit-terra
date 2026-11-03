@@ -16,6 +16,7 @@ workspace = true
 qiskit-util.workspace = true
 hashbrown.workspace = true
 qiskit-circuit.workspace = true
+qiskit-circuit-library.workspace = true
 qiskit-quantum-info.workspace = true
 num-bigint.workspace = true
 num-complex.workspace = true

@@ -43,6 +43,7 @@ use qiskit_circuit::parameter::symbol_expr::SymbolVector;
 use qiskit_circuit::var_stretch_container::{StretchType, VarType};
 use qiskit_circuit::{Block, classical, imports};
 use qiskit_circuit::{Clbit, Qubit};
+use qiskit_circuit_library::custom_operations::qft::QftGate;
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -95,6 +96,8 @@ pub enum InstructionType {
     PauliProductRotation,
     Unitary,
     ControlFlow,
+    // covers Rust based CusomOperations
+    CustomOperation,
     Store,
     // covers instruction types require resorting to python space
     Custom,
@@ -197,6 +200,8 @@ fn recognize_instruction_type(
         || ["Barrier", "Delay", "Measure", "Reset"].contains(&name)
     {
         InstructionType::StandardInstruction
+    } else if is_custom_operation(name) {
+        InstructionType::CustomOperation
     } else if name == STORE_INSTR_CLASS_NAME {
         InstructionType::Store
     } else if custom_instructions.get(name).is_some() {
@@ -224,6 +229,13 @@ fn recognize_instruction_type(
             InstructionType::Python
         }
     })
+}
+
+fn is_custom_operation(name: &str) -> bool {
+    // This is a placeholder function; we'll need either a list of CustomOperation names
+    // Or a better mechanism to iterate over all CustomOperations defined in qiskit.
+    // For now, compare against a hard coded list
+    ["qft"].contains(&name)
 }
 
 type InstructionBits = (Interned<[Qubit]>, Interned<[Clbit]>);
@@ -380,6 +392,7 @@ pub fn unpack_instruction(
         }
         InstructionType::Unitary => unpack_unitary(instruction, qpy_data)?,
         InstructionType::ControlFlow => unpack_control_flow(instruction, qpy_data)?,
+        InstructionType::CustomOperation => unpack_custom_operation(instruction, qpy_data)?,
         InstructionType::Store => unpack_store(instruction, qpy_data)?,
         InstructionType::Custom => qpy_data.caller.attach("Custom instructions", |py| {
             unpack_custom_instruction(
@@ -457,6 +470,26 @@ fn unpack_standard_instruction(
     Ok((op, param_values))
 }
 
+fn unpack_custom_operation(
+    instruction: &formats::CircuitInstructionV2Pack,
+    qpy_data: &mut QPYReadData,
+) -> Result<(PackedOperation, Vec<GenericValue>), QpyError> {
+    // This is a placeholder implementation.
+    let op = match instruction.gate_class_name.as_str() {
+        "qft" => {
+            PackedOperation::from_custom_operation(Box::new(QftGate::new(instruction.num_qargs)))
+        }
+        _ => {
+            return Err(QpyError::InvalidInstruction(format!(
+                "Unrecognized custom operation {}",
+                instruction.gate_class_name
+            )));
+        }
+    };
+    let param_values =
+        get_instruction_values(instruction, qpy_data, ValueEndian::LittleForV17AndBelow)?;
+    Ok((op, param_values))
+}
 fn unpack_store(
     instruction: &formats::CircuitInstructionV2Pack,
     qpy_data: &mut QPYReadData,

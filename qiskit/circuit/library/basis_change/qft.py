@@ -13,9 +13,9 @@
 """Define a Quantum Fourier Transform circuit (QFT) and a native gate (QFTGate)."""
 
 from __future__ import annotations
-import numpy as np
+from qiskit._accelerate.circuit_library import PyQftGate as _RustQFTGate
 
-from qiskit.circuit.quantumcircuit import QuantumRegister, CircuitInstruction, Gate
+from qiskit.circuit.quantumcircuit import QuantumCircuit, QuantumRegister, CircuitInstruction, Gate
 from qiskit.utils.deprecation import deprecate_func
 from ..blueprintcircuit import BlueprintCircuit
 
@@ -280,7 +280,7 @@ class QFT(BlueprintCircuit):
 
 
 class QFTGate(Gate):
-    r"""Quantum Fourier Transform Gate.
+    r"""Quantum Fourier Transform gate.
 
     The Quantum Fourier Transform (QFT) on :math:`n` qubits is the operation
 
@@ -296,21 +296,38 @@ class QFTGate(Gate):
     ):
         """
         Args:
-            num_qubits: The number of qubits on which the QFT acts.
+            num_qubits: The number of qubits this gate acts on.
         """
+        self._inner = _RustQFTGate(num_qubits)
         super().__init__(name="qft", num_qubits=num_qubits, params=[])
 
-    def __array__(self, dtype=complex, copy=None):
-        """Return a numpy array for the QFTGate."""
-        if copy is False:
-            raise ValueError("unable to avoid copy while creating an array as requested")
-        n = self.num_qubits
-        nums = np.arange(2**n)
-        outer = np.outer(nums, nums)
-        return np.exp(2j * np.pi * outer * (0.5**n), dtype=dtype) * (0.5 ** (n / 2))
+    @classmethod
+    def _from_inner(cls, inner: _RustQFTGate) -> QFTGate:
+        """Create a ``QFTGate`` from an existing Rust gate."""
+        self = cls.__new__(cls)
+        self._inner = inner
+        Gate.__init__(self, name="qft", num_qubits=inner.num_qubits, params=[])
+        return self
+
+    @property
+    def num_qubits(self) -> int:
+        """The number of qubits on which the QFT acts."""
+        # The Rust inner object is the single source of truth.
+        return self._inner.num_qubits
+
+    @num_qubits.setter
+    def num_qubits(self, num_qubits: int) -> None:
+        # Keep the Python and Rust representations in sync by preventing mutation.
+        raise AttributeError(
+            "'num_qubits' cannot be set on a QFTGate; construct a new QFTGate instead"
+        )
+
+    def __array__(self, dtype=None, copy=None):
+        """Return the QFT unitary matrix as a NumPy array."""
+        return self._inner.__array__(dtype=dtype, copy=copy)
 
     def _define(self):
-        """Provide a specific decomposition of the QFTGate into a quantum circuit."""
-        from qiskit.synthesis.qft import synth_qft_full
-
-        self.definition = synth_qft_full(num_qubits=self.num_qubits)
+        """Define the QFT gate using its standard circuit decomposition."""
+        self._definition = QuantumCircuit._from_circuit_data(
+            self._inner.definition(), legacy_qubits=True
+        )

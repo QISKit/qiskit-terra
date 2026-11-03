@@ -2298,11 +2298,10 @@ impl From<Box<dyn CustomOperation>> for BoxedCustomOperation {
 
 #[cfg(test)]
 mod test {
+    use crate::operations::{Param, PauliProductRotation};
     use approx::assert_abs_diff_eq;
     use ndarray::{Array2, arr2, linalg::kron};
     use qiskit_util::complex::{C_ONE, C_ZERO, IM};
-
-    use crate::operations::{Param, PauliProductRotation};
 
     #[test]
     fn test_ppr_matrix() {

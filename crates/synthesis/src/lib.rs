@@ -22,7 +22,7 @@ mod multi_controlled;
 pub mod pauli_evolution;
 pub mod pauli_products;
 mod permutation;
-mod qft;
+pub mod qft;
 pub mod qsd;
 pub mod ross_selinger;
 pub mod two_qubit_decompose;

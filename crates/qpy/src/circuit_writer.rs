@@ -38,9 +38,9 @@ use qiskit_circuit::duration::Duration;
 use qiskit_circuit::imports;
 use qiskit_circuit::instruction::Parameters;
 use qiskit_circuit::operations::{
-    BoxDuration, CaseSpecifier, Condition, ControlFlow, ControlFlowInstruction, LoopParam,
-    Operation, OperationRef, Param, PauliProductMeasurement, PauliProductRotation, PyInstruction,
-    PyOpKind, StandardGate, StandardInstruction, Store, SwitchTarget, UnitaryGate,
+    BoxDuration, CaseSpecifier, Condition, ControlFlow, ControlFlowInstruction, CustomOperation,
+    LoopParam, Operation, OperationRef, Param, PauliProductMeasurement, PauliProductRotation,
+    PyInstruction, PyOpKind, StandardGate, StandardInstruction, Store, SwitchTarget, UnitaryGate,
 };
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
 
@@ -270,11 +270,7 @@ fn pack_instruction(
         OperationRef::ControlFlow(control_flow_inst) => {
             pack_control_flow_inst(control_flow_inst, instruction, qpy_data)?
         }
-        OperationRef::CustomOperation(_) => {
-            return Err(QpyError::SerializationError(
-                "compiled custom operations are not yet supported in QPY".to_owned(),
-            ));
-        }
+        OperationRef::CustomOperation(op) => pack_custom_operation(op, instruction, qpy_data)?,
         OperationRef::Store(store) => pack_store(store, instruction, qpy_data)?,
     };
 
@@ -303,6 +299,7 @@ fn pack_instruction(
     }
     instruction_pack.bit_data = get_packed_bit_list(instruction, qpy_data.circuit_data);
     if matches!(qpy_data.caller, QpyCaller::Python)
+        && !matches!(instruction.op.view(), OperationRef::CustomOperation(_))
         && let Some(new_name) =
             qpy_data
                 .caller
@@ -371,6 +368,30 @@ pub fn standard_instruction_class_name(inst: &StandardInstruction) -> &str {
         StandardInstruction::Measure => "Measure",
         StandardInstruction::Reset => "Reset",
     }
+}
+
+fn pack_custom_operation(
+    op: &dyn CustomOperation,
+    instruction: &PackedInstruction,
+    qpy_data: &mut QPYWriteData,
+) -> Result<formats::CircuitInstructionV2Pack, QpyError> {
+    // This is a placeholder method; when we add more complex CustomOperations
+    // we'll need to have better handling here.
+    let params = pack_instruction_params(instruction, qpy_data)?;
+    let name = op.name().to_string();
+    Ok(formats::CircuitInstructionV2Pack {
+        num_qargs: instruction.op.num_qubits(),
+        num_cargs: instruction.op.num_clbits(),
+        extras_key: 0,
+        num_ctrl_qubits: 0,
+        ctrl_state: 0,
+        gate_class_name: name,
+        label: Default::default(),
+        condition: Default::default(),
+        bit_data: Default::default(),
+        params,
+        annotations: None,
+    })
 }
 
 fn pack_pauli_product_measurement(

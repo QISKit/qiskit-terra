@@ -10,7 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-mod qft_decompose_full;
+pub mod qft_decompose_full;
 mod qft_decompose_lnn;
 
 use pyo3::prelude::*;
