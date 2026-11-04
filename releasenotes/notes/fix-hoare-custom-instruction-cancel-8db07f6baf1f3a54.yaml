@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed :class:`.HoareOptimizer` removing two adjacent custom instructions
+    that do not combine to the identity. Instructions without a specific type
+    were compared by type and parameters only, so any two of them without
+    parameters looked equal. They are now compared by definition, as was
+    already the case for custom gates.
+    Fixed `#14356 <https://github.com/Qiskit/qiskit/issues/14356>`__.

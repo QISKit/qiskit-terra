@@ -626,6 +626,41 @@ class TestHoareOptimizer(QiskitTestCase):
         seq = [DAGOpNode(op=CSwapGate()), DAGOpNode(op=SwapGate())]
         self.assertTrue(HoareOptimizer()._is_identity(seq))
 
+    def test_custom_instruction_removal(self):
+        """Should not remove two distinct custom instructions, since they
+        don't form the identity even though both are plain instructions
+        without parameters.
+        """
+
+        #           ┌─────────────┐┌────────┐
+        # q_0: ─────┤0            ├┤0       ├
+        #           │             ││        │
+        # q_1: ─────┤1            ├┤1       ├
+        #           │  entangling ││        │
+        # q_2: ─────┤2            ├┤2 empty ├
+        #      ┌───┐│             ││        │
+        # q_3: ┤ H ├┤3            ├┤3       ├
+        #      └───┘└─────────────┘│        │
+        #   c: ════════════════════╡0       ╞
+        #                          └────────┘
+        circuit = QuantumCircuit(4, 1)
+        circuit.h(3)
+
+        entangling = QuantumCircuit(4, name="entangling")
+        entangling.cx(0, 1)
+        entangling.cx(0, 2)
+        entangling.cx(0, 3)
+        entangling.h(3)
+        circuit.append(entangling, range(4), [])
+
+        empty = QuantumCircuit(4, 1, name="empty")
+        circuit.append(empty, range(4), range(1))
+
+        pass_ = HoareOptimizer(size=2)
+        result = pass_.run(circuit_to_dag(circuit))
+
+        self.assertEqual(result, circuit_to_dag(circuit))
+
     def test_multiple_pass(self):
         """Verify that multiple pass can be run
         with the same Hoare instance.

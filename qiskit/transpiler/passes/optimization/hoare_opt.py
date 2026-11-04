@@ -12,7 +12,7 @@
 
 """Pass for Hoare logic circuit optimization."""
 from qiskit.transpiler.basepasses import TransformationPass
-from qiskit.circuit import QuantumRegister, ControlledGate, Gate
+from qiskit.circuit import QuantumRegister, ControlledGate, Gate, Instruction
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.circuit.library import UnitaryGate
 from qiskit.quantum_info.operators.predicates import matrix_equal
@@ -301,10 +301,10 @@ class HoareOptimizer(TransformationPass):
             gate2 = gate2.base_gate
         gate2 = gate2.base_class
 
-        # equality of gates can be determined via type and parameters, unless
-        # the gates have no specific type, in which case definition is used
+        # equality of operations can be determined via type and parameters, unless
+        # the operations have no specific type, in which case definition is used
         # or they are unitary gates, in which case matrix equality is used
-        if gate1 is Gate and gate2 is Gate:
+        if gate1 in (Gate, Instruction) and gate2 in (Gate, Instruction):
             return def1 == def2 and def1 and def2
         elif gate1 is UnitaryGate and gate2 is UnitaryGate:
             return matrix_equal(par1[0], par2[0], ignore_phase=True)
