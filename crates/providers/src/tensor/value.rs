@@ -518,10 +518,7 @@ where
 {
     let answers = broadcast_elementwise(a, b, op)?;
     let shape = answers.shape().to_vec();
-    // `map_collect` builds a standard-layout array, so iterating it is row-major, which is the
-    // order `from_bools` packs in.
-    let bits: Vec<bool> = answers.iter().copied().collect();
-    BitTensor::from_bools(bits, &shape).map(Tensor::Bit)
+    BitTensor::from_bools(answers, &shape).map(Tensor::Bit)
 }
 
 /// Generate an element-wise comparison of two tensors of the same dtype, producing `Bit`.

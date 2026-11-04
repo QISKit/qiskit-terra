@@ -19,8 +19,7 @@ use crate::tensor::{DType, Tensor, TensorType};
 
 /// Generate a [`ProgramOp`] for an element-wise comparison of two tensors.
 ///
-/// A comparison promotes and broadcasts its operands like any other elementwise binary operation,
-/// but always produces `Bit`.
+/// A comparison promotes and broadcasts its operands and produces `Bit`.
 macro_rules! compare_op {
     ($name:ident, $op_name:literal, $tensor_method:ident, $accepts:expr) => {
         #[doc = concat!(
@@ -74,10 +73,23 @@ fn any(_dtype: DType) -> bool {
     true
 }
 
-/// Admit every dtype that has a natural order, which excludes the complex ones.
+/// Admit every dtype that has a natural order.
 #[inline]
 fn ordered(dtype: DType) -> bool {
-    !matches!(dtype, DType::C64 | DType::C128)
+    matches!(
+        dtype,
+        DType::F64
+            | DType::F32
+            | DType::I64
+            | DType::I32
+            | DType::I16
+            | DType::I8
+            | DType::U64
+            | DType::U32
+            | DType::U16
+            | DType::U8
+            | DType::Bit
+    )
 }
 
 compare_op!(Equal, "equal", eq_tensor, any);
