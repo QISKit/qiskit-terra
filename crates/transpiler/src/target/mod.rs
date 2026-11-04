@@ -209,8 +209,7 @@ memory.
     mapping,
     subclass,
     name = "BaseTarget",
-    module = "qiskit._accelerate.target",
-    skip_from_py_object
+    module = "qiskit._accelerate.target"
 )]
 #[derive(Clone, Debug)]
 pub struct Target {
@@ -1250,10 +1249,10 @@ impl Target {
                     }
                     qarg_len = deduplicated_qargs.len() as u32;
                 }
-                if let Qargs::Concrete(qarg_sample) = qarg_sample {
-                    if qarg_len != *size_dict.entry(qarg_sample.len() as u32).or_insert(0) {
-                        incomplete_basis_gates.push(inst.as_str());
-                    }
+                if let Qargs::Concrete(qarg_sample) = qarg_sample
+                    && qarg_len != *size_dict.entry(qarg_sample.len() as u32).or_insert(0)
+                {
+                    incomplete_basis_gates.push(inst.as_str());
                 }
             }
         }
@@ -1271,13 +1270,12 @@ impl Target {
         if self.num_qubits.unwrap_or_default() == 0 || self.num_qubits.is_none() {
             qargs = QargsRef::Global;
         }
-        if let QargsRef::Concrete(qargs) = qargs {
-            if qargs
+        if let QargsRef::Concrete(qargs) = qargs
+            && qargs
                 .iter()
                 .any(|x| !(0..self.num_qubits.unwrap_or_default()).contains(&x.0))
-            {
-                return Err(TargetError::QargsWithoutInstruction(format!("{qargs:?}")));
-            }
+        {
+            return Err(TargetError::QargsWithoutInstruction(format!("{qargs:?}")));
         }
         if let Some(qarg_gate_map_arg) = self.qarg_gate_map.get(&qargs) {
             res.extend(qarg_gate_map_arg.iter().map(|key| key.as_str()));
@@ -1287,10 +1285,10 @@ impl Target {
                 res.insert(name);
             }
         }
-        if let QargsRef::Concrete(qargs) = qargs {
-            if let Some(global_gates) = self.global_operations.get(&(qargs.len() as u32)) {
-                res.extend(global_gates.iter().map(|key| key.as_str()))
-            }
+        if let QargsRef::Concrete(qargs) = qargs
+            && let Some(global_gates) = self.global_operations.get(&(qargs.len() as u32))
+        {
+            res.extend(global_gates.iter().map(|key| key.as_str()))
         }
         if res.is_empty() {
             return Err(TargetError::QargsWithoutInstruction(format!("{qargs:?}")));

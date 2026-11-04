@@ -46,6 +46,3 @@ features = ["union", "const_generics"]
 [dependencies.numpy]
 workspace = true
 features = ["nalgebra"]
-
-[dev-dependencies]
-pyo3 = { workspace = true, features = ["auto-initialize"] }

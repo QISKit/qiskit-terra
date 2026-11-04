@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Fixed an issue with the :func:`.qpy.dump` function where in several cases it
+    would previously crash the process if the payload specified it needed more
+    memory than was available. For several of the cases fixed it will now raise
+    a :class:`.QpyError` which can be caught and handled. However, in general
+    QPY deserialization is not safe against resource exhaustion and running it
+    may still cause an OOM failure that result in a hard process crash either
+    from the operating system or the allocator.
+    Fixes `#16898 <https://github.com/Qiskit/qiskit/issues/16898>`__.

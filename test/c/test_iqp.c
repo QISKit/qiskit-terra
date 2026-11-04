@@ -49,13 +49,13 @@ static int test_iqp_from_interactions(void) {
 
     QkCircuit *iqp = qk_circuit_library_iqp(num_qubits, interactions, true);
     if (iqp == NULL) {
-        printf("iqp_from_interactions returned NULL\n");
+        fprintf(stderr, "iqp_from_interactions returned NULL\n");
         return EqualityError;
     }
 
     size_t num_instructions = qk_circuit_num_instructions(iqp);
     if (num_instructions != 5) {
-        printf("Unexpected number of instructions: %zu (expected 5)\n", num_instructions);
+        fprintf(stderr, "Unexpected number of instructions: %zu (expected 5)\n", num_instructions);
         result = EqualityError;
         goto cleanup;
     }
@@ -67,7 +67,7 @@ static int test_iqp_from_interactions(void) {
 
         // All gates in this IQP construction should be 1 or 2 qubits.
         if (inst.num_qubits != 1 && inst.num_qubits != 2) {
-            printf("Unexpected num_qubits = %u at instruction %zu\n", inst.num_qubits, i);
+            fprintf(stderr, "Unexpected num_qubits = %u at instruction %zu\n", inst.num_qubits, i);
             result = EqualityError;
             qk_circuit_instruction_clear(&inst);
             goto cleanup;
@@ -82,7 +82,7 @@ static int test_iqp_from_interactions(void) {
 
     // With the chosen interactions matrix, we expect exactly one 2-qubit gate.
     if (num_two_qubit != 1) {
-        printf("Unexpected number of 2-qubit gates: %zu (expected 1)\n", num_two_qubit);
+        fprintf(stderr, "Unexpected number of 2-qubit gates: %zu (expected 1)\n", num_two_qubit);
         result = EqualityError;
     }
 
@@ -110,7 +110,7 @@ static int test_iqp_non_symmetric(void) {
 
     QkCircuit *iqp = qk_circuit_library_iqp(num_qubits, interactions, true);
     if (iqp != NULL) {
-        printf("Expected NULL circuit for non-symmetric matrix, got non-NULL\n");
+        fprintf(stderr, "Expected NULL circuit for non-symmetric matrix, got non-NULL\n");
         qk_circuit_free(iqp);
         result = EqualityError;
     }
@@ -127,13 +127,13 @@ static int test_random_iqp(void) {
     // Fixed seed for deterministic behavior
     QkCircuit *iqp = qk_circuit_library_random_iqp(num_qubits, 1234);
     if (iqp == NULL) {
-        printf("random_iqp returned NULL\n");
+        fprintf(stderr, "random_iqp returned NULL\n");
         return EqualityError;
     }
 
     size_t num_instructions = qk_circuit_num_instructions(iqp);
     if (num_instructions == 0) {
-        printf("Random IQP circuit has zero instructions\n");
+        fprintf(stderr, "Random IQP circuit has zero instructions\n");
         result = EqualityError;
         goto cleanup;
     }
@@ -143,8 +143,8 @@ static int test_random_iqp(void) {
     for (size_t i = 0; i < num_instructions; i++) {
         qk_circuit_get_instruction(iqp, i, &inst);
         if (inst.num_qubits != 1 && inst.num_qubits != 2) {
-            printf("Random IQP has instruction with num_qubits = %u at index %zu\n",
-                   inst.num_qubits, i);
+            fprintf(stderr, "Random IQP has instruction with num_qubits = %u at index %zu\n",
+                    inst.num_qubits, i);
             result = EqualityError;
             qk_circuit_instruction_clear(&inst);
             goto cleanup;

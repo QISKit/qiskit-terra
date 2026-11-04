@@ -21,7 +21,7 @@ use crate::gate_metrics::rotation_trace_and_dim;
 use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
 use crate::target::Target;
 use qiskit_circuit::PhysicalQubit;
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::imports;
 use qiskit_circuit::operations::Param;
 use qiskit_circuit::operations::StandardGate;
@@ -191,24 +191,24 @@ where
     }
 
     // Special handling for pauli evolution gates.
-    if view.name() == "PauliEvolution" {
-        if let OperationRef::PyCustom(py_gate) = view {
-            let result = Python::attach(|py| -> PyResult<Option<(Complex64, usize)>> {
-                let result = imports::PAULI_ROTATION_TRACE_AND_DIM
-                    .get_bound(py)
-                    .call1((py_gate.ob.clone_ref(py),))?
-                    .extract()?;
-                Ok(result)
-            })
-            .map_err(RemoveIdentityEquivError::PyPauliRotationTraceAndDim)?;
+    if view.name() == "PauliEvolution"
+        && let OperationRef::PyCustom(py_gate) = view
+    {
+        let result = Python::attach(|py| -> PyResult<Option<(Complex64, usize)>> {
+            let result = imports::PAULI_ROTATION_TRACE_AND_DIM
+                .get_bound(py)
+                .call1((py_gate.ob.clone_ref(py),))?
+                .extract()?;
+            Ok(result)
+        })
+        .map_err(RemoveIdentityEquivError::PyPauliRotationTraceAndDim)?;
 
-            if let Some((tr_over_dim, dim)) = result {
-                return Ok(average_gate_fidelity_below_tol(
-                    tr_over_dim,
-                    dim as f64,
-                    error_cutoff_fn(inst),
-                ));
-            }
+        if let Some((tr_over_dim, dim)) = result {
+            return Ok(average_gate_fidelity_below_tol(
+                tr_over_dim,
+                dim as f64,
+                error_cutoff_fn(inst),
+            ));
         }
     }
 
@@ -236,10 +236,11 @@ where
 #[pyo3(name = "remove_identity_equiv", signature=(dag, approx_degree=Some(1.0), target=None))]
 pub fn py_remove_identity_equiv(
     py: Python,
-    dag: &mut DAGCircuit,
+    dag: &mut PyDAGCircuit,
     approx_degree: Option<f64>,
     target: Option<&Target>,
 ) -> PyResult<()> {
+    let dag = dag.try_write()?;
     // TODO: This is a hack to avoid panicking in the case that the global phase contains `Py`
     // pointers (such as backrefs to `ParameterVector` objects in an expression `Symbol`) that would
     // get cloned when updating the global phase.  It's easier to do it out here than to try to

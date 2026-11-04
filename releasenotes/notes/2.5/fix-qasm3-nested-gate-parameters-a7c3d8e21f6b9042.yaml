@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed :func:`.synth_mcx_noaux_v24` omitting the parameters from
+    its nested :class:`.MCPhaseGate` instruction when synthesizing five or
+    more controls. This also fixes the resulting :class:`.MCXGate` definition
+    producing invalid OpenQASM 3 output.

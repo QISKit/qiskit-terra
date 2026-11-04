@@ -194,5 +194,6 @@ pub fn create_py_op(
         OperationRef::CustomOperation(_) => Err(PyNotImplementedError::new_err(
             "Custom operations from Rust cannot be exposed to Python",
         )),
+        OperationRef::Store(store) => store.create_py_op(py, label),
     }
 }

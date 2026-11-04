@@ -72,6 +72,8 @@ static FFI_CIRCUIT: LazyLock<VTable> =
     LazyLock::new(|| VTable::new("QK_FFI_CIRCUIT", &qiskit_cext_vtable::FUNCTIONS_CIRCUIT));
 static FFI_QI: LazyLock<VTable> =
     LazyLock::new(|| VTable::new("QK_FFI_QI", &qiskit_cext_vtable::FUNCTIONS_QI));
+static FFI_MIR: LazyLock<VTable> =
+    LazyLock::new(|| VTable::new("QK_FFI_MIR", &qiskit_cext_vtable::FUNCTIONS_MIR));
 
 #[pymodule(name = "capi")]
 pub fn capi_mod(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -81,5 +83,6 @@ pub fn capi_mod(m: &Bound<'_, PyModule>) -> PyResult<()> {
     FFI_TRANSPILE.attach_pycapsule(m, MODNAME)?;
     FFI_CIRCUIT.attach_pycapsule(m, MODNAME)?;
     FFI_QI.attach_pycapsule(m, MODNAME)?;
+    FFI_MIR.attach_pycapsule(m, MODNAME)?;
     Ok(())
 }

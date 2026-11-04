@@ -91,12 +91,12 @@ class TestPauliProductRotationGate(QiskitTestCase):
         qc1.append(PauliProductRotationGate(Pauli("XX"), angle=1.2), [0, 1])
 
         qc2 = QuantumCircuit(2)
-        qc2.append(PauliProductRotationGate(Pauli("XX"), angle=1.2), [1, 0])
-        self.assertEqual(qc1, qc2)
+        qc2.append(PauliProductRotationGate(Pauli("XZ"), angle=1.2), [0, 1])
+        self.assertNotEqual(qc1, qc2)
 
         qc3 = QuantumCircuit(2)
-        qc3.append(PauliProductRotationGate(Pauli("XZ"), angle=1.2), [0, 1])
-        self.assertNotEqual(qc1, qc3)
+        qc3.append(PauliProductRotationGate(Pauli("XZ"), angle=1.2), [1, 0])
+        self.assertNotEqual(qc2, qc3)
 
     @data("iX", "-iX")
     def test_invalid_phase(self, pauli):

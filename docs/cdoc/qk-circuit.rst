@@ -61,6 +61,9 @@ Data Types
 .. doxygenstruct:: QkCircuitInstruction
    :members:
 
+.. doxygenstruct:: QkCircuitInstructionView
+   :members:
+
 .. doxygenstruct:: QkCircuitDrawerConfig
    :members:
 

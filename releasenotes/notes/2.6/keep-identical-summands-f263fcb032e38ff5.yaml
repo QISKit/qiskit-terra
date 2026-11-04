@@ -1,0 +1,4 @@
+fixes:
+  - |
+    Fixed :class:`.FindCommutingPauliEvolutions` discarding identical summand
+    coefficients. See `#16856 <https://github.com/Qiskit/qiskit/issues/16856>`.

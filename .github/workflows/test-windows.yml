@@ -33,9 +33,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python ${{ inputs.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
+      - name: Install Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - name: Cache stestr
         uses: actions/cache@v6
         with:
@@ -50,38 +52,35 @@ jobs:
         run: 'echo "QISKIT_BUILD_WITH_MIMALLOC=1" >> $GITHUB_ENV'
       - name: Install dependencies
         run: |
+          set -e
           python -m venv test-job
-          .\test-job\Scripts\activate
+          source ./test-job/Scripts/activate
           python -m pip install -U pip
-          python -m pip install -U `
-            -c constraints.txt `
-            --group test `
+          python -m pip install -U \
+            -c constraints.txt \
+            --group test \
+            ${EXTRA_GROUPS} \
             -e .
-          pip check
-      - name: Install Optional packages
-        run: |
-          .\test-job\Scripts\activate
-          pip install -c constraints.txt --group optionals-all
-          pip check
-        if: ${{ inputs.install-optionals }}
+        shell: bash
+        env:
+          EXTRA_GROUPS: ${{ inputs.install-optionals && '--group optionals-all' || '' }}
       - name: Run Tests
         run: |
-          chcp.com 65001
-          .\test-job\Scripts\activate
+          set -e
+          source ./test-job/Scripts/activate
           python tools/report_numpy_state.py
-          $Env:PYTHONHASHSEED=$(python -S -c "import random; print(random.randint(1, 1024))")
+          export PYTHONHASHSEED=$(python -S -c "import random; print(random.randint(1, 1024))")
           echo "PYTHONHASHSEED=$PYTHONHASHSEED"
           stestr run --slowest --abbreviate
+        shell: bash
+        env:
+          QISKIT_PARALLEL: FALSE
+          QISKIT_IGNORE_USER_SETTINGS: TRUE
+          RUST_BACKTRACE: 1
       - name: Filter stestr history
         run: |
           .\test-job\Scripts\activate
           stestr history remove all
-        env:
-          LANG: "C.UTF-8"
-          PYTHONIOENCODING: "utf-8:backslashreplace"
-          QISKIT_PARALLEL: FALSE
-          QISKIT_IGNORE_USER_SETTINGS: TRUE
-          RUST_BACKTRACE: 1
       - name: Copy and Publish images
         uses: actions/upload-artifact@v7
         if: ${{ failure() }}

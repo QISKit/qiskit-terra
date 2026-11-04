@@ -195,9 +195,15 @@ fn circuit_u3(
         Some(atol) => atol,
         None => ANGLE_ZERO_EPSILON,
     };
-    let phi = mod_2pi(phi, atol);
-    let lam = mod_2pi(lam, atol);
-    if !simplify || theta.abs() > atol || phi.abs() > atol || lam.abs() > atol {
+    if simplify && theta.abs() < atol {
+        // At zero theta the gate is diagonal and only depends on `phi + lam`.
+        let tot = mod_2pi(phi + lam, atol);
+        if tot.abs() > atol {
+            circuit.push((StandardGate::U3, smallvec![0., 0., tot]));
+        }
+    } else {
+        let phi = mod_2pi(phi, atol);
+        let lam = mod_2pi(lam, atol);
         circuit.push((StandardGate::U3, smallvec![theta, phi, lam]));
     }
     OneQubitGateSequence {
@@ -260,9 +266,15 @@ fn circuit_u(
     if !simplify {
         atol = -1.0;
     }
-    let phi = mod_2pi(phi, atol);
-    let lam = mod_2pi(lam, atol);
-    if theta.abs() > atol || phi.abs() > atol || lam.abs() > atol {
+    if theta.abs() < atol {
+        // At zero theta the gate is diagonal and only depends on `phi + lam`.
+        let tot = mod_2pi(phi + lam, atol);
+        if tot.abs() > atol {
+            circuit.push((StandardGate::U, smallvec![0., 0., tot]));
+        }
+    } else {
+        let phi = mod_2pi(phi, atol);
+        let lam = mod_2pi(lam, atol);
         circuit.push((StandardGate::U, smallvec![theta, phi, lam]));
     }
     OneQubitGateSequence {

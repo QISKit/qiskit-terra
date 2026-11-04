@@ -13,15 +13,15 @@
 use crate::circuit_data::CircuitData;
 use crate::imports::{
     BARRIER, BOX_OP, BREAK_LOOP_OP, CONTINUE_LOOP_OP, DELAY, FOR_LOOP_OP, IF_ELSE_OP, MEASURE,
-    PAULI_PRODUCT_MEASUREMENT, PAULI_PRODUCT_ROTATION_GATE, RESET, SWITCH_CASE_OP, UNITARY_GATE,
-    WHILE_LOOP_OP, get_std_gate_class,
+    PAULI_PRODUCT_MEASUREMENT, PAULI_PRODUCT_ROTATION_GATE, RESET, STORE, SWITCH_CASE_OP,
+    UNITARY_GATE, WHILE_LOOP_OP, get_std_gate_class,
 };
 use crate::instruction::Parameters;
 use crate::interner::Interned;
 use crate::operations::{
     BoxedCustomOperation, ControlFlow, ControlFlowInstruction, CustomOperation, Operation,
     OperationRef, Param, PauliBased, PyInstruction, PyOpKind, PythonOperation, StandardGate,
-    StandardInstruction, UnitaryGate,
+    StandardInstruction, Store, UnitaryGate,
 };
 use crate::{Block, Clbit, Qubit};
 use hashbrown::HashMap;
@@ -49,6 +49,7 @@ enum PackedOperationType {
     PauliBased = 4,
     ControlFlow = 5,
     Custom = 6,
+    Store = 7,
 }
 impl PackedOperationType {
     /// Get `self` as a mask that can be used as a discriminant for `PackedOperation` pointers.
@@ -62,7 +63,7 @@ unsafe impl ::bytemuck::CheckedBitPattern for PackedOperationType {
     type Bits = u8;
 
     fn is_valid_bit_pattern(bits: &Self::Bits) -> bool {
-        *bits < 7
+        *bits < 8
     }
 }
 unsafe impl ::bytemuck::NoUninit for PackedOperationType {}
@@ -159,6 +160,7 @@ impl From<*mut ()> for PackedOperationInner {
 ///     PauliBased(Box<PauliBased>),
 ///     ControlFlow(Box<ControlFlowInstruction>),
 ///     Custom(Box<dyn CustomOperation>),
+///     Store(Box<Store>),
 /// }
 /// ```
 ///
@@ -359,7 +361,7 @@ mod standard_instruction {
 /// A private module to encapsulate the encoding of pointer types.
 mod pointer {
     use crate::operations::{
-        BoxedCustomOperation, ControlFlowInstruction, PyInstruction, UnitaryGate,
+        BoxedCustomOperation, ControlFlowInstruction, PyInstruction, Store, UnitaryGate,
     };
     use crate::packed_instruction::{PackedOperation, PackedOperationType, PauliBased};
     use std::ptr::NonNull;
@@ -445,6 +447,7 @@ mod pointer {
     impl_packable_pointer!(PauliBased, PackedOperationType::PauliBased);
     impl_packable_pointer!(ControlFlowInstruction, PackedOperationType::ControlFlow);
     impl_packable_pointer!(BoxedCustomOperation, PackedOperationType::Custom);
+    impl_packable_pointer!(Store, PackedOperationType::Store);
 }
 
 impl PackedOperation {
@@ -533,6 +536,7 @@ impl PackedOperation {
                 let custom_op: &BoxedCustomOperation = self.try_into().unwrap();
                 OperationRef::CustomOperation(&**custom_op)
             }
+            PackedOperationType::Store => OperationRef::Store(self.try_into().unwrap()),
         }
     }
 
@@ -596,6 +600,11 @@ impl PackedOperation {
         BoxedCustomOperation::from(custom).into()
     }
 
+    #[inline]
+    pub fn from_store(store: Box<Store>) -> Self {
+        store.into()
+    }
+
     /// Clone this `PackedOperation`, deepcopying if the internal object is a Python object.
     ///
     /// This is similar to [py_deepcopy], but only attaches to a Python interpreter if it has to.
@@ -610,7 +619,8 @@ impl PackedOperation {
             | OperationRef::Unitary(_)
             | OperationRef::PauliProductMeasurement(_)
             | OperationRef::PauliProductRotation(_)
-            | OperationRef::CustomOperation(_) => Ok(self.clone()),
+            | OperationRef::CustomOperation(_)
+            | OperationRef::Store(_) => Ok(self.clone()),
         }
     }
 
@@ -627,7 +637,8 @@ impl PackedOperation {
             | OperationRef::Unitary(_)
             | OperationRef::PauliProductMeasurement(_)
             | OperationRef::PauliProductRotation(_)
-            | OperationRef::CustomOperation(_) => Ok(self.clone()),
+            | OperationRef::CustomOperation(_)
+            | OperationRef::Store(_) => Ok(self.clone()),
         }
     }
 
@@ -635,7 +646,7 @@ impl PackedOperation {
     pub fn py_eq(&self, py: Python, other: &PackedOperation) -> PyResult<bool> {
         match (self.view(), other.view()) {
             (OperationRef::ControlFlow(left), OperationRef::ControlFlow(right)) => {
-                left.py_eq(py, right)
+                Ok(left == right)
             }
             (OperationRef::StandardGate(left), OperationRef::StandardGate(right)) => {
                 Ok(left == right)
@@ -655,6 +666,7 @@ impl PackedOperation {
                 OperationRef::PauliProductRotation(left),
                 OperationRef::PauliProductRotation(right),
             ) => Ok(left == right),
+            (OperationRef::Store(left), OperationRef::Store(right)) => Ok(left == right),
             _ => Ok(false),
         }
     }
@@ -728,6 +740,7 @@ impl PackedOperation {
             OperationRef::CustomOperation(_) => Err(PyNotImplementedError::new_err(
                 "Custom operations from Rust cannot be checked by instance",
             )),
+            OperationRef::Store(_) => STORE.get_bound(py).cast::<PyType>()?.is_subclass(py_type),
         }
     }
 }
@@ -744,6 +757,7 @@ impl Operation for PackedOperation {
             OperationRef::PauliProductMeasurement(ppm) => ppm.name(),
             OperationRef::PauliProductRotation(rotation) => rotation.name(),
             OperationRef::CustomOperation(op) => op.name(),
+            OperationRef::Store(store) => store.name(),
         };
         // SAFETY: all of the inner parts of the view are owned by `self`, so it's valid for us to
         // forcibly reborrowing up to our own lifetime. We avoid using `<OperationRef as Operation>`
@@ -794,6 +808,7 @@ impl Clone for PackedOperation {
             OperationRef::CustomOperation(custom_gate) => {
                 Self::from(BoxedCustomOperation::from(custom_gate.clone_dyn()))
             }
+            OperationRef::Store(store) => Self::from_store(Box::new(store.clone())),
         }
     }
 }
@@ -808,6 +823,7 @@ impl Drop for PackedOperation {
             PackedOperationType::PauliBased => PauliBased::drop_packed(self),
             PackedOperationType::ControlFlow => ControlFlowInstruction::drop_packed(self),
             PackedOperationType::Custom => BoxedCustomOperation::drop_packed(self),
+            PackedOperationType::Store => Store::drop_packed(self),
         }
     }
 }
@@ -998,7 +1014,7 @@ impl PackedInstruction {
     pub fn try_matrix(&self) -> Option<Array2<Complex64>> {
         match self.op.view() {
             OperationRef::StandardGate(g) => g.matrix(self.params_view()),
-            OperationRef::CustomOperation(g) => g.matrix(self.params_view()),
+            OperationRef::CustomOperation(g) => g.matrix(self.params_view()).ok().flatten(),
             OperationRef::PyCustom(p) => p.matrix(),
             OperationRef::Unitary(u) => u.matrix(),
             OperationRef::PauliProductRotation(ppr) => ppr.matrix(),
@@ -1016,7 +1032,11 @@ impl PackedInstruction {
             OperationRef::PyCustom(p) => p.matrix().map(CowArray::from),
             OperationRef::PauliProductRotation(ppr) => ppr.matrix().map(CowArray::from),
             OperationRef::Unitary(u) => Some(CowArray::from(u.matrix_view())),
-            OperationRef::CustomOperation(g) => g.matrix(self.params_view()).map(CowArray::from),
+            OperationRef::CustomOperation(g) => g
+                .matrix(self.params_view())
+                .ok()
+                .flatten()
+                .map(CowArray::from),
             _ => None,
         }
     }
@@ -1034,6 +1054,8 @@ impl PackedInstruction {
             OperationRef::CustomOperation(g) => {
                 if g.num_qubits() == 1 {
                     g.matrix(self.params_view())
+                        .ok()
+                        .flatten()
                         .map(|mat| [[mat[(0, 0)], mat[(0, 1)]], [mat[(1, 0)], mat[(1, 1)]]])
                 } else {
                     None

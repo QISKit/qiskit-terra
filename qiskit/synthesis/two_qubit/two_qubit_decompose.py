@@ -343,8 +343,6 @@ class TwoQubitControlledUDecomposer:
 
     """
 
-    # Docs generated with assistance from Claude Opus 4.8 (Claude Code).
-
     def __init__(self, rxx_equivalent_gate: type[Gate], euler_basis: str = "ZXZ"):
         r"""
         Args:
@@ -466,7 +464,7 @@ class TwoQubitBasisDecomposer:
         which is optimal for all targets and bases
         """
 
-        return two_qubit_decompose.TwoQubitBasisDecomposer.decomp0(target)
+        return two_qubit_decompose.TwoQubitBasisDecomposer.decomp0(target._inner_decomposition)
 
     def decomp1(self, target):
         r"""Decompose target :math:`\sim U_d(x, y, z)` with :math:`1` use of the basis gate
@@ -480,7 +478,7 @@ class TwoQubitBasisDecomposer:
 
         which is optimal for all targets and bases with ``z==0`` or ``c==0``.
         """
-        return self._inner_decomposer.decomp1(target)
+        return self._inner_decomposer.decomp1(target._inner_decomposition)
 
     def decomp2_supercontrolled(self, target):
         r"""
@@ -499,7 +497,7 @@ class TwoQubitBasisDecomposer:
         This is an exact decomposition for supercontrolled basis and target :math:`\sim U_d(x, y, 0)`.
         No guarantees for non-supercontrolled basis.
         """
-        return self._inner_decomposer.decomp2_supercontrolled(target)
+        return self._inner_decomposer.decomp2_supercontrolled(target._inner_decomposition)
 
     def decomp3_supercontrolled(self, target):
         r"""
@@ -507,7 +505,7 @@ class TwoQubitBasisDecomposer:
         This is an exact decomposition for supercontrolled basis :math:`\sim U_d(\pi/4, b, 0)`, all b,
         and any target. No guarantees for non-supercontrolled basis.
         """
-        return self._inner_decomposer.decomp3_supercontrolled(target)
+        return self._inner_decomposer.decomp3_supercontrolled(target._inner_decomposition)
 
     def __call__(
         self,

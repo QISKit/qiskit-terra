@@ -45,9 +45,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Python ${{ inputs.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
+      - name: Install Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - name: Cache stestr
         uses: actions/cache@v6
         with:
@@ -89,6 +91,7 @@ jobs:
             -c constraints.txt \
             --group test \
             -e .
+
       - name: Install Optional packages
         run: |
           set -e
@@ -96,11 +99,9 @@ jobs:
           python -m pip install --group optionals-all -c constraints.txt
           python -m pip check
         if: ${{ inputs.install-optionals }}
+
       - name: Install optional non-Python dependencies
-        run: |
-          set -e
-          sudo apt-get update
-          sudo apt-get install -y graphviz
+        run: sudo tools/install_ubuntu_graphviz.sh
         if: ${{ inputs.install-optionals }}
       - name: Run Python tests
         if: ${{ !inputs.install-from-sdist }}

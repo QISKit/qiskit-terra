@@ -311,9 +311,21 @@ impl BinRead for Bytes {
         _endian: Endian,
         args: Self::Args<'_>,
     ) -> BinResult<Self> {
-        let mut buf = vec![0u8; args.count];
-        reader.read_exact(&mut buf)?;
-        Ok(Bytes(buf))
+        let mut list: Vec<u8> = Vec::new();
+        list.try_reserve_exact(args.count).map_err(|e| {
+            binrw::Error::Io(binrw::io::Error::new(
+                binrw::io::ErrorKind::OutOfMemory,
+                e.to_string(),
+            ))
+        })?;
+        if reader.take(args.count as u64).read_to_end(&mut list)? == args.count {
+            Ok(Bytes(list))
+        } else {
+            Err(binrw::Error::Io(binrw::io::Error::new(
+                binrw::io::ErrorKind::UnexpectedEof,
+                "Insufficient bytes in QPY for specified size",
+            )))
+        }
     }
 }
 

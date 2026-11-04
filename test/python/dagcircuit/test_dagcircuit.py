@@ -58,7 +58,12 @@ from qiskit.circuit.library import (
     U1Gate,
     RXGate,
     CSGate,
+    CHGate,
+    UnitaryGate,
+    PauliProductRotationGate,
+    PauliProductMeasurement,
 )
+from qiskit.quantum_info import Pauli
 from qiskit.converters import circuit_to_dag
 from test import QiskitTestCase
 
@@ -402,6 +407,50 @@ class TestDagRegisters(DAGTest):
         with self.assertRaises(DAGCircuitError):
             dag.find_bit(new_bit)
 
+    def test_remove_qubits_determinism(self):
+        """Regression test of gh-16655."""
+
+        def build() -> DAGCircuit:
+            in_reg = QuantumRegister(4, "f")
+            in_dag = DAGCircuit()
+            in_dag.add_qreg(in_reg)
+
+            out_reg = QuantumRegister(4, "q")
+            out_dag = in_dag.copy_empty_like()
+            out_dag.add_qreg(out_reg)
+            out_dag.remove_qregs(in_reg)
+            out_dag.remove_qubits(*in_reg)
+            out_dag.apply_operation_back(XGate(), (out_dag.qubits[0],), ())
+            out_dag.apply_operation_back(XGate(), (out_dag.qubits[1],), ())
+            return out_dag
+
+        base = build()
+        dags = [build() for _ in range(10)]
+        self.assertEqual([base.structurally_equal(dag) for dag in dags], [True] * len(dags))
+
+    def test_remove_clbits_determinism(self):
+        """Regression test of gh-16655."""
+
+        def build() -> DAGCircuit:
+            qr = QuantumRegister(4, "q")
+            in_reg = ClassicalRegister(4, "f")
+            in_dag = DAGCircuit()
+            in_dag.add_qreg(qr)
+            in_dag.add_creg(in_reg)
+
+            out_reg = ClassicalRegister(4, "c")
+            out_dag = in_dag.copy_empty_like()
+            out_dag.add_creg(out_reg)
+            out_dag.remove_cregs(in_reg)
+            out_dag.remove_clbits(*in_reg)
+            out_dag.apply_operation_back(Measure(), (out_dag.qubits[0],), (out_dag.clbits[0],))
+            out_dag.apply_operation_back(Measure(), (out_dag.qubits[1],), (out_dag.clbits[1],))
+            return out_dag
+
+        base = build()
+        dags = [build() for _ in range(10)]
+        self.assertEqual([base.structurally_equal(dag) for dag in dags], [True] * len(dags))
+
 
 class TestDagWireRemoval(DAGTest):
     """Test removal of registers and idle wires."""
@@ -655,6 +704,24 @@ class TestDagWireRemoval(DAGTest):
 
         self.assertEqual(dag, expected)
 
+    def test_remove_first_node_and_depth(self):
+        """Test a nondeterministic panic in rustworkx-core cased by a hole for the first node index
+
+        This caused a non-deterministic panic when using rustworkx-core
+        0.18.0 (fixed in rustworkx 0.18.1)
+        """
+        dag = DAGCircuit()
+        qreg = QuantumRegister(3, "qr")
+        qreg_two = QuantumRegister(3, "qr_two")
+        dag.add_qreg(qreg)
+        dag.add_qreg(qreg_two)
+        dag.remove_qubits(*qreg)
+        dag.apply_operation_back(XGate(), (dag.qubits[0],), ())
+        dag.apply_operation_back(XGate(), (dag.qubits[1],), ())
+        dag.apply_operation_back(XGate(), (dag.qubits[2],), ())
+        depth = dag.depth()
+        self.assertEqual(depth, 1)
+
 
 @ddt
 class TestDagApplyOperation(DAGTest):
@@ -879,6 +946,48 @@ class TestDagNodeSelection(DAGTest):
 
         self.assertIsInstance(op_node_1.op, HGate)
         self.assertIsInstance(op_node_2.op, HGate)
+
+    def test_get_op_nodes_multiple_types(self):
+        """dag.op_nodes(op=iterable_of_types) returns any of the requested types."""
+        self.dag.apply_operation_back(HGate(), [self.qubit0], [])
+        self.dag.apply_operation_back(Measure(), [self.qubit1], [self.clbit1])
+        self.dag.apply_operation_back(Reset(), [self.qubit0], [])
+        self.dag.apply_operation_back(CXGate(), [self.qubit0, self.qubit1], [])
+
+        nodes = self.dag.op_nodes(op={Measure, Reset})
+        self.assertEqual(len(nodes), 2)
+        self.assertTrue(all(isinstance(node.op, (Measure, Reset)) for node in nodes))
+
+        # Also accept other iterables (ordering doesn't matter, only membership).
+        nodes = self.dag.op_nodes(op=(Measure, Reset))
+        self.assertEqual(len(nodes), 2)
+        self.assertTrue(all(isinstance(node.op, (Measure, Reset)) for node in nodes))
+
+    def test_get_op_nodes_multiple_types_empty(self):
+        """An empty iterable should match nothing."""
+        self.dag.apply_operation_back(Reset(), [self.qubit0], [])
+        self.assertEqual(self.dag.op_nodes(op=()), [])
+
+    def test_get_op_nodes_multiple_types_invalid_element(self):
+        """Non-type elements should error."""
+        self.dag.apply_operation_back(Reset(), [self.qubit0], [])
+        with self.assertRaises(TypeError):
+            self.dag.op_nodes(op=(Reset, 123))
+
+    def test_get_op_nodes_with_custom_gate(self):
+        """Iterable filters match custom gates and preserve subclass matching."""
+
+        class CustomXGate(XGate):
+            _standard_gate = False
+
+        self.dag.apply_operation_back(CustomXGate(), [self.qubit0], [])
+        self.dag.apply_operation_back(XGate(), [self.qubit1], [])
+        self.dag.apply_operation_back(HGate(), [self.qubit2], [])
+
+        nodes = self.dag.op_nodes(op=(CustomXGate, HGate))
+        self.assertEqual(len(nodes), 2)
+        self.assertTrue(all(isinstance(node.op, (CustomXGate, HGate)) for node in nodes))
+        self.assertEqual(len(self.dag.op_nodes(op=XGate)), 2)
 
     def test_quantum_successors(self):
         """The method dag.quantum_successors() returns successors connected by quantum edges"""
@@ -1465,6 +1574,34 @@ class TestDagLayers(DAGTest):
             ]
             self.assertEqual(comp, truth)
 
+    def test_serial_layers_do_not_copy_global_phase(self):
+        """serial_layers() should not copy the parent DAG global phase."""
+        qc = QuantumCircuit(2, global_phase=math.pi / 7)
+        qc.h(0)
+        qc.cx(0, 1)
+        dag = circuit_to_dag(qc)
+
+        layers = list(dag.serial_layers())
+
+        self.assertEqual(len(layers), 2)
+        self.assertEqual(dag.global_phase, math.pi / 7)
+        self.assertEqual(layers[0]["graph"].global_phase, 0.0)
+        self.assertEqual(layers[1]["graph"].global_phase, 0.0)
+
+    def test_layers_do_not_copy_global_phase(self):
+        """layers() should not copy the parent DAG global phase."""
+        qc = QuantumCircuit(2, global_phase=math.pi / 7)
+        qc.h(0)
+        qc.cx(0, 1)
+        dag = circuit_to_dag(qc)
+
+        layers = list(dag.layers())
+
+        self.assertEqual(len(layers), 2)
+        self.assertEqual(dag.global_phase, math.pi / 7)
+        self.assertEqual(layers[0]["graph"].global_phase, 0.0)
+        self.assertEqual(layers[1]["graph"].global_phase, 0.0)
+
 
 def _sort_key(indices: dict[Qubit, int]):
     """Return key function for sorting DAGCircuits, given a global qubit mapping."""
@@ -1921,6 +2058,34 @@ class TestDagEquivalence(DAGTest):
 
         self.assertNotEqual(self.dag1, dag2)
 
+    def test_dag_eq_multiple_delays(self):
+        """DAG Equivalence with multiple delays of different unit types."""
+        #      ┌───┐┌────────────────┐     ┌──────────────────┐
+        # q_0: ┤ H ├┤ Delay(100[dt]) ├──■──┤ Delay(100.0[ms]) ├
+        #      └───┘└────────────────┘┌─┴─┐└┬───────────────┬─┘
+        # q_1: ───────────────────────┤ X ├─┤ Delay(1.0[s]) ├──
+        #                             └───┘ └───────────────┘
+        circ = QuantumCircuit(2, 0)
+        circ.h(0)
+        circ.delay(100, 0, "dt")
+        circ.cx(0, 1)
+        circ.delay(1, 1, "s")
+        circ.delay(100, 0, "ms")
+
+        expected = DAGCircuit()
+        expected.add_qreg(QuantumRegister(2, "q"))
+        expected.apply_operation_back(HGate(), [expected.qubits[0]], [])
+        expected.apply_operation_back(Delay(100, "dt"), [expected.qubits[0]], [])
+        expected.apply_operation_back(CXGate(), [expected.qubits[0], expected.qubits[1]], [])
+        expected.apply_operation_back(Delay(1, "s"), [expected.qubits[1]], [])
+        expected.apply_operation_back(Delay(100, "ms"), [expected.qubits[0]], [])
+
+        obtained = circuit_to_dag(circ)
+        for node1, node2 in zip(expected.op_nodes(), obtained.op_nodes()):
+            # Compare node by node to make sure it compares correctly.
+            self.assertEqual(node1, node2)
+        self.assertEqual(obtained, expected)
+
     def test_dag_neq_same_topology(self):
         """DAG equivalence check: False. Same topology."""
         #        ┌───┐                ┌───┐
@@ -1946,6 +2111,47 @@ class TestDagEquivalence(DAGTest):
         dag2 = circuit_to_dag(circ2)
 
         self.assertNotEqual(self.dag1, dag2)
+
+    def test_dag_neq_reversed_unitary(self):
+        """Test that reversing the order of qubits of a unitary gate leads to a different circuit."""
+        unitary = UnitaryGate(CHGate())
+
+        qc1 = QuantumCircuit(4)
+        qc1.append(unitary, [0, 1])
+
+        qc2 = QuantumCircuit(4)
+        qc2.append(unitary, [1, 0])
+
+        self.assertNotEqual(qc1, qc2)
+        self.assertNotEqual(circuit_to_dag(qc1), circuit_to_dag(qc2))
+
+    def test_dag_neq_reversed_ppr(self):
+        """Test that reversing the order of qubits of a PPR gate leads to a different
+        circuit."""
+        ppr = PauliProductRotationGate(Pauli("ZX"), 0.1)
+
+        qc1 = QuantumCircuit(4)
+        qc1.append(ppr, [0, 1])
+
+        qc2 = QuantumCircuit(4)
+        qc2.append(ppr, [1, 0])
+
+        self.assertNotEqual(qc1, qc2)
+        self.assertNotEqual(circuit_to_dag(qc1), circuit_to_dag(qc2))
+
+    def test_dag_neq_reversed_ppm(self):
+        """Test that reversing the order of qubits of a PPM instruction leads to a different
+        circuit."""
+        ppm = PauliProductMeasurement(Pauli("ZX"))
+
+        qc1 = QuantumCircuit(4, 1)
+        qc1.append(ppm, [0, 1], [0])
+
+        qc2 = QuantumCircuit(4, 1)
+        qc2.append(ppm, [1, 0], [0])
+
+        self.assertNotEqual(qc1, qc2)
+        self.assertNotEqual(circuit_to_dag(qc1), circuit_to_dag(qc2))
 
     def test_node_params_equal_unequal(self):
         """Test node params are equal or unequal."""
@@ -2280,6 +2486,34 @@ class TestDagEquivalence(DAGTest):
             (op_switch, dag.output_map[d], d),
         }
         self.assertEqual(set(dag.edges()), expected_edges)
+
+    def test_get_var_by_name(self):
+        """Look up input, captured, and declared variables by name."""
+        input_var = expr.Var.new("input", types.Bool())
+        dag = DAGCircuit()
+        dag.add_input_var(input_var)
+        self.assertEqual(dag.get_var("input"), input_var)
+        self.assertIsNone(dag.get_var("missing"))
+
+        captured_var = expr.Var.new("captured", types.Bool())
+        declared_var = expr.Var.new("declared", types.Bool())
+        dag = DAGCircuit()
+        dag.add_captured_var(captured_var)
+        dag.add_declared_var(declared_var)
+        self.assertEqual(dag.get_var("captured"), captured_var)
+        self.assertEqual(dag.get_var("declared"), declared_var)
+        self.assertIsNone(dag.get_var("missing"))
+
+    def test_get_stretch_by_name(self):
+        """Look up captured and declared stretches by name."""
+        captured = expr.Stretch.new("captured")
+        declared = expr.Stretch.new("declared")
+        dag = DAGCircuit()
+        dag.add_captured_stretch(captured)
+        dag.add_declared_stretch(declared)
+        self.assertEqual(dag.get_stretch("captured"), captured)
+        self.assertEqual(dag.get_stretch("declared"), declared)
+        self.assertIsNone(dag.get_stretch("missing"))
 
     def test_forbid_mixing_captures_inputs(self):
         """Test that a DAG can't have both captures and inputs."""
@@ -2694,6 +2928,94 @@ class TestDagSubstitute(DAGTest):
 
         with self.assertRaisesRegex(DAGCircuitError, "Cannot replace a node with a DAG with more"):
             src.substitute_node_with_dag(node, replace, wires={})
+
+    def test_substitute_node_with_dag_transfers_captured_and_declared_vars(self):
+        """Test that substitute_node_with_dag transfers captured and declared variables.
+        Regression test for gh-15509."""
+        a = expr.Var.new("a", types.Bool())
+        b = expr.Var.new("b", types.Bool())
+
+        # Create a base DAG with a simple X gate
+        base_dag = DAGCircuit()
+        qr = QuantumRegister(1)
+        base_dag.add_qreg(qr)
+        x_node = base_dag.apply_operation_back(XGate(), [qr[0]], [])
+
+        # Create a replacement DAG with captured and declared variables
+        replacement_dag = DAGCircuit()
+        replacement_dag.add_qubits([qr[0]])
+        replacement_dag.add_captured_var(a)
+        replacement_dag.add_declared_var(b)
+        replacement_dag.apply_operation_back(XGate(), [qr[0]], [])
+
+        # Perform the substitution
+        base_dag.substitute_node_with_dag(x_node, replacement_dag, wires=[qr[0]])
+
+        # Verify the variables were transferred
+        self.assertEqual(base_dag.num_captured_vars, 1)
+        self.assertEqual(base_dag.num_declared_vars, 1)
+        self.assertEqual(list(base_dag.iter_captured_vars()), [a])
+        self.assertEqual(list(base_dag.iter_declared_vars()), [b])
+
+    def test_substitute_dag_transfers_input_vars(self):
+        """substitute_node_with_dag should transfer DAG-level input vars from replacement."""
+        # Base DAG with a simple X gate
+        base_qc = QuantumCircuit(1)
+        base_qc.x(0)
+        base_dag = circuit_to_dag(base_qc)
+
+        # Node to replace
+        x_node = list(base_dag.op_nodes())[0]
+
+        # Replacement DAG that declares an input var and uses it in a control-flow op
+        replacement_dag = DAGCircuit()
+        replacement_dag.add_qubits(x_node.qargs)
+        replacement_dag.add_clbits(x_node.cargs)
+
+        condition_var = expr.Var.new("condition", types.Bool())
+        replacement_dag.add_input_var(condition_var)
+
+        if_block = QuantumCircuit(1)
+        if_block.x(0)
+        if_else_op = IfElseOp(condition_var, if_block, None)
+        replacement_dag.apply_operation_back(
+            if_else_op, replacement_dag.qubits, replacement_dag.clbits
+        )
+
+        # Perform substitution and verify input vars transferred
+        base_dag.substitute_node_with_dag(
+            x_node, replacement_dag, wires=x_node.qargs + x_node.cargs
+        )
+
+        self.assertEqual(base_dag.num_input_vars, 1)
+        self.assertEqual(list(base_dag.iter_input_vars()), [condition_var])
+
+    def test_substitute_node_with_dag_transfers_captured_and_declared_stretches(self):
+        """substitute_node_with_dag should transfer captured and declared stretches."""
+        a = expr.Stretch.new("a")
+        b = expr.Stretch.new("b")
+
+        # Create a base DAG with a simple X gate
+        base_dag = DAGCircuit()
+        qr = QuantumRegister(1)
+        base_dag.add_qreg(qr)
+        x_node = base_dag.apply_operation_back(XGate(), [qr[0]], [])
+
+        # Create a replacement DAG with captured and declared stretches
+        replacement_dag = DAGCircuit()
+        replacement_dag.add_qubits([qr[0]])
+        replacement_dag.add_captured_stretch(a)
+        replacement_dag.add_declared_stretch(b)
+        replacement_dag.apply_operation_back(XGate(), [qr[0]], [])
+
+        # Perform the substitution
+        base_dag.substitute_node_with_dag(x_node, replacement_dag, wires=[qr[0]])
+
+        # Verify the stretches were transferred
+        self.assertEqual(base_dag.num_captured_stretches, 1)
+        self.assertEqual(base_dag.num_declared_stretches, 1)
+        self.assertEqual(list(base_dag.iter_captured_stretches()), [a])
+        self.assertEqual(list(base_dag.iter_declared_stretches()), [b])
 
 
 @ddt

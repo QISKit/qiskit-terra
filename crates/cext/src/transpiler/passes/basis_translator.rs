@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_transpiler::passes::run_basis_translator;
@@ -33,24 +32,24 @@ use qiskit_transpiler::target::Target;
 /// # Example
 ///
 /// ```c
-///    #include <qiskit.h>
+/// #include <qiskit.h>
 ///
-///    QkCircuit *circuit = qk_circuit_new(3, 0);
-///    qk_circuit_gate(circuit, QkGate_CCX, (uint32_t[3]){0, 1, 2}, NULL);
+/// QkCircuit *circuit = qk_circuit_new(3, 0);
+/// qk_circuit_gate(circuit, QkGate_CCX, (uint32_t[3]){0, 1, 2}, NULL);
 ///
-///    // Create a Target with global properties.
-///    QkTarget *target = qk_target_new(3);
-///    qk_target_add_instruction(target, qk_target_entry_new(QkGate_H));
-///    qk_target_add_instruction(target, qk_target_entry_new(QkGate_T));
-///    qk_target_add_instruction(target, qk_target_entry_new(QkGate_Tdg));
-///    qk_target_add_instruction(target, qk_target_entry_new(QkGate_CX));
+/// // Create a Target with global properties.
+/// QkTarget *target = qk_target_new(3);
+/// qk_target_add_instruction(target, qk_target_entry_new(QkGate_H));
+/// qk_target_add_instruction(target, qk_target_entry_new(QkGate_T));
+/// qk_target_add_instruction(target, qk_target_entry_new(QkGate_Tdg));
+/// qk_target_add_instruction(target, qk_target_entry_new(QkGate_CX));
 ///
-///    // Run pass
-///    qk_transpiler_pass_standalone_basis_translator(circuit, target, 0);
+/// // Run pass
+/// qk_transpiler_pass_standalone_basis_translator(circuit, target, 0);
 ///
-///    // Free the circuit and target pointers once you're done
-///    qk_circuit_free(circuit);
-///    qk_target_free(target);
+/// // Free the circuit and target pointers once you're done
+/// qk_circuit_free(circuit);
+/// qk_target_free(target);
 /// ```
 ///
 /// # Safety
@@ -64,11 +63,11 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_basis_translator(
     min_qubits: usize,
 ) {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circ_from_ptr = unsafe { mut_ptr_as_ref(circuit) };
+    let circ_from_ptr = unsafe { &mut *circuit };
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let target = unsafe { const_ptr_as_ref(target) };
+    let target = unsafe { &*target };
 
-    let dag = DAGCircuit::from_circuit_data(circ_from_ptr, false, None, None, None, None)
+    let dag = DAGCircuit::from_circuit_data(circ_from_ptr, false, None, None)
         .expect("Circuit to DAG conversion failed");
 
     let mut equiv_lib = generate_standard_equivalence_library();

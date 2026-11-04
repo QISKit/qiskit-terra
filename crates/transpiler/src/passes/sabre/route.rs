@@ -41,7 +41,7 @@ use super::vec_map::VecMap;
 use crate::TranspilerError;
 use crate::neighbors::Neighbors;
 use crate::target::{Target, TargetCouplingError};
-use qiskit_circuit::dag_circuit::{DAGCircuit, DAGCircuitBuilder, NodeType, Wire};
+use qiskit_circuit::dag_circuit::{DAGCircuit, DAGCircuitBuilder, NodeType, PyDAGCircuit, Wire};
 use qiskit_circuit::nlayout::NLayout;
 use qiskit_circuit::operations::{ControlFlow, StandardGate};
 use qiskit_circuit::packed_instruction::PackedInstruction;
@@ -757,11 +757,11 @@ impl State {
         }
         let sabre_dag = &problem.sabre.dag;
         while let Some(node) = self.visit.pop_front() {
-            if self.layers.num_layers().get() > 1 {
-                if let InteractionKind::TwoQ(_) = &sabre_dag[node].kind {
-                    self.layers.remove(node, &self.layout);
-                    self.reached_previous_layer.push(node);
-                }
+            if self.layers.num_layers().get() > 1
+                && let InteractionKind::TwoQ(_) = &sabre_dag[node].kind
+            {
+                self.layers.remove(node, &self.layout);
+                self.reached_previous_layer.push(node);
             }
             match try_route(
                 node,
@@ -968,8 +968,35 @@ impl State {
 /// Returns:
 ///     A two-tuple of the newly routed :class:`.DAGCircuit`, and the layout that maps virtual
 ///     qubits to their assigned physical qubits at the *end* of the circuit execution.
-#[pyfunction]
+#[pyfunction(name = "sabre_routing")]
 #[pyo3(signature=(dag, target, heuristic, initial_layout, num_trials, seed=None, run_in_parallel=None))]
+pub fn py_sabre_routing(
+    dag: &PyDAGCircuit,
+    target: &PyRoutingTarget,
+    heuristic: &Heuristic,
+    initial_layout: &NLayout,
+    num_trials: usize,
+    seed: Option<u64>,
+    run_in_parallel: Option<bool>,
+) -> PyResult<(PyDAGCircuit, NLayout)> {
+    sabre_routing(
+        dag.try_read()?,
+        target,
+        heuristic,
+        initial_layout,
+        num_trials,
+        seed,
+        run_in_parallel,
+    )
+    .map(|(out_dag, layout)| {
+        // Preserve metadata
+        (
+            PyDAGCircuit::from_dagcircuit_with_cloned_metadata(out_dag, dag),
+            layout,
+        )
+    })
+}
+
 pub fn sabre_routing(
     dag: &DAGCircuit,
     target: &PyRoutingTarget,

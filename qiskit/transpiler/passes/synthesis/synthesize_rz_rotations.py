@@ -15,6 +15,7 @@
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.dagcircuit import DAGCircuit
 from qiskit._accelerate.synthesize_rz_rotations import synthesize_rz_rotations
+from qiskit.transpiler.passes.utils import control_flow
 
 
 class SynthesizeRZRotations(TransformationPass):
@@ -87,9 +88,10 @@ class SynthesizeRZRotations(TransformationPass):
         self.synthesis_error = synthesis_error
         self.cache_error = cache_error
 
+    @control_flow.trivial_recurse
     def run(self, dag: DAGCircuit) -> DAGCircuit:
         """Run the SynthesizeRZRotations pass on `dag`."""
-        new_dag = synthesize_rz_rotations(
+        synthesize_rz_rotations(
             dag, self.approximation_degree, self.synthesis_error, self.cache_error
         )
-        return new_dag
+        return dag

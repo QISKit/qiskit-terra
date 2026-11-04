@@ -15,6 +15,7 @@
 import unittest
 
 from qiskit import QuantumRegister, QuantumCircuit, ClassicalRegister
+from qiskit.circuit import Qubit
 from qiskit.passmanager.flow_controllers import DoWhileController
 from qiskit.transpiler import PassManager
 from qiskit.transpiler.passes import OptimizeSwapBeforeMeasure, DAGFixedPoint
@@ -349,6 +350,35 @@ class TestOptimizeSwapBeforeMeasureFixedPoint(QiskitTestCase):
             )
         )
         after = pass_manager.run(circuit)
+
+        self.assertEqual(expected, after)
+
+    def test_optimize_swap_with_anonymous_qubit_and_reg(self):
+        """Anonymous bit doesn't mess up the indices
+        0: ─────────────       0: ────────
+                     ┌─┐               ┌─┐
+        q_0: ──────X─┤M├     q_0: ─────┤M├
+             ┌───┐ │ └╥┘ ==>      ┌───┐└╥┘
+        q_1: ┤ X ├─X──╫─     q_1: ┤ X ├─╫─
+             └───┘    ║           └───┘ ║
+        c: 1/═════════╩═     c: 1/══════╩═
+                      0                 0
+        """
+        loose_q = Qubit()
+        qreg = QuantumRegister(2, "q")
+        creg = ClassicalRegister(1, "c")
+
+        # Qubit order: [loose_q, qreg[0], qreg[1]]
+        circuit = QuantumCircuit([loose_q], qreg, creg)
+        circuit.x(qreg[1])
+        circuit.swap(qreg[0], qreg[1])
+        circuit.measure(qreg[0], creg[0])
+
+        expected = QuantumCircuit([loose_q], qreg, creg)
+        expected.x(qreg[1])
+        expected.measure(qreg[1], creg[0])
+
+        after = PassManager([OptimizeSwapBeforeMeasure()]).run(circuit)
 
         self.assertEqual(expected, after)
 

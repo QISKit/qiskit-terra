@@ -377,8 +377,7 @@ type KTIType = IndexMap<Key, NodeIndex>;
 #[pyclass(
     subclass,
     name = "BaseEquivalenceLibrary",
-    module = "qiskit._accelerate.equivalence",
-    skip_from_py_object
+    module = "qiskit._accelerate.equivalence"
 )]
 #[derive(Debug, Clone)]
 pub struct EquivalenceLibrary {

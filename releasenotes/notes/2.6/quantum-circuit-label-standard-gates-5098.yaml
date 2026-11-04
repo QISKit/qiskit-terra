@@ -1,0 +1,9 @@
+---
+features_circuits:
+  - |
+    Added a ``label`` argument to single-gate instruction methods on
+    :class:`.QuantumCircuit` that previously did not expose one. This lets labels be
+    set directly when adding these gates to a circuit using a method call (e.g.
+    ``circuit.cp(..., label=...)``).
+  - |
+    Added a ``label`` argument to the :class:`.RVGate` constructor.

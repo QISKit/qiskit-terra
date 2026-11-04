@@ -37,7 +37,8 @@ static int test_circuit_in_basis(void) {
     size_t circuit_len = qk_circuit_num_instructions(circuit);
     if (circuit_len != 2) {
         result = EqualityError;
-        printf(
+        fprintf(
+            stderr,
             "The number of gates resulting from the translation is incorrect. Expected 2, got %zu",
             circuit_len);
         goto cleanup;
@@ -51,7 +52,8 @@ static int test_circuit_in_basis(void) {
 
         if (strcmp(inst.name, gate_names[idx]) != 0) {
             result = EqualityError;
-            printf(
+            fprintf(
+                stderr,
                 "The operation resulting from this translation was incorrect. Expected '%s' gate, "
                 "got '%s'",
                 gate_names[idx], inst.name);
@@ -84,7 +86,8 @@ static int test_basic_basis_translator(void) {
 
     if (result_op_counts.len != 1) {
         result = EqualityError;
-        printf(
+        fprintf(
+            stderr,
             "The number of gates resulting from the translation is incorrect. Expected 1, got %zu",
             result_op_counts.len);
         goto cleanup;
@@ -93,9 +96,10 @@ static int test_basic_basis_translator(void) {
     QkOpCount u_count = result_op_counts.data[0];
     if (u_count.count != 1 || strcmp(u_count.name, "u") != 0) {
         result = EqualityError;
-        printf("The operation resulting from this translation was incorrect. Expected 'u' gate, "
-               "got '%s'",
-               u_count.name);
+        fprintf(stderr,
+                "The operation resulting from this translation was incorrect. Expected 'u' gate, "
+                "got '%s'",
+                u_count.name);
     }
 
 cleanup:
@@ -125,7 +129,8 @@ static int test_toffoli_basis_translator(void) {
 
     if (result_op_counts.len != 4) {
         result = EqualityError;
-        printf(
+        fprintf(
+            stderr,
             "The number of gates resulting from the translation is incorrect. Expected 1, got %zu",
             result_op_counts.len);
         goto cleanup;
@@ -138,7 +143,8 @@ static int test_toffoli_basis_translator(void) {
         QkOpCount gate_count = result_op_counts.data[idx];
         if (gate_count.count != freqs[idx] || strcmp(gate_count.name, gates[idx]) != 0) {
             result = EqualityError;
-            printf(
+            fprintf(
+                stderr,
                 "The operation resulting from this translation was incorrect. Expected '%s' gate, "
                 "got '%s'",
                 gates[idx], gate_count.name);

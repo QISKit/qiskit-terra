@@ -11,6 +11,7 @@
 // that they have been altered from the originals.
 
 use crate::CapacityError;
+use crate::error::TryReserveError;
 use hashbrown::HashMap;
 use hashbrown::hash_map::OccupiedError;
 use pyo3::exceptions::{PyKeyError, PyValueError};
@@ -210,6 +211,20 @@ where
             indices: HashMap::with_capacity(capacity),
             cached: OnceLock::new(),
         }
+    }
+
+    /// Create a new ObjectRegistry with an initial capacity pre-allocated. This
+    /// will return an error if the specified capacity can not be allocated.
+    pub fn try_with_capacity(capacity: usize) -> Result<Self, TryReserveError> {
+        let mut objects = Vec::new();
+        objects.try_reserve(capacity)?;
+        let mut indices = HashMap::new();
+        indices.try_reserve(capacity)?;
+        Ok(ObjectRegistry {
+            objects,
+            indices,
+            cached: OnceLock::new(),
+        })
     }
 
     /// Gets the number of registered objects.

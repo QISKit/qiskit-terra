@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a bug with the QPY serialization and deserialization of instructions
+    containing :class:`.SparseObservable` data.
+    Fixed `#16722 <https://github.com/Qiskit/qiskit/issues/16722>`__.

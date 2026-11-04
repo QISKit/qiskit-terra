@@ -18,7 +18,7 @@ from .product_formula import ProductFormula
 from .lie_trotter import LieTrotter
 from .suzuki_trotter import SuzukiTrotter
 from .qdrift import QDrift
-from .pauli_network import synth_pauli_network_rustiq
+from .pauli_network import synth_pauli_network_rustiq, synth_pauli_network_mcts
 
 __all__ = [
     "EvolutionSynthesis",
@@ -27,5 +27,6 @@ __all__ = [
     "ProductFormula",
     "QDrift",
     "SuzukiTrotter",
+    "synth_pauli_network_mcts",
     "synth_pauli_network_rustiq",
 ]

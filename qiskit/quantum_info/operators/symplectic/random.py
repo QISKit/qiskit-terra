@@ -27,19 +27,18 @@ from .pauli_list import PauliList
 
 def random_pauli(
     num_qubits: int, group_phase: bool = False, seed: int | np.random.Generator | None = None
-):
-    """Return a random Pauli.
+) -> Pauli:
+    """Return a random :class:`Pauli`.
 
     Args:
-        num_qubits (int): the number of qubits.
-        group_phase (bool): Optional. If True generate random phase.
-                            Otherwise the phase will be set so that the
-                            Pauli coefficient is +1 (default: False).
-        seed (int or np.random.Generator): Optional. Set a fixed seed or
-                                           generator for RNG.
+        num_qubits: The number of qubits.
+        group_phase: Optional. If ``True`` generate random phase.
+                     Otherwise the phase will be set so that the
+                     Pauli coefficient is +1 (default: ``False``).
+        seed: Optional. Set a fixed seed or generator for RNG.
 
     Returns:
-        Pauli: a random Pauli
+        A random Pauli.
     """
     if seed is None:
         rng = np.random.default_rng()
@@ -59,18 +58,18 @@ def random_pauli_list(
     size: int = 1,
     seed: int | np.random.Generator | None = None,
     phase: bool = True,
-):
-    """Return a random PauliList.
+) -> PauliList:
+    """Return a random :class:`PauliList`.
 
     Args:
-        num_qubits (int): the number of qubits.
-        size (int): Optional. The length of the Pauli list (Default: 1).
-        seed (int or np.random.Generator): Optional. Set a fixed seed or generator for RNG.
-        phase (bool): If True the Pauli phases are randomized, otherwise the phases are fixed to 0.
-                     [Default: True]
+        num_qubits: The number of qubits.
+        size: Optional. The length of the Pauli list (Default: 1).
+        seed: Optional. Set a fixed seed or generator for RNG.
+        phase: Optional. If ``True`` the Pauli phases are randomized, otherwise the phases are fixed
+            to 0 (Default: ``True``).
 
     Returns:
-        PauliList: a random PauliList.
+        A random :class:`PauliList`.
     """
     if seed is None:
         rng = np.random.default_rng()
@@ -87,23 +86,22 @@ def random_pauli_list(
     return PauliList.from_symplectic(z, x)
 
 
-def random_clifford(num_qubits: int, seed: int | np.random.Generator | None = None):
+def random_clifford(num_qubits: int, seed: int | np.random.Generator | None = None) -> Clifford:
     """Return a random Clifford operator.
 
     The Clifford is sampled using the method of Reference [1].
 
     Args:
-        num_qubits (int): the number of qubits for the Clifford
-        seed (int or np.random.Generator): Optional. Set a fixed seed or
-                                           generator for RNG.
+        num_qubits: The number of qubits for the Clifford.
+        seed: Optional. Set a fixed seed or generator for RNG.
 
     Returns:
-        Clifford: a random Clifford operator.
+        A random Clifford operator.
 
-    Reference:
-        1. S. Bravyi and D. Maslov, *Hadamard-free circuits expose the
-           structure of the Clifford group*.
-           `arXiv:2003.09412 [quant-ph] <https://arxiv.org/abs/2003.09412>`_
+    References:
+
+    [1] S. Bravyi and D. Maslov (2020). Hadamard-free circuits expose the structure of the
+    Clifford group. `arXiv:2003.09412 <https://arxiv.org/abs/2003.09412>`__
     """
     if seed is None:
         rng = np.random.default_rng()

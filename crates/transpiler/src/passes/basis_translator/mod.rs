@@ -36,7 +36,7 @@ use qiskit_circuit::parameter::symbol_expr::SymbolExpr;
 use qiskit_circuit::parameter::symbol_expr::Value;
 use qiskit_circuit::{
     BlocksMode, VarsMode,
-    dag_circuit::{DAGCircuit, DAGCircuitBuilder, NodeType},
+    dag_circuit::{DAGCircuit, DAGCircuitBuilder, NodeType, PyDAGCircuit},
     operations::{Operation, OperationRef, Param, PauliBased, PythonOperation},
 };
 use qiskit_circuit::{Clbit, PhysicalQubit, Qubit};
@@ -55,16 +55,24 @@ type PhysicalQargs = SmallVec<[PhysicalQubit; 2]>;
 
 #[pyfunction(name = "base_run", signature = (dag, equiv_lib, min_qubits, target=None, target_basis=None))]
 fn py_run_basis_translator(
-    dag: &DAGCircuit,
+    dag: &PyDAGCircuit,
     equiv_lib: &mut EquivalenceLibrary,
     min_qubits: usize,
     target: Option<&Target>,
     target_basis: Option<HashSet<String>>,
-) -> PyResult<Option<DAGCircuit>> {
+) -> PyResult<Option<PyDAGCircuit>> {
     let target_basis_ref: Option<HashSet<&str>> = target_basis
         .as_ref()
         .map(|set| set.iter().map(|obj| obj.as_str()).collect());
-    run_basis_translator(dag, equiv_lib, min_qubits, target, target_basis_ref).map_err(|e| e.into())
+    Ok(run_basis_translator(
+        dag.try_read()?,
+        equiv_lib,
+        min_qubits,
+        target,
+        target_basis_ref,
+    )?
+    // Turn into Python DAG and restore metadata
+    .map(|out_dag| PyDAGCircuit::from_dagcircuit_with_cloned_metadata(out_dag, dag)))
 }
 
 pub fn run_basis_translator(
@@ -517,6 +525,7 @@ fn replace_node(
                     PauliBased::PauliProductRotation(rotation.clone()).into()
                 }
                 OperationRef::CustomOperation(_) => inner_node.op.clone(),
+                OperationRef::Store(store) => store.clone().into(),
             };
             let new_params: Option<Parameters<_>> = inner_node.params.as_deref().cloned();
             dag.apply_operation_back(
@@ -585,38 +594,38 @@ fn replace_node(
                     PauliBased::PauliProductRotation(rotation.clone()).into()
                 }
                 OperationRef::CustomOperation(_) => inner_node.op.clone(),
+                OperationRef::Store(store) => store.clone().into(),
             };
 
             let mut new_params: Option<Parameters<_>> = inner_node.params.as_deref().cloned();
-            if let Some(Parameters::Params(inner_node_params)) = inner_node.params.as_deref() {
-                if inner_node_params
+            if let Some(Parameters::Params(inner_node_params)) = inner_node.params.as_deref()
+                && inner_node_params
                     .iter()
                     .any(|param| matches!(param, Param::ParameterExpression(_)))
-                {
-                    let new_params_inner: SmallVec<[Param; 3]> = inner_node_params
-                        .iter()
-                        .map(|param| match param {
-                            Param::ParameterExpression(parameter_expression) => {
-                                param_assignment_expr(parameter_expression, &parameter_map, true)
-                            }
-                            _ => Ok(param.clone()),
-                        })
-                        .collect::<Result<_, BasisTranslatorError>>()?;
-                    if let OperationRef::PyCustom(inst) = new_op.view() {
-                        // TODO: Remove this.
-                        // Acquire the gil if the operation is not native to set the operation parameters in
-                        // Python.
-                        Python::attach(|py| {
-                            inst.ob
-                                .bind(py)
-                                .setattr("params", new_params_inner.clone())
-                                .map_err(|err| {
-                                    BasisTranslatorError::BasisDAGCircuitError(err.to_string())
-                                })
-                        })?;
-                    }
-                    new_params = Some(Parameters::Params(new_params_inner));
+            {
+                let new_params_inner: SmallVec<[Param; 3]> = inner_node_params
+                    .iter()
+                    .map(|param| match param {
+                        Param::ParameterExpression(parameter_expression) => {
+                            param_assignment_expr(parameter_expression, &parameter_map, true)
+                        }
+                        _ => Ok(param.clone()),
+                    })
+                    .collect::<Result<_, BasisTranslatorError>>()?;
+                if let OperationRef::PyCustom(inst) = new_op.view() {
+                    // TODO: Remove this.
+                    // Acquire the gil if the operation is not native to set the operation parameters in
+                    // Python.
+                    Python::attach(|py| {
+                        inst.ob
+                            .bind(py)
+                            .setattr("params", new_params_inner.clone())
+                            .map_err(|err| {
+                                BasisTranslatorError::BasisDAGCircuitError(err.to_string())
+                            })
+                    })?;
                 }
+                new_params = Some(Parameters::Params(new_params_inner));
             }
             dag.apply_operation_back(
                 new_op,
@@ -639,7 +648,7 @@ fn replace_node(
             Param::Float(_) => dag
                 .add_global_phase(target_dag.global_phase())
                 .map_err(|e| BasisTranslatorError::BasisDAGCircuitError(e.to_string())),
-            Param::Obj(_) => Ok(()),
+            Param::Obj(_) | Param::Int(_) => Ok(()),
         }?
     }
 
@@ -664,6 +673,9 @@ fn param_expr_assignment(
                 let val = Python::attach(|py| val.extract::<Value>(py))
                     .map_err(|_| ParameterError::InvalidValue)?;
                 bind_map.insert(key, val);
+            }
+            Param::Int(int) => {
+                bind_map.insert(key, Value::Int(*int));
             }
         }
     }

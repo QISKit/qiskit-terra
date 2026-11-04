@@ -1,0 +1,7 @@
+fixes:
+  - |
+    Fixed an issue where the :class:`.SynthesizeRZRotations` transpiler
+    pass could potentially panic if the ``synthesis_error`` argument
+    was set to specific values.
+    See `#16540 <https://github.com/Qiskit/qiskit/issues/16540>`__ for more
+    details.

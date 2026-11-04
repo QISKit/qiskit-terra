@@ -408,7 +408,7 @@ pub fn resynthesize_clifford_circuit(
 ) -> Result<CliffordGatesVec, String> {
     let sim_clifford = clifford_from_gate_sequence(gates, num_qubits)?;
     let tableau = Array2::from_shape_fn((2 * num_qubits, 2 * num_qubits + 1), |(i, j)| {
-        sim_clifford.tableau[j][i]
+        sim_clifford.get_entry(i, j)
     });
     let mut synthesis = GreedyCliffordSynthesis::new(tableau.view())?;
     let (_, new_gates) = synthesis.run()?;

@@ -10,6 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+use crate::pointers::ExposesOwnedPointers;
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit_library::quantum_volume::quantum_volume;
 
@@ -48,7 +49,8 @@ pub extern "C" fn qk_circuit_library_quantum_volume(
     seed: i64,
 ) -> *mut CircuitData {
     let seed = if seed < 0 { None } else { Some(seed as u64) };
-    Box::into_raw(Box::new(
-        quantum_volume(num_qubits, depth, seed).unwrap().into(),
-    ))
+    quantum_volume(num_qubits, depth, seed)
+        .unwrap()
+        .inner
+        .into_leaked()
 }

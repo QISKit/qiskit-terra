@@ -3,9 +3,10 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "2.6.0-dev"
+version = "2.7.0-dev"
 edition = "2024"
-rust-version = "1.87"  # Keep in sync with README.md, rust-toolchain.toml, and tools/install_rust_msrv.sh
+# Keep `rust-version` in sync with `README.md` and `rust-toolchain.toml`.
+rust-version = "1.91"
 license = "Apache-2.0"
 
 # Shared dependencies that can be inherited.  This just helps a little with
@@ -14,22 +15,22 @@ license = "Apache-2.0"
 #
 # Each crate can add on specific features freely as it inherits.
 [workspace.dependencies]
-bytemuck = "1.25"
+bytemuck = { version = "1.25", features = ["extern_crate_alloc", "derive", "impl_core_error"] }
 bitfield-struct = "0.13.0"
 indexmap.version = "2.10.0"
-hashbrown.version = "0.15.5"
+hashbrown.version = "0.17.1"
 num-bigint = "0.4"
-num-complex = "0.4"
-nalgebra = "0.34"
+num-complex = { version = "0.4", features = ["bytemuck"] }
+nalgebra = "0.35"
 faer = "0.24"
-numpy = "0.29"
-ndarray = "0.16"
+numpy = "0.30"
+ndarray = "0.17"
 smallvec = "1.15"
 thiserror = "2.0"
 rustworkx-core = "0.18"
 fixedbitset = "0.5.7"
 approx = "0.5"
-itertools = "0.14.0"
+itertools = "0.15.0"
 foldhash = "0.2.0"
 rayon = "1.12"
 nom = "8.0"
@@ -39,45 +40,53 @@ rand = "0.10"
 rand_pcg = "0.10"
 rand_distr = "0.6"
 num-traits = "0.2"
-uuid = { version = "1.23", features = ["v4", "fast-rng"], default-features = false }
+uuid = { version = "1.23", features = [
+    "v4",
+    "fast-rng",
+], default-features = false }
 anyhow = "1.0"
 binrw = "0.15"
 cbindgen = "0.29.4"
 mimalloc = "0.1.52"
-npyz = {version = "0.9.1", features = ["complex"]}
+npyz = { version = "0.9.1", features = ["complex"] }
+tempfile = "3.0"
+mem_dbg = { version = "0.2", features = ["derive"] }
 
 # Most of the crates don't need the feature `extension-module`, since only `qiskit-pyext` builds an
 # actual C extension (the feature disables linking in `libpython`, which is forbidden in Python
 # distributions).  We only activate that feature when building the C extension module; we still need
 # it disabled for Rust-only tests to avoid linker errors with it not being loaded.  See
 # https://pyo3.rs/main/features#extension-module for more.
-pyo3 = { version = "0.29.0", features = ["abi3-py310"] }
+pyo3 = { version = "0.30", features = ["abi3-py310"] }
 
-# These are our own crates.
+# These are our own crates (or at least, the ones that are used as internal dependencies).
 qiskit-accelerate = { path = "crates/accelerate" }
 qiskit-bindgen = { path = "crates/bindgen" }
 qiskit-cext = { path = "crates/cext" }
 qiskit-cext-vtable = { path = "crates/cext-vtable" }
 qiskit-circuit = { path = "crates/circuit" }
 qiskit-circuit-library = { path = "crates/circuit_library" }
-qiskit-providers = { path = "crates/providers" }
+qiskit-mir = { path = "crates/mir" }
+qiskit-passmanager = { path = "crates/passmanager" }
 qiskit-qasm2 = { path = "crates/qasm2" }
 qiskit-qasm3 = { path = "crates/qasm3" }
 qiskit-qpy = { path = "crates/qpy" }
 qiskit-transpiler = { path = "crates/transpiler" }
 qiskit-quantum-info = { path = "crates/quantum_info" }
-qiskit-synthesis = {path = "crates/synthesis" }
+qiskit-synthesis = { path = "crates/synthesis" }
 qiskit-util = { path = "crates/util" }
 
 [workspace.lints.clippy]
 # The lint forbids things like `if a < b {} else if a == b {}`, and suggests matching on `a.cmp(&b)`
 # which uses the `::std::cmp::Ordering` enum as a return.  Both styles are acceptable, and the `if`
 # chain can be more legible to people.
-comparison-chain = "allow"
+comparison_chain = "allow"
 # Forbid `{,e}print{,ln}!` calls.  These can be allowed locally if absolutely required, but the
 # vast majority of these are debug statements that we forget about.
 print_stdout = "deny"
 print_stderr = "deny"
+# Require `<module>/mod.rs` naming instead of `<module>.rs`.  This is purely for consistent style.
+self_named_module_files = "deny"
 
 [workspace.lints.rust]
 # In Rust 2021, the bodies of `unsafe fn` may use `unsafe` functions themselves without marking

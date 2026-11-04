@@ -11,6 +11,9 @@
 # that they have been altered from the originals.
 
 """Cancel the redundant (self-adjoint) gates through commutation relations."""
+
+from __future__ import annotations
+
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.circuit.commutation_library import StandardGateCommutations
 
@@ -41,7 +44,12 @@ class CommutativeCancellation(TransformationPass):
     to 4 threads.
     """
 
-    def __init__(self, basis_gates=None, target=None):
+    def __init__(
+        self,
+        basis_gates=None,
+        target=None,
+        approximation_degree: float = 1.0,
+    ):
         """
         CommutativeCancellation initializer.
 
@@ -53,6 +61,10 @@ class CommutativeCancellation(TransformationPass):
             target (Target): The :class:`~.Target` representing the target backend, if both
                 ``basis_gates`` and ``target`` are specified then this argument will take
                 precedence and ``basis_gates`` will be ignored.
+            approximation_degree: The threshold used in the average gate fidelity
+                computation to decide whether pairs of gates can be considered as
+                canceling or commuting. A floating point value between 0 and 1,
+                where ``1.0`` means no approximation (default).
         """
         super().__init__()
         if basis_gates:
@@ -60,6 +72,7 @@ class CommutativeCancellation(TransformationPass):
         else:
             self.basis = set()
         self.target = target
+        self._approximation_degree = approximation_degree
         if target is not None:
             self.basis = set(target.operation_names)
 
@@ -86,6 +99,9 @@ class CommutativeCancellation(TransformationPass):
             DAGCircuit: the optimized DAG.
         """
         commutation_cancellation.cancel_commutations(
-            dag, self._commutation_checker, sorted(self.basis)
+            dag,
+            self._commutation_checker,
+            sorted(self.basis),
+            self._approximation_degree,
         )
         return dag

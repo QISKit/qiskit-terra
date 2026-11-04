@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.LitinskiTransformation` when processing circuits
+    with :class:`.PauliProductMeasurement`  instructions, where the a of the
+    Pauli product measurement instruction was incorrectly dropped.
+
+    See `#16869 <https://github.com/Qiskit/qiskit/issues/16869>`__.

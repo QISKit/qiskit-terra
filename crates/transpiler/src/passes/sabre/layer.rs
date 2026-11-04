@@ -78,10 +78,10 @@ impl Layers {
         qubits: [VirtualQubit; 2],
         layout: &NLayout,
     ) {
-        if let Some(Location { layer, position }) = self.locations[node] {
-            if let Some(moved) = self.layers[layer as usize].remove(position, layout) {
-                self.locations[moved] = Some(Location { layer, position });
-            }
+        if let Some(Location { layer, position }) = self.locations[node]
+            && let Some(moved) = self.layers[layer as usize].remove(position, layout)
+        {
+            self.locations[moved] = Some(Location { layer, position });
         }
         let position = self.layers[layer as usize].insert(node, qubits, layout);
         self.locations[node] = Some(Location { layer, position });

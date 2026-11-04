@@ -68,9 +68,7 @@ pub use commutation_cancellation::{cancel_commutations, commutation_cancellation
 pub use commutative_optimization::{commutative_optimization_mod, run_commutative_optimization};
 pub use consolidate_blocks::{DecomposerType, consolidate_blocks_mod, run_consolidate_blocks};
 pub use constrained_reschedule::{constrained_reschedule_mod, run_constrained_reschedule};
-pub use convert_to_pauli_rotations::{
-    convert_to_pauli_rotations_mod, py_convert_to_pauli_rotations,
-};
+pub use convert_to_pauli_rotations::{convert_to_pauli_rotations, convert_to_pauli_rotations_mod};
 pub use dense_layout::{best_subset, dense_layout_mod};
 pub use disjoint_layout::{combine_barriers, disjoint_utils_mod, distribute_components};
 pub use elide_permutations::{elide_permutations_mod, run_elide_permutations};
@@ -105,7 +103,7 @@ pub use schedule_analysis::asap_schedule_analysis::{
 };
 pub use schedule_analysis::scheduling_mod;
 pub use split_2q_unitaries::{run_split_2q_unitaries, split_2q_unitaries_mod};
-pub use substitute_pi4_rotations::{py_run_substitute_pi4_rotations, substitute_pi4_rotations_mod};
+pub use substitute_pi4_rotations::{run_substitute_pi4_rotations, substitute_pi4_rotations_mod};
 pub use synthesize_rz_rotations::{py_run_synthesize_rz_rotations, synthesize_rz_rotations_mod};
 pub use two_qubit_peephole::{
     py_two_qubit_unitary_peephole_optimize, two_qubit_peephole_mod,

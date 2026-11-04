@@ -126,8 +126,9 @@ class TestUnitarySynthesisBasisGates(QiskitTestCase):
         qc.unitary(op_1q.data, [0])
         qc.unitary(op_2q.data, [0, 1])
         qc.unitary(op_3q.data, [0, 1, 2])
-        out = UnitarySynthesis(basis_gates=None, min_qubits=2)(qc)
+        out = UnitarySynthesis(basis_gates=None)(qc)
         self.assertEqual(out.count_ops(), {"unitary": 3})
+        self.assertEqual(Operator(qc), Operator(out))
 
     @data(
         ["u3", "cx"],

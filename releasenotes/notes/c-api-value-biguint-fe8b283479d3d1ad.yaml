@@ -1,0 +1,8 @@
+---
+features_c:
+  - |
+    Added C API for accessing ``QkValue`` of type ``QkExprType_Uint`` where the
+    underlying integer is bigger than 64 bits. The new function :c:func:`qk_value_biguint`
+    returns a :c:struct:`QkBigUint` that contains an owned copy of the bigint data.
+    The caller is responsible for calling :c:func:`qk_biguint_clear` when a c:struct:`QkBigUint`
+    is no longer used.

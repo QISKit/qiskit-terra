@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.OptimizeSwapBeforeMeasure` that caused it to
+    retarget measurements to the wrong qubits when loose qubits preceded
+    the measured qubit.
+    Fixes `#16874 <https://github.com/Qiskit/qiskit/issues/16874>`__.

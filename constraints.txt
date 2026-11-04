@@ -3,3 +3,12 @@
 # usage, but our test suite uses an exact reference file that uses the
 # pydot 4 output, so we need to enforce that during tests.
 pydot>=4.0.0
+
+# z3-solver 5.0 fails to install/load in CI on macOS 15 / Python 3.10 jobs.  See
+# https://github.com/Qiskit/qiskit/issues/16601 for the current state.
+z3-solver<5.0; sys_platform == "darwin"
+
+# scs 3.3.0 (a cvxpy solver backend) bundles Intel oneMKL in its Linux/Windows
+# x86_64 wheel but fails to load it, aborting with "Cannot load libmkl_def.so.3".
+# Pin back until upstream ships a fixed release.
+scs<3.3.0

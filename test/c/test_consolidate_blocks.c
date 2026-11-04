@@ -257,9 +257,10 @@ static int test_non_cx_target(void) {
     QkOpCounts counts = qk_circuit_count_ops(qc);
     if (counts.len != 1) {
         result = EqualityError;
-        printf("The pass run did not result in a circuit with one unitary gate. Expected 1 gate, "
-               "got %zu.",
-               counts.len);
+        fprintf(stderr,
+                "The pass run did not result in a circuit with one unitary gate. Expected 1 gate, "
+                "got %zu.",
+                counts.len);
         goto cleanup;
     }
 
@@ -267,9 +268,11 @@ static int test_non_cx_target(void) {
     qk_circuit_get_instruction(qc, 0, &unitary);
     if (strcmp(unitary.name, "unitary") != 0) {
         result = EqualityError;
-        printf("The pass run did not result in a circuit with one unitary gate. Expected 'unitary' "
-               "gate, got '%s'.",
-               unitary.name);
+        fprintf(
+            stderr,
+            "The pass run did not result in a circuit with one unitary gate. Expected 'unitary' "
+            "gate, got '%s'.",
+            unitary.name);
         goto cleanup_inst;
     }
 cleanup_inst:

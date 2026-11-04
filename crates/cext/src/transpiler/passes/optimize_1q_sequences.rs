@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
 use qiskit_circuit::{circuit_data::CircuitData, dag_circuit::DAGCircuit};
 use qiskit_transpiler::{
     passes::{Optimize1qGatesDecompositionState, run_optimize_1q_gates_decomposition},
@@ -49,6 +48,7 @@ pub unsafe extern "C" fn qk_transpiler_standalone_optimize_1q_sequences(
     circuit: *mut CircuitData,
     target: *const Target,
 ) {
+    // SAFETY: Per documentation, the pointers are valid and non-null.
     unsafe { qk_transpiler_pass_standalone_optimize_1q_sequences(circuit, target) };
 }
 
@@ -79,19 +79,17 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_optimize_1q_sequences(
     circuit: *mut CircuitData,
     target: *const Target,
 ) {
-    // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let target = unsafe {
-        if target.is_null() {
-            None
-        } else {
-            Some(const_ptr_as_ref(target))
-        }
+    let target = if target.is_null() {
+        None
+    } else {
+        // SAFETY: Per documentation, the pointer is non-null and aligned.
+        Some(unsafe { &*target })
     };
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    let circuit = unsafe { &mut *circuit };
 
     // Convert the circuit to a DAG.
-    let mut circuit_as_dag = DAGCircuit::from_circuit_data(circuit, false, None, None, None, None)
+    let mut circuit_as_dag = DAGCircuit::from_circuit_data(circuit, false, None, None)
         .expect("Error while converting the circuit to a dag.");
 
     let state = Optimize1qGatesDecompositionState::new(
@@ -170,16 +168,14 @@ pub unsafe extern "C" fn qk_transpiler_pass_optimize_1q_sequences(
     dag: *mut DAGCircuit,
     target: *const Target,
 ) {
-    // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let target = unsafe {
-        if target.is_null() {
-            None
-        } else {
-            Some(const_ptr_as_ref(target))
-        }
+    let target = if target.is_null() {
+        None
+    } else {
+        // SAFETY: Per documentation, the pointer is non-null and aligned.
+        Some(unsafe { &*target })
     };
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let dag = unsafe { mut_ptr_as_ref(dag) };
+    let dag = unsafe { &mut *dag };
 
     let state = Optimize1qGatesDecompositionState::new(
         target

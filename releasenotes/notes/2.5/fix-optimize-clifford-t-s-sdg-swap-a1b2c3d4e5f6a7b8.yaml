@@ -1,0 +1,6 @@
+fixes:
+  - |
+    Fixed a bug in :class:`.OptimizeCliffordT` where, for circuits transpiled
+    to a Clifford+T basis that exclude :class:`.SXGate` and 
+    :class:`.SXdgGate`, the pass could return a circuit that was not
+    unitarily equivalent to its input.

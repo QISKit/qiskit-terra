@@ -1,0 +1,10 @@
+---
+features_qpy:
+  - QPY format version 18 significantly decreases the data size for
+    most :class:`.ClassicalRegister` and :class:`.QuantumRegister` objects in
+    a :class:`.QuantumCircuit`. The constant overhead for registers has
+    increased by 1 byte, but then in the worst case for each bit contained in
+    the register the overhead has decreased from 8 bytes for bit in the register
+    to 4 bytes for bit in the register. In the common case where the registers
+    are added to the circuit contiguously the space requirements goes from 8
+    bytes for bit to 4 bytes total to represent the register.

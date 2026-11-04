@@ -1,0 +1,5 @@
+---
+features_c:
+  - |
+    Added :c:func:`qk_obs_with_capacity` for constructing emtpy ``QkObs`` instances with a
+    pre-allocated capacity for terms.

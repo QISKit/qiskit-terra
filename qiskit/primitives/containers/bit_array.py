@@ -268,6 +268,7 @@ class BitArray(ShapedMixin):
         Raises:
             ValueError: If different mappings have different numbers of shots.
             ValueError: If no counts dictionaries are supplied.
+            ValueError: If a key is negative or does not fit in ``num_bits`` bits.
         """
         if singleton := isinstance(counts, Mapping):
             counts = [counts]
@@ -310,6 +311,7 @@ class BitArray(ShapedMixin):
 
         Raises:
             ValueError: If no strings are given.
+            ValueError: If a sample is negative or does not fit in ``num_bits`` bits.
         """
         samples = iter(samples)
         try:
@@ -331,7 +333,12 @@ class BitArray(ShapedMixin):
                 num_bits = 1
 
         num_bytes = _min_num_bytes(num_bits)
-        data = b"".join(val.to_bytes(num_bytes, "big") for val in ints)
+        try:
+            data = b"".join(val.to_bytes(num_bytes, "big") for val in ints)
+        except OverflowError as ex:
+            raise ValueError(
+                f"All samples must be non-negative integers that fit in num_bits={num_bits} bits."
+            ) from ex
         array = np.frombuffer(data, dtype=np.uint8, count=len(data))
         return BitArray(array.reshape(-1, num_bytes), num_bits)
 

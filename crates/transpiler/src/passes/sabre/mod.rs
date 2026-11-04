@@ -26,8 +26,8 @@ pub use layout::sabre_layout_and_routing;
 pub(crate) use route::sabre_routing;
 
 pub fn sabre(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(route::sabre_routing))?;
-    m.add_wrapped(wrap_pyfunction!(layout::sabre_layout_and_routing))?;
+    m.add_wrapped(wrap_pyfunction!(route::py_sabre_routing))?;
+    m.add_wrapped(wrap_pyfunction!(layout::py_sabre_layout_and_routing))?;
     m.add_class::<route::PyRoutingTarget>()?;
     m.add_class::<heuristic::SetScaling>()?;
     m.add_class::<heuristic::Heuristic>()?;

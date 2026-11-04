@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a bug in the symbolic engine where the sum or subtraction of
+    two expressions could incorrectly be optimized to 0.  This occured when
+    the same symbol was involved in both expressions and the numeric parts
+    evaluated to 0, e.g. ``(1 + x) + (-1 + x)``.
+

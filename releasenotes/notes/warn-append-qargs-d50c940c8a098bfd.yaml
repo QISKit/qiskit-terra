@@ -1,0 +1,7 @@
+---
+upgrade_circuits:
+  - |
+    The :meth:`.QuantumCircuit.append` method will now emit a warning if either
+    ``qargs`` or ``cargs`` are passed alongside a :class:`.CircuitInstruction`,
+    in which case those arguments are ignored.
+

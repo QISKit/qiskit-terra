@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed an issue where the layer-returning methods
+    :meth:`.DAGCircuit.layers` and :meth:`.DAGCircuit.serial_layers`
+    copied the parent DAG ``global_phase`` into each yielded layer DAG.
+    Fixes `#16271 <https://github.com/Qiskit/qiskit/issues/16271>`__.

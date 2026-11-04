@@ -17,18 +17,21 @@ import math
 import unittest
 import pickle
 import copy
+import functools
+import itertools
 
 from test import combine
 from test import QiskitTestCase
 
 import ddt
 
+from qiskit import QuantumCircuit
 from qiskit.circuit import Parameter, ParameterVector, ParameterExpression
 from qiskit.utils.optionals import HAS_SYMPY
 
-
 param_x = Parameter("x")
 param_y = Parameter("y")
+param_z = Parameter("z")
 nested_expr = param_x + param_y - param_x
 nested_expr = nested_expr.subs({param_y: param_x})
 
@@ -72,6 +75,23 @@ real_values = [0.41, 0.9, -0.83, math.pi, -math.pi / 124, -42.42]
 @ddt.ddt
 class TestParameterExpression(QiskitTestCase):
     """Test parameter expression."""
+
+    def assertStructurallyEqualResult(
+        self, left: ParameterExpression, right: ParameterExpression, result: bool
+    ):
+        """Assert that ``left.structurally_equal(right) == result`` with a better error message."""
+        self.assertIsInstance(left, ParameterExpression)
+        self.assertIsInstance(right, ParameterExpression)
+        if left.structurally_equal(right) != result:
+            op = "not ==" if result else "=="
+            msg = f"Assertion failure: '{left}' should {op} '{right}'."
+            raise self.failureException(msg)
+
+    def assertStructurallyEqual(self, left, right):
+        self.assertStructurallyEqualResult(left, right, True)
+
+    def assertNotStructurallyEqual(self, left, right):
+        self.assertStructurallyEqualResult(left, right, False)
 
     @ddt.data(param_x, param_x + param_y, (param_x + 1.0).bind({param_x: 1.0}))
     def test_num_parameters(self, expr):
@@ -620,6 +640,354 @@ class TestParameterExpression(QiskitTestCase):
         expected_sub = 2 - sympy.Symbol("a")
         self.assertEqual(sympy_sub, expected_sub)
 
+    def test_division_with_addition(self):
+        """Test that (v / p) + p evaluates correctly when bound.
+
+        Regression test for bug where (v / p) + p was incorrectly evaluated.
+
+        See https://github.com/Qiskit/qiskit/issues/16263
+        """
+        p = Parameter("p")
+
+        # Case 1: (v / p) + p
+        qc1 = QuantumCircuit(1)
+        qc1.rx((2 / p) + p, 0)
+
+        bound1 = qc1.assign_parameters({p: 3})
+        actual1 = float(bound1.data[0].operation.params[0])
+        expected1 = (2 / 3) + 3
+
+        self.assertAlmostEqual(actual1, expected1, places=10)
+
+        # Case 2: p + (v / p)
+        qc2 = QuantumCircuit(1)
+        qc2.rx(p + (2 / p), 0)
+
+        bound2 = qc2.assign_parameters({p: 3})
+        actual2 = float(bound2.data[0].operation.params[0])
+        expected2 = 3 + (2 / 3)
+
+        self.assertAlmostEqual(actual2, expected2, places=10)
+
+    def test_division_with_subtraction(self):
+        """Test that (v / p) - p and p - (v / p) evaluate correctly when bound.
+
+        Regression test for bug where (v / p) - p and p - (v / p) were incorrectly evaluated.
+
+        See https://github.com/Qiskit/qiskit/issues/16263
+        """
+        p = Parameter("p")
+
+        # Case 1: (v / p) - p
+        qc1 = QuantumCircuit(1)
+        qc1.rx((3 / p) - p, 0)
+
+        bound1 = qc1.assign_parameters({p: 5})
+        actual1 = float(bound1.data[0].operation.params[0])
+        expected1 = (3 / 5) - 5
+
+        self.assertAlmostEqual(actual1, expected1, places=10)
+
+        # Case 2: p - (v / p)
+        qc2 = QuantumCircuit(1)
+        qc2.rx(p - (2 / p), 0)
+
+        bound2 = qc2.assign_parameters({p: 3})
+        actual2 = float(bound2.data[0].operation.params[0])
+        expected2 = 3 - (2 / 3)
+
+        self.assertAlmostEqual(actual2, expected2, places=10)
+
+    def test_nested_division(self):
+        """Test that nested division expressions evaluate correctly when bound.
+
+        Regression test for bug where expressions like (a / x) / (b / y) were incorrectly evaluated.
+
+        See https://github.com/Qiskit/qiskit/issues/16262
+        """
+        x = Parameter("x")
+        y = Parameter("y")
+        p = Parameter("p")
+        q = Parameter("q")
+
+        # Case 1: (a / x) / (b / y)
+        qc1 = QuantumCircuit(1)
+        qc1.rx((2 / x) / (3 / y), 0)
+
+        bound1 = qc1.assign_parameters({x: 5, y: 7})
+        actual1 = float(bound1.data[0].operation.params[0])
+        expected1 = (2 / 5) / (3 / 7)
+
+        self.assertAlmostEqual(actual1, expected1, places=10)
+
+        # Case 2: (a * p) / (b / q)
+        qc2 = QuantumCircuit(1)
+        qc2.rx((2 * p) / (3 / q), 0)
+
+        bound2 = qc2.assign_parameters({p: 5, q: 7})
+        actual2 = float(bound2.data[0].operation.params[0])
+        expected2 = (2 * 5) / (3 / 7)
+
+        self.assertAlmostEqual(actual2, expected2, places=10)
+
+        # Case 3: (a / p) / (b * q)
+        qc3 = QuantumCircuit(1)
+        qc3.rx((2 / p) / (3 * q), 0)
+
+        bound3 = qc3.assign_parameters({p: 5, q: 7})
+        actual3 = float(bound3.data[0].operation.params[0])
+        expected3 = (2 / 5) / (3 * 7)
+
+        self.assertAlmostEqual(actual3, expected3, places=10)
+
+    def test_gradient_composite_base_constant_exponent(self):
+        """Test gradient of composite base with constant exponent.
+
+        Regression test for bug where d/dp (f(p))^n was incorrectly computed.
+        The correct derivative is: n * (f(p))^(n-1) * f'(p)
+
+        See https://github.com/Qiskit/qiskit/issues/16260
+        """
+        p = Parameter("p")
+
+        # Case: d/dp (2p)^3 = 3 * (2p)^2 * 2 = 6 * (2p)^2
+        expr = (2 * p) ** 3
+        gradient = expr.gradient(p)
+        actual = float(gradient.bind({p: 2}))
+        expected = 3 * (2 * 2) ** 2 * 2  # 3 * 16 * 2 = 96
+
+        self.assertAlmostEqual(actual, expected, places=10)
+
+        # Case: d/dp 2^(3p) = 2^(3p) * ln(2) * 3
+        expr = 2 ** (3 * p)
+        gradient = expr.gradient(p)
+        actual = float(gradient.bind({p: 1}))
+        expected = (2**3) * math.log(2) * 3  # 8 * ln(2) * 3
+
+        self.assertAlmostEqual(actual, expected, places=10)
+
+    def test_power_expression_with_addition_subtraction(self):
+        """Test that theta**2 + phi**2 and theta**2 - phi**2 evaluate correctly.
+
+        Regression test for bug where power expressions combined with addition/subtraction
+        were incorrectly evaluated when parameters are bound.
+        See https://github.com/Qiskit/qiskit/issues/16259
+        """
+        theta = Parameter("theta")
+        phi = Parameter("phi")
+
+        # Subtraction case: theta**2 - phi**2
+        qc_sub = QuantumCircuit(1)
+        qc_sub.rx(theta**2 - phi**2, 0)
+
+        actual_sub = qc_sub.assign_parameters({theta: 5, phi: 3})
+        expected_sub_value = 5**2 - 3**2  # 25 - 9 = 16
+        actual_sub_value = float(actual_sub.data[0].operation.params[0])
+
+        self.assertAlmostEqual(actual_sub_value, expected_sub_value, places=10)
+
+        # Addition case: theta**2 + phi**2
+        qc_add = QuantumCircuit(1)
+        qc_add.rx(theta**2 + phi**2, 0)
+
+        actual_add = qc_add.assign_parameters({theta: 5, phi: 3})
+        expected_add_value = 5**2 + 3**2  # 25 + 9 = 34
+        actual_add_value = float(actual_add.data[0].operation.params[0])
+
+        self.assertAlmostEqual(actual_add_value, expected_add_value, places=10)
+
+    def test_conjugate_gradient(self):
+        """Test that gradient of conjugate expression is computed correctly.
+
+        Regression test for bug where d/dp conj(f(p)) returned 1.0 instead of
+        the actual derivative f'(p) (assuming real parameters, conj is identity).
+        """
+        p = Parameter("p")
+        q = Parameter("q")
+
+        # d/dp conj(q) should be 0 (q does not depend on p)
+        expr = q.conjugate()
+        gradient = expr.gradient(p)
+        actual = (
+            float(gradient.bind({p: 1, q: 2})) if hasattr(gradient, "bind") else float(gradient)
+        )
+        self.assertAlmostEqual(actual, 0.0, places=10)
+
+        # d/dp conj(p) should be 1 (conj is identity for real p)
+        expr = p.conjugate()
+        gradient = expr.gradient(p)
+        actual = float(gradient.bind({p: 1})) if hasattr(gradient, "bind") else float(gradient)
+        self.assertAlmostEqual(actual, 1.0, places=10)
+
+        # d/dp conj(2*p + 3) should be 2
+        expr = (2 * p + 3).conjugate()
+        gradient = expr.gradient(p)
+        actual = float(gradient.bind({p: 5})) if hasattr(gradient, "bind") else float(gradient)
+        self.assertAlmostEqual(actual, 2.0, places=10)
+
+        # d/dp (conj(p) + conj(q)) should be 1 (only first term depends on p)
+        expr = p.conjugate() + q.conjugate()
+        gradient = expr.gradient(p)
+        actual = (
+            float(gradient.bind({p: 1, q: 2})) if hasattr(gradient, "bind") else float(gradient)
+        )
+        self.assertAlmostEqual(actual, 1.0, places=10)
+
+    def test_mul_expand_rhs_div(self):
+        """Test that multiplication distributes correctly over division.
+
+        Regression test for bug where expand((A+B)*(p/q)) incorrectly computed
+        (A+B)*p*q instead of (A*p + B*p)/q.
+        """
+
+        a = Parameter("a")
+        b = Parameter("b")
+        p = Parameter("p")
+        q = Parameter("q")
+
+        vals = {a: 2, b: 3, p: 5, q: 7}
+
+        # (a+b)*(p/q) should give a*p/q + b*p/q
+        expr = (a + b) * (p / q)
+        expected = float((a * p / q + b * p / q).bind(vals))
+        actual = float(expr.bind(vals))
+        self.assertAlmostEqual(actual, expected, places=10)
+
+        # sin((a+b)*(p/q)) - sin(a*p*q + b*p*q) must NOT be zero
+        # (the bug caused these to incorrectly simplify to 0)
+        wrong = (a * p * q + b * p * q).sin()
+        combined = expr.sin() - wrong
+        combined_val = float(combined.bind(vals))
+        expected_val = math.sin(float(expr.bind(vals))) - math.sin(
+            float((a * p * q + b * p * q).bind(vals))
+        )
+        self.assertAlmostEqual(combined_val, expected_val, places=10)
+        self.assertNotAlmostEqual(combined_val, 0.0, places=10)
+
+    def test_mul_expand_self_div(self):
+        """Test that (A/b)*v expands correctly to A*v/b.
+
+        Regression test for bug where mul_expand((A/b)*v) incorrectly computed
+        A/(v*b) instead of A*v/b.
+        """
+        p = Parameter("p")
+        q = Parameter("q")
+        a = Parameter("a")
+
+        vals = {p: 1, q: 2, a: 1}
+
+        # ((2.0*p + 2.0*q)/a) * 6.0 = 12*(p+q)/a
+        # ((p + q)/a) * 3.0 = 3*(p+q)/a
+        # These are different; their sins must NOT simplify to 0
+        e1 = ((2.0 * p + 2.0 * q) / a) * 6.0
+        e2 = ((p + q) / a) * 3.0
+
+        e1_val = float(e1.bind(vals))
+        e2_val = float(e2.bind(vals))
+        self.assertAlmostEqual(e1_val, 36.0, places=10)
+        self.assertAlmostEqual(e2_val, 9.0, places=10)
+
+        combined = e1.sin() - e2.sin()
+        combined_val = float(combined.bind(vals))
+        expected_val = math.sin(e1_val) - math.sin(e2_val)
+        self.assertAlmostEqual(combined_val, expected_val, places=10)
+        self.assertNotAlmostEqual(combined_val, 0.0, places=10)
+
+    def test_chain_rule_gradient(self):
+        """Test that the chain rule is correctly applied for all function applications.
+
+        Each sub-test uses a non-trivial inner function g(p) = 2*p + 1 (with g'(p) = 2)
+        so that a bug which drops the inner derivative would produce the wrong answer.
+        For arcsin/arccos, h(p) = 0.1*p + 0.1 is used to keep values in (-1, 1).
+        """
+        p = Parameter("p")
+        val = 0.5  # evaluation point
+
+        # g(p) = 2p + 1,  g'(p) = 2,  g(0.5) = 2.0
+        g = 2 * p + 1
+        gval = 2 * val + 1  # 2.0
+
+        with self.subTest("neg"):
+            # d/dp (-(2p+1)) = -2
+            gradient = (-g).gradient(p)
+            expected = -2.0
+            self.assertAlmostEqual(gradient, expected, places=10)
+
+        with self.subTest("abs"):
+            # d/dp |g(p)| = g(p)/|g(p)| * g'(p)
+            gradient = abs(g).gradient(p)
+            expected = (gval / abs(gval)) * 2
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, expected, places=10)
+
+        with self.subTest("exp"):
+            # d/dp exp(g(p)) = exp(g(p)) * 2
+            gradient = g.exp().gradient(p)
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, math.exp(gval) * 2, places=10)
+
+        with self.subTest("log"):
+            # d/dp log(g(p)) = 2 / g(p)
+            gradient = g.log().gradient(p)
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, 2 / gval, places=10)
+
+        with self.subTest("pow_negative_integer_exponent"):
+            # d/dp g(p)^(-2) = -2 * g(p)^(-3) * 2
+            gradient = (g**-2).gradient(p)
+            expected = -2 * gval**-3 * 2
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, expected, places=10)
+
+        with self.subTest("pow_float_exponent"):
+            # d/dp g(p)^0.5 = 0.5 * g(p)^(-0.5) * 2
+            gradient = (g**0.5).gradient(p)
+            expected = 0.5 * gval**-0.5 * 2
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, expected, places=10)
+
+        with self.subTest("sin"):
+            # d/dp sin(g(p)) = cos(g(p)) * 2
+            gradient = g.sin().gradient(p)
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, math.cos(gval) * 2, places=10)
+
+        with self.subTest("cos"):
+            # d/dp cos(g(p)) = -sin(g(p)) * 2
+            gradient = g.cos().gradient(p)
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, -math.sin(gval) * 2, places=10)
+
+        with self.subTest("tan"):
+            # d/dp tan(g(p)) = 2 / cos(g(p))^2
+            gradient = g.tan().gradient(p)
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, 2 / math.cos(gval) ** 2, places=10)
+
+        # h(p) = 0.1p + 0.1,  h'(p) = 0.1,  h(0.5) = 0.15  (safe for arcsin/arccos)
+        h = 0.1 * p + 0.1
+        hval = 0.1 * val + 0.1  # 0.15
+
+        with self.subTest("arcsin"):
+            # d/dp arcsin(h(p)) = 0.1 / sqrt(1 - h(p)^2)
+            gradient = h.arcsin().gradient(p)
+            expected = 0.1 / math.sqrt(1 - hval**2)
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, expected, places=10)
+
+        with self.subTest("arccos"):
+            # d/dp arccos(h(p)) = -0.1 / sqrt(1 - h(p)^2)
+            gradient = h.arccos().gradient(p)
+            expected = -0.1 / math.sqrt(1 - hval**2)
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, expected, places=10)
+
+        with self.subTest("arctan"):
+            # d/dp arctan(g(p)) = 2 / (1 + g(p)^2)
+            gradient = g.arctan().gradient(p)
+            actual = gradient.bind({p: val})
+            self.assertAlmostEqual(actual, 2 / (1 + gval**2), places=10)
+
     def test_simplify_multi_parameter_cancellation(self):
         """Test that simplify() handles cancellation across multiple parameters."""
         a = Parameter("a")
@@ -635,3 +1003,149 @@ class TestParameterExpression(QiskitTestCase):
         b = Parameter("b")
         expr = a + b
         self.assertEqual(expr, expr.simplify())
+
+    @ddt.data("__add__", "__sub__", "__mul__", "__truediv__")
+    def test_accumulation(self, meth):
+        """Test on-the-fly accumulation of numerical values.
+
+        Regression test of
+        """
+        symbol = Parameter("p")
+        values = [(i + 1) / 11 for i in range(50)]
+
+        def accumulator(total, value):
+            return getattr(total, meth)(value)
+
+        expression = functools.reduce(accumulator, [symbol] + values)
+        if meth == "__truediv__":
+            prod = functools.reduce(lambda total, value: total * value, values)
+            reference = symbol / prod
+        elif meth == "__sub__":
+            summed = functools.reduce(lambda total, value: total + value, values)
+            reference = symbol - summed
+        else:
+            accumulated = functools.reduce(accumulator, values)
+            reference = accumulator(symbol, accumulated)
+
+        self.assertEqual(reference, expression)
+
+    def test_huge_addition(self):
+        """Test additions are simplified on the fly (aka. simpliflied).
+
+        Regression test of #16676.
+        """
+        p = Parameter("p")
+        for _ in range(int(1e6)):
+            p += 3.14
+
+        self.assertEqual(p, p.simplify())
+
+    @ddt.data("__add__", "__sub__")
+    def test_optimization_same_symbol(self, method):
+        """Test optimizations with the same symbol."""
+        x = Parameter("x")
+        add_sub_terms = [1 + x, -1 + x, 1 - x, -1 - x]
+        pow_terms = [x**2, x ** (-2)]
+        rpow_terms = [2**x, (-2) ** x]
+        mul_terms = [2 * x, -2 * x]
+        rdiv_terms = [2 / x, -2 / x]
+        div_terms = [x / 2, x / (-2)]
+
+        value = 1.234
+
+        for terms in [add_sub_terms, pow_terms, rpow_terms, mul_terms, rdiv_terms, div_terms]:
+            for lhs, rhs in itertools.permutations(terms, 2):
+                with self.subTest(lhs=lhs, rhs=rhs):
+                    reference = getattr(lhs.bind({x: value}), method)(rhs.bind({x: value}))
+                    expression = getattr(lhs, method)(rhs)
+
+                    self.assertEqual(reference, expression.bind({x: value}))
+
+    def test_sub_sub(self):
+        """Regression test for two nested subtractions with numeric values."""
+        x, y = Parameter("x"), Parameter("y")
+        expr1 = x + y
+        sub1 = expr1 - 1.0
+        sub2 = sub1 - 2.0
+
+        expected = x + y - 3.0
+        self.assertEqual(expected, sub2)
+
+    def test_deep_string_parse(self):
+        """Test that the string parser can handle very deep expressions."""
+        n = 100_000
+        a = Parameter("a")
+        expr_str = "a" + " ** a" * n
+        # This is an explicitly private constructor, but the purpose of the test is for _any_ string
+        # constructor; we can change it over to a new API if/when we expose one.
+        out = ParameterExpression({"a": a}, expr_str)
+        expected = a
+        for _ in range(n):
+            # TODO: actually this seems like a weirdness in the parser: ` ** ` should be
+            # right-associative (so it should be `a**expected`).  We have to use `**` in the test to
+            # avoid complexity explosion via attempted simplification.
+            expected = expected**a
+        self.assertStructurallyEqual(out, expected)
+
+    def test_structurally_equal_simplification(self):
+        x = Parameter("x")
+        y = Parameter("y")
+
+        # These two expressions do not canonicalise to each other, as of the introduction of the
+        # test (2026-09-07), so they should not appear structurally equal.  If canonicalisation is
+        # introduced, the test case should be changed (after we've checked that `structurally_equal`
+        # is actually correct).
+        left = x + y + 1
+        right = 1 + y + x
+        self.assertEqual(left, right)
+        self.assertNotStructurallyEqual(left, right)
+
+    @ddt.unpack
+    @ddt.data(
+        (param_x, param_x, True),
+        (param_x, param_y, False),
+        (param_x + 1, param_x + 1, True),
+        (param_x + 1, param_x + 2, False),
+        (param_x + 1, param_y + 1, False),
+        (-param_x, -param_x, True),
+        (-param_x, -param_y, False),
+        (param_x + (2 * param_y), param_x + (2 * param_y), True),
+        (param_x + (2 * param_y), param_x + (2 * param_z), False),
+        ((-param_x) ** param_y, (-param_x) ** param_y, True),
+        ((-param_x) ** param_y, (-param_y) ** (param_x), False),
+        (param_x**-param_y, param_x**-param_y, True),
+        (param_x + param_y, param_x - param_y, False),
+        (-param_x, param_x.sin(), False),
+    )
+    def test_structurally_equal(self, left, right, expected):
+        self.assertStructurallyEqualResult(left, right, expected)
+
+    @ddt.data("__add__", "__sub__")
+    def test_optimization_with_shared_terms(self, method):
+        """Adding or subtracting two expressions with a shared term should fold the constants and
+        either double or cancel the shared term.
+
+        Tests all combinations of ``x+1, x-1, -x+1, -x-1`` with add/sub, comparing against the
+        expected simplified expression.
+        """
+        # (expression, coefficient of x, constant); the coefficient and constant are used to
+        # compute the expected expression.
+        terms = [
+            (param_x + 1, 1, 1),
+            (param_x - 1, 1, -1),
+            (-param_x + 1, -1, 1),
+            (-param_x - 1, -1, -1),
+        ]
+        # all ordered pairs, including an expression paired with itself
+        for (lhs, left_coeff, left_const), (rhs, right_coeff, right_const) in itertools.product(
+            terms, repeat=2
+        ):
+            with self.subTest(lhs=str(lhs), method=method, rhs=str(rhs)):
+                expression = getattr(lhs, method)(rhs)
+
+                # compute expected simplified expression directly
+                coeff = getattr(left_coeff, method)(right_coeff)
+                const = getattr(left_const, method)(right_const)
+                expected = coeff * param_x + const
+
+                self.assertStructurallyEqual(expression, expected)

@@ -13,6 +13,7 @@
 use crate::classical::expr::{Expr, ExprKind, PyExpr};
 use crate::classical::types::Type;
 use crate::imports;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use pyo3::{IntoPyObjectExt, intern};
@@ -52,8 +53,8 @@ unsafe impl ::bytemuck::CheckedBitPattern for UnaryOp {
 }
 
 impl UnaryOp {
-    pub fn from_u8(value: u8) -> PyResult<UnaryOp> {
-        Ok(bytemuck::checked::cast::<u8, UnaryOp>(value))
+    pub fn try_from_u8(value: u8) -> Result<UnaryOp, bytemuck::checked::CheckedCastError> {
+        bytemuck::checked::try_cast::<u8, UnaryOp>(value)
     }
 }
 
@@ -91,7 +92,8 @@ impl<'a, 'py> FromPyObject<'a, 'py> for UnaryOp {
 
     fn extract(ob: Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         let value = ob.getattr(intern!(ob.py(), "value"))?;
-        Ok(bytemuck::checked::cast(value.extract::<u8>()?))
+        bytemuck::checked::try_cast(value.extract::<u8>()?)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 }
 
@@ -192,5 +194,15 @@ impl PyUnary {
             self.get_operand(py)?.bind(py).repr()?,
             self.get_type(py)?.bind(py).repr()?,
         ))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_unary_op_from_u8_invalid_input() {
+        assert!(UnaryOp::try_from_u8(123).is_err())
     }
 }

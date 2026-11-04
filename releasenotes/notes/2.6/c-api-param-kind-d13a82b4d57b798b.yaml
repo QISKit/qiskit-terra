@@ -1,0 +1,9 @@
+---
+features_c:
+  - |
+    Add :c:func:`qk_param_kind` to obtain an enumeration (:c:enum:`QkParamKind`) 
+    describing the kind of any  ``QkParam`` instances before using functions
+    such as :c:func:`qk_param_as_real` or :c:func:`qk_param_as_int` to obtain its bound value.
+  - |
+    Add :c:func:`qk_param_as_int` to obtain the integer value of a parameter
+    that can only be represented by an integer.

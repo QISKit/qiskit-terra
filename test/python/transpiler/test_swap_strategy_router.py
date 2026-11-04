@@ -606,7 +606,7 @@ class TestPauliEvolutionSwapStrategies(QiskitTestCase):
         # test as pre-routing step
         backend = GenericBackendV2(num_qubits=4, coupling_map=[[0, 1], [0, 2], [0, 3]], seed=42)
         pm = generate_preset_pass_manager(
-            optimization_level=3, target=backend.target, seed_transpiler=40
+            optimization_level=1, target=backend.target, seed_transpiler=40
         )
         pm.pre_routing = swap_pm
         full = pm.run(circ.decompose())
@@ -747,3 +747,25 @@ class TestSwapRouterExceptions(QiskitTestCase):
 
         assigned_circuit = circuit_with_block.assign_parameters({gamma: 0.7})
         self.assertEqual(len(assigned_circuit.parameters), 1)
+
+    def test_identical_summands_added(self):
+        summand_a = SparsePauliOp(["ZZ", "ZZ"], coeffs=[0.2, 0.4])
+        summand_b = SparsePauliOp(["ZZ"], coeffs=[0.6])
+
+        circuit_a = QuantumCircuit(2)
+        circuit_a.append(PauliEvolutionGate(summand_a, time=1.0), [0, 1])
+
+        circuit_b = QuantumCircuit(2)
+        circuit_b.append(PauliEvolutionGate(summand_b, time=1.0), [0, 1])
+
+        manager = PassManager(
+            [FindCommutingPauliEvolutions(), Commuting2qGateRouter(SwapStrategy.from_line([0, 1]))]
+        )
+
+        circuit_a = manager.run(circuit_a)
+        circuit_b = manager.run(circuit_b)
+
+        operator_a = Operator(circuit_a)
+        operator_b = Operator(circuit_b)
+
+        self.assertEqual(operator_a, operator_b)

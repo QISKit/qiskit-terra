@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`~.QuantumCircuit` and :class:`.DAGCircuit` equality
+    where circuits containing the same :class:`~.UnitaryGate`, 
+    :class:`.PauliProductRotationGate`, or :class:`.PauliProductMeasurement`
+    acting on the same qubits in different orders would incorrectly compare as
+    equal.

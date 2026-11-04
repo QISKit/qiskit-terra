@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a bug in QPY serialization where :class:`~.ParameterExpression` objects
+    containing expressions that can be evaluated to concrete values
+    were not being deserialized correctly, resulting in a crash.
+    Fixed `#17164 <https://github.com/Qiskit/qiskit/issues/17164>`__.

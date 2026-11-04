@@ -36,7 +36,8 @@ jobs:
       - test-macos
       - test-windows
       - test-rust
-      - test-c
+      - test-c-defaults
+      - test-c-versions
       - test-images
       - miri
       - qpy
@@ -154,7 +155,6 @@ jobs:
     needs: config
     uses: ./.github/workflows/rust-tests.yml
     with:
-      python-version: ${{ needs.config.outputs.python-old }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
 
   miri:
@@ -164,8 +164,8 @@ jobs:
     with:
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
 
-  test-c:
-    name: Unit C / ${{ matrix.runner }}
+  test-c-defaults:
+    name: Unit C / Defaults / ${{ matrix.runner }}
     needs: config
     uses: ./.github/workflows/ctests.yml
     with:
@@ -179,6 +179,25 @@ jobs:
           - ${{ needs.config.outputs.runner-linux-arm64 }}
           - ${{ needs.config.outputs.runner-macos-arm64 }}
           - ${{ needs.config.outputs.runner-windows-x86_64 }}
+
+  test-c-versions:
+    name: Unit C / Versions / ${{ matrix.extensions && 'gnu' || 'c' }}${{ matrix.version }}
+    needs: config
+    uses: ./.github/workflows/ctests.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-new }}
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+      name: ${{ matrix.extensions && 'gnu' || 'c' }}${{ matrix.version }}
+      cmake_flags: "-DCMAKE_C_STANDARD=${{ matrix.version }} -DCMAKE_C_EXTENSIONS=${{ matrix.extensions && 'ON' || 'OFF' }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - ${{ needs.config.outputs.c-old }}
+          - ${{ needs.config.outputs.c-new }}
+        extensions:
+          - true
+          - false
 
   test-images:
     name: Image

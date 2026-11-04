@@ -480,7 +480,8 @@ def _get_layered_instructions(
         for node in dag.topological_op_nodes():
             nodes.append([node])
     else:
-        nodes = _LayerSpooler(dag, qubits, clbits, justify, measure_map, measure_arrows)
+        ordered_qubits = sorted(dag.qubits, key=wire_map.__getitem__) if wire_map else qubits
+        nodes = _LayerSpooler(dag, ordered_qubits, clbits, justify, measure_map, measure_arrows)
 
     if not idle_wires:
         # Optionally remove all idle wires and instructions that are on them and
@@ -552,7 +553,13 @@ class _LayerSpooler(list):
     """Manipulate list of layer dicts for _get_layered_instructions."""
 
     def __init__(self, dag, qubits, clbits, justification, measure_map, measure_arrows):
-        """Create spool"""
+        """Create spool.
+
+        ``qubits`` must already be ordered by their position in the outer drawing, so that
+        crossover checks in :meth:`insertable` reflect the outer layout. This prevents layer
+        collisions when a control-flow body acts on qubits that are permuted relative to the
+        outer circuit.
+        """
         super().__init__()
         self.dag = dag
         self.qubits = qubits

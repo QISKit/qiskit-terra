@@ -234,10 +234,10 @@ impl VarStretchContainer {
             _ => {}
         }
 
-        if let StretchType::Capture = stretch_type {
-            if self.num_vars(VarType::Input) > 0 {
-                return Err(VarStretchContainerError::CaptureWithInputVars);
-            }
+        if let StretchType::Capture = stretch_type
+            && self.num_vars(VarType::Input) > 0
+        {
+            return Err(VarStretchContainerError::CaptureWithInputVars);
         }
 
         let name = stretch.name.clone();

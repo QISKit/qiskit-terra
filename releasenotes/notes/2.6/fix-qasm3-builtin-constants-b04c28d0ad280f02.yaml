@@ -1,0 +1,12 @@
+---
+fixes:
+  - |
+    Fixed an issue in :func:`.qasm3.dumps` where Qiskit objects (registers,
+    parameters, gates) whose names collide with OpenQASM 3 built-in constants
+    (``pi``, ``tau``, ``euler`` and their Unicode letter aliases ``π``, ``τ``)
+    were exported without renaming.  The resulting programs could not be
+    re-parsed with :func:`.qasm3.loads` because the names collided with the
+    predefined symbols in the OpenQASM 3 global scope.  These names are now
+    escaped using the same mechanism that already handles reserved keywords
+    (for example, a :class:`.Parameter` named ``pi`` is exported as ``pi_0``).
+    See `#16169 <https://github.com/Qiskit/qiskit/issues/16169>`__.

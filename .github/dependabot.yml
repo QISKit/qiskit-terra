@@ -1,27 +1,60 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
-
 version: 2
 updates:
-  - package-ecosystem: "cargo" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "cargo"
+    directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    groups:
+      cargo:
+        patterns: ['*']
     labels:
       - "Rust"
+      - "theme: qa"
       - "dependencies"
       - "Changelog: None"
+    ignore:
+      # faer has historically made major breaking changes between minor versions, so it's easier to
+      # do things manually ourselves.
+      - { dependency-name: "faer", versions: [">0.19.4"] }
+      - { dependency-name: "faer-ext", versions: [">0.2.0"] }
+      # nalgebra 0.34 bumped its MSRV to 1.87, which is too high for us.
+      - { dependency-name: "nalgebra", versions: [">0.33.2"] }
+      # Used by the experimental OQ3 exporter at a time when we were expecting to make updates
+      # manually to this.
+      - { dependency-name: "oq3_semantics", versions: [">0.0.7"] }
+      # hashbrown 0.13.0 bumped the MSRV to 1.61
+      - { dependency-name: "hashbrown", versions: [">0.12.3"] }
+
   - package-ecosystem: "github-actions"
     directory: "/"
     groups:
-      GitHub_Actions:
+      # Catch-all for all other Actions update.  Dependabot guarantees that packages are updated in
+      # the first group they match, so previous matches won't get folded into here.
+      github-actions:
         patterns:
-          - "*"  # Group all Actions updates into a single larger pull request
+          - "*"
     schedule:
       interval: weekly
     labels:
-      - "type: qa"
+      - "theme: qa"
+      - "dependencies"
+      - "Changelog: None"
+
+  # Configuration for the wheels-build job.
+  #
+  # Dependabot doesn't (as of 2026-08-11) have a way to select only one specific dependency-group or
+  # manifest file from a directory, so instead we isolate this configuration to a single-file
+  # directory.
+  - package-ecosystem: "pip"
+    directory: "/.github/workflows/wheels"
+    groups:
+      python-wheels:
+        patterns:
+          - "*"
+    schedule:
+      interval: weekly
+    labels:
+      - "ci: test wheels"
+      - "theme: qa"
       - "dependencies"
       - "Changelog: None"

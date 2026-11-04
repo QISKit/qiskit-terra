@@ -81,6 +81,31 @@ class TestStatePreparation(QiskitTestCase):
         qc.append(stateprep.inverse(), [0, 1])
         self.assertTrue(np.allclose(Operator(qc).data, np.identity(2**qc.num_qubits)))
 
+    def test_inverse_preserves_integer_bitmap_width(self):
+        """Test inverse preserves explicit width for integer-bitmap inputs."""
+        stateprep = StatePreparation(1, num_qubits=2)
+        inverse = stateprep.inverse()
+        qc = QuantumCircuit(2)
+        qc.append(stateprep, [0, 1])
+        qc.append(inverse, [0, 1])
+
+        self.assertEqual(inverse.num_qubits, 2)
+        self.assertTrue(np.allclose(Operator(qc).data, np.identity(2**qc.num_qubits)))
+
+    def test_inverse_integer_bitmap_matches_vector_form(self):
+        """Test integer-bitmap inverse matches the equivalent vector-form semantics."""
+        int_stateprep = StatePreparation(1, num_qubits=2)
+        vector_stateprep = StatePreparation([0, 1, 0, 0])
+
+        for stateprep, inverse in (
+            (int_stateprep, vector_stateprep.inverse()),
+            (vector_stateprep, int_stateprep.inverse()),
+        ):
+            qc = QuantumCircuit(2)
+            qc.append(stateprep, [0, 1])
+            qc.append(inverse, [0, 1])
+            self.assertTrue(Statevector(qc) == Statevector.from_label("00"))
+
     def test_double_inverse(self):
         """Test twice inverse of StatePreparation"""
         desired_sv = Statevector([1 / math.sqrt(2), 0, 0, 1 / math.sqrt(2)])
@@ -95,6 +120,11 @@ class TestStatePreparation(QiskitTestCase):
         qc = QuantumCircuit(3)
         with self.assertRaises(QiskitError):
             qc.prepare_state("11")
+
+    def test_num_qubits_with_non_integer_params(self):
+        """Test number of qubits is rejected for non-integer state arguments."""
+        with self.assertRaises(QiskitError):
+            StatePreparation([1, 0], num_qubits=1)
 
     def test_incompatible_int_state_and_qubit_args(self):
         """Test error raised if number of qubits not compatible with  integer state arg"""

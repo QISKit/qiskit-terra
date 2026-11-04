@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Fix a performance regression in :meth:`.SparsePauliOp.to_matrix` for dense outputs introduced in
+    v2.5, where the output was copied unnecessarily.
