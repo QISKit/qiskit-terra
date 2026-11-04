@@ -838,7 +838,7 @@ impl Drop for PackedOperation {
 ///
 /// A `PackedInstruction` in general cannot be safely mutated outside the context of its
 /// `CircuitData`, because the majority of the data is not actually stored here.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PackedInstruction {
     pub op: PackedOperation,
     /// The index under which the interner has stored `qubits`.
@@ -860,6 +860,23 @@ pub struct PackedInstruction {
     /// We can revisit once we're on PyO3 0.22+ and have been able to disable its `py-clone`
     /// feature.
     pub py_op: OnceLock<Py<PyAny>>,
+}
+
+// Custom implementation of `Clone` which removes the ability to clone the underlying `py_op` cache.
+// If a user were to want to clone the cache along with the operation, the user should call
+// [PackedOperation::shallow_clone].
+impl Clone for PackedInstruction {
+    fn clone(&self) -> Self {
+        Self {
+            op: self.op.clone(),
+            clbits: self.clbits,
+            label: self.label.clone(),
+            params: self.params.clone(),
+            qubits: self.qubits,
+            #[cfg(feature = "cache_pygates")]
+            py_op: Default::default(),
+        }
+    }
 }
 
 impl PackedInstruction {
@@ -1005,6 +1022,19 @@ impl PackedInstruction {
         self.py_op.take();
 
         Ok(())
+    }
+
+    #[cfg(feature = "cache_pygates")]
+    /// Performs a clone of the instruction object and preserves its cache.
+    pub fn clone_with_cache(&self) -> Self {
+        Self {
+            op: self.op.clone(),
+            clbits: self.clbits,
+            label: self.label.clone(),
+            params: self.params.clone(),
+            qubits: self.qubits,
+            py_op: self.py_op.clone(),
+        }
     }
 
     /// Extract an owned `ndarray` matrix from this instruction, if available.
