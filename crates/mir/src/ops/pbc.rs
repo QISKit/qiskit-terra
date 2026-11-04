@@ -187,6 +187,22 @@ impl fmt::Display for PauliMeasure {
     }
 }
 
+pub trait QuantumOp {
+    fn paulis(&self) -> &PauliString;
+}
+
+impl QuantumOp for PauliRotation {
+    fn paulis(&self) -> &PauliString {
+        self.paulis()
+    }
+}
+
+impl QuantumOp for PauliMeasure {
+    fn paulis(&self) -> &PauliString {
+        self.paulis()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
