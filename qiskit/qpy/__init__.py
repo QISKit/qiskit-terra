@@ -774,17 +774,6 @@ There is a circuit payload for each circuit (where the total number is dictated
 by ``num_circuits`` in the file header). There is no padding between the
 circuits in the data.
 
-.. _qpy_version_19:
-
-Version 19
-----------
-
-QPY version 19 aims to reduce the file sizes of generated QPY files
-and to extend the flexbility of the format to handle various gate types.
-To achieve this, the structure of a circuit instruction was overhauled.
-
-
-
 .. _qpy_version_18:
 
 Version 18
