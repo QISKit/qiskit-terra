@@ -29,6 +29,7 @@ use std::fmt;
 /// does not operate on, or effect any QuantumIDs and thus the `qids` list
 /// should be empty.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "mem_dbg", derive(mem_dbg::MemSize, mem_dbg::MemDbg))]
 pub struct MirInstruction {
     op: MirOp,
     qids: QidList,
