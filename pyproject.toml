@@ -71,7 +71,6 @@ csp-layout-pass = [
 ]
 qpy-compat = [
     "symengine>=0.11,<0.14",
-    "sympy>1.3"
 ]
 # This will make the resolution work for installers from PyPI, but `pip install .[all]` will be
 # unreliable because `qiskit` will resolve to the PyPI version, so local changes in the
