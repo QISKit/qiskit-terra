@@ -40,6 +40,7 @@ from qiskit.synthesis import LieTrotter
 from qiskit.qpy.common import QPY_RUST_READ_MIN_VERSION, QPY_RUST_WRITE_MIN_VERSION, QPY_VERSION
 from qiskit.qpy.binary_io import write_circuit
 from qiskit.qpy import dump, load
+from qiskit.qpy import interface
 from qiskit.qpy import UnsupportedFeatureForVersion
 from test import QiskitTestCase
 from unittest.mock import patch
@@ -330,10 +331,7 @@ class TestQPYRoundtrip(QiskitTestCase):
         self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
 
     def test_recursion_limit(self):
-        if sys.platform == "win32":
-            depth = 50
-        else:
-            depth = 200
+        depth = 5
         body = QuantumCircuit(1, 1)
         for _ in range(depth):
             qc = QuantumCircuit(1, 1)
@@ -342,8 +340,10 @@ class TestQPYRoundtrip(QiskitTestCase):
         with io.BytesIO() as buf:
             dump(qc, buf)
             buf.seek(0)
-            with self.assertRaises(RecursionError):
-                load(buf)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(buf)
 
     def test_parameter_expression_deep_recursion(self):
         depth = 1000
@@ -385,10 +385,7 @@ class TestQPYRoundtrip(QiskitTestCase):
 
     def test_tuple_param_recursion_limit(self):
         tup = ()
-        if sys.platform == "win32":
-            depth = 200
-        else:
-            depth = 500
+        depth = 5
         for _ in range(depth):
             tup = (tup,)
 
@@ -398,8 +395,10 @@ class TestQPYRoundtrip(QiskitTestCase):
         with io.BytesIO() as fptr:
             dump(qc, fptr)
             fptr.seek(0)
-            with self.assertRaises(RecursionError):
-                load(fptr)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(fptr)
 
     def test_controlled_gate_recursion_limit(self):
         class MyControlled(ControlledGate):
@@ -413,7 +412,8 @@ class TestQPYRoundtrip(QiskitTestCase):
 
         g = MyControlled("my", 2, [], base_gate=XGate())
         g._definition = QuantumCircuit()
-        for i in range(100_000):
+        depth = 5
+        for i in range(depth):
             g = MyControlled("my", 3 + i, [], base_gate=g)
             g._definition = QuantumCircuit()
 
@@ -423,8 +423,10 @@ class TestQPYRoundtrip(QiskitTestCase):
         with io.BytesIO() as fptr:
             dump(qc, fptr)
             fptr.seek(0)
-            with self.assertRaises(RecursionError):
-                load(fptr)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(fptr)
 
     def test_annoted_operation_recursion_limit(self):
         class MyAnnotated(AnnotatedOperation):
@@ -440,8 +442,9 @@ class TestQPYRoundtrip(QiskitTestCase):
             def params(self):
                 return []
 
+        depth = 5
         g = MyAnnotated(XGate(), [])
-        for i in range(100_000):
+        for i in range(depth):
             g = MyAnnotated(g, [])
 
         qc = QuantumCircuit(g.num_qubits)
@@ -450,15 +453,17 @@ class TestQPYRoundtrip(QiskitTestCase):
         with io.BytesIO() as fptr:
             dump(qc, fptr)
             fptr.seek(0)
-            with self.assertRaises(RecursionError):
-                load(fptr)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(fptr)
 
     @unittest.skipIf(
         sys.platform == "win32",
         "The stack limit on windows prevents calling qpy.dump() with the recursive custom gates.",
     )
     def test_custom_instruction(self):
-        depth = 100
+        depth = 5
         gate = Gate("custom", 1, [])
         for i in range(depth):
             g = Gate(f"custom{i}", 1, [])
@@ -472,5 +477,7 @@ class TestQPYRoundtrip(QiskitTestCase):
         with io.BytesIO() as fptr:
             dump(qc, fptr)
             fptr.seek(0)
-            with self.assertRaises(RecursionError):
-                load(fptr)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(fptr)
