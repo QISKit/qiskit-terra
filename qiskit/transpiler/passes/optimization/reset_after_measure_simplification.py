@@ -34,7 +34,13 @@ class ResetAfterMeasureSimplification(TransformationPass):
     @control_flow.trivial_recurse
     def run(self, dag):
         """Run the pass on a dag."""
-        for node in dag.op_nodes(Measure):
+        for node in dag.topological_op_nodes():
+            is_measure_like = isinstance(node.op, Measure) or (
+                node.op.name.startswith("measure") and len(node.qargs) == 1 and len(node.cargs) == 1
+            )
+            if not is_measure_like:
+                continue
+
             succ = next(dag.quantum_successors(node))
             if isinstance(succ, DAGOpNode) and isinstance(succ.op, Reset):
                 x_body = QuantumCircuit(1)

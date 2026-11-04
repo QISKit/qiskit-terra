@@ -17,6 +17,7 @@ from qiskit.circuit import Clbit
 from qiskit.transpiler.passes.optimization import ResetAfterMeasureSimplification
 from qiskit.circuit import IfElseOp
 from test import QiskitTestCase
+from qiskit.circuit import Instruction
 
 
 class TestResetAfterMeasureSimplificationt(QiskitTestCase):
@@ -31,6 +32,25 @@ class TestResetAfterMeasureSimplificationt(QiskitTestCase):
 
         ans_qc = QuantumCircuit(1, 1)
         ans_qc.measure(0, 0)
+        x_body = QuantumCircuit(1)
+        x_body.x(0)
+        new_x = IfElseOp((ans_qc.clbits[0], 1), x_body)
+        ans_qc.append(new_x, [ans_qc.qubits[0]])
+
+        self.assertEqual(new_qc, ans_qc)
+
+
+    def test_measure_2_like_instruction(self):
+        """Test reset simplification for measure-like custom instructions."""
+        qc = QuantumCircuit(1, 1)
+        measure_2 = Instruction("measure_2", 1, 1, [])
+        qc.append(measure_2, [0], [0])
+        qc.reset(0)
+
+        new_qc = ResetAfterMeasureSimplification()(qc)
+
+        ans_qc = QuantumCircuit(1, 1)
+        ans_qc.append(measure_2, [0], [0])
         x_body = QuantumCircuit(1)
         x_body.x(0)
         new_x = IfElseOp((ans_qc.clbits[0], 1), x_body)
