@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.WrapAngles` that caused angle bounds to
+    be ignored for gates inside control-flow blocks.
+    Fixed `#17316 <https://github.com/Qiskit/qiskit/issues/17316>`__.

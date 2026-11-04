@@ -34,7 +34,6 @@ pyo3.workspace = true
 qiskit-accelerate.workspace = true
 qiskit-circuit = { workspace = true, features = ["passmanager"] }
 qiskit-circuit-library.workspace = true
-qiskit-mir.workspace = true
 qiskit-passmanager.workspace = true
 qiskit-qasm2.workspace = true
 qiskit-qasm3.workspace = true
