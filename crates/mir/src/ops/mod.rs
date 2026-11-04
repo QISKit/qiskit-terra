@@ -47,10 +47,7 @@ mod tests {
             AngleType::new(0.5),
         ));
 
-        let mir_op3 = MirOp::PauliMeasure(PauliMeasure::new(
-            PauliString::new(vec![Pauli::I; 8]),
-            false,
-        ));
+        let mir_op3 = MirOp::PauliMeasure(PauliMeasure::new(PauliString::new(vec![Pauli::I; 8])));
 
         assert_eq!(mir_op, mir_op2);
         assert_ne!(mir_op2, mir_op3);

@@ -101,7 +101,7 @@ mod tests {
         let sym_id = symbol_table
             .add(Symbol::new("c0".to_string(), SymbolType::Bool))
             .unwrap();
-        let op = MirOp::PauliMeasure(PauliMeasure::new(PauliString::new(vec![Pauli::I]), true));
+        let op = MirOp::PauliMeasure(PauliMeasure::new(PauliString::new(vec![Pauli::I])));
         let instr = MirInstruction {
             op: op.clone(),
             qids: QidList::new(vec![Qid::virt(0)]),

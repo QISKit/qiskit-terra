@@ -111,33 +111,27 @@ impl fmt::Display for PauliRotation {
 /// This is a multi-qubit operation, which produces a single classical bit.
 /// Unlike a destructive measurement of each qubit individually, this doesn't
 /// collapse each qubit on its own - only the joint parity of the product.
-/// `neg` used to flip the result when set.  
 /// When used in a `MirInstruction`, the instruction `qids` must have the same
 /// length as `paulis` (one qid per Pauli), `args` must be empty, and `returns`
 /// must contain exactly one `SymbolId` for the boolean result.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PauliMeasure {
     paulis: PauliString,
-    neg: bool,
 }
 
 impl PauliMeasure {
-    pub fn new(paulis: PauliString, neg: bool) -> Self {
-        Self { paulis, neg }
+    pub fn new(paulis: PauliString) -> Self {
+        Self { paulis }
     }
 
     pub fn paulis(&self) -> &PauliString {
         &self.paulis
     }
-
-    pub fn neg(&self) -> bool {
-        self.neg
-    }
 }
 
 impl fmt::Display for PauliMeasure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "pauli_measure({:?}, neg={})", self.paulis, self.neg)
+        write!(f, "pauli_measure({:?})", self.paulis)
     }
 }
 
@@ -158,9 +152,8 @@ mod tests {
 
     #[test]
     fn create_pauli_measure() {
-        let pauli_measure = PauliMeasure::new(PauliString::new(vec![Pauli::I; 8]), false);
+        let pauli_measure = PauliMeasure::new(PauliString::new(vec![Pauli::I; 8]));
 
         assert_eq!(*pauli_measure.paulis(), PauliString::new(vec![Pauli::I; 8]));
-        assert!(!pauli_measure.neg());
     }
 }
