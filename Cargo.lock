@@ -2289,7 +2289,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-accelerate"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "approx",
  "hashbrown 0.15.5",
@@ -2315,7 +2315,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-bindgen"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "anyhow",
  "cbindgen",
@@ -2326,7 +2326,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-bindgen-cli"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "anyhow",
  "cbindgen",
@@ -2339,7 +2339,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-cext"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2368,14 +2368,14 @@ dependencies = [
 
 [[package]]
 name = "qiskit-cext-vtable"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "qiskit-cext",
 ]
 
 [[package]]
 name = "qiskit-circuit"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "ahash 0.8.12",
  "approx",
@@ -2413,7 +2413,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-circuit-library"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "hashbrown 0.15.5",
  "itertools 0.15.0",
@@ -2437,7 +2437,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-passmanager"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "anyhow",
  "hashbrown 0.15.5",
@@ -2450,7 +2450,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-providers"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "approx",
  "hashbrown 0.15.5",
@@ -2464,7 +2464,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-pyext"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "anyhow",
  "cbindgen",
@@ -2488,7 +2488,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-qasm2"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "hashbrown 0.15.5",
  "num-bigint",
@@ -2497,7 +2497,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-qasm3"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "foldhash 0.2.0",
  "hashbrown 0.15.5",
@@ -2513,7 +2513,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-qpy"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "binrw",
  "bytemuck",
@@ -2535,7 +2535,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-quantum-info"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "approx",
  "bytemuck",
@@ -2562,7 +2562,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-synthesis"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "approx",
  "binrw",
@@ -2595,7 +2595,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-transpiler"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "anyhow",
  "approx",
@@ -2627,7 +2627,7 @@ dependencies = [
 
 [[package]]
 name = "qiskit-util"
-version = "2.6.1"
+version = "2.6.2"
 dependencies = [
  "foldhash 0.2.0",
  "indexmap",
