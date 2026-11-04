@@ -910,6 +910,19 @@ impl PyParameterExpression {
 
     /// Return a SymPy equivalent of this expression.
     ///
+    /// .. note::
+    ///
+    ///   This is for interoperability only. Qiskit will not accept or work with raw Sympy or
+    ///   Symengine expressions in its parameters, because they do not contain the tracking
+    ///   information used in circuit-parameter binding and assignment.
+    ///
+    /// .. warning::
+    ///
+    ///   This method will pass strings from the expression to SymPy which is
+    ///   inherently unsafe as SymPy heavily relies on Python's :func:`.eval`
+    ///   function for the processing of strings. This method is not safe to
+    ///   use with untrusted input.
+    ///
     /// Returns:
     ///     A SymPy equivalent of this expression.
     pub fn sympify(&self, py: Python) -> PyResult<Py<PyAny>> {

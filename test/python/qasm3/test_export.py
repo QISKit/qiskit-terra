@@ -38,7 +38,7 @@ from qiskit.circuit import (
 )
 from qiskit.circuit.classical import expr, types
 from qiskit.circuit.controlflow import CASE_DEFAULT
-from qiskit.circuit.library import PauliEvolutionGate
+from qiskit.circuit.library import PauliEvolutionGate, PermutationGate
 from qiskit.qasm3 import (
     Exporter,
     dumps,
@@ -249,6 +249,27 @@ class TestCircuitQASM3(QiskitTestCase):
             ]
         )
         self.assertEqual(Exporter().dumps(qc), expected_qasm)
+
+    def test_gate_with_qasm_decomposition_uses_decomposed_params(self):
+        """Test custom QASM decompositions with non-scalar original params."""
+        circuit = QuantumCircuit(2)
+        circuit.append(PermutationGate([1, 0]), [0, 1])
+
+        expected_qasm = "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                "gate permutation__1_0_ _gate_q_0, _gate_q_1 {",
+                "  swap _gate_q_0, _gate_q_1;",
+                "}",
+                "qubit[2] q;",
+                "permutation__1_0_ q[0], q[1];",
+                "",
+            ]
+        )
+
+        self.assertEqual(Exporter().dumps(circuit), expected_qasm)
+        self.assertEqual(Exporter(disable_constants=True).dumps(circuit), expected_qasm)
 
     def test_same_composite_circuits(self):
         """Test when a composite circuit is added to the circuit multiple times."""

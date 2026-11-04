@@ -46,6 +46,10 @@ style:
 black:
 	black qiskit test tools setup.py docs/conf.py
 
+.PHONY: miri
+miri:
+	tools/miri.bash
+
 # Use the -s (starting directory) flag for "unittest discover" is necessary,
 # otherwise the QuantumCircuit header will be modified during the discovery.
 test:

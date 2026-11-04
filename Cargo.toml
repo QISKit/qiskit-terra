@@ -59,7 +59,7 @@ mem_dbg = { version = "0.2", features = ["derive"] }
 # https://pyo3.rs/main/features#extension-module for more.
 pyo3 = { version = "0.30", features = ["abi3-py310"] }
 
-# These are our own crates.
+# These are our own crates (or at least, the ones that are used as internal dependencies).
 qiskit-accelerate = { path = "crates/accelerate" }
 qiskit-bindgen = { path = "crates/bindgen" }
 qiskit-cext = { path = "crates/cext" }
@@ -68,7 +68,6 @@ qiskit-circuit = { path = "crates/circuit" }
 qiskit-circuit-library = { path = "crates/circuit_library" }
 qiskit-mir = { path = "crates/mir" }
 qiskit-passmanager = { path = "crates/passmanager" }
-qiskit-providers = { path = "crates/providers" }
 qiskit-qasm2 = { path = "crates/qasm2" }
 qiskit-qasm3 = { path = "crates/qasm3" }
 qiskit-qpy = { path = "crates/qpy" }
@@ -81,7 +80,7 @@ qiskit-util = { path = "crates/util" }
 # The lint forbids things like `if a < b {} else if a == b {}`, and suggests matching on `a.cmp(&b)`
 # which uses the `::std::cmp::Ordering` enum as a return.  Both styles are acceptable, and the `if`
 # chain can be more legible to people.
-comparison-chain = "allow"
+comparison_chain = "allow"
 # Forbid `{,e}print{,ln}!` calls.  These can be allowed locally if absolutely required, but the
 # vast majority of these are debug statements that we forget about.
 print_stdout = "deny"
