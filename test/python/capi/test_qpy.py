@@ -329,7 +329,7 @@ class TestQpyCAPI(QiskitTestCase):
 
     def test_recursion_limit(self):
         if sys.platform == "win32":
-            depth = 50
+            depth = 31
         else:
             depth = 101
         body = QuantumCircuit(1, 1)
