@@ -22,7 +22,7 @@ from qiskit.circuit.library.standard_gates.x import CXGate, XGate
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit.random import random_circuit
-from qiskit.qpy import dump, load
+from qiskit import qpy
 from qiskit.quantum_info.operators.symplectic.sparse_pauli_op import SparsePauliOp
 from qiskit.synthesis.evolution.lie_trotter import LieTrotter
 from test import QiskitTestCase
@@ -51,23 +51,25 @@ class TestParallelLoad(QiskitTestCase):
             for i in range(num_circuits)
         ]
         buf = io.BytesIO()
-        dump(circuits, buf)
+        qpy.dump(circuits, buf)
         return buf.getvalue()
 
     def test_parallel_and_sequential_match(self):
         dump = self.generate_dump_with_random_circuits()
 
         with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "TRUE"}):
-            sequential = load(io.BytesIO(dump))
+            with io.BytesIO(dump) as buff:
+                sequential = qpy.load(buff)
         with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "FALSE"}):
-            parallel = load(io.BytesIO(dump))
+            with io.BytesIO(dump) as buff:
+                parallel = qpy.load(buff)
 
         self.assertEqual(len(sequential), len(parallel))
         for seq, par in zip(sequential, parallel):
             self.assertEqual(seq, par)
 
-    def generatge_dump_with_custom_operations(self):
-        """Build severl circuits, with with multiple operations: custom gate, PauliEvaluation,
+    def generate_dump_with_custom_operations(self):
+        """Build several circuits, with multiple operations: custom gate, PauliEvaluation,
         AnnotatedOperation and ControlledGate, in order to exersise GIL acquiring in parallel load
         """
         theta = Parameter("theta")
@@ -101,15 +103,17 @@ class TestParallelLoad(QiskitTestCase):
         circuits.append(q4)
 
         buf = io.BytesIO()
-        dump(circuits, buf)
+        qpy.dump(circuits, buf)
         return buf.getvalue()
 
     def test_parallel_load_extensive_GIL_release(self):
-        dump = self.generatge_dump_with_custom_operations()
+        dump = self.generate_dump_with_custom_operations()
         with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "TRUE"}):
-            sequential = load(io.BytesIO(dump))
+            with io.BytesIO(dump) as buff:
+                sequential = qpy.load(buff)
         with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "FALSE"}):
-            parallel = load(io.BytesIO(dump))
+            with io.BytesIO(dump) as buff:
+                parallel = qpy.load(buff)
 
         self.assertEqual(len(sequential), len(parallel))
         for seq, par in zip(sequential, parallel):

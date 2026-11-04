@@ -384,7 +384,7 @@ pub fn load_qpy(
             })
         };
 
-        if getenv_use_multiple_threads() {
+        if getenv_use_multiple_threads() && num_programs > 1 {
             let parallel_circuits: Vec<LoadedCircuit> = qpy_raw_circuits
                 .par_iter()
                 .map(load_one_circuit)
