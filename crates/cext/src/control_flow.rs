@@ -713,10 +713,8 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_uint(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction with a classical register condition.
 ///
-/// @return The condition value.
-///
-/// Panics if `cf_inst` is not an IfElse or While control flow instruction where the condition is a
-/// register type.
+/// @return The condition value if `cf_inst` is an if-else block or while loop with a
+///         register condition, otherwise zero.
 ///
 /// # Example
 /// ```c
