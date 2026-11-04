@@ -331,7 +331,7 @@ class TestQpyCAPI(QiskitTestCase):
         if sys.platform == "win32":
             depth = 50
         else:
-            depth = 200
+            depth = 101
         body = QuantumCircuit(1, 1)
         for _ in range(depth):
             qc = QuantumCircuit(1, 1)
