@@ -954,8 +954,8 @@ class Statevector(QuantumState, TolerancesMixin):
         )
 
     @staticmethod
-    def _evolve_operator(statevec, oper, qargs=None):
-        """Evolve a qudit statevector"""
+    def _evolve_operator(statevec, oper, qargs=None, flatten=True):
+        """Evolve a qubit statevector"""
         new_shape = statevec._op_shape.compose(oper._op_shape, qargs=qargs)
         if qargs is None:
             # Full system evolution
@@ -969,32 +969,30 @@ class Statevector(QuantumState, TolerancesMixin):
         axes = indices + [i for i in range(num_qargs) if i not in indices]
         axes_inv = np.argsort(axes).tolist()
 
-        # Calculate contraction dimensions
-        contract_dim = oper._op_shape.shape[1]
-        contract_shape = (contract_dim, statevec._op_shape.shape[0] // contract_dim)
-
-        # Reshape and transpose input array for contraction
-        tensor = np.transpose(
-            np.reshape(statevec.data, statevec._op_shape.tensor_shape),
-            axes,
-        )
-        tensor_shape = tensor.shape
+        if statevec._data.shape == statevec._op_shape.tensor_shape:
+            tensor = statevec._data
+        else:
+            # Reshape and transpose input array for contraction
+            tensor = statevec.data.reshape(statevec._op_shape.tensor_shape)
+        tensor = tensor.transpose(axes)
 
         # Perform contraction
-        tensor = np.reshape(
-            np.dot(oper.data, np.reshape(tensor, contract_shape)),
-            tensor_shape,
-        )
+        oper_tensor = oper.data.reshape(oper._op_shape.tensor_shape)
+        axes = oper_tensor.ndim // 2
+        tensor = np.tensordot(oper_tensor, tensor, axes=axes)
 
-        # Transpose back to  original subsystem spec and flatten
-        statevec._data = np.reshape(np.transpose(tensor, axes_inv), new_shape.shape[0])
+        # Transpose back to original subsystem spec and flatten
+        statevec._data = tensor.transpose(axes_inv)
 
         # Update dimension
         statevec._op_shape = new_shape
+
+        if flatten:
+            statevec._data = statevec._data.reshape(statevec._op_shape.shape[0])
         return statevec
 
     @staticmethod
-    def _evolve_instruction(statevec, obj, qargs=None):
+    def _evolve_instruction(statevec, obj, qargs=None, flatten=True):
         """Update the current Statevector by applying an instruction."""
         from qiskit.circuit.reset import Reset
         from qiskit.circuit.barrier import Barrier
@@ -1009,7 +1007,9 @@ class Statevector(QuantumState, TolerancesMixin):
         if mat is not None:
             # Perform the composition and inplace update the current state
             # of the operator
-            return Statevector._evolve_operator(statevec, Operator(mat), qargs=qargs)
+            return Statevector._evolve_operator(
+                statevec, Operator(mat), qargs=qargs, flatten=flatten
+            )
 
         # Special instruction types
         if isinstance(obj, Reset):
@@ -1068,5 +1068,9 @@ class Statevector(QuantumState, TolerancesMixin):
                 new_qargs = [qubits[tup] for tup in instruction.qubits]
             else:
                 new_qargs = [qargs[qubits[tup]] for tup in instruction.qubits]
-            Statevector._evolve_instruction(statevec, instruction.operation, qargs=new_qargs)
+            Statevector._evolve_instruction(
+                statevec, instruction.operation, qargs=new_qargs, flatten=False
+            )
+        # flatten statevector at the end
+        statevec._data = statevec._data.reshape(statevec._op_shape.shape[0])
         return statevec
