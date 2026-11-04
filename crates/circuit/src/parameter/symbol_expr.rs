@@ -1039,17 +1039,8 @@ impl SymbolExpr {
     }
 
     /// Iterate over all symbols this equation contains.
-    pub fn iter_symbols(&self) -> Box<dyn Iterator<Item = &Symbol> + '_> {
-        // This could maybe be more elegantly resolved with a SymbolIter type>
-        match self {
-            SymbolExpr::Symbol(e) => Box::new(::std::iter::once(e.as_ref())),
-            SymbolExpr::Value(_) => Box::new(::std::iter::empty()),
-            SymbolExpr::Unary { op: _, expr } => crate::stack::grow(|| expr.iter_symbols()),
-            SymbolExpr::Binary { op: _, lhs, rhs } => Box::new(
-                crate::stack::grow(|| lhs.iter_symbols())
-                    .chain(crate::stack::grow(|| rhs.iter_symbols())),
-            ),
-        }
+    pub fn iter_symbols(&self) -> super::iter::IterSymbols<'_> {
+        super::iter::IterSymbols::new(self)
     }
 
     /// Map of parameter name to the parameter.
