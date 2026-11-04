@@ -468,54 +468,22 @@ impl ProgramOp for RandomBits {
         let keys = key_operand(x)?;
         let layout = Layout::new(keys, &self.shape)?;
         let bits = bits_per_value(self.dtype).expect("the constructor checked the dtype");
-        let width = keys.kind().key_words();
-        let source = flat_key_words(keys);
-        // How many values one block holds, and so how far one block advances the payload index. A
-        // value never straddles a block, since every width divides a block.
-        let per_block = (32 * keys.kind().block_words()) / bits;
-
-        /// Draw each key's values, then gather them in output order.
-        ///
-        /// `$value` reads value `i` out of the block of words a key drew.
-        macro_rules! draw {
-            ($variant:ident, $t:ty, $value:expr) => {{
-                let mut block = vec![0u32; keys.kind().block_words()];
-                let mut cached: Option<(usize, usize)> = None;
-                let values: Vec<$t> = layout
-                    .sources()
-                    .map(|(key, payload)| {
-                        let wanted = (key, payload / per_block);
-                        if cached != Some(wanted) {
-                            let words = &source[key * width..][..width];
-                            Stream::at_block(keys.kind(), words, wanted.1).fill(&mut block);
-                            cached = Some(wanted);
-                        }
-                        $value(&block, payload % per_block)
-                    })
-                    .collect();
-                Tensor::$variant(
-                    ndarray::ArrayD::from_shape_vec(IxDyn(&layout.shape), values)
-                        .expect("one value per output position")
-                        .into_shared(),
-                )
-            }};
-        }
 
         // A value takes the next `bits` bits of its key's stream, least significant first.
         Ok(vec![match self.dtype {
-            DType::U64 => draw!(U64, u64, |b: &[u32], i: usize| (b[2 * i] as u64)
-                | ((b[2 * i + 1] as u64) << 32)),
-            DType::U32 => draw!(U32, u32, |b: &[u32], i: usize| b[i]),
-            DType::U16 => {
-                draw!(U16, u16, |b: &[u32], i: usize| (b[i / 2] >> (16 * (i % 2)))
-                    as u16)
-            }
-            DType::U8 => draw!(U8, u8, |b: &[u32], i: usize| (b[i / 4] >> (8 * (i % 4)))
-                as u8),
-            DType::Bit => {
-                draw!(Bit, u8, |b: &[u32], i: usize| ((b[i / 32] >> (i % 32)) & 1)
-                    as u8)
-            }
+            DType::U64 => Tensor::U64(draw_values(keys, &layout, bits, |b, i| {
+                (b[2 * i] as u64) | ((b[2 * i + 1] as u64) << 32)
+            })),
+            DType::U32 => Tensor::U32(draw_values(keys, &layout, bits, |b, i| b[i])),
+            DType::U16 => Tensor::U16(draw_values(keys, &layout, bits, |b, i| {
+                (b[i / 2] >> (16 * (i % 2))) as u16
+            })),
+            DType::U8 => Tensor::U8(draw_values(keys, &layout, bits, |b, i| {
+                (b[i / 4] >> (8 * (i % 4))) as u8
+            })),
+            DType::Bit => Tensor::Bit(draw_values(keys, &layout, bits, |b, i| {
+                ((b[i / 32] >> (i % 32)) & 1) as u8
+            })),
             dtype => unreachable!("the constructor refuses {dtype}"),
         }])
     }
