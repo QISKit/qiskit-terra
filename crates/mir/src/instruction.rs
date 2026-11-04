@@ -16,7 +16,7 @@ use crate::line_graph;
 use crate::ops::{
     MirOp,
     MirOp::{PauliMeasure, PauliRotation},
-    pbc::PauliString,
+    pbc::QuantumOp,
 };
 use crate::qid::{BitLayout, Qid, QidList, table::ResourceTable};
 use crate::symbol_table::SymbolIdList;
@@ -80,10 +80,10 @@ impl MirInstruction {
     ) -> Result<(), InstructionVerificationError> {
         match &self.op {
             PauliRotation(pauli_rotation) => {
-                self.verify_quantum_op(pauli_rotation.paulis(), resource_table)?;
+                self.verify_quantum_op(pauli_rotation, resource_table)?;
             }
             PauliMeasure(pauli_measure) => {
-                self.verify_quantum_op(pauli_measure.paulis(), resource_table)?;
+                self.verify_quantum_op(pauli_measure, resource_table)?;
             }
         }
         Ok(())
@@ -99,11 +99,12 @@ impl MirInstruction {
     ///   3. The [`Qid`]s cannot be [`BitLayou::Abstract`] (they must have a
     ///      known width).
     ///   4. The [`Qid`]s must not be aliased.
-    fn verify_quantum_op(
+    fn verify_quantum_op<T: QuantumOp>(
         &self,
-        paulis: &PauliString,
+        op: &T,
         resource_table: &ResourceTable,
     ) -> Result<(), InstructionVerificationError> {
+        let paulis = op.paulis();
         // Walk the QidList and check all Qids exist in the ResourceTable, are
         // not Abstract, and collect the total number.
         let mut total_qids = 0;
