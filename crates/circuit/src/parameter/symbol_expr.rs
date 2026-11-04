@@ -3312,13 +3312,15 @@ impl PartialOrd for SymbolExpr {
             SymbolExpr::Symbol(l) => match rhs {
                 SymbolExpr::Value(_) => Some(Ordering::Greater),
                 SymbolExpr::Symbol(r) => l.partial_cmp(r),
-                SymbolExpr::Unary { op: _, expr } => self.partial_cmp(expr),
+                SymbolExpr::Unary { op: _, expr } => crate::stack::grow(|| self.partial_cmp(expr)),
                 _ => Some(Ordering::Less),
             },
             SymbolExpr::Unary { op: _, expr } => match rhs {
                 SymbolExpr::Value(_) => Some(Ordering::Greater),
-                SymbolExpr::Unary { op: _, expr: rexpr } => expr.partial_cmp(rexpr),
-                _ => (expr.as_ref()).partial_cmp(rhs),
+                SymbolExpr::Unary { op: _, expr: rexpr } => {
+                    crate::stack::grow(|| expr.partial_cmp(rexpr))
+                }
+                _ => crate::stack::grow(|| (expr.as_ref()).partial_cmp(rhs)),
             },
             SymbolExpr::Binary {
                 op,
@@ -3329,7 +3331,7 @@ impl PartialOrd for SymbolExpr {
                     BinaryOp::Mul | BinaryOp::Div | BinaryOp::Pow => Some(Ordering::Greater),
                     _ => Some(Ordering::Equal),
                 },
-                SymbolExpr::Unary { op: _, expr } => self.partial_cmp(expr),
+                SymbolExpr::Unary { op: _, expr } => crate::stack::grow(|| self.partial_cmp(expr)),
                 SymbolExpr::Binary {
                     op: _,
                     lhs: rl,
@@ -3688,7 +3690,7 @@ impl Value {
                 expr,
             } => {
                 let l = SymbolExpr::Value(-self);
-                match l.mul_opt(expr, recursive) {
+                match crate::stack::grow(|| l.mul_opt(expr, recursive)) {
                     Some(e) => Some(e),
                     None => Some(_mul(l, expr.as_ref().clone())),
                 }
@@ -3696,16 +3698,15 @@ impl Value {
             SymbolExpr::Binary { op, lhs: l, rhs: r } => {
                 if recursive {
                     match op {
-                        BinaryOp::Mul => match self.mul_opt(l, recursive) {
-                            Some(e) => match e.mul_opt(r, recursive) {
+                        BinaryOp::Mul => match crate::stack::grow(|| self.mul_opt(l, recursive)) {
+                            Some(e) => match crate::stack::grow(|| e.mul_opt(r, recursive)) {
                                 Some(ee) => Some(ee),
                                 None => Some(_mul(e, r.as_ref().clone())),
                             },
-                            None => self
-                                .mul_opt(r, recursive)
+                            None => crate::stack::grow(|| self.mul_opt(r, recursive))
                                 .map(|e| _mul(e, l.as_ref().clone())),
                         },
-                        BinaryOp::Div => match self.mul_opt(l, recursive) {
+                        BinaryOp::Div => match crate::stack::grow(|| self.mul_opt(l, recursive)) {
                             Some(e) => Some(_div(e, r.as_ref().clone())),
                             None => self
                                 .div_opt(r, recursive)
@@ -3751,7 +3752,7 @@ impl Value {
                 expr,
             } => {
                 if recursive {
-                    self.div_opt(expr, recursive).map(_neg)
+                    crate::stack::grow(|| self.div_opt(expr, recursive)).map(_neg)
                 } else {
                     None
                 }
