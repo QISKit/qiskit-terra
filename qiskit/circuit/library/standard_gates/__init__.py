@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -34,7 +34,7 @@ from .iswap import iSwapGate
 from .sx import SXGate, SXdgGate, CSXGate
 from .dcx import DCXGate
 from .t import TGate, TdgGate
-from .u import UGate, CUGate
+from .u import UGate, CUGate, U4Gate
 from .u1 import U1Gate, CU1Gate, MCU1Gate
 from .u2 import U2Gate
 from .u3 import U3Gate, CU3Gate
@@ -43,6 +43,71 @@ from .x import MCXGate, MCXGrayCode, MCXRecursive, MCXVChain
 from .y import YGate, CYGate
 from .z import ZGate, CZGate, CCZGate
 from .global_phase import GlobalPhaseGate
+
+
+__all__ = [
+    "C3SXGate",
+    "C3XGate",
+    "C4XGate",
+    "CCXGate",
+    "CCZGate",
+    "CHGate",
+    "CPhaseGate",
+    "CRXGate",
+    "CRYGate",
+    "CRZGate",
+    "CSGate",
+    "CSXGate",
+    "CSdgGate",
+    "CSwapGate",
+    "CU1Gate",
+    "CU3Gate",
+    "CUGate",
+    "CXGate",
+    "CYGate",
+    "CZGate",
+    "DCXGate",
+    "ECRGate",
+    "GlobalPhaseGate",
+    "HGate",
+    "IGate",
+    "MCPhaseGate",
+    "MCU1Gate",
+    "MCXGate",
+    "MCXGrayCode",
+    "MCXRecursive",
+    "MCXVChain",
+    "PhaseGate",
+    "RC3XGate",
+    "RCCXGate",
+    "RGate",
+    "RXGate",
+    "RXXGate",
+    "RYGate",
+    "RYYGate",
+    "RZGate",
+    "RZXGate",
+    "RZZGate",
+    "SGate",
+    "SXGate",
+    "SXdgGate",
+    "SdgGate",
+    "SwapGate",
+    "TGate",
+    "TdgGate",
+    "U1Gate",
+    "U2Gate",
+    "U3Gate",
+    "U4Gate",
+    "UGate",
+    "XGate",
+    "XXMinusYYGate",
+    "XXPlusYYGate",
+    "YGate",
+    "ZGate",
+    "get_standard_gate_name_mapping",
+    "iSwapGate",
+]
 
 
 def get_standard_gate_name_mapping():

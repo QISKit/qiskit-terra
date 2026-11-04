@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -172,6 +172,15 @@ class TestTransformations(ChannelTestCase):
             target = rho.evolve(Kraus(self.depol_kraus(p)))
             output = rho.evolve(Kraus(Choi(self.depol_choi(p))))
             self.assertEqual(output, target)
+
+    def test_choi_to_kraus_does_not_mutate_input(self):
+        """Converting to Kraus should not modify the input Choi data."""
+        choi = Choi(self.choiX)
+        original = choi.data.copy()
+
+        _ = Kraus(choi)
+
+        np.testing.assert_array_equal(choi.data, original)
 
     def test_choi_to_stinespring(self):
         """Test Choi to Stinespring transformation."""

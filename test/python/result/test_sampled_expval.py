@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,7 @@ import unittest
 
 from qiskit.result import Counts, QuasiDistribution, ProbDistribution, sampled_expectation_value
 from qiskit.quantum_info import Pauli, SparsePauliOp, SparseObservable
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 PROBS = {
     "1000": 0.0022,
@@ -109,6 +109,17 @@ class TestSampledExpval(QiskitTestCase):
 
         result2 = sampled_expectation_value(dist, "00ZI")
         self.assertAlmostEqual(result2, 0.4376)
+
+    def test_complex_coefficient(self):
+        """Test that complex coefficients return complex expectation values.
+
+        Regression test for #11393."""
+        dist = {"11111": 1}
+        complex_coeff = SparsePauliOp(["ZZZZZ"], coeffs=[1j])
+        float_coeff = SparsePauliOp(["ZZZZZ"], coeffs=[1])
+
+        self.assertAlmostEqual(-1j, sampled_expectation_value(dist, complex_coeff))
+        self.assertAlmostEqual(-1, sampled_expectation_value(dist, float_coeff))
 
 
 if __name__ == "__main__":

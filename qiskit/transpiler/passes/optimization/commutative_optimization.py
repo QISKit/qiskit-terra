@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -41,7 +41,7 @@ class CommutativeOptimization(TransformationPass):
     def __init__(self, approximation_degree: float = 1.0, matrix_max_num_qubits: int = 0):
         """
         Args:
-            approximation_degree: the threshold used in the the average gate fidelity
+            approximation_degree: the threshold used in the average gate fidelity
                 computation to decide whether pairs of gates can be considered as
                 canceling or commuting.
             matrix_max_num_qubits: Upper-bound on the number of qubits for the matrix-based

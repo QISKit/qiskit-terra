@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=missing-function-docstring, missing-module-docstring
 
 import unittest
 from inspect import signature
@@ -40,7 +39,7 @@ from qiskit.quantum_info import Pauli
 from qiskit.quantum_info.operators.predicates import matrix_equal, is_unitary_matrix
 from qiskit.quantum_info import Operator
 from qiskit import transpile
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestStandard1Q(QiskitTestCase):
@@ -1408,7 +1407,7 @@ class TestStandardMethods(QiskitTestCase):
                 continue
             sig = signature(gate_class)
             if gate_class == MSGate:
-                # due to the signature (num_qubits, theta, *, n_qubits=Noe) the signature detects
+                # due to the signature (num_qubits, theta, *, n_qubits=None) the signature detects
                 # 3 arguments but really its only 2. This if can be removed once the deprecated
                 # n_qubits argument is no longer supported.
                 free_params = 2

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -59,7 +59,7 @@ def circuit_to_instruction(circuit, parameter_map=None, equivalence_library=None
             circ.rz(0.5, q[1])
             circuit_to_instruction(circ)
     """
-    # pylint: disable=cyclic-import
+
     from qiskit.circuit.quantumcircuit import QuantumCircuit
 
     if circuit.num_input_vars:
@@ -134,8 +134,8 @@ def circuit_to_instruction(circuit, parameter_map=None, equivalence_library=None
     for reg in regs:
         qc.add_register(reg)
 
-    if circuit.global_phase:
-        qc.global_phase = circuit.global_phase
+    if target.global_phase:
+        qc.global_phase = target.global_phase
 
     out_instruction.definition = qc
 

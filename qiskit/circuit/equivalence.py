@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -17,13 +17,24 @@ import rustworkx as rx
 
 
 from qiskit.exceptions import InvalidFileError
-from qiskit._accelerate.equivalence import (  # pylint: disable=unused-import
-    BaseEquivalenceLibrary,
+from qiskit._accelerate.equivalence import BaseEquivalenceLibrary
+
+# This re-exports structs from Rust for the Python interface
+from qiskit._accelerate.equivalence import (
     Key,
     Equivalence,
     NodeData,
     EdgeData,
 )
+
+__all__ = [
+    "BaseEquivalenceLibrary",
+    "EdgeData",
+    "Equivalence",
+    "EquivalenceLibrary",
+    "Key",
+    "NodeData",
+]
 
 
 class EquivalenceLibrary(BaseEquivalenceLibrary):
@@ -33,13 +44,17 @@ class EquivalenceLibrary(BaseEquivalenceLibrary):
     def draw(self, filename=None):
         """Draws the equivalence relations available in the library.
 
+        .. warning::
+            This function will call the system Graphviz tool on a file involving user-controllable
+            strings (such as gate names).  It is recommended to only call this function on trusted
+            input.
+
         Args:
-            filename (str): An optional path to write the output image to
-                if specified this method will return None.
+            filename (str): An optional path to write the output image to.  If unspecified, the
+                image will instead be returned.
 
         Returns:
-            PIL.Image or IPython.display.SVG: Drawn equivalence library as an
-                IPython SVG if in a jupyter notebook, or as a PIL.Image otherwise.
+            PIL.Image: If ``filename`` is ``None``, then the rendered image.
 
         Raises:
             InvalidFileError: if filename is not valid.
@@ -84,7 +99,7 @@ class EquivalenceLibrary(BaseEquivalenceLibrary):
                     )
                     node_map[decomp_basis] = decomp_basis_node
 
-                label = f"{str(params)}\n{str(decomp) if num_qubits <= 5 else '...'}"
+                label = f"{params!s}\n{str(decomp) if num_qubits <= 5 else '...'}"
                 graph.add_edge(
                     node_map[basis],
                     node_map[decomp_basis],

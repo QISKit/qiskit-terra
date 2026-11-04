@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -29,7 +29,7 @@ from qiskit.quantum_info.operators.mixins import generate_apidocs
 class ScalarOp(LinearOp):
     """Scalar identity operator class.
 
-    This is a symbolic representation of an scalar identity operator on
+    This is a symbolic representation of a scalar identity operator on
     multiple subsystems. It may be used to initialize a symbolic scalar
     multiplication of an identity and then be implicitly converted to other
     kinds of operator subclasses by using the :meth:`compose`, :meth:`dot`,

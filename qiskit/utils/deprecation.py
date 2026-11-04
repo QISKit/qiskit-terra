@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -18,7 +18,7 @@ import functools
 import inspect
 import warnings
 from collections.abc import Callable
-from typing import Any, Type
+from typing import Any
 
 
 def deprecate_func(
@@ -214,13 +214,14 @@ def _maybe_warn_and_rename_kwarg(
     old_arg_name: str,
     new_alias: str | None,
     warning_msg: str,
-    category: Type[Warning],
+    category: type[Warning],
     predicate: Callable[[Any], bool] | None,
 ) -> None:
-    # In Python 3.10+, we should set `zip(strict=False)` (the default). That is, we want to
-    # stop iterating once `args` is done, since some args may have not been explicitly passed as
-    # positional args.
-    arg_names_to_values = {name: val for val, name in zip(args, original_func_co_varnames)}
+    # We want to stop iterating once `args` is done, since some args may have not been explicitly
+    # passed as positional args.
+    arg_names_to_values = {
+        name: val for val, name in zip(args, original_func_co_varnames, strict=False)
+    }
     arg_names_to_values.update(kwargs)
 
     if old_arg_name not in arg_names_to_values:
@@ -247,9 +248,9 @@ def _write_deprecation_msg(
     pending: bool,
     additional_msg: str,
     removal_timeline: str,
-) -> tuple[str, Type[DeprecationWarning] | Type[PendingDeprecationWarning]]:
+) -> tuple[str, type[DeprecationWarning] | type[PendingDeprecationWarning]]:
     if pending:
-        category: Type[DeprecationWarning] | Type[PendingDeprecationWarning] = (
+        category: type[DeprecationWarning] | type[PendingDeprecationWarning] = (
             PendingDeprecationWarning
         )
         deprecation_status = "pending deprecation"

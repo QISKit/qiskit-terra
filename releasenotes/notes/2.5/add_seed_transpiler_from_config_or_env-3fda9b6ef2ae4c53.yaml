@@ -1,0 +1,23 @@
+---
+fixes:
+  - |
+    Fixed an issue where the ``transpile_optimization_level`` user configuration
+    file field would not be respected when calling :func:`.generate_preset_pass_manager`.
+    This field was supposed to be used as an alternative default when building a preset
+    pass manager, but it previously was only being respected by :func:`.transpile` and not
+    with :func:`.generate_preset_pass_manager`.
+features_transpiler:
+  - Added the ability to set the ``seed_transpiler`` argument for :func:`.transpile` and
+    :func:`.generate_preset_pass_manager` via the environment variable ``QISKIT_TRANSPILER_SEED``.
+    When ``QISKIT_TRANSPILER_SEED`` is set and the ``seed_transpiler`` argument to the function is not specified, the value in the environment variable
+    will be used as the seed for that transpilation or preset pass manager respectively. If the
+    ``seed_transpiler`` argument is set it will take precedence over the environment variable.
+  - Added the ability to set the ``seed_transpiler`` argument for :func:`.transpile` and
+    :func:`.generate_preset_pass_manager` via the user configuration file. If the
+    ``transpiler_seed`` field is set in the user configuration file this will be used as the
+    default ``seed_transpiler`` value for both functions. This option is the lowest priority
+    way to set the seed value and can be overridden by either the ``QISKIT_TRANSPILER_SEED``
+    environment variable or setting the ``seed_transpiler`` argument when calling either function
+    (setting the argument will override the environment variable too). The typical use case
+    is if you want to always have a fixed seed set transpilation in a given environment setting it
+    in the user configuration file is a good way to enable this.

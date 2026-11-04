@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -48,7 +48,7 @@ class CollectMultiQBlocks(AnalysisPass):
         super().__init__()
         self.parent = {}  # parent array for the union
 
-        # the dicts belowed are keyed by a qubit signifying the root of a
+        # the dicts below are keyed by a qubit signifying the root of a
         #    set in the DSU data structure
         self.bit_groups = {}  # current groups of bits stored at top of trees
         self.gate_groups = {}  # current gate lists for the groups
@@ -75,7 +75,7 @@ class CollectMultiQBlocks(AnalysisPass):
     def union_set(self, set1, set2):
         """DSU function for unioning two sets together
         Find the roots of each set. Then assign one to have the other
-        as its parent, thus liking the sets.
+        as its parent, thus linking the sets.
         Merges smaller set into larger set in order to have better runtime
         """
 
@@ -118,7 +118,7 @@ class CollectMultiQBlocks(AnalysisPass):
             blocks to end). After that, we process gates in order of lowest
             number of qubits acted on to largest number of qubits acted on
             because these have less chance of increasing the size of blocks
-            The key also processes all the non operation notes first so that
+            The key also processes all the non operation nodes first so that
             input nodes do not mess with the top sort of op nodes
             """
             if isinstance(x, DAGInNode):

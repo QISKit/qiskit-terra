@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -106,6 +106,13 @@ class TestStinespring(ChannelTestCase):
         stine_l, stine_r = self.rand_matrix(4, 2), self.rand_matrix(4, 2)
         self.assertFalse(Stinespring((stine_l, stine_r)).is_cptp())
         self.assertFalse(Stinespring(self.UI + self.UX).is_cptp())
+
+    def test_is_cptp_honors_tolerances(self):
+        """Test that is_cptp uses caller-provided tolerance values."""
+        channel = Stinespring((1 + 4e-4) * np.eye(2))
+
+        self.assertFalse(channel.is_cptp(atol=1e-5, rtol=0))
+        self.assertTrue(channel.is_cptp(atol=1e-3, rtol=0))
 
     def test_conjugate(self):
         """Test conjugate method."""

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from cmath import exp
-from typing import Optional
+
 from qiskit.circuit.gate import Gate
 from qiskit.circuit.parameterexpression import ParameterValueType
 from qiskit._accelerate.circuit import StandardGate
@@ -89,7 +89,7 @@ class RZZGate(Gate):
 
     _standard_gate = StandardGate.RZZ
 
-    def __init__(self, theta: ParameterValueType, label: Optional[str] = None):
+    def __init__(self, theta: ParameterValueType, label: str | None = None):
         """
         Args:
             theta: The rotation angle.
@@ -99,7 +99,7 @@ class RZZGate(Gate):
 
     def _define(self):
         """Default definition"""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit import QuantumCircuit
 
         # q_0: ──■─────────────■──

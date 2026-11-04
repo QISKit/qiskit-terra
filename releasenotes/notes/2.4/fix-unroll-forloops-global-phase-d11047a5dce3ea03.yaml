@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.UnrollForLoops` where unrolling a static
+    :meth:`.QuantumCircuit.for_loop` whose body has a nonzero
+    :attr:`.QuantumCircuit.global_phase` added one extra copy of the
+    body phase.
+
+    Fixed `#16185 <https://github.com/Qiskit/qiskit/issues/16185>`__.

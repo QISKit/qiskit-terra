@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=invalid-name
 
 """Tests for Pauli operator class."""
 
@@ -25,6 +24,7 @@ from ddt import data, ddt, unpack
 
 from qiskit import QuantumCircuit
 from qiskit.circuit import Qubit
+from qiskit.circuit.random import random_clifford_circuit
 from qiskit.circuit.library import (
     CXGate,
     CYGate,
@@ -37,6 +37,7 @@ from qiskit.circuit.library import (
     SGate,
     SwapGate,
     iSwapGate,
+    DCXGate,
     XGate,
     YGate,
     ZGate,
@@ -62,7 +63,7 @@ from qiskit.exceptions import QiskitError
 from qiskit.primitives import BackendEstimatorV2
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.quantum_info.operators import Operator, Pauli, SparsePauliOp
-from qiskit.quantum_info.random import random_clifford, random_pauli
+from qiskit.quantum_info import random_clifford, random_pauli
 from qiskit.utils import optionals
 
 LABEL_REGEX = re.compile(r"(?P<coeff>[+-]?1?[ij]?)(?P<pauli>[IXYZ]*)")
@@ -450,6 +451,7 @@ class TestPauli(QiskitTestCase):
                 SwapGate(),
                 iSwapGate(),
                 ECRGate(),
+                DCXGate(),
                 CPhaseGate(theta=np.pi),
                 CRXGate(theta=np.pi),
                 CRYGate(theta=np.pi),
@@ -490,11 +492,15 @@ class TestPauli(QiskitTestCase):
                 HGate(),
                 SGate(),
                 SdgGate(),
+                SXGate(),
+                SXdgGate(),
                 CXGate(),
                 CYGate(),
                 CZGate(),
                 SwapGate(),
+                iSwapGate(),
                 ECRGate(),
+                DCXGate(),
             ),
             [int, np.int8, np.uint8, np.int16, np.uint16, np.int32, np.uint32, np.int64, np.uint64],
         )
@@ -523,6 +529,19 @@ class TestPauli(QiskitTestCase):
         self.assertEqual(value, target)
         self.assertEqual(value, value_h)
         self.assertEqual(value_inv, value_s)
+
+    def test_evolve_clifford_circuit_qargs(self):
+        """Test evolve method for random Clifford circuit"""
+        qargs = [2, 4, 1, 0]
+        qc = random_clifford_circuit(4, 100, seed=123)
+        op = Operator(qc)
+        pauli = random_pauli(5, seed=5678)
+        target_s = Operator(pauli).compose(op, qargs=qargs).dot(op.adjoint(), qargs=qargs)
+        target_h = Operator(pauli).compose(op.adjoint(), qargs=qargs).dot(op, qargs=qargs)
+        value_evolve_s = Operator(pauli.evolve(qc, frame="s", qargs=qargs))
+        value_evolve_h = Operator(pauli.evolve(qc, frame="h", qargs=qargs))
+        self.assertEqual(value_evolve_s, target_s)
+        self.assertEqual(value_evolve_h, target_h)
 
     @data("s", "h")
     def test_evolve_with_misleading_name(self, frame):

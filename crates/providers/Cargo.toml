@@ -1,0 +1,34 @@
+[package]
+name = "qiskit-providers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "qiskit_providers"
+
+[dependencies]
+num-complex.workspace = true
+thiserror.workspace = true
+qiskit-circuit.workspace = true
+
+[dev-dependencies]
+num-traits.workspace = true
+# Only a test uses this, to check the promotion table against the dtype lattice as a graph.
+rustworkx-core.workspace = true
+
+[dependencies.approx]
+workspace = true
+features = ["num-complex"]
+
+[dependencies.hashbrown]
+workspace = true
+features = ["rayon", "serde"]
+
+[lints]
+workspace = true
+
+[dependencies.ndarray]
+workspace = true
+features = ["rayon", "approx"]

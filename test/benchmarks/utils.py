@@ -4,18 +4,18 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=invalid-name,no-member
 
 """Benchmark utility functions."""
 
 import numpy as np
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
+from qiskit.quantum_info import SparseObservable, SparsePauliOp
 from qiskit.circuit import (
     QuantumRegister,
     ClassicalRegister,
@@ -49,6 +49,16 @@ from qiskit.circuit.library import (
     RZZGate,
     CCXGate,
     CSwapGate,
+    PauliEvolutionGate,
+    LinearPauliRotationsGate,
+    qaoa_ansatz,
+    grover_operator,
+)
+from qiskit.synthesis import (
+    synth_qft_full,
+    synth_mcx_1_clean_kg24,
+    multiplier_cumulative_h18,
+    adder_modular_v17,
 )
 
 
@@ -306,3 +316,157 @@ def trivial_bvlike_circuit(N):
     for kk in range(N - 2, -1, -1):
         qc.cx(kk, N - 1)
     return qc
+
+
+def qft_circuit(num_qubits: int):
+    """Quantum Fourier Transform circuit.
+
+    Parameters:
+        num_qubits: Number of qubits in the circuit.
+    Returns:
+        QuantumCircuit: Output circuit.
+    """
+    circuit = synth_qft_full(num_qubits, do_swaps=False)
+    return circuit
+
+
+def trotter_circuit(num_qubits: int, reps: int = 10):
+    """Trotter circuit.
+
+    Parameters:
+        num_qubits: Number of qubits in the output circuit.
+        reps: Number of repetitions.
+    Returns:
+        QuantumCircuit: Output circuit.
+    """
+    obs = SparseObservable.from_sparse_list(
+        [(inter, [i, i + 1], -1) for inter in ("XX", "YY", "ZZ") for i in range(num_qubits - 1)]
+        + [("Z", [i], 0.5) for i in range(num_qubits)],
+        num_qubits=num_qubits,
+    )
+    evo = PauliEvolutionGate(obs, time=1 / reps)
+    circuit = QuantumCircuit(num_qubits)
+    for _ in range(reps):
+        circuit.append(evo, circuit.qubits)
+    return circuit
+
+
+def qaoa_circuit(num_qubits: int, reps: int = 10):
+    """QAOA circuit.
+
+    Parameters:
+        num_qubits: Number of qubits in the output circuit.
+        reps: Number of repetitions.
+    Returns:
+        QuantumCircuit: Output circuit.
+    """
+
+    gen = np.random.default_rng(seed=24_122_025)
+    obs = SparsePauliOp.from_sparse_list(
+        [("ZZ", [i, j], gen.random()) for i in range(num_qubits - 1) for j in range(i)],
+        num_qubits=num_qubits,
+    )
+
+    circuit = qaoa_ansatz(obs, reps=reps)
+    return circuit
+
+
+def grover_circuit(num_qubits: int):
+    """Grover circuit.
+
+    Parameters:
+        num_qubits: Number of qubits in the output circuit.
+    Returns:
+        QuantumCircuit: Output circuit.
+    """
+    state_qubits = list(range(num_qubits - 1))
+    target_qubit = num_qubits - 1
+
+    # state preparation: prob dist + function applied on the values
+    state_prep = QuantumCircuit(num_qubits)
+    state_prep.h(state_qubits)  # could replace this by a probability distribution
+    func = LinearPauliRotationsGate(num_qubits - 1, slope=0.2, offset=1)
+    state_prep.append(func, state_qubits + [target_qubit])
+
+    # oracle: flip if target qubit is 1
+    oracle = QuantumCircuit(num_qubits)
+    oracle.z(target_qubit)
+
+    # we could maybe set reflection_qubits=[target_qubit] too
+    circuit = grover_operator(oracle, state_preparation=state_prep)
+    return circuit
+
+
+def mcx_circuit(num_qubits: int):
+    """A Clifford+T -friendly circuit for multi-controlled X gate.
+
+    Parameters:
+        num_qubits: Number of qubits in the output circuit (including
+            one target and one ancilla qubits)
+    Returns:
+        QuantumCircuit: Output circuit.
+    """
+    num_control_qubits = num_qubits - 2
+    if num_control_qubits == 0:
+        circuit = QuantumCircuit(num_qubits)
+        circuit.x(0)
+    elif num_control_qubits == 1:
+        circuit = QuantumCircuit(num_qubits)
+        circuit.cx(0, 1)
+    elif num_control_qubits == 2:
+        circuit = QuantumCircuit(num_qubits)
+        circuit.ccx(0, 1, 2)
+    else:
+        circuit = synth_mcx_1_clean_kg24(num_control_qubits)
+    return circuit
+
+
+def multiplier_circuit(num_qubits: int):
+    """A Clifford+T -friendly circuit for the multiplier gate.
+
+    Parameters:
+        num_qubits: Number of qubits in the output circuit.
+    Returns:
+        QuantumCircuit: Output circuit.
+    """
+    circuit = multiplier_cumulative_h18(num_qubits // 4)
+    return circuit
+
+
+def modular_adder_circuit(num_qubits: int):
+    """A Clifford+T -friendly circuit for the modular adder gate.
+
+    Parameters:
+        num_qubits: Number of qubits in the output circuit.
+    Returns:
+        QuantumCircuit: Output circuit.
+    """
+    circuit = adder_modular_v17(num_qubits // 2)
+    return circuit
+
+
+def create_ft_circuit(circuit_name: str, num_qubits: int, reps: int = 10):
+    """Creates circuits for Fault-Tolerance compilation pipelines.
+
+    Parameters:
+        circuit_name: the name of the circuit.
+        num_qubits: Number of qubits in the circuit.
+        reps: Number of repetitions (when applicable).
+    Returns:
+        QuantumCircuit: Output circuit.
+    """
+    circuit_map = {
+        "qft": qft_circuit,
+        "trotter": trotter_circuit,
+        "qaoa": qaoa_circuit,
+        "grover": grover_circuit,
+        "mcx": mcx_circuit,
+        "multiplier": multiplier_circuit,
+        "modular_adder": modular_adder_circuit,
+    }
+    if circuit_name not in circuit_map:
+        raise ValueError(f"Unknown circuit: {circuit_name}")
+    if circuit_name in ["trotter", "qaoa"]:
+        return circuit_map[circuit_name](num_qubits, reps)
+    else:
+        return circuit_map[circuit_name](num_qubits)

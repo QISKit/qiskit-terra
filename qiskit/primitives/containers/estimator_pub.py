@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from numbers import Real
 from collections.abc import Mapping
-from typing import Tuple, Union
+
 
 import numpy as np
 
@@ -199,12 +199,12 @@ class EstimatorPub(ShapedMixin):
             )
 
 
-EstimatorPubLike = Union[
-    EstimatorPub,
-    Tuple[QuantumCircuit, ObservablesArrayLike],
-    Tuple[QuantumCircuit, ObservablesArrayLike, BindingsArrayLike],
-    Tuple[QuantumCircuit, ObservablesArrayLike, BindingsArrayLike, Real],
-]
+EstimatorPubLike = (
+    EstimatorPub
+    | tuple[QuantumCircuit, ObservablesArrayLike]
+    | tuple[QuantumCircuit, ObservablesArrayLike, BindingsArrayLike]
+    | tuple[QuantumCircuit, ObservablesArrayLike, BindingsArrayLike, Real]
+)
 """A Pub (Primitive Unified Bloc) for an Estimator primitive.
 
 A fully specified estimator pub is a tuple ``(circuit, observables, parameter_values, precision)``.

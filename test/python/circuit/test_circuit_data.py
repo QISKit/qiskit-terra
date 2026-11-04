@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -29,7 +29,7 @@ from qiskit.circuit import (
 from qiskit.circuit.classical import types, expr
 from qiskit.circuit.library import HGate, XGate, CXGate, RXGate, Measure
 from qiskit.circuit.exceptions import CircuitError
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit import transpile
 
@@ -46,7 +46,7 @@ class TestQuantumCircuitData(QiskitTestCase):
         self.assertEqual(data.qubits, list(qr))
 
         # Test re-adding is disallowed by default.
-        with self.assertRaisesRegex(ValueError, "Existing object"):
+        with self.assertRaisesRegex(ValueError, "cannot add object"):
             data.add_qubit(qr[0])
 
         # Make sure re-adding is allowed in non-strict mode
@@ -62,7 +62,7 @@ class TestQuantumCircuitData(QiskitTestCase):
         self.assertEqual(data.qubits, qubits)
 
         # Test re-adding is disallowed by default.
-        with self.assertRaisesRegex(ValueError, "Existing object"):
+        with self.assertRaisesRegex(ValueError, "cannot add object"):
             data.add_qubit(qubits[0])
 
         # Make sure re-adding is allowed in non-strict mode
@@ -111,7 +111,7 @@ class TestQuantumCircuitData(QiskitTestCase):
         self.assertEqual(data.clbits, list(cr))
 
         # Test re-adding is disallowed by default.
-        with self.assertRaisesRegex(ValueError, "Existing object"):
+        with self.assertRaisesRegex(ValueError, "cannot add object"):
             data.add_clbit(cr[0])
 
         # Make sure re-adding is allowed in non-strict mode
@@ -127,7 +127,7 @@ class TestQuantumCircuitData(QiskitTestCase):
         self.assertEqual(data.clbits, clbits)
 
         # Test re-adding is disallowed by default.
-        with self.assertRaisesRegex(ValueError, "Existing object"):
+        with self.assertRaisesRegex(ValueError, "cannot add object"):
             data.add_clbit(clbits[0])
 
         # Make sure re-adding is allowed in non-strict mode
@@ -390,7 +390,7 @@ class TestQuantumCircuitData(QiskitTestCase):
     def test_setitem_slice(self, sli, value_length):
         """Test that __setitem__ with slice is equivalent to that of list."""
         reg_size = 20
-        assert value_length <= reg_size
+        self.assertLessEqual(value_length, reg_size)
         qr = QuantumRegister(reg_size)
         default_bit = Qubit()
         data_list = [
@@ -418,7 +418,7 @@ class TestQuantumCircuitData(QiskitTestCase):
     def test_setitem_slice_negative(self, sli, value_length):
         """Test that __setitem__ with slice is equivalent to that of list."""
         reg_size = 20
-        assert value_length <= reg_size
+        self.assertLessEqual(value_length, reg_size)
         qr = QuantumRegister(reg_size)
         default_bit = Qubit()
         data_list = [
@@ -441,7 +441,7 @@ class TestQuantumCircuitData(QiskitTestCase):
         """Test using foreign bits is not allowed."""
         qr = QuantumRegister(1)
         cr = ClassicalRegister(1)
-        with self.assertRaisesRegex(KeyError, "not been added to this circuit"):
+        with self.assertRaisesRegex(KeyError, "is not present"):
             CircuitData(qr, cr, [CircuitInstruction(XGate(), [Qubit()], [])])
 
     def test_unregistered_bit_error_append(self):
@@ -449,7 +449,7 @@ class TestQuantumCircuitData(QiskitTestCase):
         qr = QuantumRegister(1)
         cr = ClassicalRegister(1)
         data = CircuitData(qr, cr)
-        with self.assertRaisesRegex(KeyError, "not been added to this circuit"):
+        with self.assertRaisesRegex(KeyError, "is not present"):
             qr_foreign = QuantumRegister(1)
             data.append(CircuitInstruction(XGate(), [qr_foreign[0]], []))
 
@@ -458,7 +458,7 @@ class TestQuantumCircuitData(QiskitTestCase):
         qr = QuantumRegister(1)
         cr = ClassicalRegister(1)
         data = CircuitData(qr, cr, [CircuitInstruction(XGate(), [qr[0]], [])])
-        with self.assertRaisesRegex(KeyError, "not been added to this circuit"):
+        with self.assertRaisesRegex(KeyError, "is not present"):
             qr_foreign = QuantumRegister(1)
             data[0] = CircuitInstruction(XGate(), [qr_foreign[0]], [])
 
@@ -468,7 +468,7 @@ class TestQuantumCircuitInstructionData(QiskitTestCase):
     """QuantumCircuit.data operation tests."""
 
     # N.B. Most of the cases here are not expected use cases of circuit.data
-    # but are included as tests to maintain compatability with the previous
+    # but are included as tests to maintain compatibility with the previous
     # list interface of circuit.data.
 
     def test_iteration_of_data_entry(self):
@@ -914,7 +914,6 @@ class TestQuantumCircuitInstructionData(QiskitTestCase):
         qc.cz(0, 1)
 
         class NotAnInstruction:
-            # pylint: disable=missing-class-docstring,missing-function-docstring
             def to_instruction(self):
                 return CXGate()
 
@@ -929,7 +928,6 @@ class TestQuantumCircuitInstructionData(QiskitTestCase):
         classes to be used, not just `Instruction`."""
 
         class MyOp(Operation):
-            # pylint: disable=missing-class-docstring,missing-function-docstring
 
             @property
             def name(self):
@@ -1014,7 +1012,7 @@ class TestQuantumCircuitInstructionData(QiskitTestCase):
         self.assertEqual(data.num_input_vars, 0)
         self.assertEqual(data.num_captured_vars, 1)
         self.assertEqual(data.num_declared_vars, 1)
-        assert c1 in data.get_captured_vars()
+        self.assertIn(c1, data.get_captured_vars())
 
     def test_local_stretches(self):
         """Test local stretch variables handling"""

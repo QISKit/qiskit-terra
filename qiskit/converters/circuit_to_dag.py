@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -24,7 +24,8 @@ def circuit_to_dag(circuit, copy_operations=True, *, qubit_order=None, clbit_ord
     Args:
         circuit (QuantumCircuit): the input circuit.
         copy_operations (bool): Deep copy the operation objects
-            in the :class:`~.QuantumCircuit` for the output :class:`~.DAGCircuit`.
+            in the :class:`~.QuantumCircuit` for the output :class:`~.DAGCircuit`
+            and shallow copy the metadata.
             This should only be set to ``False`` if the input :class:`~.QuantumCircuit`
             will not be used anymore as the operations in the output
             :class:`~.DAGCircuit` will be shared instances and modifications to

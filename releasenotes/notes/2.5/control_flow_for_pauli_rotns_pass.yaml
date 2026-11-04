@@ -1,0 +1,6 @@
+---
+features_transpiler:
+  - The pass :class:`.ConvertToPauliRotations` now supports circuits with
+    :class:`.ControlFlowOp` by recursively applying the pass on each 
+    constituent control flow block. Previously, it did not support transpilation 
+    of circuits with control flow instructions.

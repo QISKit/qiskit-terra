@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,10 +14,13 @@
 
 from __future__ import annotations
 
-from qiskit.circuit import QuantumCircuit, Gate
+import typing
 
-from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
+from qiskit.circuit import QuantumCircuit, Gate
 from qiskit.utils.deprecation import deprecate_func
+
+if typing.TYPE_CHECKING:
+    from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
 
 
 class PhaseOracle(QuantumCircuit):
@@ -66,6 +69,7 @@ class PhaseOracle(QuantumCircuit):
             var_order: A list with the order in which variables will be created.
                (default: by appearance)
         """
+        from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
 
         if isinstance(expression, str):
             expression = BooleanExpression(expression, var_order=var_order)
@@ -116,9 +120,9 @@ class PhaseOracle(QuantumCircuit):
         the CNF is over three boolean variables --- let us call them  :math:`x_1, x_2, x_3`, and
         contains five clauses.  The five clauses, listed afterwards, are implicitly joined by the
         logical `AND` operator, :math:`\land`, while the variables in each clause, represented by
-        their indices, are implicitly disjoined by the logical `OR` operator, :math:`lor`. The
+        their indices, are implicitly disjoined by the logical `OR` operator, :math:`\lor`. The
         :math:`-` symbol preceding a boolean variable index corresponds to the logical `NOT`
-        operator, :math:`lnot`. Character `0` (zero) marks the end of each clause.  Essentially,
+        operator, :math:`\lnot`. Character `0` (zero) marks the end of each clause.  Essentially,
         the code above corresponds to the following CNF:
 
         :math:`(\lnot x_1 \lor \lnot x_2 \lor \lnot x_3)
@@ -134,6 +138,8 @@ class PhaseOracle(QuantumCircuit):
         Returns:
             PhaseOracle: A quantum circuit with a phase oracle.
         """
+        from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
+
         expr = BooleanExpression.from_dimacs_file(filename)
         return cls(expr)
 
@@ -180,8 +186,10 @@ class PhaseOracleGate(Gate):
             var_order: A list with the order in which variables will be created.
                (default: by appearance)
             label: A label for the gate to display in visualizations. Per default, the label is
-                set to display the textual represntation of the boolean expression (truncated if needed)
+                set to display the textual representation of the boolean expression (truncated if needed)
         """
+        from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
+
         if label is None:
             if isinstance(expression, str):
                 label = (expression[:15] + "...") if len(expression) > 15 else expression
@@ -248,5 +256,7 @@ class PhaseOracleGate(Gate):
         Returns:
             PhaseOracleGate: A quantum circuit with a phase oracle.
         """
+        from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
+
         expr = BooleanExpression.from_dimacs_file(filename)
         return cls(expr)

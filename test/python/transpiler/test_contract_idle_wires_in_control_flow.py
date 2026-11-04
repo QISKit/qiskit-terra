@@ -4,19 +4,18 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=missing-class-docstring,missing-module-docstring,missing-function-docstring
 
 from qiskit.circuit import QuantumCircuit, ClassicalRegister, QuantumRegister
 from qiskit.circuit.classical import expr, types
 from qiskit.transpiler.passes import ContractIdleWiresInControlFlow
 
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestContractIdleWiresInControlFlow(QiskitTestCase):
@@ -38,6 +37,43 @@ class TestContractIdleWiresInControlFlow(QiskitTestCase):
             qc.h(0)
             qc.cx(0, 1)
         self.assertEqual(ContractIdleWiresInControlFlow()(qc), qc)
+
+    def test_break_loop(self):
+        qc = QuantumCircuit(3, 1)
+        with qc.while_loop((qc.clbits[0], False)):
+            qc.cx(0, 1)
+            qc.noop(2)
+            with qc.if_test((0, True)):
+                qc.break_loop()
+
+        expected = QuantumCircuit(3, 1)
+        with expected.while_loop((expected.clbits[0], False)):
+            expected.cx(0, 1)
+            # keep the noop since the optimization currently
+            # marks all qubits in break_loop's containing block as used
+            expected.noop(2)
+            with expected.if_test((0, True)):
+                expected.break_loop()
+
+        self.assertEqual(ContractIdleWiresInControlFlow()(qc), expected)
+
+    def test_continue_loop(self):
+        qc = QuantumCircuit(3, 1)
+        with qc.while_loop((qc.clbits[0], False)):
+            qc.cx(0, 1)
+            qc.noop(2)
+            with qc.if_test((0, True)):
+                qc.continue_loop()
+
+        expected = QuantumCircuit(3, 1)
+        with expected.while_loop((expected.clbits[0], False)):
+            expected.cx(0, 1)
+            # keep the noop since the optimization currently
+            # marks all qubits in continue_loop's containing block as used
+            expected.noop(2)
+            with expected.if_test((0, True)):
+                expected.continue_loop()
+        self.assertEqual(ContractIdleWiresInControlFlow()(qc), expected)
 
     def test_disparate_if_else_left_alone(self):
         qc = QuantumCircuit(3, 1)

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -523,25 +523,26 @@ what you need, consider using :mod:`qiskit.qpy` instead.
 '''
 
 __all__ = [
-    "load",
-    "loads",
+    "LEGACY_CUSTOM_CLASSICAL",
+    "LEGACY_CUSTOM_INSTRUCTIONS",
+    "LEGACY_INCLUDE_PATH",
+    "CustomClassical",
+    "CustomInstruction",
+    "QASM2Error",
+    "QASM2ExportError",
+    "QASM2ParseError",
     "dump",
     "dumps",
-    "CustomInstruction",
-    "CustomClassical",
-    "LEGACY_CUSTOM_INSTRUCTIONS",
-    "LEGACY_CUSTOM_CLASSICAL",
-    "LEGACY_INCLUDE_PATH",
-    "QASM2Error",
-    "QASM2ParseError",
-    "QASM2ExportError",
+    "load",
+    "loads",
 ]
 
 import os
 from pathlib import Path
-from typing import Iterable, Union, Optional, Literal
+from typing import Literal
+from collections.abc import Iterable
 
-# pylint: disable=c-extension-no-member
+
 from qiskit._accelerate import qasm2 as _qasm2
 from qiskit.circuit import QuantumCircuit
 from . import parse as _parse
@@ -563,7 +564,7 @@ LEGACY_INCLUDE_PATH = (
 )
 
 
-def _normalize_path(path: Union[str, os.PathLike]) -> str:
+def _normalize_path(path: str | os.PathLike) -> str:
     """Normalize a given path into a path-like object that can be passed to Rust.
 
     Ideally this would be something that we can convert to Rust's `OSString`, but in practice,
@@ -578,7 +579,7 @@ def _normalize_path(path: Union[str, os.PathLike]) -> str:
 def loads(
     string: str,
     *,
-    include_path: Iterable[Union[str, os.PathLike]] = (".",),
+    include_path: Iterable[str | os.PathLike] = (".",),
     custom_instructions: Iterable[CustomInstruction] = (),
     custom_classical: Iterable[CustomClassical] = (),
     strict: bool = False,
@@ -615,10 +616,10 @@ def loads(
 
 
 def load(
-    filename: Union[str, os.PathLike],
+    filename: str | os.PathLike,
     *,
-    include_path: Iterable[Union[str, os.PathLike]] = (".",),
-    include_input_directory: Optional[Literal["append", "prepend"]] = "append",
+    include_path: Iterable[str | os.PathLike] = (".",),
+    include_input_directory: Literal["append", "prepend"] | None = "append",
     custom_instructions: Iterable[CustomInstruction] = (),
     custom_classical: Iterable[CustomClassical] = (),
     strict: bool = False,
@@ -627,7 +628,7 @@ def load(
     should be ASCII or UTF-8 encoded, and contain the OpenQASM 2 program.
 
     Args:
-        filename: The OpenQASM 2 program in a string.
+        filename: The path to the OpenQASM 2 file.
         include_path: order of directories to search when evaluating ``include`` statements.
         include_input_directory: Whether to add the directory of the input file to the
             ``include_path``, and if so, whether to *append* it to search last, or *prepend* it to

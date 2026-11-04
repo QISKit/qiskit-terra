@@ -4,15 +4,17 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+use crate::CapacityError;
+use crate::error::TryReserveError;
 use hashbrown::HashMap;
 use hashbrown::hash_map::OccupiedError;
-use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use std::fmt::Debug;
@@ -112,6 +114,50 @@ impl PartialEq for PyObjectAsKey {
 }
 impl Eq for PyObjectAsKey {}
 
+/// Error types for attempts to add unique objects.
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum AddError<T: Debug = String, B: Debug = String> {
+    #[error("cannot add object {ob:?} as it is already mapped to {key:?}")]
+    Duplicate { key: T, ob: B },
+    #[error(transparent)]
+    Capacity(#[from] CapacityError),
+}
+impl<T: Debug, B: Debug> AddError<T, B> {
+    pub fn erase_type(self) -> AddError {
+        match self {
+            Self::Duplicate { key, ob } => AddError::Duplicate {
+                key: format!("{key:?}"),
+                ob: format!("{ob:?}"),
+            },
+            Self::Capacity(c) => AddError::Capacity(c),
+        }
+    }
+}
+impl<T: Debug, B: Debug> From<AddError<T, B>> for PyErr {
+    fn from(val: AddError<T, B>) -> PyErr {
+        match val {
+            AddError::Duplicate { .. } => PyValueError::new_err(val.to_string()),
+            AddError::Capacity(c) => c.into(),
+        }
+    }
+}
+
+/// Error return from functions that look up an object in the registry.
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("object {0:?} is not present")]
+pub struct AbsentObject<T: Debug = String>(T);
+impl<T: Debug> AbsentObject<T> {
+    /// Erase the internal type of the object by evaluating the debug formatting.
+    pub fn erase_type(self) -> AbsentObject {
+        AbsentObject(format!("{:?}", self.0))
+    }
+}
+impl<T: Debug> From<AbsentObject<T>> for PyErr {
+    fn from(val: AbsentObject<T>) -> Self {
+        PyKeyError::new_err(val.to_string())
+    }
+}
+
 /// A registry of unique objects, each mapped to a unique index.
 ///
 /// This is used to associate sharable bits and other globally unique
@@ -132,7 +178,7 @@ pub struct ObjectRegistry<T, B> {
 
 impl<T, B> Default for ObjectRegistry<T, B>
 where
-    T: From<u32> + Copy,
+    T: From<u32> + Copy + Debug,
     u32: From<T>,
     B: Clone + Eq + Hash + Debug,
 {
@@ -151,7 +197,7 @@ impl<T: Eq, B: Eq + Hash> Eq for ObjectRegistry<T, B> {}
 
 impl<T, B> ObjectRegistry<T, B>
 where
-    T: From<u32> + Copy,
+    T: From<u32> + Copy + Debug,
     u32: From<T>,
     B: Clone + Eq + Hash + Debug,
 {
@@ -165,6 +211,20 @@ where
             indices: HashMap::with_capacity(capacity),
             cached: OnceLock::new(),
         }
+    }
+
+    /// Create a new ObjectRegistry with an initial capacity pre-allocated. This
+    /// will return an error if the specified capacity can not be allocated.
+    pub fn try_with_capacity(capacity: usize) -> Result<Self, TryReserveError> {
+        let mut objects = Vec::new();
+        objects.try_reserve(capacity)?;
+        let mut indices = HashMap::new();
+        indices.try_reserve(capacity)?;
+        Ok(ObjectRegistry {
+            objects,
+            indices,
+            cached: OnceLock::new(),
+        })
     }
 
     /// Gets the number of registered objects.
@@ -193,14 +253,10 @@ where
     pub fn map_objects<U: IntoIterator<Item = B>>(
         &self,
         objects: U,
-    ) -> PyResult<impl Iterator<Item = T> + use<T, B, U>> {
+    ) -> Result<impl Iterator<Item = T> + use<T, B, U>, AbsentObject<B>> {
         let v: Result<Vec<_>, _> = objects
             .into_iter()
-            .map(|b| {
-                self.indices.get(&b).copied().ok_or_else(|| {
-                    PyKeyError::new_err(format!("Object {b:?} has not been added to this circuit."))
-                })
-            })
+            .map(|b| self.indices.get(&b).copied().ok_or(AbsentObject(b)))
             .collect();
         v.map(|x| x.into_iter())
     }
@@ -225,12 +281,11 @@ where
     }
 
     /// Registers a new object, automatically creating a unique index within the registry.
-    pub fn add(&mut self, object: B, strict: bool) -> PyResult<T> {
-        let idx: u32 = self.objects.len().try_into().map_err(|_| {
-            PyRuntimeError::new_err(format!(
-                "Cannot add object {object:?}, which would exceed circuit capacity for its kind.",
-            ))
-        })?;
+    ///
+    /// Errors if the object is already in the registry.  To ignore duplicates, use
+    /// [add_allow_existing].
+    pub fn add(&mut self, object: B) -> Result<T, AddError<T, B>> {
+        let idx: u32 = self.objects.len().try_into().map_err(|_| CapacityError)?;
         // Dump the cache
         self.cached.take();
         match self.indices.try_insert(object.clone(), idx.into()) {
@@ -238,26 +293,34 @@ where
                 self.objects.push(object);
                 Ok(idx.into())
             }
-            Err(OccupiedError { entry, .. }) if !strict => Ok(*entry.get()),
-            _ => Err(PyValueError::new_err(format!(
-                "Existing object {object:?} cannot be re-added in strict mode."
-            ))),
+            Err(OccupiedError { value: _, entry }) => Err(AddError::Duplicate {
+                key: *entry.get(),
+                ob: object,
+            }),
         }
     }
+    /// Add an object to the registry, returning the existing key in the case of duplication.
+    pub fn add_allow_existing(&mut self, object: B) -> Result<T, CapacityError> {
+        match self.add(object) {
+            Ok(key) | Err(AddError::Duplicate { key, ob: _ }) => Ok(key),
+            Err(AddError::Capacity(c)) => Err(c),
+        }
+    }
+    // Add an object to the registry, panicking if it is a duplicate or out of capacity.
+    pub fn add_unique_within_capacity(&mut self, object: B) -> T {
+        self.add(object)
+            .expect("caller should ensure uniqueness and capacity bounds")
+    }
 
-    pub fn replace(&mut self, index: T, replacement: B) -> PyResult<()> {
+    pub fn replace(&mut self, index: T, replacement: B) {
         self.cached.take();
         let to_replace = &mut self.objects[<u32 as From<T>>::from(index) as usize];
         self.indices.remove(to_replace);
         *to_replace = replacement.clone();
         self.indices.insert(replacement, index);
-        Ok(())
     }
 
-    pub fn remove_indices<I>(&mut self, indices: I) -> PyResult<()>
-    where
-        I: IntoIterator<Item = T>,
-    {
+    pub fn remove_indices(&mut self, indices: impl IntoIterator<Item = T>) {
         let mut indices_sorted: Vec<usize> = indices
             .into_iter()
             .map(|i| <u32 as From<T>>::from(i) as usize)
@@ -272,7 +335,6 @@ where
         for (i, object) in self.objects.iter().enumerate() {
             self.indices.insert(object.clone(), (i as u32).into());
         }
-        Ok(())
     }
 
     /// Called during Python garbage collection, only!.

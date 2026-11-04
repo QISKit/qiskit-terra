@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -56,11 +56,11 @@ def format_counts_memory(shot_memory, header=None):
         header (dict): the experiment header dictionary containing
             useful information for postprocessing. creg_sizes
             are a nested list where the inner element is a list
-            of creg name, creg size pairs. memory_slots is an integers
+            of creg name, creg size pairs. memory_slots is an integer
             specifying the number of total memory_slots in the experiment.
 
     Returns:
-        dict: a formatted memory
+        str: a formatted memory
     """
     if shot_memory.startswith("0x"):
         shot_memory = _hex_to_bin(shot_memory)
@@ -97,7 +97,7 @@ def format_level_0_memory(memory):
     """Format an experiment result memory object for measurement level 0.
 
     Args:
-        memory (list): Memory from experiment with `meas_level==1`. `avg` or
+        memory (list): Memory from experiment with `meas_level==0`. `avg` or
             `single` will be inferred from shape of result memory.
 
     Returns:
@@ -182,7 +182,7 @@ def format_statevector(vec, decimals=None):
     Returns:
         list[complex]: a list of python complex numbers.
     """
-    # pylint: disable=cyclic-import
+
     from qiskit.quantum_info.states.statevector import Statevector
 
     if isinstance(vec, Statevector):
@@ -217,7 +217,7 @@ def format_unitary(mat, decimals=None):
     Returns:
         list[list[complex]]: a matrix of complex numbers
     """
-    # pylint: disable=cyclic-import
+
     from qiskit.quantum_info.operators.operator import Operator
 
     if isinstance(mat, Operator):

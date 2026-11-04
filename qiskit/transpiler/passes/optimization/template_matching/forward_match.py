@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -25,6 +25,9 @@ Exact and practical pattern matching for quantum circuit optimization.
 """
 
 from qiskit.circuit.controlledgate import ControlledGate
+from qiskit.transpiler.passes.optimization.template_matching.template_substitution import (
+    TemplateSubstitution,
+)
 
 
 class ForwardMatch:
@@ -80,47 +83,37 @@ class ForwardMatch:
         self.carg_indices = []
 
     def _init_successors_to_visit(self):
-        """
-        Initialize the attribute list 'SuccessorsToVisit'
-        """
-        for i in range(0, self.circuit_dag_dep.size()):
+        """Initialize the attribute list 'SuccessorsToVisit'"""
+        for i in range(self.circuit_dag_dep.size()):
             if i == self.node_id_c:
                 self.circuit_dag_dep.get_node(i).successorstovisit = (
                     self.circuit_dag_dep.direct_successors(i)
                 )
 
     def _init_matched_with_circuit(self):
-        """
-        Initialize the attribute 'MatchedWith' in the template DAG dependency.
-        """
-        for i in range(0, self.circuit_dag_dep.size()):
+        """Initialize the attribute 'MatchedWith' in the template DAG dependency."""
+        for i in range(self.circuit_dag_dep.size()):
             if i == self.node_id_c:
                 self.circuit_dag_dep.get_node(i).matchedwith = [self.node_id_t]
             else:
                 self.circuit_dag_dep.get_node(i).matchedwith = []
 
     def _init_matched_with_template(self):
-        """
-        Initialize the attribute 'MatchedWith' in the circuit DAG dependency.
-        """
-        for i in range(0, self.template_dag_dep.size()):
+        """Initialize the attribute 'MatchedWith' in the circuit DAG dependency."""
+        for i in range(self.template_dag_dep.size()):
             if i == self.node_id_t:
                 self.template_dag_dep.get_node(i).matchedwith = [self.node_id_c]
             else:
                 self.template_dag_dep.get_node(i).matchedwith = []
 
     def _init_is_blocked_circuit(self):
-        """
-        Initialize the attribute 'IsBlocked' in the circuit DAG dependency.
-        """
-        for i in range(0, self.circuit_dag_dep.size()):
+        """Initialize the attribute 'IsBlocked' in the circuit DAG dependency."""
+        for i in range(self.circuit_dag_dep.size()):
             self.circuit_dag_dep.get_node(i).isblocked = False
 
     def _init_is_blocked_template(self):
-        """
-        Initialize the attribute 'IsBlocked' in the template DAG dependency.
-        """
-        for i in range(0, self.template_dag_dep.size()):
+        """Initialize the attribute 'IsBlocked' in the template DAG dependency."""
+        for i in range(self.template_dag_dep.size()):
             self.template_dag_dep.get_node(i).isblocked = False
 
     def _init_list_match(self):
@@ -294,11 +287,10 @@ class ForwardMatch:
                         return target_qubits_template == target_qubits_circuit
                 else:
                     return False
+        elif node_template.op.name in ["rxx", "ryy", "rzz", "swap", "iswap", "ms"]:
+            return set(self.qarg_indices) == set(node_template.qindices)
         else:
-            if node_template.op.name in ["rxx", "ryy", "rzz", "swap", "iswap", "ms"]:
-                return set(self.qarg_indices) == set(node_template.qindices)
-            else:
-                return self.qarg_indices == node_template.qindices
+            return self.qarg_indices == node_template.qindices
 
     def _is_same_c_conf(self, node_circuit, node_template):
         """
@@ -404,39 +396,59 @@ class ForwardMatch:
 
                 # Check if the qubit, clbit configuration are compatible for a match,
                 # also check if the operation are the same.
-                if (
+                if not (
                     self._is_same_q_conf(node_circuit, node_template)
                     and self._is_same_c_conf(node_circuit, node_template)
                     and self._is_same_op(node_circuit, node_template)
                 ):
-
-                    v[1].matchedwith = [i]
-
-                    self.template_dag_dep.get_node(i).matchedwith = [label]
-
-                    # Append the new match to the list of matches.
-                    self.match.append([i, label])
-
-                    # Potential successors to visit (circuit) for a given match.
-                    potential = self.circuit_dag_dep.direct_successors(label)
-
-                    # If the potential successors to visit are blocked or match, it is removed.
-                    for potential_id in potential:
-                        if self.circuit_dag_dep.get_node(potential_id).isblocked | (
-                            self.circuit_dag_dep.get_node(potential_id).matchedwith != []
-                        ):
-                            potential.remove(potential_id)
-
-                    sorted_potential = sorted(potential)
-
-                    #  Update the successor to visit attribute
-                    v[1].successorstovisit = sorted_potential
-
-                    # Add the updated node to the stack.
-                    self.matched_nodes_list.append([v[0], v[1]])
-                    self.matched_nodes_list.sort(key=lambda x: x[1].successorstovisit)
-                    match = True
+                    # Check if parameters match the template or not.
                     continue
+
+                # Construct a temporary list of matches.
+                temp_match = self.match.copy()
+
+                # Append the new match to the list of matches.
+                temp_match.append([i, label])
+
+                # Check if the potential match is valid by attempting
+                # to bind parameters.
+                substitution = TemplateSubstitution(
+                    [temp_match], self.circuit_dag_dep, self.template_dag_dep, None
+                )
+
+                template_sublist, circuit_sublist = zip(*temp_match)
+                template = substitution._attempt_bind(template_sublist, circuit_sublist)
+
+                if template is None:
+                    continue
+
+                v[1].matchedwith = [i]
+
+                self.template_dag_dep.get_node(i).matchedwith = [label]
+
+                # Append the new match to the list of matches.
+                self.match.append([i, label])
+
+                # Potential successors to visit (circuit) for a given match.
+                potential = self.circuit_dag_dep.direct_successors(label)
+
+                # If the potential successors to visit are blocked or match, it is removed.
+                for potential_id in potential:
+                    if self.circuit_dag_dep.get_node(potential_id).isblocked | (
+                        self.circuit_dag_dep.get_node(potential_id).matchedwith != []
+                    ):
+                        potential.remove(potential_id)
+
+                sorted_potential = sorted(potential)
+
+                #  Update the successor to visit attribute
+                v[1].successorstovisit = sorted_potential
+
+                # Add the updated node to the stack.
+                self.matched_nodes_list.append([v[0], v[1]])
+                self.matched_nodes_list.sort(key=lambda x: x[1].successorstovisit)
+                match = True
+                break
 
             # If no match is found, block the node and all the successors.
             if not match:

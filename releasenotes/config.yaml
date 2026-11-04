@@ -6,229 +6,165 @@ pre_release_tag_re: (?P<pre_release>(?:[ab]|rc|pre)+\d*)$
 unreleased_version_title: Unreleased Notes Preview
 sections:
   - [features, New Features]
-  - [features_algorithms, Algorithms Features]
   - [features_c, C API Features]
   - [features_circuits, Circuits Features]
   - [features_primitives, Primitives Features]
   - [features_providers, Providers Features]
-  - [features_pulse, Pulse Features]
   - [features_qasm, OpenQASM Features]
   - [features_qpy, QPY Features]
   - [features_quantum_info, Quantum Information Features]
   - [features_synthesis, Synthesis Features]
   - [features_transpiler, Transpiler Features]
   - [features_visualization, Visualization Features]
-  - [features_misc, Misc. Features]
-  - [issues, Known Issues]
+  - [features_misc, Miscellaneous Features]
   - [upgrade, Upgrade Notes]
-  - [upgrade_algorithms, Algorithms Upgrade Notes]
-  - [upgrade_circuits, Circuits Upgrade Notes]
   - [upgrade_c, C API Upgrade Notes]
+  - [upgrade_circuits, Circuits Upgrade Notes]
   - [upgrade_primitives, Primitives Upgrade Notes]
   - [upgrade_providers, Providers Upgrade Notes]
-  - [upgrade_pulse, Pulse Upgrade Notes]
   - [upgrade_qasm, OpenQASM Upgrade Notes]
   - [upgrade_qpy, QPY Upgrade Notes]
   - [upgrade_quantum_info, Quantum Information Upgrade Notes]
   - [upgrade_synthesis, Synthesis Upgrade Notes]
   - [upgrade_transpiler, Transpiler Upgrade Notes]
   - [upgrade_visualization, Visualization Upgrade Notes]
-  - [upgrade_misc, Misc. Upgrade Notes]
+  - [upgrade_misc, Miscellaneous Upgrade Notes]
   - [deprecations, Deprecation Notes]
-  - [deprecations_algorithms, Algorithms Deprecations]
   - [deprecations_c, C API Deprecations]
   - [deprecations_circuits, Circuits Deprecations]
   - [deprecations_primitives, Primitives Deprecations]
   - [deprecations_providers, Providers Deprecations]
-  - [deprecations_pulse, Pulse Deprecations]
   - [deprecations_qasm, OpenQASM Deprecations]
   - [deprecations_qpy, QPY Deprecations]
   - [deprecations_quantum_info, Quantum Information Deprecations]
   - [deprecations_synthesis, Synthesis Deprecations]
   - [deprecations_transpiler, Transpiler Deprecations]
   - [deprecations_visualization, Visualization Deprecations]
-  - [deprecations_misc, Misc. Deprecations]
+  - [deprecations_misc, Miscellaneous Deprecations]
+  - [build, Build System Changes]
+  - [issues, Known Issues]
   - [critical, Critical Issues]
   - [security, Security Issues]
   - [fixes, Bug Fixes]
+  - [performance, Performance Improvements]
   - [other, Other Notes]
 template: |
   ---
-  prelude: >
-      Replace this text with content to appear at the top of the section for this
-      release. All of the prelude content is merged together and then rendered
-      separately from the items listed in other parts of the file, so the text
-      needs to be worded so that both the prelude and the other items make sense
-      when read independently. This may mean repeating some details. Not every
-      release note requires a prelude. Usually only notes describing major
-      features or adding release theme details should have a prelude.
-  features:
-    - |
-      List new features here, or remove this section.  All of the list items in
-      this section are combined when the release notes are rendered, so the text
-      needs to be worded so that it does not depend on any information only
-      available in another section, such as the prelude. This may mean repeating
-      some details. If the feature note is contained within one of the modules
-      listed below you should use the appropriate subsection instead.
-  features_c:
-    - |
-      New features related to the C API.
-  features_circuits:
-    - |
-      New features related to the qiskit.circuit module.
-  features_primitives:
-    - |
-      New features related to the qiskit.primitives module.
-  features_providers:
-    - |
-      New features related to the qiskit.providers module.
-  features_pulse:
-    - |
-      New features related to the qiskit.pulse module.
-  features_qasm:
-    - |
-      New features related to the qiskit.qasm2 or qiskit.qasm3 modules.
-  features_qpy:
-    - |
-      New features related to the qiskit.qpy module.
-  features_quantum_info:
-    - |
-      New features related to the qiskit.quantum_info module.
-  features_synthesis:
-    - |
-      New features related to the qiskit.synthesis module.
-  features_transpiler:
-    - |
-      New features related to the qiskit.transpiler and qiskit.dagcircuit
-      modules.
-  features_visualization:
-    - |
-      New features related to the qiskit.visualization module.
-  features_misc:
-    - |
-      New miscellaneous features.
-  issues:
-    - |
-      List known issues here, or remove this section.  All of the list items in
-      this section are combined when the release notes are rendered, so the text
-      needs to be worded so that it does not depend on any information only
-      available in another section, such as the prelude. This may mean repeating
-      some details.
-  upgrade:
-    - |
-      List upgrade notes here, or remove this section.  All of the list items in
-      this section are combined when the release notes are rendered, so the text
-      needs to be worded so that it does not depend on any information only
-      available in another section, such as the prelude. This may mean repeating
-      some details. If the upgrade note is contained within one of the modules
-      listed below you should use the appropriate subsection instead.
-  upgrade_c:
-    - |
-      Notes with upgrade impact related to the C API.
-  upgrade_circuits:
-    - |
-      Notes with upgrade impact related to the qiskit.circuit module.
-  upgrade_primitives:
-    - |
-      Notes with upgrade impact related to the qiskit.primitives module.
-  upgrade_providers:
-    - |
-      Notes with upgrade impact related to the qiskit.providers module.
-  upgrade_pulse:
-    - |
-      Notes with upgrade impact related to the qiskit.pulse module.
-  upgrade_qasm:
-    - |
-      Notes with upgrade impact related to the qiskit.qasm2 or qiskit.qasm3
-      modules.
-  upgrade_qpy:
-    - |
-      Notes with upgrade impact related to the qiskit.qpy module.
-  upgrade_quantum_info:
-    - |
-      Notes with upgrade impact related to the qiskit.quantum_info module.
-  upgrade_synthesis:
-    - |
-      Notes with upgrade impact related to the qiskit.synthesis module.
-  upgrade_transpiler:
-    - |
-      Notes with upgrade impact related to the qiskit.transpiler and
-      qiskit.dagcircuit modules.
-  upgrade_visualization:
-    - |
-      Notes with upgrade impact related to the qiskit.visualization module.
-  upgrade_misc:
-    - |
-      Miscellaneous notes about potential upgrade impact.
-  deprecations:
-    - |
-      List deprecations notes here, or remove this section.  All of the list
-      items in this section are combined when the release notes are rendered, so
-      the text needs to be worded so that it does not depend on any information
-      only available in another section, such as the prelude. This may mean
-      repeating some details.
-  deprecations_c:
-    - |
-      Deprecations related to the C API.
-  deprecations_circuits:
-    - |
-      Deprecations related to the qiskit.circuit module.
-  deprecations_primitives:
-    - |
-      Deprecations related to the qiskit.primitives module.
-  deprecations_providers:
-    - |
-      Deprecations related to the qiskit.providers module.
-  deprecations_pulse:
-    - |
-      Deprecations related to the qiskit.pulse module.
-  deprecations_qasm:
-    - |
-      Deprecations related to the qiskit.qasm2 or qiskit.qasm3 modules.
-  deprecations_qpy:
-    - |
-      Deprecations related to the qiskit.qpy module.
-  deprecations_quantum_info:
-    - |
-      Deprecations related to the qiskit.quantum_info module.
-  deprecations_synthesis:
-    - |
-      Deprecations related to the qiskit.synthesis module.
-  deprecations_transpiler:
-    - |
-      Deprecations related to the qiskit.transpiler and qiskit.dagcircuit
-      modules.
-  deprecations_visualization:
-    - |
-      Deprecations related to the qiskit.visualization module.
-  deprecations_misc:
-    - |
-      New miscellaneous features.
-  critical:
-    - |
-      Add critical notes here, or remove this section.  All of the list items in
-      this section are combined when the release notes are rendered, so the text
-      needs to be worded so that it does not depend on any information only
-      available in another section, such as the prelude. This may mean repeating
-      some details.
-  security:
-    - |
-      Add security notes here, or remove this section.  All of the list items in
-      this section are combined when the release notes are rendered, so the text
-      needs to be worded so that it does not depend on any information only
-      available in another section, such as the prelude. This may mean repeating
-      some details.
+  # Delete all sections that you do not need.  You can have more than one section in a file, and
+  # more than one bullet point per section.  This is a regular YAML file, and all text should use
+  # Sphinx's flavor of rST (restructured text).  Each bullet point is a separate "release note".
+  #
+  # Each public bug fix, feature, deprecation, and behavior change needs a release note.
+  # Documentation- or internal-only changes do not need release notes.
+  #
+  # Each bullet point appears without any context, so make sure each can be read in isolation.  The
+  # reader will not see your code change, the issue, or any other bullet points in this file.  You
+  # might need to repeat yourself between bullets.
+  #
+  # Use Sphinx cross-references like :meth:`.YourClass.your_method` whenever mentioning a
+  # function/class/method by name.
+  #
+  # Use `- |` for multiline YAML strings (like in the "fixes" example in this template) to preserve
+  # newlines, which you need for Sphinx syntax.
+  #
+  # There are some rare additional sections listed in `releasenotes/config.yaml` not included here.
+
   fixes:
     - |
-      Add normal bug fixes here, or remove this section.  All of the list items
-      in this section are combined when the release notes are rendered, so the
-      text needs to be worded so that it does not depend on any information only
-      available in another section, such as the prelude. This may mean repeating
-      some details.
-  other:
-    - |
-      Add other notes here, or remove this section.  All of the list items in
-      this section are combined when the release notes are rendered, so the text
-      needs to be worded so that it does not depend on any information only
-      available in another section, such as the prelude. This may mean repeating
-      some details.
+      Give each bug fix a separate bullet point in here, or delete this section.
+      Each bug-fix note should be about one sentence long.  You can link to
+      issues such as by doing:
+
+      See `#15019 <https://github.com/Qiskit/qiskit/issues/15019>`__.
+
+  # Performance release notes are for runtime and output quality improvements which do not 
+  # include API or semantic changes. 
+  performance:
+    - Measurable performance improvements.
+
+  # A feature is a new user-visible functionality. It can come in the form of a new function, 
+  # class, parameter, environment variable or any other user accessible and publicly documented 
+  # endpoint. In addition, new capabilities (for example "Qiskit can now compile to Clifford+T"), 
+  # newly supported workflows and new types of language interoperability are considered features.
+  # Choose only the "features" sections you need and delete the rest.  Try to be concise.  You may
+  # use a code example for complicated features.
+  features_c:
+    - New features in the C API.
+  features_circuits:
+    - New features in :mod:`qiskit.circuit`.
+  features_primitives:
+    - New features in :mod:`qiskit.primitives`.
+  features_providers:
+    - New features in :mod:`qiskit.providers`.
+  features_qasm:
+    - New features in :mod:`qiskit.qasm2` or :mod:`qiskit.qasm3`.
+  features_qpy:
+    - New features in :mod:`qiskit.qpy` or changes to the QPY spec.
+  features_quantum_info:
+    - New features in :mod:`qiskit.quantum_info`.
+  features_synthesis:
+    - New features in :mod:`qiskit.synthesis`.
+  features_transpiler:
+    - New features in :mod:`qiskit.transpiler`, including all transpiler passes and also the
+      :class:`.DAGCircuit` intermediate representation (IR).
+  features_visualization:
+    - New features in :mod:`qiskit.visualization`.
+  features_misc:
+    - New features that don't fit into any other category.
+
+  # Release notes for changes that might require users to modify their code.  These should not be
+  # common, because breaking user code is against the deprecation policy.
+  upgrade_c:
+    - Changes needing user action in the C API.
+  upgrade_circuits:
+    - Changes needing user action in :mod:`qiskit.circuit`.
+  upgrade_primitives:
+    - Changes needing user action in :mod:`qiskit.primitives`.
+  upgrade_providers:
+    - Changes needing user action in :mod:`qiskit.providers`.
+  upgrade_qasm:
+    - Changes needing user action in :mod:`qiskit.qasm2` or :mod:`qiskit.qasm3`.
+  upgrade_qpy:
+    - Changes needing user action in :mod:`qiskit.qpy` or changes to the QPY spec.
+  upgrade_quantum_info:
+    - Changes needing user action in :mod:`qiskit.quantum_info`.
+  upgrade_synthesis:
+    - Changes needing user action in :mod:`qiskit.synthesis`.
+  upgrade_transpiler:
+    - Changes needing user action in :mod:`qiskit.transpiler`, including all transpiler passes
+      and also the :class:`.DAGCircuit` IR.
+  upgrade_visualization:
+    - Changes needing user action in :mod:`qiskit.visualization`.
+  upgrade_misc:
+    - Changes needing user action that don't fit into any other category.
+
+  # New deprecations in this release.  Each deprecation should explain why the deprecation is
+  # necessary, and what users should do instead.  Include examples.
+  deprecations_c:
+    - New deprecations in the C API.
+  deprecations_circuits:
+    - New deprecations in :mod:`qiskit.circuit`.
+  deprecations_primitives:
+    - New deprecations in :mod:`qiskit.primitives`.
+  deprecations_providers:
+    - New deprecations in :mod:`qiskit.providers`.
+  deprecations_qasm:
+    - New deprecations in :mod:`qiskit.qasm2` or :mod:`qiskit.qasm3`.
+  deprecations_qpy:
+    - New deprecations in :mod:`qiskit.qpy` or changes to the QPY spec.
+  deprecations_quantum_info:
+    - New deprecations in :mod:`qiskit.quantum_info`.
+  deprecations_synthesis:
+    - New deprecations in :mod:`qiskit.synthesis`.
+  deprecations_transpiler:
+    - New deprecations in :mod:`qiskit.transpiler`, including all transpiler passes and also the
+      :class:`.DAGCircuit` IR.
+  deprecations_visualization:
+    - New deprecations in :mod:`qiskit.visualization`.
+  deprecations_misc:
+    - New deprecations that don't fit into any other category.
+
+  # Build release notes are for things like Rust-version updates, Python-packaging updates, etc.
+  # These generally shouldn't concern users, just people building from source.
+  build:
+    - Changes to the build system that packagers might need to be aware of.

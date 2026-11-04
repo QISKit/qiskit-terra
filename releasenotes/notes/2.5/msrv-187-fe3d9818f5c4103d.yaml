@@ -1,0 +1,8 @@
+---
+build:
+  - The minimum supported Rust version (MSRV) for building Qiskit from source
+    has been increased from 1.85 to 1.87. Rust 1.87 was required to update
+    to the latest versions of our upstream dependencies. Specifically,
+    `nalgebra 0.34 <https://github.com/dimforge/nalgebra>`__ requires
+    Rust 1.87.
+

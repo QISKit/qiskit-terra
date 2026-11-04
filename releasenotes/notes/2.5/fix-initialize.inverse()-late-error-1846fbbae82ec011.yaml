@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed an unclear error message in :meth:`.Initialize.inverse`, which now immediately 
+    raises an error when called since the instruction is not invertible.
+
+    See `#15595 <https://github.com/Qiskit/qiskit/issues/15595>`__.

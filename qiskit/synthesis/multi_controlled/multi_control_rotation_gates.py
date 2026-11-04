@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -17,8 +17,12 @@ import math
 import numpy as np
 
 from qiskit.circuit import QuantumCircuit, Gate
-from qiskit.circuit.library.standard_gates.u3 import _generate_gray_code
+from qiskit.circuit.library import RXGate, RYGate, RZGate, UnitaryGate
 from qiskit.exceptions import QiskitError
+from qiskit.quantum_info.operators.predicates import is_unitary_matrix
+
+from .gray_code import generate_gray_code
+from .mcx_synthesis import synth_mcx_n_dirty_i15
 
 
 def _apply_cu(circuit, theta, phi, lam, control, target, use_basis_gates=True):
@@ -44,7 +48,7 @@ def _apply_mcu_graycode(circuit, theta, phi, lam, ctls, tgt, use_basis_gates):
 
     n = len(ctls)
 
-    gray_code = _generate_gray_code(n)
+    gray_code = generate_gray_code(n)
     last_pattern = None
 
     for pattern in gray_code:
@@ -104,12 +108,7 @@ def _mcsu2_real_diagonal(
             `arXiv:2302.06377 (2023) <https://arxiv.org/abs/2302.06377>`__
 
     """
-    # pylint: disable=cyclic-import
-    from qiskit.circuit.library.standard_gates import RXGate, RYGate, RZGate
-    from qiskit.circuit.library.generalized_gates import UnitaryGate
-    from qiskit.quantum_info.operators.predicates import is_unitary_matrix
     from qiskit.compiler import transpile
-    from qiskit.synthesis.multi_controlled import synth_mcx_n_dirty_i15
 
     if isinstance(gate, RYGate):
         theta = gate.params[0]
@@ -130,7 +129,9 @@ def _mcsu2_real_diagonal(
             raise QiskitError(f"The unitary must be a 2x2 matrix, but has shape {unitary.shape}.")
 
         if not is_unitary_matrix(unitary):
-            raise QiskitError(f"The unitary in must be an unitary matrix, but is {unitary}.")
+            raise QiskitError(
+                f"The unitary for the input gate must be a unitary matrix, but is {unitary}."
+            )
 
         if not np.isclose(1.0, np.linalg.det(unitary)):
             raise QiskitError(

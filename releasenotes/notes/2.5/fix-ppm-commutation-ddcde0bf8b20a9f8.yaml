@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed commutativity check between two :class:`.PauliProductMeasurement` instructions
+    in the case that both instructions measure to the same classical bit. In this case,
+    the later measurement overwrites the result of the earlier measurement, and consequently,
+    interchanging the two measurement instructions inside the quantum circuit is generally
+    invalid.

@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -17,7 +17,7 @@ use smallvec::smallvec;
 
 use pyo3::prelude::*;
 use qiskit_circuit::Qubit;
-use qiskit_circuit::circuit_data::CircuitData;
+use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::operations::{Param, StandardGate};
 
 // Optimize the synthesis of an n-qubit circuit contains only CX gates for
@@ -133,7 +133,7 @@ fn _matrix_to_north_west(
     while !done {
         // At each iteration the values of i switch between even and odd
         let mut at_least_one_needed = false;
-        for i in (first_qubit..n - 1).step_by(2) {
+        for i in (first_qubit..n.saturating_sub(1)).step_by(2) {
             // "If j < k, we do nothing" (see [1])
             // "If j > k, we swap the two labels, and we also perform a box" (see [1])
             if label_arr[i] > label_arr[i + 1] {
@@ -208,7 +208,7 @@ fn _north_west_to_identity(n: usize, mut mat: ArrayViewMut2<bool>) -> Instructio
     let mut cx_instructions_rows: InstructionList = Vec::new();
     while !done {
         let mut at_least_one_needed = false;
-        for i in (first_qubit..n - 1).step_by(2) {
+        for i in (first_qubit..n.saturating_sub(1)).step_by(2) {
             // Exchange the labels if needed
             if label_arr[i] > label_arr[i + 1] {
                 at_least_one_needed = true;
@@ -305,7 +305,7 @@ pub fn py_synth_cnot_lnn_instructions(
 /// Returns: The CircuitData of the synthesized circuit.
 #[pyfunction]
 #[pyo3(signature = (mat))]
-pub fn py_synth_cnot_depth_line_kms(mat: PyReadonlyArray2<bool>) -> PyResult<CircuitData> {
+pub fn py_synth_cnot_depth_line_kms(mat: PyReadonlyArray2<bool>) -> PyResult<PyCircuitData> {
     let num_qubits = mat.as_array().nrows(); // is a quadratic matrix
     let (cx_instructions_rows_m2nw, cx_instructions_rows_nw2id) =
         synth_cnot_lnn_instructions(mat.as_array());
@@ -320,5 +320,8 @@ pub fn py_synth_cnot_depth_line_kms(mat: PyReadonlyArray2<bool>) -> PyResult<Cir
                 smallvec![Qubit(ctrl as u32), Qubit(target as u32)],
             )
         });
-    CircuitData::from_standard_gates(num_qubits as u32, instructions, Param::Float(0.0))
+    Ok(
+        CircuitData::from_standard_gates(num_qubits as u32, instructions, Param::Float(0.0))?
+            .into(),
+    )
 }

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -90,20 +90,20 @@ def pauli_twirl_2q_gates(
         twirling_std_gate = []
         for gate in twirling_gate:
             if isinstance(gate, str):
-                gate = NAME_TO_CLASS.get(gate, None)
+                gate_name = gate
+                gate = NAME_TO_CLASS.get(gate_name, None)
                 if gate is None:
-                    raise QiskitError(f"The specified gate name {twirling_gate} is not supported")
+                    raise QiskitError(f"The specified gate name {gate_name} is not supported")
                 twirling_std_gate.append(gate)
             else:
                 twirling_gate = getattr(gate, "_standard_gate", None)
 
                 if twirling_gate is None:
                     custom_gates.append(gate)
+                elif twirling_gate in NAME_TO_CLASS.values():
+                    twirling_std_gate.append(twirling_gate)
                 else:
-                    if twirling_gate in NAME_TO_CLASS.values():
-                        twirling_std_gate.append(twirling_gate)
-                    else:
-                        custom_gates.append(gate)
+                    custom_gates.append(gate)
         if not custom_gates:
             custom_gates = None
         if not twirling_std_gate:
@@ -113,12 +113,11 @@ def pauli_twirl_2q_gates(
         if std_gate is None:
             twirling_std_gate = None
             custom_gates = [twirling_gate]
+        elif std_gate in NAME_TO_CLASS.values():
+            twirling_std_gate = [std_gate]
         else:
-            if std_gate in NAME_TO_CLASS.values():
-                twirling_std_gate = [std_gate]
-            else:
-                twirling_std_gate = None
-                custom_gates = [twirling_gate]
+            twirling_std_gate = None
+            custom_gates = [twirling_gate]
     else:
         twirling_std_gate = twirling_gate
     out_twirls = num_twirls

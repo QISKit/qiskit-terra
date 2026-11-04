@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -96,7 +96,7 @@ class DAGDefaultStyle(DefaultStyle):
     def __init__(self):
         path = self.DEFAULT_STYLE_PATH / Path(self.DEFAULT_STYLE_NAME).with_suffix(".json")
 
-        with open(path, "r") as infile:
+        with open(path) as infile:
             default_style = json.load(infile)
 
         # set shortcuts, such as "ec" for "edgecolor"

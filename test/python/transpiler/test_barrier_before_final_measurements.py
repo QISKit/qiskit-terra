@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -20,7 +20,7 @@ from qiskit.transpiler import passes
 from qiskit.transpiler.passes import BarrierBeforeFinalMeasurements
 from qiskit.converters import circuit_to_dag
 from qiskit.circuit import QuantumRegister, QuantumCircuit, ClassicalRegister
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestBarrierBeforeFinalMeasurements(QiskitTestCase):
@@ -152,6 +152,91 @@ class TestBarrierBeforeFinalMeasurements(QiskitTestCase):
         expected.barrier(qr0, qr1)
         expected.measure(qr0, cr0[0])
         expected.measure(qr1, cr0[1])
+
+        pass_ = BarrierBeforeFinalMeasurements()
+        result = pass_.run(circuit_to_dag(circuit))
+
+        self.assertEqual(result, circuit_to_dag(expected))
+
+    def test_two_qregs_to_a_single_clbit(self):
+        """Two measurements in different qregs writing the *same* clbit keep their order.
+
+        The clbit carries a write-after-write dependency, so swapping the two measurements
+        changes which value c0 ends up holding.  Regression test of gh-16851.
+                                          |
+        q0:-------[m]------     q0:-------|------[m]--
+                   |                      |       |
+        q1:--[X]---|--[m]--  -> q1:--[X]--|--[m]--|---
+                   |   |                  |   |   |
+         c:--------.---.---      c:-----------.---.---
+        """
+        qr = QuantumRegister(2, "q")
+        cr = ClassicalRegister(1, "c")
+
+        circuit = QuantumCircuit(qr, cr)
+        circuit.x(qr[1])
+        circuit.measure(qr[1], cr[0])
+        circuit.measure(qr[0], cr[0])
+
+        expected = QuantumCircuit(qr, cr)
+        expected.x(qr[1])
+        expected.barrier(qr)
+        expected.measure(qr[1], cr[0])
+        expected.measure(qr[0], cr[0])
+
+        pass_ = BarrierBeforeFinalMeasurements()
+        result = pass_.run(circuit_to_dag(circuit))
+
+        self.assertEqual(result, circuit_to_dag(expected))
+
+    def test_three_qregs_to_a_single_clbit(self):
+        """Three measurements writing the same clbit keep their order.
+
+        The measurement order q2, q0, q1 is deliberately not the qubit order, so an
+        implementation that reinserts the final operations qubit-by-qubit produces
+        q0, q1, q2 instead.  Regression test of gh-16851.
+        """
+        qr = QuantumRegister(3, "q")
+        cr = ClassicalRegister(1, "c")
+
+        circuit = QuantumCircuit(qr, cr)
+        circuit.measure(qr[2], cr[0])
+        circuit.measure(qr[0], cr[0])
+        circuit.measure(qr[1], cr[0])
+
+        expected = QuantumCircuit(qr, cr)
+        expected.barrier(qr)
+        expected.measure(qr[2], cr[0])
+        expected.measure(qr[0], cr[0])
+        expected.measure(qr[1], cr[0])
+
+        pass_ = BarrierBeforeFinalMeasurements()
+        result = pass_.run(circuit_to_dag(circuit))
+
+        self.assertEqual(result, circuit_to_dag(expected))
+
+    def test_shared_clbit_across_an_existing_barrier(self):
+        """Measurements writing the same clbit keep their order across an existing barrier.
+
+        q0:-------|--[m]--     q0:--|-------|--[m]--
+                  |   |                     |   |
+        q1:--[m]--|---|---  -> q1:--|--[m]--|---|---
+              |   |   |                 |   |   |
+         c:---.-------.---      c:------.-------.---
+        """
+        qr = QuantumRegister(2, "q")
+        cr = ClassicalRegister(1, "c")
+
+        circuit = QuantumCircuit(qr, cr)
+        circuit.measure(qr[1], cr[0])
+        circuit.barrier(qr)
+        circuit.measure(qr[0], cr[0])
+
+        expected = QuantumCircuit(qr, cr)
+        expected.barrier(qr)
+        expected.measure(qr[1], cr[0])
+        expected.barrier(qr)
+        expected.measure(qr[0], cr[0])
 
         pass_ = BarrierBeforeFinalMeasurements()
         result = pass_.run(circuit_to_dag(circuit))

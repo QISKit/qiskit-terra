@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    The minimum require version of NumPy is now correctly listed as 1.21 (instead of 1.17).
+    This bound has been effectively in place for several releases due to the use of :class:`numpy.typing.NDArray`,
+    which was introduced in NumPy 1.21, so Qiskit would fail to import with older versions of NumPy.

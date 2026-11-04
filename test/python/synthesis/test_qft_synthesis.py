@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,7 +21,7 @@ from qiskit.circuit.library import QFT
 from qiskit.synthesis.qft import synth_qft_line, synth_qft_full
 from qiskit.quantum_info import Operator
 from qiskit.synthesis.linear.linear_circuits_utils import check_lnn_connectivity
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @ddt
@@ -57,6 +57,12 @@ class TestQFTLNN(QiskitTestCase):
         # Check that the output circuit has LNN connectivity
         with self.subTest(msg="synthesized QFT circuit do not have LNN connectivity"):
             self.assertTrue(check_lnn_connectivity(qft_lnn))
+
+    @data(50, 100, 1000)
+    def test_create_large_circuit(self, num_qubits):
+        """Test creating large QFT circuits."""
+        qft = synth_qft_line(num_qubits)
+        self.assertEqual(set(qft.count_ops()), {"p", "cx", "h"})
 
 
 @ddt
@@ -110,6 +116,12 @@ class TestQFTFull(QiskitTestCase):
             original = QFT(num_qubits, name="SomeRandomName")
         synthesized = synth_qft_full(num_qubits, name="SomeRandomName")
         self.assertEqual(original.name, synthesized.name)
+
+    @data(50, 100, 1000)
+    def test_create_large_circuit(self, num_qubits):
+        """Test creating large QFT circuits."""
+        qft = synth_qft_full(num_qubits)
+        self.assertEqual(set(qft.count_ops()), {"cp", "h", "swap"})
 
 
 if __name__ == "__main__":

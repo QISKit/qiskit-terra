@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,18 +12,17 @@
 """
 Circuit synthesis for a stabilizer state preparation circuit.
 """
-# pylint: disable=invalid-name
+
 
 from __future__ import annotations
 
 from collections.abc import Callable
 import numpy as np
+
 from qiskit.circuit import QuantumCircuit
 from qiskit.exceptions import QiskitError
-from qiskit.quantum_info.states import StabilizerState
-from qiskit.synthesis.linear.linear_matrix_utils import (
-    calc_inverse_matrix,
-)
+from qiskit.quantum_info import StabilizerState, Clifford, Pauli
+from qiskit.synthesis.linear import calc_inverse_matrix
 from qiskit.synthesis.linear_phase import synth_cz_depth_line_mr
 from qiskit.synthesis.clifford.clifford_decompose_layers import (
     _default_cz_synth_func,
@@ -42,7 +41,7 @@ def synth_stabilizer_layers(
     """Synthesis of a stabilizer state into layers.
 
     It provides a similar decomposition to the synthesis described in Lemma 8 of reference [1],
-    without the initial Hadamard-free sub-circuit which do not affect the stabilizer state.
+    without the initial Hadamard-free sub-circuit which does not affect the stabilizer state.
 
     For example, a 5-qubit stabilizer state is decomposed into the following layers:
 
@@ -110,8 +109,6 @@ def synth_stabilizer_layers(
     layeredCircuit.append(H1_circ, qubit_list)
 
     # Add Pauli layer to fix the Clifford phase signs
-    # pylint: disable=cyclic-import
-    from qiskit.quantum_info.operators.symplectic import Clifford
 
     clifford_target = Clifford(layeredCircuit)
     pauli_circ = _calc_pauli_diff_stabilizer(cliff, clifford_target)
@@ -122,9 +119,6 @@ def synth_stabilizer_layers(
 
 def _calc_pauli_diff_stabilizer(cliff, cliff_target):
     """Given two Cliffords whose stabilizers differ by a Pauli, we find this Pauli."""
-
-    # pylint: disable=cyclic-import
-    from qiskit.quantum_info.operators.symplectic import Pauli
 
     num_qubits = cliff.num_qubits
     if cliff.num_qubits != cliff_target.num_qubits:

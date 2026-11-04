@@ -5,12 +5,25 @@ All the crates in here are called `qiskit-*`, and are stored in directories that
 This crate structure currently serves the purpose of building only a single Python extension module, which still separates out some of the Rust code into separate logical chunks.
 The intention is that (much) longer term, we might be wanting to expose more of Qiskit functionality directly for other languages to interact with without going through Python.
 
+We use a structure with several crates in it for a couple of reasons:
+
+* logical separation of code
+* faster incremental compile times
+
+When we're doing Rust/Python interaction, though, we have to be careful.
+Pure-Rust FFI with itself over dynamic-library boundaries (like a Python C extension) isn't very natural, since Rust heavily prefers static linking.
+If we had more than one Python C extension, it would be very hard to interact between the code in them.
+This would be a particular problem for defining the circuit object and using it in other places, which is something we absolutely need to do.
+
+### Libraries
+
 * `qiskit-pyext` is the only crate that actually builds a Python C extension library.
   This is kind of like the parent crate of all the others, from an FFI perspective; others define `pyclass`es and `pyfunction`s and the like, but it's `qiskit-pyext` that builds the C extension.
   Our C extension is built as `qiskit._accelerate` in Python space.
-* `qiskit-cext` is the crate that defines the C FFI for Qiskit. It defines the C API to work with the rust code directly. It has 2 modes of operation a standalone mode
-  that compiles to a C dynamic library without any runtime dependency on the Python interpreter and a embedded mode where the API is re-exported from `qiskit-pyext`
-  and used to accelerate Python worklows when writing compiled extensions that interact with Qiskit.
+* `qiskit-cext` is the crate that defines the C FFI for Qiskit. It defines the C API to work with the Rust code directly. It has two modes of operation: a standalone mode
+  that compiles to a C dynamic library without any runtime dependency on the Python interpreter, and an embedded mode where the API is re-exported from `qiskit-pyext`
+  and used to accelerate Python workflows when writing compiled extensions that interact with Qiskit.
+* `qiskit-bindgen` is an internal library that contains the logic for constructing header files to access the C API defined in `qiskit-cext`.
 * `qiskit-accelerate` is a catch-all crate for one-off accelerators. This should be the end of the dependency tree and only be in the dependency list for the public
   interface crates: `qiskit-pyext` or `qiskit-cext`. If what you're working on is small and largely self-contained, and doesn't fit in another crate you probably just
   want to put it in here, then bind it to the C extension module in `qiskit-pyext`.
@@ -21,20 +34,22 @@ The intention is that (much) longer term, we might be wanting to expose more of 
   This depends on `qiskit-circuit`, but is otherwise pretty standalone, and it's unlikely that other things will need to interact with it.
 * `qiskit-qasm3` is the Qiskit-specific side of the OpenQASM 3 importer.
   The actual parser lives at https://github.com/Qiskit/openqasm3_parser, and is its own set of Rust-only crates.
-* `qiskit-quantum-info` is the crate for quantum information.
+* `qiskit-quantum-info` contains definitions and operations on quantum-information-related objects,
+  without reference to circuit-level objects.  This is a base crate.  Interactions between
+  circuit-level objects and quantum-info objects are either in `qiskit-circuit` (if they are part of
+  core IR definitions) or `qiskit_synthesis::quantum_info` (if not).
 * `qiskit-synthesis` is the crate for synthesis functionality.
 * `qiskit-circuit-library` is the crate for circuit library functions. It contains constructors or other
   circuit functionality that builds on the core circuit data model defined in `qiskit-circuit`.
+* `qiskit-providers` defines the quantum program representation and the backend interface that consumes it. A
+  quantum program contains the semantics of classical processing that is near-time to the QPU in a quantum computer.
+* `qiskit-util` is for small utility functions and data structures that are independent of all
+  Qiskit-specific objects, so it can be depended-on by both `quantum-info` and `circuit`.
 
-We use a structure with several crates in it for a couple of reasons:
+### Binaries
 
-* logical separation of code
-* faster incremental compile times
-
-When we're doing Rust/Python interaction, though, we have to be careful.
-Pure-Rust FFI with itself over dynamic-library boundaries (like a Python C extension) isn't very natural, since Rust heavily prefers static linking.
-If we had more than one Python C extension, it would be very hard to interact between the code in them.
-This would be a particular problem for defining the circuit object and using it in other places, which is something we absolutely need to do.
+* `qiskit-bindgen-cli` is a toolkit for working with the code generation tooling around C header files
+  and vtables, including linting them for consistency.  See the crate's `README` for more.
 
 ## Developer notes
 

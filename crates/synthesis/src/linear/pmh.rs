@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -13,11 +13,11 @@
 use hashbrown::HashMap;
 use ndarray::{Array1, Array2, ArrayViewMut2, Axis, s};
 use numpy::PyReadonlyArray2;
-use smallvec::smallvec;
+use smallvec::{SmallVec, smallvec};
 use std::cmp;
 
 use qiskit_circuit::Qubit;
-use qiskit_circuit::circuit_data::CircuitData;
+use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::operations::{Param, StandardGate};
 
 use pyo3::prelude::*;
@@ -31,7 +31,7 @@ fn _index(transpose: bool, i: usize, j: usize) -> (usize, usize) {
 
 fn _ceil_fraction(numerator: usize, denominator: usize) -> usize {
     let mut fraction = numerator / denominator;
-    if numerator % denominator > 0 {
+    if !numerator.is_multiple_of(denominator) {
         fraction += 1;
     }
     fraction
@@ -151,10 +151,24 @@ fn lower_cnot_synth(
 #[pyo3(signature = (matrix, section_size=None))]
 pub fn synth_cnot_count_full_pmh(
     matrix: PyReadonlyArray2<bool>,
-    section_size: Option<i64>,
-) -> PyResult<CircuitData> {
+    section_size: Option<usize>,
+) -> PyResult<PyCircuitData> {
     let arrayview = matrix.as_array();
-    let mut mat: Array2<bool> = arrayview.to_owned();
+    let mat: Array2<bool> = arrayview.to_owned();
+    let num_qubits = mat.nrows();
+
+    let instructions = synth_pmh(mat, section_size);
+    Ok(
+        CircuitData::from_standard_gates(num_qubits as u32, instructions, Param::Float(0.0))?
+            .into(),
+    )
+}
+
+type Instruction = (StandardGate, SmallVec<[Param; 3]>, SmallVec<[Qubit; 2]>);
+pub fn synth_pmh(
+    mut mat: Array2<bool>,
+    section_size: Option<usize>,
+) -> impl DoubleEndedIterator<Item = Instruction> {
     let num_qubits = mat.nrows(); // is a quadratic matrix
 
     // If given, use the user-specified input size. If None, we default to
@@ -164,7 +178,7 @@ pub fn synth_cnot_count_full_pmh(
     // until ~100 qubits.
     let alpha = 0.56;
     let blocksize = match section_size {
-        Some(section_size) => section_size as usize,
+        Some(section_size) => section_size,
         None => std::cmp::max(2, (alpha * (num_qubits as f64).log2()).floor() as usize),
     };
 
@@ -174,9 +188,9 @@ pub fn synth_cnot_count_full_pmh(
     let upper_cnots = lower_cnot_synth(mat.view_mut(), blocksize, true);
 
     // iterator over the gates
-    let instructions = upper_cnots
-        .iter()
-        .map(|(i, j)| (*j, *i))
+    upper_cnots
+        .into_iter()
+        .map(|(i, j)| (j, i))
         .chain(lower_cnots.into_iter().rev())
         .map(|(ctrl, target)| {
             (
@@ -184,7 +198,5 @@ pub fn synth_cnot_count_full_pmh(
                 smallvec![],
                 smallvec![Qubit(ctrl as u32), Qubit(target as u32)],
             )
-        });
-
-    CircuitData::from_standard_gates(num_qubits as u32, instructions, Param::Float(0.0))
+        })
 }

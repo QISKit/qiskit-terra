@@ -22,24 +22,26 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ inputs.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
+      - name: Install Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - name: Install Image dependencies
         run: |
           set -e
           python -m venv image_tests
-          image_tests/bin/python -m pip install -U \
+          source image_tests/bin/activate
+          python -m pip install -U pip
+          pip install -U \
             -c constraints.txt \
-            -r requirements.txt \
-            -r requirements-dev.txt \
-            -r requirements-optional.txt \
+            --group test \
+            --group optionals-all \
             -e .
-          sudo apt-get update
-          sudo apt-get install -y graphviz pandoc
-          image_tests/bin/pip check
+          sudo tools/install_ubuntu_graphviz.sh
+          pip check
       - name: Run image tests
         run: |
           image_tests/bin/python -m unittest discover -v test/visual
@@ -49,7 +51,7 @@ jobs:
           # This variable should become redundant on release of jupyter-core 6.
           JUPYTER_PLATFORM_DIRS: 1
       - name: Store image tests diff
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: ${{ failure() }}
         with:
           name: image-test-failure-img-diffs

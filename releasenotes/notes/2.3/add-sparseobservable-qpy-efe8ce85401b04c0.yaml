@@ -1,0 +1,13 @@
+---
+fixes:
+  - |
+    Fixed support for serializing :class:`.PauliEvolutionGate` with operators of type 
+    :class:`.SparseObservable` by adding QPY support for the latter.
+    Fixes `#15070 <https://github.com/Qiskit/qiskit/issues/15070>`__.
+upgrade:
+  - |
+    QPY has been upgraded to version 17 to support :class:`.SparseObservable` serialization
+    by introducing the ``SPARSE_OBSERVABLE`` format.
+    In particular, this allows to serialize :class:`.PauliEvolutionGate` objects that internally 
+    use this operator and the payload of the evolution gate is updated. 
+    See :mod:`qiskit.qpy` for more details on the updated payloads.

@@ -1,0 +1,10 @@
+---
+features_c:
+  - |
+    Added C API bindings for the Instantaneous Quantum Polynomial-time (IQP)
+    circuit generator in the circuit library. The new functions
+    ``qk_circuit_library_iqp`` and ``qk_circuit_library_random_iqp`` let C
+    callers construct IQP circuits either from an explicit integer interaction
+    matrix (with an optional symmetry check) or from a reproducible random
+    instance.
+

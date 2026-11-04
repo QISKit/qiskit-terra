@@ -4,14 +4,13 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 """Prepare a quantum state from the state where all qubits are 0."""
 
-from typing import Union, Optional
 
 import math
 import numpy as np
@@ -27,7 +26,7 @@ from qiskit.circuit.library.generalized_gates import Isometry
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.quantum_info.states.statevector import (
     Statevector,
-)  # pylint: disable=cyclic-import
+)
 
 _EPS = 1e-10  # global variable used to chop very small numbers to zero
 
@@ -41,10 +40,10 @@ class StatePreparation(Gate):
 
     def __init__(
         self,
-        params: Union[str, list, int, Statevector],
-        num_qubits: Optional[int] = None,
+        params: str | list | int | Statevector,
+        num_qubits: int | None = None,
         inverse: bool = False,
-        label: Optional[str] = None,
+        label: str | None = None,
         normalize: bool = False,
     ):
         r"""
@@ -208,7 +207,10 @@ class StatePreparation(Gate):
             None if self._label in ("State Preparation", "State Preparation Dg") else self._label
         )
 
-        return StatePreparation(self._params_arg, inverse=not self._inverse, label=label)
+        num_qubits = self.num_qubits if self._from_int else None
+        return StatePreparation(
+            self._params_arg, num_qubits=num_qubits, inverse=not self._inverse, label=label
+        )
 
     def broadcast_arguments(self, qargs, cargs):
         flat_qargs = [qarg for sublist in qargs for qarg in sublist]
@@ -270,7 +272,7 @@ class UniformSuperpositionGate(Gate):
     def __init__(
         self,
         num_superpos_states: int = 2,
-        num_qubits: Optional[int] = None,
+        num_qubits: int | None = None,
     ):
         r"""
         Args:
@@ -292,12 +294,11 @@ class UniformSuperpositionGate(Gate):
         if num_superpos_states <= 1:
             raise ValueError("num_superpos_states must be a positive integer greater than 1.")
         if num_qubits is None:
-            num_qubits = int(math.ceil(math.log2(num_superpos_states)))
-        else:
-            if not (isinstance(num_qubits, int) and (num_qubits >= math.log2(num_superpos_states))):
-                raise ValueError(
-                    "num_qubits must be an integer greater than or equal to log2(num_superpos_states)."
-                )
+            num_qubits = math.ceil(math.log2(num_superpos_states))
+        elif not (isinstance(num_qubits, int) and (num_qubits >= math.log2(num_superpos_states))):
+            raise ValueError(
+                "num_qubits must be an integer greater than or equal to log2(num_superpos_states)."
+            )
         super().__init__("USup", num_qubits, [num_superpos_states])
 
     def _define(self):

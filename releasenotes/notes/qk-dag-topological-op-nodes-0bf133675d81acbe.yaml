@@ -1,6 +1,0 @@
----
-features_c:
-  - |
-    Added :c:func:`qk_dag_topological_op_nodes` to obtain the operation nodes in the
-    DAG circuit listed in topological order. This function takes the DAG and an array
-    of elements where this function will write the output to.

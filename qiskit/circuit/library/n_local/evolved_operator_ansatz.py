@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -20,14 +20,15 @@ import warnings
 import itertools
 import numpy as np
 
+
+from qiskit.circuit.library.hamiltonian_gate import HamiltonianGate
 from qiskit.circuit.library.pauli_evolution import PauliEvolutionGate
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.parametervector import ParameterVector
 from qiskit.circuit import QuantumRegister
 from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.quantum_info import Operator, Pauli, SparsePauliOp
+from qiskit.quantum_info import Operator, Pauli, SparsePauliOp, SparseObservable
 from qiskit.quantum_info.operators.base_operator import BaseOperator
-from qiskit.synthesis.evolution.product_formula import real_or_fail
 
 from qiskit._accelerate.circuit_library import pauli_evolution
 
@@ -82,7 +83,7 @@ def evolved_operator_ansatz(
         insert_barriers: Whether to insert barriers in between each evolution.
         name: The name of the circuit.
         parameter_prefix: Set the names of the circuit parameters. If a string, the same prefix
-            will be used for each parameters. Can also be a list to specify a prefix per
+            will be used for each parameter. Can also be a list to specify a prefix per
             operator.
         remove_identities: If ``True``, ignore identity operators (note that we do not check
             :class:`.Operator` inputs). This will also remove parameters associated with identities.
@@ -90,10 +91,13 @@ def evolved_operator_ansatz(
             layers of gate objects. Setting this to ``False`` is significantly less performant,
             especially for parameter binding, but can be desirable for a cleaner visualization.
     """
+    from qiskit.synthesis.evolution import LieTrotter
+    from qiskit.synthesis.evolution.product_formula import real_or_fail
+
     if reps < 0:
         raise ValueError("reps must be a non-negative integer.")
 
-    if isinstance(operators, BaseOperator):
+    if isinstance(operators, (BaseOperator, SparseObservable)):
         operators = [operators]
     elif len(operators) == 0:
         return QuantumCircuit()
@@ -109,6 +113,10 @@ def evolved_operator_ansatz(
     num_qubits = operators[0].num_qubits
     if remove_identities:
         operators, parameter_prefix = _remove_identities(operators, parameter_prefix)
+        # After removing identities, update num_operators to reflect the actual count
+        num_operators = len(operators)
+        if num_operators == 0:
+            return QuantumCircuit(num_qubits, name=name)
 
     if any(op.num_qubits != num_qubits for op in operators):
         raise ValueError("Inconsistent numbers of qubits in the operators.")
@@ -129,7 +137,7 @@ def evolved_operator_ansatz(
     if (
         flatten is not False  # captures None and True
         and evolution is None
-        and all(isinstance(op, SparsePauliOp) for op in operators)
+        and all(isinstance(op, (SparsePauliOp, SparseObservable)) for op in operators)
     ):
         sparse_labels = [op.to_sparse_list() for op in operators]
         expanded_paulis = []
@@ -149,14 +157,9 @@ def evolved_operator_ansatz(
 
     # slower, Python-path
     if evolution is None:
-        from qiskit.synthesis.evolution import LieTrotter
-
         evolution = LieTrotter(insert_barriers=insert_barriers)
 
     circuit = QuantumCircuit(num_qubits, name=name)
-
-    # pylint: disable=cyclic-import
-    from qiskit.circuit.library.hamiltonian_gate import HamiltonianGate
 
     for rep in range(reps):
         for i, op in enumerate(operators):
@@ -169,7 +172,7 @@ def evolved_operator_ansatz(
                     )
                 flatten_operator = False
 
-            elif isinstance(op, BaseOperator):
+            elif isinstance(op, (BaseOperator, SparseObservable)):
                 gate = PauliEvolutionGate(op, next(param_iter), synthesis=evolution)
                 flatten_operator = flatten is True or flatten is None
             else:
@@ -251,7 +254,7 @@ def hamiltonian_variational_ansatz(
         insert_barriers: Whether to insert barriers in between each evolution.
         name: The name of the circuit.
         parameter_prefix: Set the names of the circuit parameters. If a string, the same prefix
-            will be used for each parameters. Can also be a list to specify a prefix per
+            will be used for each parameter. Can also be a list to specify a prefix per
             operator.
 
     References:
@@ -307,7 +310,7 @@ class EvolvedOperatorAnsatz(NLocal):
             insert_barriers: Whether to insert barriers in between each evolution.
             name: The name of the circuit.
             parameter_prefix: Set the names of the circuit parameters. If a string, the same prefix
-                will be used for each parameters. Can also be a list to specify a prefix per
+                will be used for each parameter. Can also be a list to specify a prefix per
                 operator.
             initial_state: A :class:`.QuantumCircuit` object to prepend to the circuit.
             flatten: Set this to ``True`` to output a flat circuit instead of nesting it inside multiple
@@ -429,9 +432,6 @@ class EvolvedOperatorAnsatz(NLocal):
 
     def _evolve_operator(self, operator, time):
 
-        # pylint: disable=cyclic-import
-        from qiskit.circuit.library.hamiltonian_gate import HamiltonianGate
-
         # if the operator is specified as matrix use exact matrix exponentiation
         if isinstance(operator, Operator):
             gate = HamiltonianGate(operator, time)
@@ -499,6 +499,8 @@ def _validate_prefix(parameter_prefix, operators):
 
 
 def _is_pauli_identity(operator):
+    if isinstance(operator, SparseObservable):
+        return operator.num_terms == 1 and len(operator[0].bit_labels()) == 0
     if isinstance(operator, SparsePauliOp):
         if len(operator.paulis) == 1:
             operator = operator.paulis[0]  # check if the single Pauli is identity below
@@ -516,6 +518,12 @@ def _remove_identities(operators, prefixes):
         return operators, prefixes
 
     cleaned_ops = [op for i, op in enumerate(operators) if i not in identity_ops]
-    cleaned_prefix = [prefix for i, prefix in enumerate(prefixes) if i not in identity_ops]
+    # Handle both string and list prefixes
+    if isinstance(prefixes, str):
+        # If it's a string, keep it as a string (it will be used for all remaining operators)
+        cleaned_prefix = prefixes
+    else:
+        # If it's a list, remove the corresponding entries
+        cleaned_prefix = [prefix for i, prefix in enumerate(prefixes) if i not in identity_ops]
 
     return cleaned_ops, cleaned_prefix

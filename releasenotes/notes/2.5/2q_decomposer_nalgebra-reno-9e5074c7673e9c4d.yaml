@@ -1,0 +1,12 @@
+---
+performance:
+  - The internal linear algebra library used by the :class:`.TwoQubitBasisDecomposer`
+    and :class:`.TwoQubitWeylDecomposition` has been updated to use the
+    `nalgebra <https://docs.rs/nalgebra/latest/nalgebra/>`__ library internally
+    for matrix storage and matrix multiplication. This was done to improve the performance
+    as nalgebra offers fixed size stack allocated small matrix types that have
+    optimized implementations of common linear algebra functions. This has led to
+    a speed up in the synthesis performance of these classes and their internal use in the
+    transpiler for 2q unitary analysis and synthesis. See
+    `#15928 <https://github.com/Qiskit/qiskit/pull/15928>`__ and
+    `#15960 <https://github.com/Qiskit/qiskit/pull/15960>`__ for more details.

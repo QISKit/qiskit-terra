@@ -1,0 +1,8 @@
+---
+upgrade_synthesis:
+  - |
+    The serialization format used by
+    :meth:`.SolovayKitaevDecomposition.save_basic_approximations` and
+    :meth:`.SolovayKitaevDecomposition.load_basic_approximations` has been
+    upgraded. Files saved with Qiskit 2.3 or earlier will not be compatible
+    with Qiskit 2.4 or later.

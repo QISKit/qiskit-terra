@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,12 +12,14 @@
 """Circuit synthesizers and related classes for boolean expressions"""
 
 import itertools
+from math import pi
+
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import ZGate, XGate
 
 
 class EsopGenerator:
-    """Generates an ESOP (Exlusive-sum-of-products) representation
+    """Generates an ESOP (Exclusive-sum-of-products) representation
     for a boolean function given by its truth table"""
 
     def __init__(self, truth_table):
@@ -76,16 +78,17 @@ class EsopGenerator:
 
 def synth_phase_oracle_from_esop(esop, num_qubits):
     """
-    Generates a phase oracle for the boolean function f given in ESOP (Exlusive sum of products) form
+    Generates a phase oracle for the boolean function f given in ESOP (Exclusive sum of products) form
     esop is of the form ('01-1', '11-0', ...) etc
     where 1 is the variable, 0 is negated variable and - is don't care
     """
     qc = QuantumCircuit(num_qubits)
-    clause_data = [
-        (zip(*[qubit_data for qubit_data in enumerate(clause) if qubit_data[1] != "-"]))
-        for clause in esop
-    ]
-    for qubit_indices, control_data in clause_data:
+    for clause in esop:
+        clause_data = [(index, bit) for index, bit in enumerate(clause) if bit != "-"]
+        if len(clause_data) == 0:
+            qc.global_phase += pi
+            continue
+        qubit_indices, control_data = zip(*clause_data)
         control_state = "".join(control_data)
         if len(control_state) == 1:  # single qubit; either Z or XZX
             if control_state == "0":
@@ -108,17 +111,18 @@ def synth_phase_oracle_from_esop(esop, num_qubits):
 
 def synth_bit_oracle_from_esop(esop, num_qubits):
     """
-    Generates a bit-flip oracle for the boolean function f given in ESOP (Exlusive sum of products) form
+    Generates a bit-flip oracle for the boolean function f given in ESOP (Exclusive sum of products) form
     esop is of the form ('01-1', '11-0', ...) etc
     where 1 is the variable, 0 is negated variable and - is don't care
     """
     output_index = num_qubits - 1
     qc = QuantumCircuit(num_qubits)
-    clause_data = [
-        (zip(*[qubit_data for qubit_data in enumerate(clause) if qubit_data[1] != "-"]))
-        for clause in esop
-    ]
-    for qubit_indices, control_data in clause_data:
+    for clause in esop:
+        clause_data = [(index, bit) for index, bit in enumerate(clause) if bit != "-"]
+        if len(clause_data) == 0:
+            qc.x(output_index)
+            continue
+        qubit_indices, control_data = zip(*clause_data)
         control_state = "".join(control_data)
         # use custom controlled-X gate
         gate = XGate().control(len(qubit_indices), ctrl_state=control_state[::-1], annotated=False)

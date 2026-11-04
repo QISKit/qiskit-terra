@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    Fixed a visualization artifact in :func:`~qiskit.visualization.plot_state_qsphere` where
+    symmetric entangled states (e.g., Bell states) were arbitrarily rotated due to floating-point
+    noise. Previously, microscopic noise introduced by the internal eigensolver could cause the
+    visualization to select the wrong basis state as the global phase anchor (Phase 0). A rounding
+    step has been added to filter this noise, ensuring stable and canonical orientation for
+    symmetric states.
+

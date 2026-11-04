@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=too-many-return-statements
 
 """
 A target object represents the minimum set of information the transpiler needs
@@ -21,7 +20,7 @@ from __future__ import annotations
 
 import itertools
 
-from typing import Optional, List, Any
+from typing import Any
 from collections.abc import Mapping
 import io
 import copy
@@ -43,9 +42,6 @@ from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.instruction_durations import InstructionDurations
 from qiskit.transpiler.timing_constraints import TimingConstraints
 
-# import QubitProperties here to provide convenience alias for building a
-# full target
-from qiskit.providers.backend import QubitProperties  # pylint: disable=unused-import
 
 logger = logging.getLogger(__name__)
 
@@ -60,21 +56,19 @@ class InstructionProperties(BaseInstructionProperties):
     custom attributes for those custom/additional properties by the backend.
     """
 
-    def __new__(  # pylint: disable=keyword-arg-before-vararg
+    def __new__(
         cls,
-        duration=None,  # pylint: disable=keyword-arg-before-vararg
-        error=None,  # pylint: disable=keyword-arg-before-vararg
-        *args,  # pylint: disable=unused-argument
-        **kwargs,  # pylint: disable=unused-argument
+        duration=None,
+        error=None,
+        *args,
+        **kwargs,
     ):
-        return super(InstructionProperties, cls).__new__(  # pylint: disable=too-many-function-args
-            cls, duration, error
-        )
+        return super().__new__(cls, duration, error)
 
     def __init__(
         self,
-        duration: float | None = None,  # pylint: disable=unused-argument
-        error: float | None = None,  # pylint: disable=unused-argument
+        duration: float | None = None,
+        error: float | None = None,
     ):
         """Create a new ``InstructionProperties`` object
 
@@ -102,7 +96,7 @@ class Target(BaseTarget):
     they are made (either through versioning, subclassing, or mixins) to add
     on to the set of information exposed by a target.
 
-    As a basic example, let's assume backend has two qubits, supports
+    As a basic example, let's assume a backend has two qubits, supports
     :class:`~qiskit.circuit.library.UGate` on both qubits and
     :class:`~qiskit.circuit.library.CXGate` in both directions. To model this
     you would create the target like::
@@ -165,7 +159,7 @@ class Target(BaseTarget):
     you call :meth:`.add_instruction` the bounds are applied for all qargs that it
     is defined on. The bounds are specified of a list of 2-tuples of floats where
     the first float is the lower bound and the second float is the upper bound. For example,
-    if you specfied an angle bound::
+    if you specified an angle bound::
 
         [(0.0, 3.14), (-3.14, 3.14), (0.0, 1.0)]
 
@@ -175,7 +169,7 @@ class Target(BaseTarget):
     inclusively as well. A bound can also be specified with ``None`` instead
     of a 2-tuple which indicates that parameter has no constraints. For example::
 
-        [(0.0, 3.14, None, None)]
+        [(0.0, 3.14), None, None]
 
     indicates an angle bound for a 3 parameter gate where only the first
     parameter is restricted to angles between 0.0 and 3.14 and the other
@@ -223,7 +217,7 @@ class Target(BaseTarget):
     usual API for constructing a :class:`Target` should be a function that returns a base
     :class:`Target`, not a subclass with a custom initializer.
 
-    You may use subclassing to add *addition* Python-space properties to your :class:`Target`, for
+    You may use subclassing to add *additional* Python-space properties to your :class:`Target`, for
     example to then interpret in custom backend-specific transpiler stages; the :class:`Target` is
     passed to stage-plugin constructors.
 
@@ -238,12 +232,12 @@ class Target(BaseTarget):
     """
 
     __slots__ = (
-        "_gate_map",
         "_coupling_graph",
+        "_gate_map",
         "_instruction_durations",
         "_instruction_schedule_map",
-        "_non_global_basis_strict",
         "_non_global_basis",
+        "_non_global_basis_strict",
     )
 
     def __new__(
@@ -305,7 +299,7 @@ class Target(BaseTarget):
         """
         if description is not None:
             description = str(description)
-        out = super(Target, cls).__new__(  # pylint: disable=too-many-function-args
+        out = super().__new__(
             cls,
             description,
             num_qubits,
@@ -404,7 +398,7 @@ class Target(BaseTarget):
                 The operation object to add to the map. If it's parameterized any value
                 of the parameter can be set. Optionally for variable width
                 instructions (such as control flow operations such as :class:`~.ForLoop` or
-                :class:`~MCXGate`) you can specify the class. If the class is specified than the
+                :class:`~MCXGate`) you can specify the class. If the class is specified then the
                 ``name`` argument must be specified. When a class is used the gate is treated as global
                 and not having any properties set.
             properties (dict): A dictionary of qarg entries to an
@@ -543,7 +537,7 @@ class Target(BaseTarget):
         is globally defined.
         """
         return [
-            (self._gate_name_map[op], qarg)
+            (self.operation_from_name(op), qarg)
             for op, qargs in self._gate_map.items()
             for qarg in qargs
         ]
@@ -594,8 +588,8 @@ class Target(BaseTarget):
             self._coupling_graph.add_nodes_from([{} for _ in range(self.num_qubits)])
         for gate, qarg_map in self._gate_map.items():
             if qarg_map is None:
-                if self._gate_name_map[gate].num_qubits == 2:
-                    self._coupling_graph = None  # pylint: disable=attribute-defined-outside-init
+                if self.operation_from_name(gate).num_qubits == 2:
+                    self._coupling_graph = None
                     return
                 continue
             for qarg, properties in qarg_map.items():
@@ -605,9 +599,7 @@ class Target(BaseTarget):
                         return
                     continue
                 if len(qarg) == 1:
-                    self._coupling_graph[qarg[0]] = (
-                        properties  # pylint: disable=attribute-defined-outside-init
-                    )
+                    self._coupling_graph[qarg[0]] = properties
                 elif len(qarg) == 2:
                     try:
                         edge_data = self._coupling_graph.get_edge_data(*qarg)
@@ -618,14 +610,14 @@ class Target(BaseTarget):
         if self._coupling_graph.num_edges() == 0 and (
             qargs is None or any(x is None for x in qargs)
         ):
-            self._coupling_graph = None  # pylint: disable=attribute-defined-outside-init
+            self._coupling_graph = None
 
     def build_coupling_map(self, two_q_gate=None, filter_idle_qubits=False):
         """Get a :class:`~qiskit.transpiler.CouplingMap` from this target.
 
         If there is a mix of two qubit operations that have a connectivity
         constraint and those that are globally defined this will also return
-        ``None`` because the globally connectivity means there is no constraint
+        ``None`` because the global connectivity means there is no constraint
         on the target. If you wish to see the constraints of the two qubit
         operations that have constraints you should use the ``two_q_gate``
         argument to limit the output to the gates which have a constraint.
@@ -795,7 +787,7 @@ class Target(BaseTarget):
         num_qubits: int | None = None,
         coupling_map: CouplingMap | None = None,
         instruction_durations: InstructionDurations | None = None,
-        concurrent_measurements: Optional[List[List[int]]] = None,
+        concurrent_measurements: list[list[int]] | None = None,
         dt: float | None = None,
         timing_constraints: TimingConstraints | None = None,
         custom_name_mapping: dict[str, Any] | None = None,
@@ -810,11 +802,9 @@ class Target(BaseTarget):
 
         This constructor will use the input from ``basis_gates``, ``num_qubits``,
         and ``coupling_map`` to build a base model of the backend and the
-        ``instruction_durations``, ``backend_properties``, and ``inst_map`` inputs
-        are then queried (in that order) based on that model to look up the properties
+        ``instruction_durations`` input is then queried based on that model to look up the properties
         of each instruction and qubit. If there is an inconsistency between the inputs
-        any extra or conflicting information present in ``instruction_durations``,
-        ``backend_properties``, or ``inst_map`` will be ignored.
+        any extra or conflicting information present in ``instruction_durations`` will be ignored.
 
         Args:
             basis_gates: The list of basis gate names for the backend. For the
@@ -880,7 +870,6 @@ class Target(BaseTarget):
         # in legacy transpiler usage
         # the coupling map is used to define connectivity constraints and
         # the properties is only used for error rate and duration population.
-        # If coupling map is not specified we ignore the backend_properties
         if coupling_map is None:
             for gate in basis_gates:
                 if gate not in name_mapping:
@@ -892,7 +881,7 @@ class Target(BaseTarget):
         else:
             one_qubit_gates = []
             two_qubit_gates = []
-            global_ideal_variable_width_gates = []  # pylint: disable=invalid-name
+            global_ideal_variable_width_gates = []
             if num_qubits is None:
                 num_qubits = len(coupling_map.graph)
             for gate in basis_gates:
@@ -971,7 +960,7 @@ class _FakeTarget(Target):
 
     def __new__(
         cls,
-        coupling_map=None,  # pylint: disable=unused-argument
+        coupling_map=None,
         description=None,
         num_qubits=0,
         dt=None,
@@ -998,15 +987,15 @@ class _FakeTarget(Target):
     def __init__(
         self,
         coupling_map=None,
-        description=None,  # pylint: disable=unused-argument
-        num_qubits=0,  # pylint: disable=unused-argument
-        dt=None,  # pylint: disable=unused-argument
-        granularity=1,  # pylint: disable=unused-argument
-        min_length=1,  # pylint: disable=unused-argument
-        pulse_alignment=1,  # pylint: disable=unused-argument
-        acquire_alignment=1,  # pylint: disable=unused-argument
-        qubit_properties=None,  # pylint: disable=unused-argument
-        concurrent_measurements=None,  # pylint: disable=unused-argument
+        description=None,
+        num_qubits=0,
+        dt=None,
+        granularity=1,
+        min_length=1,
+        pulse_alignment=1,
+        acquire_alignment=1,
+        qubit_properties=None,
+        concurrent_measurements=None,
     ):
         super().__init__()
         if coupling_map is None or isinstance(coupling_map, CouplingMap):
@@ -1017,7 +1006,7 @@ class _FakeTarget(Target):
     def __len__(self):
         return len(self._gate_map)
 
-    def build_coupling_map(self, *args, **kwargs):  # pylint: disable=unused-argument
+    def build_coupling_map(self, *args, **kwargs):
         return copy.deepcopy(self._coupling_map)
 
     def instruction_supported(self, *args, **kwargs):

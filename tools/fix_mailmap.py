@@ -6,13 +6,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=bad-builtin
 
 """Check and fixup mailmaps files against git log."""
 
@@ -29,7 +28,6 @@ from sys import stderr
 from unicodedata import normalize
 
 # Set up some globals for simplicity
-# pylint: disable=invalid-name, global-statement
 color_output = True
 quiet_mode = False  # Only report errors
 problem_found = False  # Problems requiring user intervention were detected
@@ -57,7 +55,7 @@ def mailmap_line(index: int) -> str:
 
 def print_red(text: str) -> None:
     """Print messages indicating need for user intervention."""
-    global problem_found
+    global problem_found  # noqa: PLW0603
     problem_found = True
     if color_output:
         text = "\n".join(f"\033[31m{line}\033[0m" for line in text.splitlines())
@@ -66,7 +64,7 @@ def print_red(text: str) -> None:
 
 def print_yellow(text: str) -> None:
     """Print messages indicating changes were made that the user should confirm."""
-    global changes_made
+    global changes_made  # noqa: PLW0603
     changes_made = True
     if quiet_mode:
         return
@@ -294,9 +292,8 @@ def check_duplicates(authors: list, email_mapping: dict):
         canonical_emails.add(canonical_email)
 
     new_mailmap_lines = set()
-    for norm_name in duplicated_names:
+    for norm_name, dup_authors in duplicated_names.items():
         msg = f"Found potentially-duplicated authors whose names normalize to '{norm_name}'\n"
-        dup_authors = duplicated_names[norm_name]
 
         canonical_name, msg1 = find_canonical_name(dup_authors, canonical_names)
         msg += msg1
@@ -322,9 +319,8 @@ def check_duplicates(authors: list, email_mapping: dict):
                 )
     if new_mailmap_lines:
         return sorted(new_mailmap_lines, key=str.lower)
-    for norm_email in duplicated_emails:
+    for norm_email, dup_authors in duplicated_emails.items():
         msg = f"Found potentially-duplicated authors whose emails normalize to <{norm_email}>'\n"
-        dup_authors = duplicated_emails[norm_email]
 
         canonical_name, msg1 = find_canonical_name(dup_authors, canonical_names)
         msg += msg1
@@ -489,7 +485,7 @@ def _main():
     )
 
     args = parser.parse_args()
-    global mailmap_path, mailmap_body_offset, quiet_mode, color_output
+    global mailmap_path, mailmap_body_offset, quiet_mode, color_output  # noqa: PLW0603
     mailmap_path = args.mailmap_file
     quiet_mode = args.quiet
     color_output = args.color

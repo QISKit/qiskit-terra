@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -66,7 +66,6 @@ For example::
 ```
 """
 
-# pylint: disable=attribute-defined-outside-init
 
 import unittest
 import os
@@ -79,7 +78,7 @@ from qiskit.transpiler import PassManager
 from qiskit.transpiler.passes import BasicSwap, LookaheadSwap, SabreSwap
 from qiskit.transpiler.passes import SetLayout
 from qiskit.transpiler import CouplingMap, Layout
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class CommonUtilitiesMixin:
@@ -104,7 +103,6 @@ class CommonUtilitiesMixin:
         if initial_layout:
             passmanager.append(SetLayout(Layout(initial_layout)))
 
-        # pylint: disable=not-callable
         passmanager.append(self.pass_class(CouplingMap(coupling_map), **self.additional_args))
         return passmanager
 

@@ -1,0 +1,5 @@
+---
+build:
+  - |
+    The minimum version of the build dependency ``setuptools-rust`` was bumped to 1.13, to use the
+    new ``Extension(generated_files=...)`` argument.

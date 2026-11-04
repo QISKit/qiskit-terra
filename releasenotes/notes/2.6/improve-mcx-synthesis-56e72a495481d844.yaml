@@ -1,0 +1,15 @@
+---
+features_circuits:
+  - Improve the default CX count in the definition of :meth:`.QuantumCircuit.mcx`
+    and :class:`.MCXGate` with no ancilla qubits.
+features_synthesis:
+  - Added a synthesis function for multi-controlled X gates with no ancilla qubits,
+    :func:`.synth_mcx_noaux_sp22` that implements the linear-depth strategy
+    from da Silva et al. This method provides better CX counts than
+    :func:`.synth_mcx_noaux_v24`. Note that although this synthesis method
+    grows quadratically in the number of controls, while the method in 
+    :func:`.synth_mcx_noaux_hp24` grows linearly in the number of controls,
+    it still yields better CX counts where :math:`n \leq 32`.
+features_transpiler:
+  - Added a new high-level synthesis plugin :class:`.MCXSynthesisNoAuxSP22`
+    for the synthesis of :class:`.MCXGate` with no ancilla qubits.

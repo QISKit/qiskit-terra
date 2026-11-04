@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -76,7 +76,7 @@ class IQP(QuantumCircuit):
             interactions: input n-by-n symmetric matrix.
 
         Raises:
-            CircuitError: if the inputs is not as symmetric matrix.
+            CircuitError: if the input is not a symmetric matrix.
         """
         circuit = iqp(interactions)
         super().__init__(*circuit.qregs, name=circuit.name)

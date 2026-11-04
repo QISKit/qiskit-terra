@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,7 +14,6 @@
 """Test Qiskit's power instruction operation."""
 
 import unittest
-from typing import Type
 
 import numpy as np
 import scipy.linalg
@@ -48,7 +47,7 @@ from qiskit.circuit.library import (
     SwapGate,
 )
 from qiskit.quantum_info.operators import Operator
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase, combine
 
 
 @ddt
@@ -251,7 +250,7 @@ class TestEfficientGatePowering(QiskitTestCase):
         (iSwapGate(), XXPlusYYGate),
     )
     @unpack
-    def test_efficient_gate_powering(self, gate: Gate, output_gate_type: Type[Gate]):
+    def test_efficient_gate_powering(self, gate: Gate, output_gate_type: type[Gate]):
         """Test efficient gate powering."""
         exponents = (-5, -0.5, -0.1, 0, 0.1, 0.5, 5)
         for exponent in exponents:
@@ -282,6 +281,31 @@ class TestPowerAnnotatedGate(QiskitTestCase):
         self.assertIsInstance(result2, UnitaryGate)
 
         self.assertEqual(Operator(result1), Operator(result2))
+
+
+@ddt
+class TestControlledGatePower(QiskitTestCase):
+    """Test power method preserves ctrl_state on controlled gates."""
+
+    @combine(
+        gate=[
+            CPhaseGate(0.7, ctrl_state=0),
+            CPhaseGate(0.7, ctrl_state=1),
+            CSGate(ctrl_state=0),
+            CSGate(ctrl_state=1),
+            CSdgGate(ctrl_state=0),
+            CSdgGate(ctrl_state=1),
+        ],
+        exponent=[0.5, 1.5, 2, -1, -0.5],
+    )
+    def test_power_preserves_ctrl_state(self, gate: Gate, exponent: float):
+        """Test that power() preserves the control state on CPhase, CS, and CSdg gates."""
+        powered = gate.power(exponent)
+        self.assertEqual(powered.ctrl_state, gate.ctrl_state)
+        self.assertEqual(
+            Operator(powered),
+            Operator(gate.base_gate.power(exponent).control(1, ctrl_state=gate.ctrl_state)),
+        )
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,7 +12,8 @@
 
 """Create a new first-order Pauli-Z expansion circuit."""
 
-from typing import Callable, Optional
+
+from collections.abc import Callable
 import numpy as np
 from qiskit.utils.deprecation import deprecate_func
 
@@ -87,7 +88,7 @@ class ZFeatureMap(PauliFeatureMap):
         self,
         feature_dimension: int,
         reps: int = 2,
-        data_map_func: Optional[Callable[[np.ndarray], float]] = None,
+        data_map_func: Callable[[np.ndarray], float] | None = None,
         parameter_prefix: str = "x",
         insert_barriers: bool = False,
         name: str = "ZFeatureMap",
@@ -101,6 +102,7 @@ class ZFeatureMap(PauliFeatureMap):
             parameter_prefix: The prefix used if default parameters are generated.
             insert_barriers: If True, barriers are inserted in between the evolution instructions
                 and hadamard layers.
+            name: Name of the circuit.
 
         """
         super().__init__(

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,7 @@ Layer classes for the fast gradient implementation.
 """
 from __future__ import annotations
 from abc import abstractmethod, ABC
-from typing import Optional
+
 import numpy as np
 from .fast_grad_utils import (
     bit_permutation_1q,
@@ -43,7 +43,7 @@ class LayerBase(ABC):
         Args:
             mat: external gate matrix that initializes this layer's one.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abstractmethod
     def get_attr(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -53,7 +53,7 @@ class LayerBase(ABC):
         Returns:
             (1) gate matrix; (2) direct permutation; (3) inverse permutations.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class Layer1Q(LayerBase):
@@ -62,7 +62,7 @@ class Layer1Q(LayerBase):
     interleaves with the identity ones.
     """
 
-    def __init__(self, num_qubits: int, k: int, g2x2: Optional[np.ndarray] = None):
+    def __init__(self, num_qubits: int, k: int, g2x2: np.ndarray | None = None):
         """
         Args:
             num_qubits: number of qubits.
@@ -102,7 +102,7 @@ class Layer2Q(LayerBase):
     interleaves with the identity ones.
     """
 
-    def __init__(self, num_qubits: int, j: int, k: int, g4x4: Optional[np.ndarray] = None):
+    def __init__(self, num_qubits: int, j: int, k: int, g4x4: np.ndarray | None = None):
         """
         Args:
             num_qubits: number of qubits.
@@ -139,13 +139,13 @@ class Layer2Q(LayerBase):
 
 def init_layer1q_matrices(thetas: np.ndarray, dst: np.ndarray) -> np.ndarray:
     """
-    Initializes 4x4 matrices of 2-qubit gates defined in the paper.
+    Initializes 2x2 matrices of 1-qubit gates defined in the paper.
 
     Args:
-        thetas: depth x 4 matrix of gate parameters for every layer, where
-                "depth" is the number of layers.
-        dst: destination array of size depth x 4 x 4 that will receive gate
-             matrices of each layer.
+        thetas: n x 3 matrix of gate parameters for every qubit, where
+                "n" is the number of qubits.
+        dst: destination array of size n x 2 x 2 that will receive gate
+             matrices of each qubit.
 
     Returns:
         Returns the "dst" array.
@@ -163,14 +163,14 @@ def init_layer1q_matrices(thetas: np.ndarray, dst: np.ndarray) -> np.ndarray:
 
 def init_layer1q_deriv_matrices(thetas: np.ndarray, dst: np.ndarray) -> np.ndarray:
     """
-    Initializes 4x4 derivative matrices of 2-qubit gates defined in the paper.
+    Initializes 2x2 derivative matrices of 1-qubit gates defined in the paper.
 
     Args:
-        thetas: depth x 4 matrix of gate parameters for every layer, where
-                "depth" is the number of layers.
-        dst: destination array of size depth x 4 x 4 x 4 that will receive gate
-             derivative matrices of each layer; there are 4 parameters per gate,
-             hence, 4 derivative matrices per layer.
+        thetas: n x 3 matrix of gate parameters for every qubit, where
+                "n" is the number of qubits.
+        dst: destination array of size n x 3 x 2 x 2 that will receive gate
+             derivative matrices of each qubit; there are 3 parameters per gate,
+             hence, 3 derivative matrices per qubit.
 
     Returns:
         Returns the "dst" array.

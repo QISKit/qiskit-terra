@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,7 @@ use std::fmt;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use indexmap::IndexSet;
+use qiskit_util::IndexSet;
 use smallvec::SmallVec;
 
 /// A key to retrieve a value (by reference) from an interner of the same type.  This is narrower
@@ -207,7 +207,7 @@ mod interned_map {
 /// assert_eq!(interner.get(key), &[0, 1, 2, 3, 4]);
 /// ```
 #[derive(Default)]
-pub struct Interner<T: ?Sized + ToOwned>(IndexSet<<T as ToOwned>::Owned, ::ahash::RandomState>);
+pub struct Interner<T: ?Sized + ToOwned>(IndexSet<<T as ToOwned>::Owned>);
 
 // `Clone` and `Debug` can't use the derivation mechanism because the values that are actually
 // stored are of type `<T as ToOwned>::Owned`, which the derive system doesn't reason about.
@@ -286,7 +286,8 @@ where
     /// Note that the default item of the interner is always allocated and given a key immediately,
     /// which will use one slot of the capacity.
     pub fn with_capacity(capacity: usize) -> Self {
-        let mut set = IndexSet::with_capacity_and_hasher(capacity, ::ahash::RandomState::new());
+        let mut set =
+            IndexSet::with_capacity_and_hasher(capacity, ::foldhash::fast::RandomState::default());
         set.insert(Default::default());
         Self(set)
     }

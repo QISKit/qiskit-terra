@@ -4,11 +4,13 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
+
+use itertools::Itertools;
 
 use std::f64::consts::PI;
 
@@ -19,13 +21,15 @@ use qiskit_circuit::instruction::Parameters;
 use smallvec::smallvec;
 
 use crate::commutation_checker::{CommutationChecker, try_matrix_with_definition};
-use crate::passes::remove_identity_equiv::{average_gate_fidelity_below_tol, is_identity_equiv};
+use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
+use crate::passes::remove_identity_equiv::is_identity_equiv;
 use qiskit_circuit::circuit_instruction::OperationFromPython;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::operations::{
-    Operation, OperationRef, Param, StandardGate, multiply_param, radd_param,
+    Operation, OperationRef, Param, PauliBased, PauliProductMeasurement, PauliProductRotation,
+    StandardGate, multiply_param, radd_param,
 };
-use qiskit_circuit::{BlocksMode, Clbit, Qubit, imports};
+use qiskit_circuit::{BlocksMode, Clbit, NoBlocks, Qubit, imports};
 
 use qiskit_circuit::VarsMode;
 use qiskit_circuit::packed_instruction::PackedInstruction;
@@ -64,7 +68,7 @@ fn compare_params(params1: &[Param], params2: &[Param]) -> PyResult<bool> {
 
 /// List of symmetric gates, that is the gate remains the same under all
 /// permutations of its arguments.
-static SYMMETRIC_GATES: [StandardGate; 13] = [
+static SYMMETRIC_GATES: [StandardGate; 12] = [
     StandardGate::CZ,
     StandardGate::Swap,
     StandardGate::ISwap,
@@ -76,7 +80,6 @@ static SYMMETRIC_GATES: [StandardGate; 13] = [
     StandardGate::RYY,
     StandardGate::RZZ,
     StandardGate::XXMinusYY,
-    StandardGate::XXPlusYY,
     StandardGate::CCZ,
 ];
 
@@ -98,16 +101,48 @@ static MERGEABLE_ROTATION_GATES: [StandardGate; 12] = [
     StandardGate::CU1,
 ];
 
+/// Check if `inst` is symmetric for some special values of its parameters,
+/// taking tolerance into account.
+fn is_special_symmetric(inst: &PackedInstruction, tol: f64) -> bool {
+    // For now, this only handles the standard XXPlusYY gate.
+    if let OperationRef::StandardGate(StandardGate::XXPlusYY) = inst.op.view() {
+        // From the matrix representation, applying XXPlusYY(theta, beta) on reversed qubits [q2, q1]
+        // is the same as applying XXPlusYY(theta, -beta) on [q1, q2].
+        // The direct computation for the average gate fidelity between XXPlusYY(theta, beta) and
+        // XXPlusYY(theta, -beta) gives the following: 1/5 + 4/5 [1-sin^(theta/2) sin^2(beta)]^2.
+        match inst.params_view() {
+            [Param::Float(theta), Param::Float(beta)] => {
+                // If both theta and beta are floating-point, we can evaluate the above condition
+                // directly.
+                let x = (1.0 - (theta / 2.0).sin().powf(2.0) * beta.sin().powf(2.0)).powf(2.0);
+                return x > 1.0 - 5. / 4. * tol;
+            }
+            [Param::ParameterExpression(_theta), Param::Float(beta)] => {
+                // If theta is parametric, we take the estimate that works for all theta.
+                let x = (1.0 - beta.sin().powf(2.0)).powf(2.0);
+                return x > 1.0 - 5. / 4. * tol;
+            }
+            _ => {
+                return false;
+            }
+        }
+    }
+    false
+}
+
 /// Computes the canonical representative of a packed instruction, and in particular:
 /// * replaces all types of Z-rotations by RZ-gates,
 /// * replaces all types of X-rotations by RX-gates,
-/// * sorts the qubits for symmetric gates.
+/// * sorts qubits for symmetric gates,
+/// * sorts qubits for [PauliProductRotation] and [PauliProductMeasurement].
 ///
 /// # Arguments:
 ///
 /// * `dag` - The output [DAGCircuit]. We use its `qargs_interner` to store sorted
 ///   qubits for symmetric gates.
 /// * `inst` - The instruction to canonicalize.
+/// * `tol` - The tolerance used for fidelity computations (for instance, checking
+///   whether a gate is symmetric within the specified tolerance).
 ///
 /// # Returns:
 ///
@@ -116,6 +151,7 @@ static MERGEABLE_ROTATION_GATES: [StandardGate; 12] = [
 fn canonicalize(
     dag: &mut DAGCircuit,
     inst: &PackedInstruction,
+    tol: f64,
 ) -> Option<(PackedInstruction, Param)> {
     // ToDo: possibly consider other rotations as well (e.g. CS -> CRZ).
     let rotation = match inst.op.view() {
@@ -172,27 +208,152 @@ fn canonicalize(
         ));
     }
 
-    if let OperationRef::StandardGate(standard_gate) = inst.op.view() {
-        if SYMMETRIC_GATES.contains(&standard_gate) {
-            let qargs = dag.get_qargs(inst.qubits);
-            if !qargs.is_sorted() {
-                let mut sorted_qargs = qargs.to_vec();
-                sorted_qargs.sort();
-                let sorted_qubits = dag.add_qargs(&sorted_qargs);
-                let canonical_instruction = PackedInstruction {
-                    op: standard_gate.into(),
-                    qubits: sorted_qubits,
-                    clbits: Default::default(),
-                    params: inst.params.clone(),
-                    label: None,
-                    #[cfg(feature = "cache_pygates")]
-                    py_op: std::sync::OnceLock::new(),
-                };
-                return Some((canonical_instruction, Param::Float(0.)));
+    if let OperationRef::StandardGate(standard_gate) = inst.op.view()
+        && (SYMMETRIC_GATES.contains(&standard_gate) || is_special_symmetric(inst, tol))
+    {
+        let qargs = dag.get_qargs(inst.qubits);
+        if !qargs.is_sorted() {
+            let mut sorted_qargs = qargs.to_vec();
+            sorted_qargs.sort();
+            let sorted_qubits = dag.add_qargs(&sorted_qargs);
+            let canonical_instruction = PackedInstruction {
+                op: standard_gate.into(),
+                qubits: sorted_qubits,
+                clbits: Default::default(),
+                params: inst.params.clone(),
+                label: None,
+                #[cfg(feature = "cache_pygates")]
+                py_op: std::sync::OnceLock::new(),
+            };
+            return Some((canonical_instruction, Param::Float(0.)));
+        }
+    }
+
+    // Sort qubits for PauliProductRotations: this allows to merge scrambled pauli rotations
+    // and allows a faster commutativity check with other Pauli-based gates.
+    if let OperationRef::PauliProductRotation(ppr) = inst.op.view() {
+        let qargs = dag.get_qargs(inst.qubits);
+        let mut paired = qargs
+            .iter()
+            .zip(ppr.z.iter())
+            .zip(ppr.x.iter())
+            .map(|((q, z), x)| (q, z, x))
+            .collect::<Vec<_>>();
+        paired.sort_by_key(|(q, _, _)| **q);
+        let (sorted_qargs, sorted_z, sorted_x) =
+            paired
+                .into_iter()
+                .multiunzip::<(Vec<Qubit>, Vec<bool>, Vec<bool>)>();
+        let sorted_ppr = PauliProductRotation {
+            z: sorted_z,
+            x: sorted_x,
+            angle: ppr.angle.clone(),
+        };
+
+        let sorted_qubits = dag.add_qargs(&sorted_qargs);
+
+        let canonical_instruction = PackedInstruction {
+            op: PauliBased::PauliProductRotation(sorted_ppr).into(),
+            qubits: sorted_qubits,
+            clbits: Default::default(),
+            params: inst.params.clone(),
+            label: None,
+            #[cfg(feature = "cache_pygates")]
+            py_op: std::sync::OnceLock::new(),
+        };
+        return Some((canonical_instruction, Param::Float(0.)));
+    }
+
+    // Sort qubits for PauliProductMeasurements: this allows a faster commutativity check with
+    // other Pauli-based gates.
+    if let OperationRef::PauliProductMeasurement(ppm) = inst.op.view() {
+        let qargs = dag.get_qargs(inst.qubits);
+        let mut paired = qargs
+            .iter()
+            .zip(ppm.z.iter())
+            .zip(ppm.x.iter())
+            .map(|((q, z), x)| (q, z, x))
+            .collect::<Vec<_>>();
+        paired.sort_by_key(|(q, _, _)| **q);
+        let (sorted_qargs, sorted_z, sorted_x) =
+            paired
+                .into_iter()
+                .multiunzip::<(Vec<Qubit>, Vec<bool>, Vec<bool>)>();
+        let sorted_ppm = PauliProductMeasurement {
+            z: sorted_z,
+            x: sorted_x,
+            neg: ppm.neg,
+        };
+
+        let sorted_qubits = dag.add_qargs(&sorted_qargs);
+
+        let canonical_instruction = PackedInstruction {
+            op: PauliBased::PauliProductMeasurement(sorted_ppm).into(),
+            qubits: sorted_qubits,
+            clbits: inst.clbits,
+            params: inst.params.clone(),
+            label: None,
+            #[cfg(feature = "cache_pygates")]
+            py_op: std::sync::OnceLock::new(),
+        };
+        return Some((canonical_instruction, Param::Float(0.)));
+    }
+
+    None
+}
+
+/// Checks commutation between two pauli-based gates, assuming
+/// * the qubits are sorted by index
+/// * the first instruction is not a PPM
+fn try_commute_pauli_based_with_sorted_qargs(
+    op1: &OperationRef,
+    op2: &OperationRef,
+    qargs1: &[Qubit],
+    qargs2: &[Qubit],
+) -> Option<bool> {
+    // To check whether two Pauli-based gates commute, we extract their Pauli generators and
+    // test them for commutation. While we could also use the commutation checker, we can perform
+    // a more efficient check here because the qubits are already sorted by index.
+    //
+    // Two important notes:
+    // * We do not need to handle the case where both instructions are PPMs writing to the
+    //   same clbit. This is because we do not attempt to merge a PPM with other gates, so
+    //   the first instruction is never a PPM.
+    // * All PPRs equivalent to the identity up to a global phase have already been removed.
+    //   As a result, commutation of Pauli generators is both a necessary and sufficient condition.
+    let (z1, x1, z2, x2) = match (op1, op2) {
+        (OperationRef::PauliProductMeasurement(_), _) => {
+            unreachable!(
+                "The commutative optimization pass does not merge Pauli product measurement instructions. \
+                Thus, the first instruction cannot be a PauliProductMeasurement."
+            );
+        }
+        (OperationRef::PauliProductRotation(pp1), OperationRef::PauliProductRotation(pp2)) => {
+            (&pp1.z, &pp1.x, &pp2.z, &pp2.x)
+        }
+        (OperationRef::PauliProductRotation(pp1), OperationRef::PauliProductMeasurement(pp2)) => {
+            (&pp1.z, &pp1.x, &pp2.z, &pp2.x)
+        }
+        _ => {
+            return None;
+        }
+    };
+
+    let mut parity = false;
+    let (n1, n2) = (qargs1.len(), qargs2.len());
+    let (mut i1, mut i2) = (0, 0);
+    while i1 < n1 && i2 < n2 {
+        match qargs1[i1].cmp(&qargs2[i2]) {
+            std::cmp::Ordering::Less => i1 += 1,
+            std::cmp::Ordering::Greater => i2 += 1,
+            std::cmp::Ordering::Equal => {
+                parity ^= (x1[i1] && z2[i2]) ^ (z1[i1] && x2[i2]);
+                i1 += 1;
+                i2 += 1;
             }
         }
     }
-    None
+    Some(!parity)
 }
 
 /// Return `true` if two instructions commute (up to the specified tolerance).
@@ -218,6 +379,13 @@ fn commute(
 
     let op1 = inst1.op.view();
     let op2 = inst2.op.view();
+
+    // For pauli-based gates, we use a more efficient implementation instead of calling
+    // the generic commutation checker, using the fact we have already sorted the qubits by index
+    // during canonicalization.
+    if let Some(val) = try_commute_pauli_based_with_sorted_qargs(&op1, &op2, qargs1, qargs2) {
+        return Ok(val);
+    }
 
     Ok(commutation_checker.commute(
         &op1,
@@ -283,11 +451,12 @@ fn try_merge(
     if let (OperationRef::StandardGate(gate1), OperationRef::StandardGate(gate2)) =
         (inst1.op.view(), inst2.op.view())
     {
-        // Check wether the two gates are self-inverse.
-        if let Some((gate1inv, params1inv)) = gate1.inverse(params1) {
-            if (gate1inv == gate2) && compare_params(&params1inv, params2)? {
-                return Ok((true, None, 0.));
-            }
+        // Check whether the two gates are self-inverse.
+        if let Some((gate1inv, params1inv)) = gate1.inverse(params1)
+            && (gate1inv == gate2)
+            && compare_params(&params1inv, params2)?
+        {
+            return Ok((true, None, 0.));
         }
 
         // Can merge two single-parameter standard rotation gates of the same type.
@@ -309,54 +478,82 @@ fn try_merge(
         }
     }
 
-    // Special handling for PauliEvolutionGates.
-    if inst1.op.name() == "PauliEvolution" && inst2.op.name() == "PauliEvolution" {
-        if let (OperationRef::Gate(py_gate1), OperationRef::Gate(py_gate2)) =
-            (inst1.op.view(), inst2.op.view())
-        {
-            let merged_instruction = Python::attach(|py| -> PyResult<Option<PackedInstruction>> {
-                let merge_result = imports::MERGE_TWO_PAULI_EVOLUTIONS
-                    .get_bound(py)
-                    .call1((py_gate1.gate.clone_ref(py), py_gate2.gate.clone_ref(py)))?;
+    // Special handling for PauliProductRotations.
+    if let (OperationRef::PauliProductRotation(ppr1), OperationRef::PauliProductRotation(ppr2)) =
+        (inst1.op.view(), inst2.op.view())
+    {
+        let merge_result = ppr1.merge_with(ppr2);
 
-                if merge_result.is_none() {
-                    Ok(None)
-                } else {
-                    let instr: OperationFromPython = merge_result.extract()?;
-                    let merged_param = instr
-                        .params
-                        .expect("PauliEvolution gate contains a parameter")
-                        .unwrap_params()[0]
-                        .clone();
+        if let Some(merged_ppr) = merge_result {
+            let angle = merged_ppr.angle.clone();
+            let merged_params = Some(Box::new(Parameters::Params(smallvec![angle])));
 
-                    let merged_params = Some(Box::new(Parameters::Params(smallvec![merged_param])));
+            let packed = PackedInstruction {
+                op: PauliBased::PauliProductRotation(merged_ppr).into(),
+                qubits: inst1.qubits,
+                clbits: inst1.clbits,
+                params: merged_params,
+                label: None,
+                #[cfg(feature = "cache_pygates")]
+                py_op: std::sync::OnceLock::new(),
+            };
 
-                    Ok(Some(PackedInstruction {
-                        op: instr.operation,
-                        qubits: inst1.qubits,
-                        clbits: inst1.clbits,
-                        params: merged_params,
-                        label: instr.label.clone(),
-                        #[cfg(feature = "cache_pygates")]
-                        py_op: std::sync::OnceLock::new(),
-                    }))
-                }
-            })?;
-
-            if let Some(merged_instruction) = merged_instruction {
-                if let Some(phase_update) = is_identity_equiv(
-                    &merged_instruction,
-                    true,
-                    Some(matrix_max_num_qubits),
-                    error_cutoff_fn,
-                )? {
-                    return Ok((true, None, phase_update));
-                } else {
-                    return Ok((true, Some(merged_instruction), 0.));
-                }
+            if let Some(phase_update) = is_identity_equiv(&packed, false, None, error_cutoff_fn)? {
+                return Ok((true, None, phase_update));
             } else {
-                return Ok((false, None, 0.));
+                return Ok((true, Some(packed), 0.));
             }
+        }
+    }
+
+    // Special handling for PauliEvolutionGates.
+    if inst1.op.name() == "PauliEvolution"
+        && inst2.op.name() == "PauliEvolution"
+        && let (OperationRef::PyCustom(py_gate1), OperationRef::PyCustom(py_gate2)) =
+            (inst1.op.view(), inst2.op.view())
+    {
+        let merged_instruction = Python::attach(|py| -> PyResult<Option<PackedInstruction>> {
+            let merge_result = imports::MERGE_TWO_PAULI_EVOLUTIONS
+                .get_bound(py)
+                .call1((py_gate1.ob.clone_ref(py), py_gate2.ob.clone_ref(py)))?;
+
+            if merge_result.is_none() {
+                Ok(None)
+            } else {
+                let instr: OperationFromPython<NoBlocks> = merge_result.extract()?;
+                let merged_param = instr
+                    .params
+                    .expect("PauliEvolution gate contains a parameter")
+                    .unwrap_params()[0]
+                    .clone();
+
+                let merged_params = Some(Box::new(Parameters::Params(smallvec![merged_param])));
+
+                Ok(Some(PackedInstruction {
+                    op: instr.operation,
+                    qubits: inst1.qubits,
+                    clbits: inst1.clbits,
+                    params: merged_params,
+                    label: instr.label.clone(),
+                    #[cfg(feature = "cache_pygates")]
+                    py_op: std::sync::OnceLock::new(),
+                }))
+            }
+        })?;
+
+        if let Some(merged_instruction) = merged_instruction {
+            if let Some(phase_update) = is_identity_equiv(
+                &merged_instruction,
+                true,
+                Some(matrix_max_num_qubits),
+                error_cutoff_fn,
+            )? {
+                return Ok((true, None, phase_update));
+            } else {
+                return Ok((true, Some(merged_instruction), 0.));
+            }
+        } else {
+            return Ok((false, None, 0.));
         }
     }
 
@@ -397,26 +594,28 @@ fn disjoint_instructions(
 
 #[pyfunction]
 #[pyo3(name = "commutative_optimization")]
-#[pyo3(signature = (dag, commutation_checker, approximation_degree=1., matrix_max_num_qubits=0))]
+#[pyo3(signature = (py_dag, commutation_checker, approximation_degree=1., matrix_max_num_qubits=0))]
 pub fn run_commutative_optimization(
-    dag: &mut DAGCircuit,
+    py_dag: &PyDAGCircuit,
     commutation_checker: &mut CommutationChecker,
     approximation_degree: f64,
     matrix_max_num_qubits: u32,
-) -> PyResult<Option<DAGCircuit>> {
-    let tol = 1e-12_f64.max(1. - approximation_degree);
+) -> PyResult<Option<PyDAGCircuit>> {
+    let tol = MINIMUM_TOL.max(1. - approximation_degree);
+    let error_cutoff_fn = |_inst: &PackedInstruction| -> f64 { tol };
+    let dag = py_dag.try_read()?;
 
     // Create output DAG.
     // We will use it to intern qubits of canonicalized instructions.
     // (In theory, we could also change qubits when merging instructions, however
     // this does not happen right now).
-    let mut new_dag = dag.copy_empty_like_with_same_capacity(VarsMode::Alike, BlocksMode::Keep)?;
+    let mut new_dag = dag.copy_empty_like_with_same_capacity(VarsMode::Alike, BlocksMode::Keep);
 
-    let node_indices = dag.topological_op_nodes()?.collect::<Vec<_>>();
+    let node_indices = dag.topological_op_nodes(false).collect::<Vec<_>>();
     let num_nodes = node_indices.len();
 
     let mut node_actions: Vec<NodeAction> = vec![NodeAction::Keep; num_nodes];
-    let mut new_global_phase = dag.global_phase().clone();
+    let mut new_global_phase = new_dag.set_global_phase_f64(0.0);
 
     let mut modified: bool = false;
 
@@ -424,12 +623,19 @@ pub fn run_commutative_optimization(
         let node_index1 = node_indices[idx1];
         let instr1 = dag[node_index1].unwrap_operation();
 
-        // For now, assume that control-flow operations do not commute with anything.
+        // Right now the control-flow operations cannot be merged with anything.
         if instr1.op.try_control_flow().is_some() {
             continue;
         }
 
-        if let Some((new_instruction, phase_update)) = canonicalize(&mut new_dag, instr1) {
+        if let Some(phase_update) = is_identity_equiv(instr1, false, Some(0), error_cutoff_fn)? {
+            node_actions[idx1] = NodeAction::Drop;
+            new_global_phase = radd_param(new_global_phase, Param::Float(phase_update));
+            modified = true;
+            continue;
+        }
+
+        if let Some((new_instruction, phase_update)) = canonicalize(&mut new_dag, instr1, tol) {
             node_actions[idx1] = NodeAction::Canonical(new_instruction, phase_update);
         }
 
@@ -441,6 +647,13 @@ pub fn run_commutative_optimization(
                 unreachable!("The current instruction should not be deleted.")
             }
         };
+
+        // Right now we do not merge pauli product measurement instructions with other instructions.
+        // However, we did previously canonicalize them so that we can efficiently check commutation relations
+        // between them and pauli product rotations.
+        if matches!(instr1.op.view(), OperationRef::PauliProductMeasurement(_)) {
+            continue;
+        }
 
         let qargs1: &[Qubit] = new_dag.get_qargs(instr1.qubits);
         let cargs1: &[Clbit] = new_dag.get_cargs(instr1.clbits);
@@ -506,7 +719,7 @@ pub fn run_commutative_optimization(
         return Ok(None);
     }
 
-    new_dag.set_global_phase(new_global_phase)?;
+    new_dag.set_global_phase_param(new_global_phase)?;
 
     for idx in 0..num_nodes {
         match &node_actions[idx] {
@@ -519,8 +732,10 @@ pub fn run_commutative_optimization(
             }
         }
     }
-
-    Ok(Some(new_dag))
+    // Preserve metadata from original circuit
+    Ok(Some(PyDAGCircuit::from_dagcircuit_with_cloned_metadata(
+        new_dag, py_dag,
+    )))
 }
 
 pub fn commutative_optimization_mod(m: &Bound<PyModule>) -> PyResult<()> {

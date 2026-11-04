@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from numbers import Integral
-from typing import Tuple, Union
+
 
 from qiskit import QuantumCircuit
 from qiskit.circuit import CircuitInstruction
@@ -76,7 +76,7 @@ class SamplerPub(ShapedMixin):
 
     @property
     def shots(self) -> int | None:
-        """An specific number of shots to run with (optional).
+        """A specific number of shots to run with (optional).
 
         This value takes precedence over any value owed by or supplied to a sampler.
         """
@@ -169,12 +169,13 @@ class SamplerPub(ShapedMixin):
             raise ValueError(message)
 
 
-SamplerPubLike = Union[
-    QuantumCircuit,
-    Tuple[QuantumCircuit],
-    Tuple[QuantumCircuit, BindingsArrayLike],
-    Tuple[QuantumCircuit, BindingsArrayLike, Union[Integral, None]],
-]
+SamplerPubLike = (
+    SamplerPub
+    | QuantumCircuit
+    | tuple[QuantumCircuit]
+    | tuple[QuantumCircuit, BindingsArrayLike]
+    | tuple[QuantumCircuit, BindingsArrayLike, Integral | None]
+)
 """A Pub (Primitive Unified Bloc) for a Sampler.
 
 A fully specified sample Pub is a tuple ``(circuit, parameter_values, shots)``.

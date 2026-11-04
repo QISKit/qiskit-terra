@@ -1,0 +1,6 @@
+---
+features_transpiler:
+  - |
+    The fast-path main loop of :class:`.UnitarySynthesis` now aggressively caches its helper
+    two-qubit decomposer objects internally, which makes the whole pass approximately 2x faster
+    in its standard calling position in the preset pass managers.

@@ -1,0 +1,6 @@
+---
+features_synthesis:
+  - Improve the single-qubit gate count in the :class:`.TwoQubitControlledUDecomposer`.
+    A general two-qubit unitary is now decomposed into a circuit with 3 two-qubit gates 
+    and only 8 single-qubit unitary gates, improving on the previous decomposition 
+    which required 24 single-qubit unitary gates.

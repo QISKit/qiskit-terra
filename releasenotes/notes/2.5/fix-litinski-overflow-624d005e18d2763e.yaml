@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.LitinskiTransformation` where the Hilbert-space
+    dimension used in the Clifford-proximity check overflowed on 32+ qubits,
+    causing non-Clifford rotations to be incorrectly classified as Clifford-close.
+    The same overflow was also fixed in :class:`.PauliProductRotationGate` when
+    computing its trace and dimension.
+
+    Fixed `#16869 <https://github.com/Qiskit/qiskit/issues/16869>`__.

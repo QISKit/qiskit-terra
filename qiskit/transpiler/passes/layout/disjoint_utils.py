@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,7 +12,7 @@
 
 """This module contains common utils for disjoint coupling maps."""
 from __future__ import annotations
-from typing import Union
+
 
 from qiskit.dagcircuit.dagcircuit import DAGCircuit
 from qiskit.transpiler.coupling import CouplingMap
@@ -20,9 +20,7 @@ from qiskit.transpiler.target import Target
 from qiskit.transpiler.exceptions import TranspilerError
 
 
-def require_layout_isolated_to_component(
-    dag: DAGCircuit, components_source: Union[Target, CouplingMap]
-):
+def require_layout_isolated_to_component(dag: DAGCircuit, components_source: Target | CouplingMap):
     """
     Check that the layout of the dag does not require connectivity across connected components
     in the CouplingMap

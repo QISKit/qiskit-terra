@@ -1,0 +1,6 @@
+---
+features_circuits:
+  - A new :class:`.PauliProductRotationGate` has been added, which represents generic
+    Pauli product rotations of the form :math:`\exp(-i \theta / 2 P)` for a Pauli
+    product :math:`P` and a rotation angle :math:`\theta`. Together with the
+    :class:`.PauliProductMeasurement`, these gates form a basis for Pauli-based computation.

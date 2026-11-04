@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from collections import OrderedDict
-from typing import Type
 
 import logging
 
@@ -98,7 +97,7 @@ class BasicProvider:
             ret[backend_name] = backend_instance
         return ret
 
-    def _get_backend_instance(self, backend_cls: Type[Backend]) -> Backend:
+    def _get_backend_instance(self, backend_cls: type[Backend]) -> Backend:
         """
         Return an instance of a backend from its class.
 

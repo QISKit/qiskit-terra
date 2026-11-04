@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -27,7 +27,7 @@ from qiskit.circuit import (
 from qiskit.circuit.classical import expr, types
 from qiskit.dagcircuit import DAGCircuit, DAGCircuitError
 from qiskit.converters import circuit_to_dag, dag_to_circuit
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestDagCompose(QiskitTestCase):
@@ -530,6 +530,28 @@ class TestDagCompose(QiskitTestCase):
             DAGCircuitError, "Variable '.*' to be inlined is not in the base DAG"
         ):
             dest.compose(source, inline_captures=True)
+
+    def test_rejects_rhs_with_too_many_qubits(self):
+        """Test that compose rejects a DAG with too many qubits."""
+        dest = circuit_to_dag(QuantumCircuit(1))
+        other = circuit_to_dag(QuantumCircuit(2))
+
+        with self.assertRaisesRegex(
+            DAGCircuitError,
+            r"Cannot compose onto a DAGCircuit with fewer qubits \(2 > 1\)\.",
+        ):
+            dest.compose(other)
+
+    def test_rejects_rhs_with_too_many_clbits(self):
+        """Test that compose rejects a DAG with too many classical bits."""
+        dest = circuit_to_dag(QuantumCircuit(1, 1))
+        other = circuit_to_dag(QuantumCircuit(1, 2))
+
+        with self.assertRaisesRegex(
+            DAGCircuitError,
+            r"Cannot compose onto a DAGCircuit with fewer classical bits \(2 > 1\)\.",
+        ):
+            dest.compose(other)
 
 
 if __name__ == "__main__":

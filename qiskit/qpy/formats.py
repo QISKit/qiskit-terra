@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=invalid-name
 
 """Binary format definition."""
 
@@ -172,6 +171,30 @@ INSTRUCTION_ANNOTATION_SIZE = struct.calcsize(INSTRUCTION_ANNOTATION_PACK)
 SPARSE_PAULI_OP_LIST_ELEM = namedtuple("SPARSE_PAULI_OP_LIST_ELEMENT", ["size"])
 SPARSE_PAULI_OP_LIST_ELEM_PACK = "!Q"
 SPARSE_PAULI_OP_LIST_ELEM_SIZE = struct.calcsize(SPARSE_PAULI_OP_LIST_ELEM_PACK)
+
+# SparseObservable List - Version 17+
+SPARSE_OBSERVABLE = namedtuple(
+    "SPARSE_OBSERVABLE",
+    ["num_qubits", "coeff_data_len", "bitterm_data_len", "inds_data_len", "bounds_data_len"],
+)
+SPARSE_OBSERVABLE_PACK = "!IQQQQ"
+SPARSE_OBSERVABLE_SIZE = struct.calcsize(SPARSE_OBSERVABLE_PACK)
+
+# Register instruction parameter - Version >=18
+#
+# A Register param payload holds either a whole classical register or a single clbit, told apart by a
+# leading tag byte.  A register's name follows the tag and runs to the end of the payload, whose
+# length the enclosing field already gives; a clbit is stored as its index in the circuit.
+#
+# Up to version 17 both cases shared one untyped string: a register was its bare name, and a clbit
+# was a b"\x00" byte followed by its index written out as ASCII digits.
+REGISTER_PARAM_TAG_REGISTER = 1
+REGISTER_PARAM_TAG_CLBIT = 0
+REGISTER_PARAM_TAG_PACK = "!B"
+REGISTER_PARAM_TAG_SIZE = struct.calcsize(REGISTER_PARAM_TAG_PACK)
+REGISTER_PARAM_CLBIT = namedtuple("REGISTER_PARAM_CLBIT", ["tag", "index"])
+REGISTER_PARAM_CLBIT_PACK = "!BI"
+REGISTER_PARAM_CLBIT_SIZE = struct.calcsize(REGISTER_PARAM_CLBIT_PACK)
 
 # Pauli Evolution Gate
 PAULI_EVOLUTION_DEF = namedtuple(

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -66,12 +66,15 @@ class BasePadding(TransformationPass):
             target: The :class:`~.Target` representing the target backend.
                 If it supplied and it does not support delay instruction on a qubit,
                 padding passes do not pad any idle time of the qubit.
+            durations: The instruction durations. This is mostly for legacy applications without
+                a :class:`.Target`. The ``target`` argument should typically be used instead of
+                this and if both are specified ``target`` will supersede this argument.
         """
         super().__init__()
         self.target = target
         self.durations = durations
 
-    def get_duration(self, node, dag):  # pylint: disable=too-many-return-statements
+    def get_duration(self, node, dag):
         """Get duration of a given node in the circuit."""
         if node.name == "delay":
             return node.op.duration
@@ -129,7 +132,7 @@ class BasePadding(TransformationPass):
         new_dag._unit = self.property_set["time_unit"]
         new_dag.global_phase = dag.global_phase
 
-        idle_after = {bit: 0 for bit in dag.qubits}
+        idle_after = dict.fromkeys(dag.qubits, 0)
 
         # Compute fresh circuit duration from the node start time dictionary and op duration.
         # Note that pre-scheduled duration may change within the alignment passes, i.e.
@@ -169,7 +172,7 @@ class BasePadding(TransformationPass):
                 self._apply_scheduled_op(new_dag, t0, node.op, node.qargs, node.cargs)
             else:
                 raise TranspilerError(
-                    f"Operation {repr(node)} is likely added after the circuit is scheduled. "
+                    f"Operation {node!r} is likely added after the circuit is scheduled. "
                     "Schedule the circuit again if you transformed it."
                 )
 

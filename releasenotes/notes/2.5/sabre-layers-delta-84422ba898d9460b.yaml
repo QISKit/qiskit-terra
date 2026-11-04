@@ -1,0 +1,8 @@
+---
+performance:
+  - |
+    Sabre routing (used in :class:`.SabreSwap` and :class:`.SabreLayout`) now updates its
+    extended-set layer structure in place rather than rebuilding on each routed gate.  This is a
+    significant performance improvement for wide circuits with dense layer structures; a 115-qubit
+    quantum-volume circuit now routes in approximately 2/3 the previous time.
+    See `#14912 <https://github.com/Qiskit/qiskit/pull/14912>`__ for more detail.

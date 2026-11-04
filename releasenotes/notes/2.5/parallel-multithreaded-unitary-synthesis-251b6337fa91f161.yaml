@@ -1,0 +1,11 @@
+---
+performance:
+  - The :class:`.UnitarySynthesis` transpiler pass is now multithreaded when
+    run with the default synthesis plugin which results in improved runtime
+    performance. See `#16275 <https://github.com/Qiskit/qiskit/pull/16275>`__
+    for more details.
+  - The C API function :c:func:`qk_transpiler_pass_standalone_unitary_synthesis`
+    is now internally multithreaded. This results in improved runtime
+    performance. See `#16275 <https://github.com/Qiskit/qiskit/pull/16275>`__
+    for more details.
+

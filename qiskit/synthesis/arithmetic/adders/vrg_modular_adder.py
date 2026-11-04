@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,10 +13,9 @@
 """Compute modular sum of two qubit registers without any ancillary qubits."""
 
 from __future__ import annotations
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit import QuantumRegister
-from qiskit.circuit.library.standard_gates.x import XGate
-from qiskit.circuit.library.generalized_gates.mcmt import MCMTGate
+
+from qiskit.circuit import QuantumRegister, QuantumCircuit
+from qiskit.circuit.library import XGate, MCMTGate
 
 
 def adder_modular_v17(num_qubits: int) -> QuantumCircuit:

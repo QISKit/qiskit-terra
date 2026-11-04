@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -128,7 +128,7 @@ class DiagonalGate(Gate):
 
     def validate_parameter(self, parameter):
         """Diagonal Gate parameter should accept complex
-        (in addition to the Gate parameter types) and always return build-in complex."""
+        (in addition to the Gate parameter types) and always return built-in complex."""
         if isinstance(parameter, complex):
             return complex(parameter)
         else:
@@ -156,7 +156,7 @@ class DiagonalGate(Gate):
 def _extract_rz(phi1, phi2):
     """
     Extract a Rz rotation (angle given by first output) such that exp(j*phase)*Rz(z_angle)
-    is equal to the diagonal matrix with entires exp(1j*ph1) and exp(1j*ph2).
+    is equal to the diagonal matrix with entries exp(1j*ph1) and exp(1j*ph2).
     """
     phase = (phi1 + phi2) / 2.0
     z_angle = phi2 - phi1

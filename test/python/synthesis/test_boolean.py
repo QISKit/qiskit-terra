@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -17,7 +17,7 @@ import ast
 from os import path
 from ddt import ddt, unpack, data
 
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 from qiskit import transpile
 from qiskit.providers.basic_provider import BasicSimulator
 
@@ -36,7 +36,7 @@ class TestTruthTable(QiskitTestCase):
 
         def func(vals):
             x0, x1, x2, x3 = vals
-            return (x0 and x1 or not x2) ^ x3
+            return ((x0 and x1) or not x2) ^ x3
 
         table = TruthTable(func, 4)
         self.assertEqual(str(table), "1111000100001110")
@@ -69,7 +69,6 @@ class TestTruthTable(QiskitTestCase):
 
 @ddt
 class TestBooleanExpression(QiskitTestCase):
-    # pylint: disable=possibly-used-before-assignment
     """Test boolean expression."""
 
     @data(
@@ -168,7 +167,7 @@ class TestBooleanExpressionDIMACS(QiskitTestCase):
 
     def test_bad_formatting(self):
         """Tests DIMACS parsing on edge cases"""
-        # pylint: disable=trailing-whitespace
+
         dimacs = """p cnf 2 1
          
         1 2 0"""  # has empty line with whitespace - should ignore it
@@ -181,7 +180,7 @@ class TestBooleanExpressionDIMACS(QiskitTestCase):
 
 
 class TestBooleanParse(QiskitTestCase):
-    """Tests the boolean experssion parsers"""
+    """Tests the boolean expression parsers"""
 
     def test_args_collection(self):
         """Tests that args are collected based of appearance in the string"""

@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -30,7 +30,7 @@ use qiskit_circuit::imports::TRANSPILE_LAYOUT;
 /// and routing permutations. The initial layout permutation is caused by
 /// setting and applying the initial layout (the mapping from virtual circuit
 /// qubits to physical qubits on the target) and the routing permtuations are
-/// caused by swap gate insertion or permutation ellision prior to the initial
+/// caused by swap gate insertion or permutation elision prior to the initial
 /// layout. This struct tracks these details and provide an interface to reason
 /// about these permutations.
 pub struct TranspileLayout {
@@ -94,7 +94,7 @@ impl TranspileLayout {
     /// # Panics
     ///
     /// If the two layouts and the number of virtual qubits are not all the same size, or if the
-    /// numebr of input qubits is larger than the sizes of the other objects.
+    /// number of input qubits is larger than the sizes of the other objects.
     pub fn from_layouts(
         initial_layout: NLayout,
         final_layout: &NLayout,
@@ -436,7 +436,7 @@ impl TranspileLayout {
     /// ((initial layout, physical DAG, routing permutation), virtual permutation)
     /// ```
     /// and this [TranspileLayout] corresponds to the inner 3-tuple.  In order to combine the
-    /// previous virtual permutation into this layout, you wuold call this function.
+    /// previous virtual permutation into this layout, you would call this function.
     ///
     /// The function is a "gets set to" permutation, just like as returned by [output_permutation].
     ///

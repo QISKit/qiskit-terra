@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -25,7 +25,7 @@ from ._utils import _ctrl_state_to_int
 
 
 # The list of gates whose controlled versions have efficient synthesis algorithms.
-# For example, a controlled version of X is MCX (with many synthesis algorithms avalable),
+# For example, a controlled version of X is MCX (with many synthesis algorithms available),
 # and a controlled version of Z is MCX + two Hadamard gates.
 #
 # Note: when adding a new gate to this list, also add the decomposition of its controlled
@@ -127,7 +127,6 @@ def control(
         CircuitError: gate contains non-gate in definition
     """
 
-    # pylint: disable=cyclic-import
     from qiskit.circuit import controlledgate
 
     ctrl_state = _ctrl_state_to_int(ctrl_state, num_ctrl_qubits)
@@ -262,23 +261,22 @@ def apply_basic_controlled_gate(circuit, gate, controls, target):
                 circuit.cp(lamb, controls[0], target)
             else:
                 circuit.cu(theta, phi, lamb, 0, controls[0], target)
+        elif phi == -pi / 2 and lamb == pi / 2:
+            circuit.mcrx(theta, controls, target, use_basis_gates=False)
+        elif phi == 0 and lamb == 0:
+            circuit.mcry(
+                theta,
+                controls,
+                target,
+                use_basis_gates=False,
+            )
+        elif theta == 0 and phi == 0:
+            circuit.mcp(lamb, controls, target)
         else:
-            if phi == -pi / 2 and lamb == pi / 2:
-                circuit.mcrx(theta, controls, target, use_basis_gates=False)
-            elif phi == 0 and lamb == 0:
-                circuit.mcry(
-                    theta,
-                    controls,
-                    target,
-                    use_basis_gates=False,
-                )
-            elif theta == 0 and phi == 0:
-                circuit.mcp(lamb, controls, target)
-            else:
-                circuit.mcrz(lamb, controls, target, use_basis_gates=False)
-                circuit.mcry(theta, controls, target, use_basis_gates=False)
-                circuit.mcrz(phi, controls, target, use_basis_gates=False)
-                circuit.mcp((phi + lamb) / 2, controls[1:], controls[0])
+            circuit.mcrz(lamb, controls, target, use_basis_gates=False)
+            circuit.mcry(theta, controls, target, use_basis_gates=False)
+            circuit.mcrz(phi, controls, target, use_basis_gates=False)
+            circuit.mcp((phi + lamb) / 2, controls[1:], controls[0])
 
     elif gate.name == "z":
         circuit.h(target)

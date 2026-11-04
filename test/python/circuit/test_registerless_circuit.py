@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -17,7 +17,7 @@ import numpy
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
 from qiskit.circuit import Qubit, Clbit, AncillaQubit
 from qiskit.circuit.exceptions import CircuitError
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestRegisterlessCircuit(QiskitTestCase):
@@ -82,7 +82,7 @@ class TestAddingBitsWithoutRegisters(QiskitTestCase):
         with self.assertRaisesRegex(CircuitError, "bits found already"):
             qc.add_bits(qr[:])
 
-    def test_addding_individual_bit(self):
+    def test_adding_individual_bit(self):
         """Verify we can add a single bit to a circuit."""
         qr = QuantumRegister(3, "qr")
         qc = QuantumCircuit(qr)
@@ -254,7 +254,7 @@ class TestGatesOnWireRange(QiskitTestCase):
         """Test gate wire range"""
         qreg = QuantumRegister(4)
         circuit = QuantumCircuit(qreg)
-        circuit.h(range(0, 2))
+        circuit.h(range(2))
 
         expected = QuantumCircuit(qreg)
         expected.h(qreg[0:2])
@@ -266,7 +266,7 @@ class TestGatesOnWireRange(QiskitTestCase):
         qreg0 = QuantumRegister(2)
         qreg1 = QuantumRegister(2)
         circuit = QuantumCircuit(qreg0, qreg1)
-        circuit.h(range(0, 3))
+        circuit.h(range(3))
 
         expected = QuantumCircuit(qreg0, qreg1)
         expected.h(qreg0[0])
@@ -295,7 +295,7 @@ class TestGatesOnWireRange(QiskitTestCase):
         qreg01 = QuantumRegister(2)
         qreg23 = QuantumRegister(2)
         circuit = QuantumCircuit(qreg01, qreg23)
-        circuit.barrier(range(0, 3))
+        circuit.barrier(range(3))
 
         expected = QuantumCircuit(qreg01, qreg23)
         expected.barrier(qreg01[0], qreg01[1], qreg23[0])

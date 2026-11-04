@@ -1,0 +1,5 @@
+---
+features_transpiler:
+  - Added a new argument called ``insert_barrier`` to the :class:`.LitinskiTransformation` pass.
+    If ``fix_clifford=True`` and ``insert_barrier=True``, a barrier is added in between the
+    Pauli-based computation part of the circuit and the final cliffords.

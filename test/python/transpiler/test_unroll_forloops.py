@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,12 +12,13 @@
 
 """Test the UnrollForLoops pass"""
 
+import math
 import unittest
 
 from qiskit.circuit import QuantumCircuit, Parameter, QuantumRegister, ClassicalRegister
 from qiskit.transpiler import PassManager
 from qiskit.transpiler.passes.utils.unroll_forloops import UnrollForLoops
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestUnrollForLoops(QiskitTestCase):
@@ -65,6 +66,42 @@ class TestUnrollForLoops(QiskitTestCase):
         passmanager = PassManager()
         passmanager.append(UnrollForLoops())
         result = passmanager.run(circuit)
+
+        self.assertEqual(result, expected)
+
+    def test_preserves_body_global_phase(self):
+        """Check that body global phase is accumulated once per loop iteration."""
+        indexset = range(3)
+        body = QuantumCircuit(1, global_phase=math.pi / 7)
+        body.x(0)
+
+        circuit = QuantumCircuit(1)
+        circuit.for_loop(indexset, None, body, [0], [])
+
+        expected = QuantumCircuit(1)
+        for _ in indexset:
+            expected.compose(body, inplace=True)
+
+        result = UnrollForLoops()(circuit)
+
+        self.assertEqual(result, expected)
+
+    def test_preserves_builder_body_global_phase(self):
+        """Check global phase from a builder-created body is accumulated once per iteration."""
+        indexset = range(3)
+
+        circuit = QuantumCircuit(1)
+        with circuit.for_loop(indexset):
+            circuit.global_phase = math.pi / 7
+            circuit.x(0)
+
+        body = QuantumCircuit(1, global_phase=math.pi / 7)
+        body.x(0)
+        expected = QuantumCircuit(1)
+        for _ in indexset:
+            expected.compose(body, inplace=True)
+
+        result = UnrollForLoops()(circuit)
 
         self.assertEqual(result, expected)
 

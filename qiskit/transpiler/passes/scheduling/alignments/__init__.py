@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -40,7 +40,7 @@ the underlying pulse instruction should satisfy other two waveform constraints.
 Pulse alignment constraint
 
     This value is reported by ``timing_constraints["pulse_alignment"]`` in the backend
-    configuration in units of dt. The start time of the all pulse instruction should be
+    configuration in units of dt. The start time of all pulse instructions should be
     multiple of this value. Violation of this constraint may result in the
     backend execution failure.
 
@@ -77,3 +77,5 @@ Minimum pulse length constraint
 
 from .check_durations import InstructionDurationCheck
 from .reschedule import ConstrainedReschedule
+
+__all__ = ["ConstrainedReschedule", "InstructionDurationCheck"]

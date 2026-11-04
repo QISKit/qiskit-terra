@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -73,7 +73,7 @@ class TemplateOptimization(TransformationPass):
                 is not given. The key is the name of the gate and the value its quantum cost.
         """
         super().__init__()
-        # If no template is given; the template are set as x-x, cx-cx, ccx-ccx.
+        # If no template is given; the templates are set as x-x, cx-cx, ccx-ccx.
         if template_list is None:
             template_list = [template_nct_2a_1(), template_nct_2a_2(), template_nct_2a_3()]
         self.template_list = template_list
@@ -101,7 +101,7 @@ class TemplateOptimization(TransformationPass):
 
         for template in self.template_list:
             if not isinstance(template, (QuantumCircuit, DAGDependency)):
-                raise TranspilerError("A template is a Quantumciruit or a DAGDependency.")
+                raise TranspilerError("A template is a QuantumCircuit or a DAGDependency.")
 
             if len(template.qubits) > len(circuit_dag_dep.qubits):
                 continue
@@ -117,7 +117,7 @@ class TemplateOptimization(TransformationPass):
 
                 if not comparison:
                     raise TranspilerError(
-                        "A template is a Quantumciruit() that performs the identity."
+                        "A template is a QuantumCircuit() that performs the identity."
                     )
             except TypeError:
                 pass

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -78,6 +78,33 @@ sample transpilation looks like::
     # ... and use it (as many times as you like).
     physical = pm.run(abstract)
 
+For early experiments towards fault tolerance, the functions :func:`.generate_preset_pass_manager`
+and :func:`.transpile` invoke a specialized transpilation pipeline when the target basis consists of 
+Clifford+T gates, see :func:`.generate_preset_clifford_t_pass_manager` for documentation.
+It is recommended to use the latter for a detailed configuration of Clifford+T pipelines. 
+For example, the :math:`R_Z` synthesis accuracy cannot be set via 
+``"unitary_synthesis_method"`` in :func:`.generate_preset_pass_manager` but can only be globally
+set via the ``"approximation_degree"``. However, :func:`.generate_preset_clifford_t_pass_manager`
+exposes ``"rz_synthesis_config"`` for this matter.
+
+For example::
+
+    from qiskit.circuit import QuantumCircuit
+    from qiskit.circuit.library import QFTGate
+    from qiskit.transpiler import generate_preset_pass_manager
+    from qiskit.quantum_info import get_clifford_gate_names
+
+    # Any abstract circuit you want:
+    abstract = QuantumCircuit(4)
+    abstract.append(QFTGate(4), [0, 1, 2, 3])
+
+    # Use all Clifford+T basis gates
+    basis_gates = get_clifford_gate_names() + ["t", "tdg"]
+
+    # Create and run the pass manager
+    pm = generate_preset_pass_manager(basis_gates=basis_gates)
+    transpiled = pm.run(abstract)
+
 For most use cases, this is all you need.
 All of Qiskit's transpiler infrastructure is highly extensible and configurable, however.
 The rest of this page details how to harness the low-level capabilities of the transpiler stack.
@@ -145,7 +172,7 @@ this can be overridden by passing explicit ``<stage>_method="<choice>"`` argumen
 Reproducibility of the preset pipelines
 ---------------------------------------
 
-Quantum compilation often involves solving problems that are knownn to be non-polynomial in
+Quantum compilation often involves solving problems that are known to be non-polynomial in
 complexity, and so are intractable to globally optimize.  In these cases, stochastic and heuristic
 algorithms are often more appropriate.  This leads to problems of reproducibility, however.
 
@@ -154,7 +181,7 @@ to ensure reproducibility of a compilation, pass a known integer to the ``seed_t
 argument of the generator functions.
 
 All built-in plugins to Qiskit are required to produce their analyses and modify the
-:class:`.DAGCircuit` in deterministic ways if they randomization (if any) is seeded, so that a
+:class:`.DAGCircuit` in deterministic ways if their randomization (if any) is seeded, so that a
 compilation can be repeated later.  There are limits on this:
 
 * All built-in passes with stochastic components must provide a way to seed the randomization, and
@@ -202,7 +229,7 @@ compilation can be repeated later.  There are limits on this:
 In general, a consumer of the :class:`.DAGCircuit` should be able to assume, after any combination
 of built-in, seeded if appropriate, Qiskit passes have run with fixed inputs, that the exact output
 of all :meth:`.DAGCircuit` methods is deterministic.  This includes the order of output even of
-methods that do not make any promise about the order; while the semantics and precide order cannot
+methods that do not make any promise about the order; while the semantics and precise order cannot
 be relied on, the determinism of it for fixed inputs can.
 
 Transpiler-pass authors should consult :ref:`transpiler-custom-passes-determinism` for a discussion
@@ -747,9 +774,6 @@ At a high level, this starts from the set of gates requested by the circuit, and
 given :class:`.EquivalenceLibrary` (typically the :data:`.SessionEquivalenceLibrary`) to move
 towards the ISA.
 
-For a Clifford+T basis set, the single-qubit rotation gates are approximated using the
-:class:`.SolovayKitaevDecomposition` algorithm.
-
 This is the default translation method.
 
 The optimization level has no effect on this plugin.
@@ -797,12 +821,10 @@ When writing :ref:`stage plugins <transpiler-preset-stage-plugins>`, the entry p
 Built-in ``default`` plugin
 ...........................
 
-This varies significantly depending on the optimization level and whether the basis set is of the
-form Clifford+T.
+This varies significantly depending on the optimization level.
 
 The specifics of this pipeline are subject to change between Qiskit versions. The broad principles
-are described below. First, consider the more common case that the basis set is not of the form
-Clifford+T.
+are described below.
 
 At optimization level 0, the stage is empty.
 
@@ -818,8 +840,6 @@ At optimization level 3, the two-qubit matrix-based resynthesis runs inside the 
 The optimization loop condition also tries multiple runs and chooses the minimum point in the case
 of fluctuating output; this is necessary because matrix-based resynthesis is relatively unstable in
 terms of concrete gates.
-
-For a Clifford+T basis set, two-qubit matrix based resynthesis is not applied.
 
 Optimization level 3 is typically very expensive for large circuits.
 
@@ -1034,7 +1054,7 @@ Some tips for ensuring this include:
   ``HashMap`` and ``HashSet``, respectively; they have similar deterministic-iteration properties to
   Python's :class:`dict`.
 
-* If your pass as stochastic components, ensure that you accept a ``seed`` input, and make your
+* If your pass has stochastic components, ensure that you accept a ``seed`` input, and make your
   output pure if this is supplied as an integer.  Typically this means storing the seed, and
   instantiating a new pRNG from this seed at the start of each call to :meth:`.BasePass.run`.
 
@@ -1196,8 +1216,11 @@ using the latest :class:`~.BackendV2` interface.
 For example, if we wanted to visualize the :class:`~.CouplingMap` for the
 example 3 qubit :class:`~.Target` above:
 
+.. code-block:: python
+
+   target.build_coupling_map().draw()
+
 .. plot::
-   :include-source:
    :alt: Output from the previous code.
 
    from qiskit.circuit import Parameter, Measure
@@ -1250,72 +1273,26 @@ example 3 qubit :class:`~.Target` above:
        }
    )
 
-   target.build_coupling_map().draw()
+   pil_draw = target.build_coupling_map().draw()
+
+   # The following code is only needed to display the image in the documentation. If you
+   # are running this code in a Jupyter notebook, `pil_draw` renders directly without
+   # requiring matplotlib.
+   from matplotlib import pyplot
+   pyplot.axis("off")
+   pyplot.imshow(pil_draw)
 
 This shows the global connectivity of the :class:`~.Target` which is the
 combination of the supported qubits for :class:`~.CXGate` and :class:`~.CZGate`. To
 see the individual connectivity, you can pass the operation name to
 :meth:`.CouplingMap.build_coupling_map`:
 
-.. plot::
-   :alt: Output from the previous code.
-   :include-source:
-
-   from qiskit.circuit import Parameter, Measure
-   from qiskit.transpiler import Target, InstructionProperties
-   from qiskit.circuit.library import UGate, RZGate, RXGate, RYGate, CXGate, CZGate
-
-   target = Target(num_qubits=3)
-   target.add_instruction(CXGate(), {(0, 1): InstructionProperties(error=.0001, duration=5e-7)})
-   target.add_instruction(
-       UGate(Parameter('theta'), Parameter('phi'), Parameter('lam')),
-       {
-           (0,): InstructionProperties(error=.00001, duration=5e-8),
-           (1,): InstructionProperties(error=.00002, duration=6e-8)
-       }
-   )
-   target.add_instruction(
-       RZGate(Parameter('theta')),
-       {
-           (1,): InstructionProperties(error=.00001, duration=5e-8),
-           (2,): InstructionProperties(error=.00002, duration=6e-8)
-       }
-   )
-   target.add_instruction(
-       RYGate(Parameter('theta')),
-       {
-           (1,): InstructionProperties(error=.00001, duration=5e-8),
-           (2,): InstructionProperties(error=.00002, duration=6e-8)
-       }
-   )
-   target.add_instruction(
-       RXGate(Parameter('theta')),
-       {
-           (1,): InstructionProperties(error=.00001, duration=5e-8),
-           (2,): InstructionProperties(error=.00002, duration=6e-8)
-       }
-   )
-   target.add_instruction(
-       CZGate(),
-       {
-           (1, 2): InstructionProperties(error=.0001, duration=5e-7),
-           (2, 0): InstructionProperties(error=.0001, duration=5e-7)
-       }
-   )
-   target.add_instruction(
-       Measure(),
-       {
-           (0,): InstructionProperties(error=.001, duration=5e-5),
-           (1,): InstructionProperties(error=.002, duration=6e-5),
-           (2,): InstructionProperties(error=.2, duration=5e-7)
-       }
-   )
+.. code-block:: python
 
    target.build_coupling_map('cx').draw()
 
 .. plot::
    :alt: Output from the previous code.
-   :include-source:
 
    from qiskit.circuit import Parameter, Measure
    from qiskit.transpiler import Target, InstructionProperties
@@ -1367,7 +1344,80 @@ see the individual connectivity, you can pass the operation name to
        }
    )
 
+   pil_draw = target.build_coupling_map('cx').draw()
+
+   # The following code is only needed to display the image in the documentation. If you
+   # are running this code in a Jupyter notebook, `pil_draw` renders directly without
+   # requiring matplotlib.
+   from matplotlib import pyplot
+   pyplot.axis("off")
+   pyplot.imshow(pil_draw)
+
+.. code-block:: python
+
    target.build_coupling_map('cz').draw()
+
+.. plot::
+   :alt: Output from the previous code.
+
+   from qiskit.circuit import Parameter, Measure
+   from qiskit.transpiler import Target, InstructionProperties
+   from qiskit.circuit.library import UGate, RZGate, RXGate, RYGate, CXGate, CZGate
+
+   target = Target(num_qubits=3)
+   target.add_instruction(CXGate(), {(0, 1): InstructionProperties(error=.0001, duration=5e-7)})
+   target.add_instruction(
+       UGate(Parameter('theta'), Parameter('phi'), Parameter('lam')),
+       {
+           (0,): InstructionProperties(error=.00001, duration=5e-8),
+           (1,): InstructionProperties(error=.00002, duration=6e-8)
+       }
+   )
+   target.add_instruction(
+       RZGate(Parameter('theta')),
+       {
+           (1,): InstructionProperties(error=.00001, duration=5e-8),
+           (2,): InstructionProperties(error=.00002, duration=6e-8)
+       }
+   )
+   target.add_instruction(
+       RYGate(Parameter('theta')),
+       {
+           (1,): InstructionProperties(error=.00001, duration=5e-8),
+           (2,): InstructionProperties(error=.00002, duration=6e-8)
+       }
+   )
+   target.add_instruction(
+       RXGate(Parameter('theta')),
+       {
+           (1,): InstructionProperties(error=.00001, duration=5e-8),
+           (2,): InstructionProperties(error=.00002, duration=6e-8)
+       }
+   )
+   target.add_instruction(
+       CZGate(),
+       {
+           (1, 2): InstructionProperties(error=.0001, duration=5e-7),
+           (2, 0): InstructionProperties(error=.0001, duration=5e-7)
+       }
+   )
+   target.add_instruction(
+       Measure(),
+       {
+           (0,): InstructionProperties(error=.001, duration=5e-5),
+           (1,): InstructionProperties(error=.002, duration=6e-5),
+           (2,): InstructionProperties(error=.2, duration=5e-7)
+       }
+   )
+
+   pil_draw = target.build_coupling_map('cz').draw()
+
+   # The following code is only needed to display the image in the documentation. If you
+   # are running this code in a Jupyter notebook, `pil_draw` renders directly without
+   # requiring matplotlib.
+   from matplotlib import pyplot
+   pyplot.axis("off")
+   pyplot.imshow(pil_draw)
 
 
 .. _transpiler-scheduling-description:
@@ -1475,7 +1525,10 @@ Pass Manager Definition
    StagedPassManager
    PassManager
    PassManagerConfig
+   PassManagerCliffordTConfig
    generate_preset_pass_manager
+   generate_preset_clifford_t_pass_manager
+   generate_preset_pbc_pass_manager
 
 Layout and Topology
 -------------------
@@ -1533,10 +1586,13 @@ from qiskit.passmanager import (
 )
 from qiskit.passmanager.compilation_status import PropertySet
 
+# import QubitProperties here to provide convenience alias for building a full target
+from qiskit.providers.backend import QubitProperties
+
 from qiskit._accelerate.angle_bound_registry import WrapAngleRegistry
 
 from .passmanager import PassManager, StagedPassManager
-from .passmanager_config import PassManagerConfig
+from .passmanager_config import PassManagerConfig, PassManagerCliffordTConfig
 from .exceptions import (
     TranspilerError,
     TranspilerAccessError,
@@ -1549,8 +1605,45 @@ from .basepasses import AnalysisPass, TransformationPass
 from .coupling import CouplingMap
 from .layout import Layout, TranspileLayout
 from .instruction_durations import InstructionDurations
-from .preset_passmanagers import generate_preset_pass_manager
+from .preset_passmanagers import (
+    generate_preset_pass_manager,
+    generate_preset_clifford_t_pass_manager,
+    generate_preset_pbc_pass_manager,
+)
 from .target import Target
 from .target import InstructionProperties
-from .target import QubitProperties
 from .optimization_metric import OptimizationMetric
+
+from . import passes, preset_passmanagers
+
+__all__ = [
+    "AnalysisPass",
+    "CircuitTooWideForTarget",
+    "ConditionalController",
+    "CouplingError",
+    "CouplingMap",
+    "DoWhileController",
+    "InstructionDurations",
+    "InstructionProperties",
+    "InvalidLayoutError",
+    "Layout",
+    "LayoutError",
+    "OptimizationMetric",
+    "PassManager",
+    "PassManagerCliffordTConfig",
+    "PassManagerConfig",
+    "PropertySet",
+    "QubitProperties",
+    "StagedPassManager",
+    "Target",
+    "TransformationPass",
+    "TranspileLayout",
+    "TranspilerAccessError",
+    "TranspilerError",
+    "WrapAngleRegistry",
+    "generate_preset_clifford_t_pass_manager",
+    "generate_preset_pass_manager",
+    "generate_preset_pbc_pass_manager",
+    "passes",
+    "preset_passmanagers",
+]

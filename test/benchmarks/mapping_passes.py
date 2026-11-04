@@ -4,18 +4,32 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=no-member,invalid-name,missing-docstring,no-name-in-module
-# pylint: disable=attribute-defined-outside-init,unsubscriptable-object
-# pylint: disable=unused-wildcard-import,wildcard-import,undefined-variable
+
+from copy import deepcopy
 
 from qiskit.transpiler import CouplingMap
-from qiskit.transpiler.passes import *
+from qiskit.transpiler.passes import (
+    FullAncillaAllocation,
+    EnlargeWithAncilla,
+    ApplyLayout,
+    SabreSwap,
+    BasicSwap,
+    Layout2qDistance,
+    DenseLayout,
+    CheckMap,
+    TrivialLayout,
+    SetLayout,
+    SabreLayout,
+    GateDirection,
+    CheckGateDirection,
+    CSPLayout,
+)
 from qiskit.converters import circuit_to_dag
 
 from .utils import random_circuit
@@ -96,7 +110,7 @@ class PassBenchmarks:
         self.enlarge_dag = enlarge_pass.run(self.full_ancilla_dag)
         apply_pass = ApplyLayout()
         apply_pass.property_set["layout"] = self.layout
-        self.dag = apply_pass.run(self.enlarge_dag)
+        self.dag = apply_pass.run(deepcopy(self.enlarge_dag))
 
     def time_sabre_swap(self, _, __):
         swap = SabreSwap(self.coupling_map, seed=42)
@@ -222,6 +236,7 @@ class RoutedPassBenchmarks:
         apply_pass = ApplyLayout()
         apply_pass.property_set["layout"] = self.layout
         self.dag = apply_pass.run(self.enlarge_dag)
+        self.routed_dag = SabreSwap(self.coupling_map, seed=42).run(self.dag)
 
     def time_gate_direction(self, _, __):
         GateDirection(self.coupling_map).run(self.routed_dag)

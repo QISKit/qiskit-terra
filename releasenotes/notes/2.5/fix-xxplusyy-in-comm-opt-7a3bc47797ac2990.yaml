@@ -1,0 +1,13 @@
+---
+fixes:
+  - |
+    Fixed a bug in the :class:`.CommutativeOptimization` transpiler pass
+    where pairs of :class:`.XXPlusYYGate` gates acting on the same qubits
+    but in reversed order were incorrectly simplified. However, the
+    simplification is performed in special cases where the gate and its
+    reversed versions are inverse within the specified tolerance, for
+    instance when the argument `beta` is a multiple of `pi`.
+
+    See `#16161 <https://github.com/Qiskit/qiskit/issues/16161>`__.
+
+

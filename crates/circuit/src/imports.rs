@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -18,47 +18,10 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 
 use crate::operations::{STANDARD_GATE_SIZE, StandardGate};
+use qiskit_util::py::ImportOnceCell;
 
-/// Helper wrapper around `PyOnceLock` instances that are just intended to store a Python object
-/// that is lazily imported.
-pub struct ImportOnceCell {
-    module: &'static str,
-    object: &'static str,
-    cell: PyOnceLock<Py<PyAny>>,
-}
+pub use qiskit_util::py::imports::*;
 
-impl ImportOnceCell {
-    pub const fn new(module: &'static str, object: &'static str) -> Self {
-        Self {
-            module,
-            object,
-            cell: PyOnceLock::new(),
-        }
-    }
-
-    /// Get the underlying GIL-independent reference to the contained object, importing if
-    /// required.
-    #[inline]
-    pub fn get(&self, py: Python) -> &Py<PyAny> {
-        self.cell.get_or_init(py, || {
-            py.import(self.module)
-                .unwrap()
-                .getattr(self.object)
-                .unwrap()
-                .unbind()
-        })
-    }
-
-    /// Get a GIL-bound reference to the contained object, importing if required.
-    #[inline]
-    pub fn get_bound<'py>(&self, py: Python<'py>) -> &Bound<'py, PyAny> {
-        self.get(py).bind(py)
-    }
-}
-
-pub static BUILTIN_LIST: ImportOnceCell = ImportOnceCell::new("builtins", "list");
-pub static BUILTIN_SET: ImportOnceCell = ImportOnceCell::new("builtins", "set");
-pub static BUILTIN_HASH: ImportOnceCell = ImportOnceCell::new("builtins", "hash");
 pub static OPERATION: ImportOnceCell = ImportOnceCell::new("qiskit.circuit.operation", "Operation");
 pub static INSTRUCTION: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.instruction", "Instruction");
@@ -70,6 +33,8 @@ pub static PARAMETER_EXPRESSION: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.parameterexpression", "ParameterExpression");
 pub static PARAMETER_VECTOR: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.parametervector", "ParameterVector");
+pub static PARAMETER_VECTOR_ELEMENT: ImportOnceCell =
+    ImportOnceCell::new("qiskit.circuit.parametervector", "ParameterVectorElement");
 pub static QUANTUM_CIRCUIT: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.quantumcircuit", "QuantumCircuit");
 pub static SINGLETON_GATE: ImportOnceCell =
@@ -94,14 +59,27 @@ pub static CONTROLLED_GATE: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit", "ControlledGate");
 pub static ANNOTATED_OPERATION: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit", "AnnotatedOperation");
-pub static DEEPCOPY: ImportOnceCell = ImportOnceCell::new("copy", "deepcopy");
+pub static MODIFIER: ImportOnceCell =
+    ImportOnceCell::new("qiskit.circuit.annotated_operation", "Modifier");
+pub static INVERSE_MODIFIER: ImportOnceCell =
+    ImportOnceCell::new("qiskit.circuit.annotated_operation", "InverseModifier");
+pub static CONTROL_MODIFIER: ImportOnceCell =
+    ImportOnceCell::new("qiskit.circuit.annotated_operation", "ControlModifier");
+pub static POWER_MODIFIER: ImportOnceCell =
+    ImportOnceCell::new("qiskit.circuit.annotated_operation", "PowerModifier");
+pub static CASE_DEFAULT: ImportOnceCell = ImportOnceCell::new("qiskit.circuit", "CASE_DEFAULT");
+pub static CLBIT: ImportOnceCell = ImportOnceCell::new("qiskit.circuit", "Clbit");
+pub static CLASSICAL_REGISTER: ImportOnceCell =
+    ImportOnceCell::new("qiskit.circuit", "ClassicalRegister");
 pub static QI_OPERATOR: ImportOnceCell = ImportOnceCell::new("qiskit.quantum_info", "Operator");
-pub static WARNINGS_WARN: ImportOnceCell = ImportOnceCell::new("warnings", "warn");
+pub static CLIFFORD: ImportOnceCell =
+    ImportOnceCell::new("qiskit.quantum_info.operators.symplectic", "Clifford");
+pub static SPARSE_PAULI_OP: ImportOnceCell =
+    ImportOnceCell::new("qiskit.quantum_info.operators", "SparsePauliOp");
 pub static CIRCUIT_TO_DAG: ImportOnceCell =
     ImportOnceCell::new("qiskit.converters", "circuit_to_dag");
 pub static DAG_TO_CIRCUIT: ImportOnceCell =
     ImportOnceCell::new("qiskit.converters", "dag_to_circuit");
-pub static UUID: ImportOnceCell = ImportOnceCell::new("uuid", "UUID");
 pub static BARRIER: ImportOnceCell = ImportOnceCell::new("qiskit.circuit", "Barrier");
 pub static DELAY: ImportOnceCell = ImportOnceCell::new("qiskit.circuit", "Delay");
 pub static MEASURE: ImportOnceCell = ImportOnceCell::new("qiskit.circuit", "Measure");
@@ -114,6 +92,10 @@ pub static UNITARY_GATE: ImportOnceCell = ImportOnceCell::new(
     "qiskit.circuit.library.generalized_gates.unitary",
     "UnitaryGate",
 );
+pub static PAULI_PRODUCT_ROTATION_GATE: ImportOnceCell = ImportOnceCell::new(
+    "qiskit.circuit.library.generalized_gates.pauli_product_rotation",
+    "PauliProductRotationGate",
+);
 pub static PAULI_PRODUCT_MEASUREMENT: ImportOnceCell = ImportOnceCell::new(
     "qiskit.circuit.library.pauli_product_measurement",
     "PauliProductMeasurement",
@@ -123,6 +105,9 @@ pub static MCPHASE_GATE: ImportOnceCell =
 pub static PAULI_GATE: ImportOnceCell = ImportOnceCell::new("qiskit.circuit.library", "PauliGate");
 pub static PAULI_EVOLUTION_GATE: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.library", "PauliEvolutionGate");
+pub static MCMT_GATE: ImportOnceCell = ImportOnceCell::new("qiskit.circuit.library", "MCMTGate");
+pub static BLUEPRINT_CIRCUIT: ImportOnceCell =
+    ImportOnceCell::new("qiskit.circuit.library", "BlueprintCircuit");
 pub static PAULI_ROTATION_TRACE_AND_DIM: ImportOnceCell = ImportOnceCell::new(
     "qiskit.circuit.library.pauli_evolution",
     "_pauli_rotation_trace_and_dim",
@@ -135,8 +120,6 @@ pub static XX_DECOMPOSER: ImportOnceCell =
     ImportOnceCell::new("qiskit.synthesis.two_qubit.xx_decompose", "XXDecomposer");
 pub static XX_EMBODIMENTS: ImportOnceCell =
     ImportOnceCell::new("qiskit.synthesis.two_qubit.xx_decompose", "XXEmbodiments");
-pub static NUMPY_COPY_ONLY_IF_NEEDED: ImportOnceCell =
-    ImportOnceCell::new("qiskit._numpy_compat", "COPY_ONLY_IF_NEEDED");
 pub static HLS_SYNTHESIZE_OP_USING_PLUGINS: ImportOnceCell = ImportOnceCell::new(
     "qiskit.transpiler.passes.synthesis.high_level_synthesis",
     "_synthesize_op_using_plugins",
@@ -145,11 +128,17 @@ pub static CONTROL_FLOW_CONDITION_RESOURCES: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.controlflow", "condition_resources");
 pub static CONTROL_FLOW_NODE_RESOURCES: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.controlflow", "node_resources");
+
+pub static CONTROL_FLOW_BOX_OP: ImportOnceCell =
+    ImportOnceCell::new("qiskit.circuit.controlflow", "BoxOp");
+pub static TRANSPILER_LAYOUT: ImportOnceCell =
+    ImportOnceCell::new("qiskit.transpiler.layout", "TranspileLayout");
+pub static LAYOUT: ImportOnceCell = ImportOnceCell::new("qiskit.transpiler.layout", "Layout");
 pub static SYMPIFY_PARAMETER_EXPRESSION: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.parameterexpression", "sympify");
-pub static LAYOUT: ImportOnceCell = ImportOnceCell::new("qiskit.transpiler.layout", "Layout");
 pub static TRANSPILE_LAYOUT: ImportOnceCell =
     ImportOnceCell::new("qiskit.transpiler.layout", "TranspileLayout");
+pub static STORE: ImportOnceCell = ImportOnceCell::new("qiskit.circuit.store", "Store");
 
 /// A mapping from the enum variant in crate::operations::StandardGate to the python
 /// module path and class name to import it. This is used to populate the conversion table
@@ -335,6 +324,11 @@ static STDGATE_PYTHON_GATES: [PyOnceLock<Py<PyAny>>; STANDARD_GATE_SIZE] = [
     PyOnceLock::new(),
     PyOnceLock::new(),
 ];
+
+#[inline]
+pub fn get_std_gate_class_name(rs_gate: &StandardGate) -> String {
+    STDGATE_IMPORT_PATHS[*rs_gate as usize][1].to_string()
+}
 
 #[inline]
 pub fn get_std_gate_class(py: Python, rs_gate: StandardGate) -> PyResult<&'static Py<PyAny>> {

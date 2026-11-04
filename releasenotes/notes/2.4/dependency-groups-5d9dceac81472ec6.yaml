@@ -1,0 +1,6 @@
+---
+build:
+  - |
+    Qiskit now manages its additional development dependencies using separate PEP 735
+    `dependency-groups` entries for different tasks, replacing the old monolithic
+    `requirements-dev.txt` and `requirements-optional.txt` files.

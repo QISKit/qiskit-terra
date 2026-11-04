@@ -1,0 +1,18 @@
+---
+fixes:
+  - |
+    The methods :meth:`.SparsePauliOp.from_list` and 
+    :meth:`.SparsePauliOp.from_sparse_list` now automatically 
+    infer the coefficient data type, if the ``dtype`` argument is 
+    not specified.
+  
+    For example::
+
+        from qiskit.quantum_info import SparsePauliOp
+        from qiskit.circuit import Parameter
+
+        theta = Parameter("theta")
+        
+        # Previously required manually setting dtype=object
+        op_list = SparsePauliOp.from_list([("X", theta)])
+        op_sparse = SparsePauliOp.from_sparse_list([("X", [0], theta)], num_qubits=1)

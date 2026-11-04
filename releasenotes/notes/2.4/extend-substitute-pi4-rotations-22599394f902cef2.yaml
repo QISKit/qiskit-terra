@@ -1,0 +1,9 @@
+---
+features_transpiler:
+  - |
+    Extended the transpiler pass :class:`.SubstitutePi4Rotations`,
+    to handle more standard gates:
+
+    * single-qubit rotation gates: :class:`.PhaseGate`,
+    * two-qubit rotation gates: :class:`.RXXGate`, :class:`.RYYGate`, :class:`.RZZGate`, :class:`.RZXGate`,
+    * two-qubit controlled rotation gates: :class:`.CPhaseGate`, :class:`.CRXGate`, :class:`.CRYGate`, :class:`.CRZGate`.

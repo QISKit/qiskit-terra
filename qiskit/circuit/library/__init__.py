@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -18,9 +18,25 @@ Circuit Library (:mod:`qiskit.circuit.library`)
 
 .. currentmodule:: qiskit.circuit.library
 
-The circuit library is a collection of valuable circuits and building blocks. We call these valuable
-for different reasons. For instance, they can be used as building blocks for algorithms, serve as
-benchmarks, or they are circuits conjectured to be difficult to simulate classically.
+The circuit library is a collection of quantum circuits that serve as algorithmic building blocks,
+benchmarking tools, and examples that are conjectured to be hard to simulate classically.
+The goal is to provide circuits that are well-defined, widely applicable, and easy to reuse across
+different workflows.
+
+The criteria for a circuit in the library are:
+
+Well-defined
+   The circuit has a clear structure or a mathematical action, supported by a paper or
+   reference.
+
+Widely used and relevant
+   The circuit is a canonical or best-known choice for a well-defined task, is a standard reference
+   or common baseline, or is historically foundational to a substantial subfield of quantum
+   computing.
+
+Standalone
+   The circuit is self-contained, meaning it can be generated efficiently without new
+   external dependencies.
 
 Elements in the circuit library are either :class:`.QuantumCircuit`\ s or
 :class:`~.circuit.Instruction`\ s, allowing them to be easily investigated or plugged into other
@@ -126,7 +142,6 @@ Structural operations
       ansatz = real_amplitudes(5, entanglement="pairwise")
       ansatz.draw("mpl")
 
-
 .. _standard-gates:
 
 Standard gates
@@ -190,6 +205,7 @@ and operations.
    U1Gate
    U2Gate
    U3Gate
+   U4Gate
    XGate
    YGate
    ZGate
@@ -273,6 +289,14 @@ Operations are non-reversible changes in the quantum state of the circuit.
 * :class:`~qiskit.circuit.Measure`
 * :class:`~qiskit.circuit.Reset`
 
+In addition to :class:`.Measure`, there is a generalized joint-Pauli measurement available, used as
+a basic operation in Pauli-based computation.
+
+.. autosummary::
+    :toctree: ../stubs
+
+    PauliProductMeasurement
+
 
 .. _generalized-gates:
 
@@ -309,6 +333,7 @@ which prints:
    MSGate
    RVGate
    PauliGate
+   PauliProductRotationGate
    LinearFunction
    Isometry
    UnitaryGate
@@ -599,6 +624,7 @@ For example, we can build a variational circuit
 
 .. plot::
    :alt: The efficient SU2 ansatz circuit...
+   :include-source:
    :context:
 
    from qiskit.circuit.library import efficient_su2
@@ -774,7 +800,7 @@ References:
 
 Maslov, D. and Dueck, G. W. and Miller, D. M.,
 Techniques for the synthesis of reversible Toffoli networks, 2007
-http://dx.doi.org/10.1145/1278349.1278355
+https://dx.doi.org/10.1145/1278349.1278355
 
 .. currentmodule:: qiskit.circuit.library.templates.nct
 .. autofunction:: template_nct_2a_1
@@ -869,110 +895,17 @@ from .templates import *
 from ..barrier import Barrier
 from ..measure import Measure
 from ..reset import Reset
-
-
 from .blueprintcircuit import BlueprintCircuit
-from .generalized_gates import (
-    Diagonal,
-    DiagonalGate,
-    MCMT,
-    MCMTVChain,
-    Permutation,
-    PermutationGate,
-    GMS,
-    MCMTGate,
-    MSGate,
-    GR,
-    GRX,
-    GRY,
-    GRZ,
-    RVGate,
-    PauliGate,
-    LinearFunction,
-    Isometry,
-    UnitaryGate,
-    UCGate,
-    UCPauliRotGate,
-    UCRXGate,
-    UCRYGate,
-    UCRZGate,
-)
+from .generalized_gates import *
 from .pauli_evolution import PauliEvolutionGate
 from .pauli_product_measurement import PauliProductMeasurement
 from .hamiltonian_gate import HamiltonianGate
-from .boolean_logic import (
-    AND,
-    AndGate,
-    OR,
-    OrGate,
-    XOR,
-    BitwiseXorGate,
-    random_bitwise_xor,
-    InnerProduct,
-    InnerProductGate,
-)
-from .basis_change import QFT, QFTGate
-from .arithmetic import (
-    ModularAdderGate,
-    HalfAdderGate,
-    FullAdderGate,
-    MultiplierGate,
-    FunctionalPauliRotations,
-    LinearPauliRotations,
-    LinearPauliRotationsGate,
-    PiecewiseLinearPauliRotations,
-    PiecewiseLinearPauliRotationsGate,
-    PiecewisePolynomialPauliRotations,
-    PiecewisePolynomialPauliRotationsGate,
-    PolynomialPauliRotations,
-    PolynomialPauliRotationsGate,
-    IntegerComparator,
-    IntegerComparatorGate,
-    WeightedAdder,
-    WeightedSumGate,
-    QuadraticForm,
-    QuadraticFormGate,
-    LinearAmplitudeFunction,
-    LinearAmplitudeFunctionGate,
-    VBERippleCarryAdder,
-    CDKMRippleCarryAdder,
-    DraperQFTAdder,
-    PiecewiseChebyshev,
-    PiecewiseChebyshevGate,
-    HRSCumulativeMultiplier,
-    RGQFTMultiplier,
-    ExactReciprocal,
-    ExactReciprocalGate,
-)
-
-from .n_local import (
-    n_local,
-    NLocal,
-    TwoLocal,
-    pauli_two_design,
-    PauliTwoDesign,
-    real_amplitudes,
-    RealAmplitudes,
-    efficient_su2,
-    EfficientSU2,
-    hamiltonian_variational_ansatz,
-    evolved_operator_ansatz,
-    EvolvedOperatorAnsatz,
-    excitation_preserving,
-    ExcitationPreserving,
-    qaoa_ansatz,
-    QAOAAnsatz,
-)
-from .data_preparation import (
-    z_feature_map,
-    zz_feature_map,
-    pauli_feature_map,
-    PauliFeatureMap,
-    ZFeatureMap,
-    ZZFeatureMap,
-    StatePreparation,
-    Initialize,
-)
+from .boolean_logic import *
+from .basis_change import *
+from .arithmetic import *
+from . import n_local as mod_n_local  # avoid conflict with the function called `n_local`
+from .n_local import *
+from .data_preparation import *
 from .quantum_volume import QuantumVolume, quantum_volume
 from .fourier_checking import FourierChecking, fourier_checking
 from .graph_state import GraphState, GraphStateGate
@@ -983,4 +916,51 @@ from .grover_operator import GroverOperator, grover_operator
 from .phase_oracle import PhaseOracle, PhaseOracleGate
 from .bit_flip_oracle import BitFlipOracleGate
 from .overlap import UnitaryOverlap, unitary_overlap
-from .standard_gates import get_standard_gate_name_mapping
+
+from . import (
+    standard_gates,
+    templates,
+    generalized_gates,
+    boolean_logic,
+    basis_change,
+    arithmetic,
+    data_preparation,
+)
+
+__all__ = [
+    "IQP",
+    "Barrier",
+    "BitFlipOracleGate",
+    "BlueprintCircuit",
+    "FourierChecking",
+    "GraphState",
+    "GraphStateGate",
+    "GroverOperator",
+    "HamiltonianGate",
+    "HiddenLinearFunction",
+    "Measure",
+    "PauliEvolutionGate",
+    "PauliProductMeasurement",
+    "PhaseEstimation",
+    "PhaseOracle",
+    "PhaseOracleGate",
+    "QuantumVolume",
+    "Reset",
+    "UnitaryOverlap",
+    "fourier_checking",
+    "grover_operator",
+    "hidden_linear_function",
+    "iqp",
+    "phase_estimation",
+    "quantum_volume",
+    "random_iqp",
+    "unitary_overlap",
+]
+__all__ += standard_gates.__all__
+__all__ += templates.__all__
+__all__ += generalized_gates.__all__
+__all__ += boolean_logic.__all__
+__all__ += basis_change.__all__
+__all__ += arithmetic.__all__
+__all__ += mod_n_local.__all__
+__all__ += data_preparation.__all__

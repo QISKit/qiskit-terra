@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -16,13 +16,15 @@ use pyo3::prelude::*;
 use hashbrown::HashSet;
 use ndarray::aview2;
 use rand::prelude::*;
+use rand::rngs::SysRng;
 use rand_pcg::Pcg64Mcg;
 use rayon_cond::CondIterator;
 use rustworkx_core::petgraph::graph::NodeIndex;
 
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::nlayout::NLayout;
-use qiskit_circuit::{BlocksMode, PhysicalQubit, VirtualQubit, getenv_use_multiple_threads};
+use qiskit_circuit::{BlocksMode, PhysicalQubit, VirtualQubit};
+use qiskit_util::getenv_use_multiple_threads;
 
 use crate::TranspilerError;
 use crate::neighbors::Neighbors;
@@ -37,8 +39,41 @@ use super::heuristic::Heuristic;
 use super::route::{RoutingProblem, RoutingResult, RoutingTarget, swap_map, swap_map_trial};
 
 #[allow(clippy::too_many_arguments)]
-#[pyfunction]
+#[pyfunction(name = "sabre_layout_and_routing")]
 #[pyo3(signature = (dag, target, heuristic, max_iterations, num_swap_trials, num_random_trials, seed=None, partial_layouts=vec![], skip_routing=false))]
+pub fn py_sabre_layout_and_routing(
+    dag: &mut PyDAGCircuit,
+    target: &Target,
+    heuristic: &Heuristic,
+    max_iterations: usize,
+    num_swap_trials: usize,
+    num_random_trials: usize,
+    seed: Option<u64>,
+    partial_layouts: Vec<Vec<Option<PhysicalQubit>>>,
+    skip_routing: bool,
+) -> PyResult<(PyDAGCircuit, NLayout, NLayout)> {
+    sabre_layout_and_routing(
+        dag.try_write()?,
+        target,
+        heuristic,
+        max_iterations,
+        num_swap_trials,
+        num_random_trials,
+        seed,
+        partial_layouts,
+        skip_routing,
+    )
+    .map(|(out_dag, init, out)| {
+        // Preserve metadata
+        (
+            PyDAGCircuit::from_dagcircuit_with_cloned_metadata(out_dag, dag),
+            init,
+            out,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn sabre_layout_and_routing(
     dag: &mut DAGCircuit,
     target: &Target,
@@ -84,7 +119,7 @@ pub fn sabre_layout_and_routing(
     let seeds = |count| {
         match seed {
             Some(seed) => Pcg64Mcg::seed_from_u64(seed),
-            None => Pcg64Mcg::from_os_rng(),
+            None => Pcg64Mcg::try_from_rng(&mut SysRng).unwrap(),
         }
         .sample_iter(&rand::distr::StandardUniform)
         .take(count)

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,9 +14,12 @@
 
 from __future__ import annotations
 
+import typing
+
 from qiskit.circuit import Gate
 
-from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
+if typing.TYPE_CHECKING:
+    from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
 
 
 class BitFlipOracleGate(Gate):
@@ -62,8 +65,10 @@ class BitFlipOracleGate(Gate):
             var_order: A list with the order in which variables will be created.
                (default: by appearance)
             label: A label for the gate to display in visualizations. Per default, the label is
-                set to display the textual represntation of the boolean expression (truncated if needed)
+                set to display the textual representation of the boolean expression (truncated if needed)
         """
+        from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
+
         if label is None:
             if isinstance(expression, str):
                 label = (expression[:15] + "...") if len(expression) > 15 else expression
@@ -130,5 +135,7 @@ class BitFlipOracleGate(Gate):
         Returns:
             BitFlipOracleGate: A quantum gate with a bit-flip oracle.
         """
+        from qiskit.synthesis.boolean.boolean_expression import BooleanExpression
+
         expr = BooleanExpression.from_dimacs_file(filename)
         return cls(expr)

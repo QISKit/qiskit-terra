@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,7 +13,8 @@
 
 """Utility functions for working with Results."""
 
-from typing import Sequence, Union, Optional, Dict, List
+
+from collections.abc import Sequence
 from collections import Counter
 from copy import deepcopy
 
@@ -26,16 +27,16 @@ from qiskit.result.distributions.probability import ProbDistribution
 from qiskit.result.distributions.quasi import QuasiDistribution
 from qiskit.result.postprocess import _bin_to_hex
 
-from qiskit._accelerate import results as results_rs  # pylint: disable=no-name-in-module
+from qiskit._accelerate import results as results_rs
 
 
 def marginal_counts(
-    result: Union[dict, Result],
-    indices: Optional[List[int]] = None,
+    result: dict | Result,
+    indices: list[int] | None = None,
     inplace: bool = False,
     format_marginal: bool = False,
-    marginalize_memory: Optional[bool] = True,
-) -> Union[Dict[str, int], Result]:
+    marginalize_memory: bool | None = True,
+) -> dict[str, int] | Result:
     """Marginalize counts from an experiment over some indices of interest.
 
     Args:
@@ -108,7 +109,7 @@ def _adjust_creg_sizes(creg_sizes, indices):
     # Get creg num values and then convert to the cumulative last index per creg.
     # e.g. [2, 1, 3] => [1, 2, 5]
     creg_nums = [x for _, x in creg_sizes]
-    creg_limits = [sum(creg_nums[0:x:1]) - 1 for x in range(0, len(creg_nums) + 1)][1:]
+    creg_limits = [sum(creg_nums[0:x:1]) - 1 for x in range(len(creg_nums) + 1)][1:]
 
     # Now iterate over indices and find which creg that index is in.
     # When found increment the creg size
@@ -125,13 +126,13 @@ def _adjust_creg_sizes(creg_sizes, indices):
 
 
 def marginal_memory(
-    memory: Union[List[str], np.ndarray],
-    indices: Optional[List[int]] = None,
+    memory: list[str] | np.ndarray,
+    indices: list[int] | None = None,
     int_return: bool = False,
     hex_return: bool = False,
     avg_data: bool = False,
     parallel_threshold: int = 1000,
-) -> Union[List[str], np.ndarray]:
+) -> list[str] | np.ndarray:
     """Marginalize shot memory
 
     This function is multithreaded and will launch a thread pool with threads equal to the number
@@ -197,9 +198,9 @@ def marginal_memory(
 
 def marginal_distribution(
     counts: dict,
-    indices: Optional[Sequence[int]] = None,
+    indices: Sequence[int] | None = None,
     format_marginal: bool = False,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Marginalize counts from an experiment over some indices of interest.
 
     Unlike :func:`~.marginal_counts` this function respects the order of

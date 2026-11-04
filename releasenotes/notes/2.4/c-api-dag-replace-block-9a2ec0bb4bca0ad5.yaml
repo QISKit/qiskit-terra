@@ -1,0 +1,6 @@
+---
+features_c:
+  - |
+    Added the C API function :c:func:`qk_dag_replace_block_with_unitary`, which replaces
+    a block of nodes in a DAG circuit with a new node representing a unitary gate. The
+    function returns the index of the newly created node.

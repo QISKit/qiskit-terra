@@ -1,0 +1,25 @@
+---
+features_transpiler:
+  - |
+    Added equivalences for the standard gates :class:`.C3SXGate` and :class:`.RC3XGate` to
+    the equivalence library.
+  - |
+    Added a new function :func:`~.generate_preset_pbc_pass_manager`, which provides
+    a way to construct a preset pass manager for compilation into PBC (Pauli Based
+    Computation) intermediate representation, consisting of :class:`.PauliProductRotationGate`
+    and :class:`.PauliProductMeasurement` objects, as well as :class:`.Barrier`,
+    :class:`.Reset`, :class:`.Delay`, and control-flow operations.
+
+    For example::
+
+        from qiskit.circuit import QuantumCircuit
+        from qiskit.transpiler import generate_preset_pbc_pass_manager
+
+        qc = QuantumCircuit(2, 1)
+        qc.h(0)
+        qc.cx(0, 1)
+        qc.t(1)
+        qc.measure(0, 0)
+
+        pm = generate_preset_pbc_pass_manager()
+        qct = pm.run(qc)

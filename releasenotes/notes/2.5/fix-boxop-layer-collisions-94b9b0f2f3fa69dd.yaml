@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed layer collisions in the text and Matplotlib circuit drawers when a
+    control-flow body acts on qubits that are permuted relative to the
+    outer circuit, for example ``circuit.append(BoxOp(body), [0, 2, 1])``. Instructions inside the
+    body are now laid out according to the outer drawing order, so gates that overlap in the drawn
+    layout are placed in separate layers instead of being drawn on top of one another.
+    Fixed `#16510 <https://github.com/Qiskit/qiskit/issues/16510>`__.

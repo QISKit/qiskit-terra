@@ -5,11 +5,8 @@
 notifications:
     ".*":
         - "`@Qiskit/terra-core`"
-    "visualization/timeline":
-        - "`@nkanazawa1989`"
     "qpy":
         - "`@mtreinish`"
-        - "`@nkanazawa1989`"
     "two_qubit_decompose":
         - "`@levbishop`"
     "circuit/library":
@@ -21,8 +18,15 @@ notifications:
         - "`@levbishop`"
     "visualization":
         - "@enavarro51"
-    "^docs/":
-        - "@Eric-Arellano"
-        - "@abbycross"
-        - "@beckykd"
 always_notify: true
+
+# Set the headings in the GitHub Releases release notes.
+categories:
+  "Changelog: Added": "Added"
+  "Changelog: Fixed": "Fixed"
+  "Changelog: Changed": "Changed"
+  "Changelog: Deprecated": "Deprecated"
+  "Changelog: Removed": "Removed"
+  "Changelog: Build": "Build System"
+  "Changelog: Performance": "Performance"
+  "Changelog: None": null

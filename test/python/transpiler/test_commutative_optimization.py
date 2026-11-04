@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,7 @@ import unittest
 
 import numpy as np
 
-from ddt import ddt, data
+from ddt import ddt, data, unpack
 
 from qiskit import QuantumRegister, QuantumCircuit
 from qiskit.converters import circuit_to_dag
@@ -26,6 +26,8 @@ from qiskit.circuit.library import (
     PhaseGate,
     UnitaryGate,
     PauliEvolutionGate,
+    PauliProductRotationGate,
+    PauliProductMeasurement,
     Initialize,
     U2Gate,
     CZGate,
@@ -43,9 +45,9 @@ from qiskit.circuit.library import (
 )
 from qiskit.circuit.parameter import Parameter
 from qiskit.transpiler.passes import CommutativeOptimization
-from qiskit.quantum_info import Operator, SparsePauliOp, Clifford
+from qiskit.quantum_info import Operator, SparsePauliOp, Clifford, Pauli
 
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @ddt
@@ -165,8 +167,9 @@ class TestCommutativeOptimization(QiskitTestCase):
         RXXGate(0.4),
         RYYGate(0.4),
         RZZGate(0.4),
-        XXMinusYYGate(0.4),
-        XXPlusYYGate(0.4),
+        XXPlusYYGate(0.4, 0.0),
+        XXPlusYYGate(0.4, np.pi),
+        XXMinusYYGate(0.4, 0.2),
     )
     def test_symmetric_gates_cancel(self, symmetric_gate):
         """Test that various symmetric gates cancel."""
@@ -179,6 +182,26 @@ class TestCommutativeOptimization(QiskitTestCase):
         expected = QuantumCircuit(2)
 
         self.assertEqual(Operator(expected), Operator(qc))
+        self.assertEqual(qct, expected)
+
+    def test_nonsymmetric_gates_do_not_canel(self):
+        """Test that non-symmetric gates do not cancel."""
+        qc = QuantumCircuit(2)
+        qc.append(XXPlusYYGate(0.4, 0.2), [0, 1])
+        qc.append(XXPlusYYGate(0.4, 0.2).inverse(), [1, 0])  # note reversed order of qubits
+
+        qct = CommutativeOptimization()(qc)
+
+        self.assertEqual(qct, qc)
+
+    def test_symmetric_xxplusyy_gates_cancel(self):
+        """Test for cancellation XXPlusYY gates with parametric values of theta."""
+        symmetric_gate = XXPlusYYGate(Parameter("t"), np.pi)
+        qc = QuantumCircuit(2)
+        qc.append(symmetric_gate, [0, 1])
+        qc.append(symmetric_gate.inverse(), [1, 0])  # note reversed order of qubits
+        qct = CommutativeOptimization()(qc)
+        expected = QuantumCircuit(2)
         self.assertEqual(qct, expected)
 
     def test_symmetric_iswap_gates_cancel(self):
@@ -312,6 +335,48 @@ class TestCommutativeOptimization(QiskitTestCase):
         qct = CommutativeOptimization()(qc)
 
         self.assertEqual(qct, qc)
+
+    def test_merge_pauli_product_rotations(self):
+        """Test that the pass merges PauliProductRotationGates."""
+
+        qc = QuantumCircuit(4)
+        qc.append(PauliProductRotationGate(Pauli("XXII"), -1), [0, 1, 2, 3])
+        qc.append(PauliProductRotationGate(Pauli("ZZIY"), 1), [0, 1, 3, 2])
+        qc.append(PauliProductRotationGate(Pauli("ZZYI"), 1), [1, 0, 2, 3])
+        qc.append(PauliProductRotationGate(Pauli("YYXX"), 1), [0, 1, 2, 3])
+        qc.append(PauliProductRotationGate(Pauli("XXII"), 1), [0, 1, 2, 3])
+
+        # The two "XXII" rotations should cancel.
+        # The two "ZZIY" rotations (after canonicalizing) should get combined.
+        qct = CommutativeOptimization()(qc)
+
+        expected = QuantumCircuit(4)
+        expected.append(PauliProductRotationGate(Pauli("ZZIY"), 2), [0, 1, 2, 3])
+        expected.append(PauliProductRotationGate(Pauli("YYXX"), 1), [0, 1, 2, 3])
+
+        self.assertEqual(Operator(expected), Operator(qc))
+        self.assertEqual(qct, expected)
+
+    def test_merge_parameterized_pauli_product_rotations(self):
+        """Test that the pass merges parameterized PauliProductRotationGates."""
+
+        p = Parameter("p")
+        q = Parameter("q")
+        r = Parameter("r")
+
+        qc = QuantumCircuit(4)
+        qc.append(PauliProductRotationGate(Pauli("YYXX"), p), [0, 1, 2, 3])
+        qc.append(PauliProductRotationGate(Pauli("YYXX"), q), [0, 1, 2, 3])
+        qc.append(PauliProductRotationGate(Pauli("ZXXX"), r), [0, 1, 2, 3])
+        qc.append(PauliProductRotationGate(Pauli("YYXX"), -1), [0, 1, 2, 3])
+
+        qct = CommutativeOptimization()(qc)
+
+        expected = QuantumCircuit(4)
+        expected.append(PauliProductRotationGate(Pauli("ZXXX"), r), [0, 1, 2, 3])
+        expected.append(PauliProductRotationGate(Pauli("YYXX"), p + q - 1), [0, 1, 2, 3])
+
+        self.assertEqual(qct, expected)
 
     def test_2pi_multiples(self):
         """Test 2pi multiples are handled with the correct phase they introduce."""
@@ -1152,7 +1217,7 @@ measure q0[1] -> c0[1];
         self.assertEqual(qc, qct)
 
     def test_circuit_with_clbits(self):
-        """Test optimization for circuit wih classical bits."""
+        """Test optimization for circuit with classical bits."""
         qc = QuantumCircuit(2, 2)
         qc.cx(0, 1)
         qc.z(0)
@@ -1183,6 +1248,92 @@ measure q0[1] -> c0[1];
 
         self.assertEqual(Operator(expected), Operator(qc))
         self.assertEqual(qct, expected)
+
+    def test_merge_pprs_with_unordered_indices(self):
+        """Test merging PPRs with scrambled qubit indices."""
+        qc = QuantumCircuit(8)
+        qc.append(PauliProductRotationGate(Pauli("IXYZ"), 1), [3, 5, 0, 2])
+        qc.append(PauliProductRotationGate(Pauli("ZIXY"), 1), [5, 0, 2, 3])
+        qc.append(PauliProductRotationGate(Pauli("YZIX"), 1), [0, 2, 3, 5])
+        qc.append(PauliProductRotationGate(Pauli("XYZI"), 1), [2, 3, 5, 0])
+
+        # All of the product rotations gates above are the same (after sorting
+        # the indices), so all of these gates should get combined.
+        qct = CommutativeOptimization()(qc)
+        self.assertEqual(qct.size(), 1)
+
+    @data(
+        ("XXXX", [2, 3, 1, 0], "ZZ", [0, 1], True),
+        ("XXXX", [2, 3, 1, 0], "ZZ", [1, 5], False),
+        ("XXXX", [2, 3, 1, 0], "ZZZZ", [1, 0, 3, 2], True),
+        ("XXXX", [2, 3, 1, 0], "ZZZZ", [1, 0, 3, 5], False),
+        ("XXXX", [2, 3, 1, 0], "-ZZ", [0, 1], True),
+        ("XXXX", [2, 3, 1, 0], "-ZZ", [1, 5], False),
+        ("XXXX", [2, 3, 1, 0], "-ZZZZ", [1, 0, 3, 2], True),
+        ("XXXX", [2, 3, 1, 0], "-ZZZZ", [1, 0, 3, 5], False),
+    )
+    @unpack
+    def test_cancel_pprs_across_ppm(self, p1, q1, p2, q2, should_cancel):
+        """Test that two PPRs get canceled iff they commute with a PPM separating them."""
+        qc = QuantumCircuit(8, 1)
+        qc.append(PauliProductRotationGate(Pauli(p1), 1), q1)
+        qc.append(PauliProductMeasurement(Pauli(p2)), q2, [0])
+        qc.append(PauliProductRotationGate(Pauli(p1), -1), q1)
+
+        # The two PPR gates should get canceled iff they commute with PPM
+        qct = CommutativeOptimization()(qc)
+        self.assertEqual(qct.size() == 1, should_cancel)
+
+    def test_remove_equivalent_to_identity(self):
+        """Test that PPRs equivalent to identity get removed, and the
+        global phase is updated correctly.
+        """
+        qc = QuantumCircuit(3)
+        qc.append(PauliProductRotationGate(Pauli("XYZ"), 2 * np.pi), [0, 1, 2])
+
+        qct = CommutativeOptimization()(qc)
+
+        qc_expected = QuantumCircuit(3, global_phase=np.pi)
+
+        self.assertEqual(qct, qc_expected)
+        self.assertEqual(Operator(qct), Operator(qc))
+
+    def test_merge_across_equivalent_to_identity(self):
+        """Test that two PPRs get merged when they are separated by a PPR
+        that is equivalent to identity.
+        """
+        qc = QuantumCircuit(4)
+        qc.append(PauliProductRotationGate(Pauli("XXZ"), 1), [0, 1, 2])
+        qc.append(PauliProductRotationGate(Pauli("XYZ"), 4 * np.pi), [0, 1, 2])
+        qc.append(PauliProductRotationGate(Pauli("XXZ"), 1), [0, 1, 2])
+
+        qct = CommutativeOptimization()(qc)
+
+        qc_expected = QuantumCircuit(4)
+        qc_expected.append(PauliProductRotationGate(Pauli("XXZ"), 2), [0, 1, 2])
+
+        self.assertEqual(qct, qc_expected)
+        self.assertEqual(Operator(qct), Operator(qc))
+
+    def test_consecutive_ppms(self):
+        """Test circuits with consecutive pauli product measurements"""
+        qc = QuantumCircuit(4, 2)
+        qc.append(PauliProductRotationGate(Pauli("XX"), 1), [0, 1])
+        qc.append(PauliProductMeasurement(Pauli("ZZ")), [0, 1], [0])
+        qc.append(PauliProductMeasurement(Pauli("ZZ")), [0, 1], [0])
+        qc.append(PauliProductMeasurement(Pauli("YX")), [0, 2], [1])
+        qc.append(PauliProductRotationGate(Pauli("XX"), -1), [0, 1])
+
+        qct = CommutativeOptimization()(qc)
+
+        # The two rotation gates commute through all measurement gates and should cancel.
+        # The measurement gates should remain unchanged.
+        qc_expected = QuantumCircuit(4, 2)
+        qc_expected.append(PauliProductMeasurement(Pauli("ZZ")), [0, 1], [0])
+        qc_expected.append(PauliProductMeasurement(Pauli("ZZ")), [0, 1], [0])
+        qc_expected.append(PauliProductMeasurement(Pauli("YX")), [0, 2], [1])
+
+        self.assertEqual(qct, qc_expected)
 
 
 if __name__ == "__main__":

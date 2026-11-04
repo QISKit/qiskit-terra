@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -36,10 +36,11 @@ class Counts(dict):
             data (dict): The dictionary input for the counts. Where the keys
                 represent a measured classical value and the value is an
                 integer the number of shots with that result.
-                The keys can be one of several formats:
+                All keys must be of the same format. This format must be one of the following.
 
                      * A hexadecimal string of the form ``'0x4a'``
-                     * A bit string prefixed with ``0b`` for example ``'0b1011'``
+                     * A bit string prefixed with ``0b``, for example ``'0b1011'``
+                     * A bit string with no prefix, for example ``'1011'``
                      * A bit string formatted across register and memory slots.
                        For example, ``'00 10'``.
                      * A dit string, for example ``'02'``. Note for objects created
@@ -56,7 +57,8 @@ class Counts(dict):
             memory_slots (int): The number of total ``memory_slots`` in the
                 experiment.
         Raises:
-            TypeError: If the input key type is not an ``int`` or ``str``.
+            TypeError: If the input key type is not an ``int`` or ``str``, or if the
+                input keys are not all of the same type.
             QiskitError: If a dit string key is input with ``creg_sizes`` and/or
                 ``memory_slots``.
         """
@@ -78,29 +80,32 @@ class Counts(dict):
                 elif first_key.startswith("0b"):
                     self.int_raw = {int(key, 0): value for key, value in data.items()}
                     self.hex_raw = {hex(key): value for key, value in self.int_raw.items()}
-                else:
-                    if not creg_sizes and not memory_slots:
-                        self.hex_raw = None
-                        self.int_raw = None
+                elif not creg_sizes and not memory_slots:
+                    # bit strings with no leading 0b or dit strings
+                    self.hex_raw = None
+                    self.int_raw = None
+                    if all(isinstance(k, str) for k in data):
                         bin_data = data
                     else:
-                        hex_dict = {}
-                        int_dict = {}
-                        for bitstring, value in data.items():
-                            if not self.bitstring_regex.search(bitstring):
-                                raise exceptions.QiskitError(
-                                    "Counts objects with dit strings do not "
-                                    "currently support dit string formatting parameters "
-                                    "creg_sizes or memory_slots"
-                                )
-                            int_key = self._remove_space_underscore(bitstring)
-                            int_dict[int_key] = value
-                            hex_dict[hex(int_key)] = value
-                        self.hex_raw = hex_dict
-                        self.int_raw = int_dict
+                        raise TypeError("All keys must be of the same type")
+                else:
+                    hex_dict = {}
+                    int_dict = {}
+                    for bitstring, value in data.items():
+                        if not self.bitstring_regex.search(bitstring):
+                            raise exceptions.QiskitError(
+                                "Counts objects with dit strings do not "
+                                "currently support dit string formatting parameters "
+                                "creg_sizes or memory_slots"
+                            )
+                        int_key = self._remove_space_underscore(bitstring)
+                        int_dict[int_key] = value
+                        hex_dict[hex(int_key)] = value
+                    self.hex_raw = hex_dict
+                    self.int_raw = int_dict
             else:
                 raise TypeError(
-                    "Invalid input key type %s, must be either an int "
+                    f"Invalid input key type {type(first_key)}, must be either an int "
                     "key or string key with hexadecimal value or bit string"
                 )
         header = {}
@@ -130,7 +135,7 @@ class Counts(dict):
         max_values_counts = [x[0] for x in self.items() if x[1] == max_value]
         if len(max_values_counts) != 1:
             raise exceptions.QiskitError(
-                f"Multiple values have the same maximum counts: {','.join(max_values_counts)}"
+                f"Multiple values have the same maximum counts: {','.join(max_values_counts)}."
             )
         return max_values_counts[0]
 

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -101,20 +101,19 @@ class TemplateMatching:
                             l_q_sub[q] = node_circuit_perm[node_template.qindices.index(q)]
                         l_q.append(l_q_sub)
         # Not controlled
+        # Symmetric gate
+        elif node_template.op.name not in ["rxx", "ryy", "rzz", "swap", "iswap", "ms"]:
+            l_q_sub = [-1] * n_qubits_t
+            for q in node_template.qindices:
+                l_q_sub[q] = node_circuit.qindices[node_template.qindices.index(q)]
+            l_q.append(l_q_sub)
+        # Not symmetric
         else:
-            # Symmetric gate
-            if node_template.op.name not in ["rxx", "ryy", "rzz", "swap", "iswap", "ms"]:
+            for perm_q in itertools.permutations(node_circuit.qindices):
                 l_q_sub = [-1] * n_qubits_t
                 for q in node_template.qindices:
-                    l_q_sub[q] = node_circuit.qindices[node_template.qindices.index(q)]
+                    l_q_sub[q] = perm_q[node_template.qindices.index(q)]
                 l_q.append(l_q_sub)
-            # Not symmetric
-            else:
-                for perm_q in itertools.permutations(node_circuit.qindices):
-                    l_q_sub = [-1] * n_qubits_t
-                    for q in node_template.qindices:
-                        l_q_sub[q] = perm_q[node_template.qindices.index(q)]
-                    l_q.append(l_q_sub)
 
         # Classical control
         if not node_template.cindices or not node_circuit.cindices:
@@ -198,7 +197,7 @@ class TemplateMatching:
             list: qubits configuration for the 'length' successors of node_id_c.
         """
         template_nodes = range(node_id_t + 1, self.template_dag_dep.size())
-        circuit_nodes = range(0, self.circuit_dag_dep.size())
+        circuit_nodes = range(self.circuit_dag_dep.size())
         successors_template = self.template_dag_dep.get_node(node_id_t).successors
 
         counter = 1
@@ -250,8 +249,8 @@ class TemplateMatching:
         n_clbits_t = len(self.template_dag_dep.clbits)
 
         # Loop over the indices of both template and circuit.
-        for template_index in range(0, self.template_dag_dep.size()):
-            for circuit_index in range(0, self.circuit_dag_dep.size()):
+        for template_index in range(self.template_dag_dep.size()):
+            for circuit_index in range(self.circuit_dag_dep.size()):
                 # Operations match up to ParameterExpressions.
                 if self.circuit_dag_dep.get_node(circuit_index).op.soft_compare(
                     self.template_dag_dep.get_node(template_index).op
@@ -275,8 +274,8 @@ class TemplateMatching:
                         n_clbits_t,
                     )
 
-                    list_circuit_q = list(range(0, n_qubits_c))
-                    list_circuit_c = list(range(0, n_clbits_c))
+                    list_circuit_q = list(range(n_qubits_c))
+                    list_circuit_c = list(range(n_clbits_c))
 
                     # If the parameter for qubits heuristics is given then extracts
                     # the list of qubits for the successors (length(int)) in the circuit.

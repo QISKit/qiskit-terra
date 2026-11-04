@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,7 +21,8 @@ import itertools
 import math
 import numbers
 import re
-from typing import Iterable, List, Sequence, Union
+
+from collections.abc import Iterable, Sequence
 
 from qiskit._accelerate.circuit import StandardGate
 from qiskit.circuit import (
@@ -173,13 +174,32 @@ _RESERVED_KEYWORDS = frozenset(
         "while",
     }
 )
+# Built-in constants defined in the OpenQASM 3 global scope. These are valid identifiers,
+# but declaring a new symbol with one of these names collides with the predefined constant.
+# The Unicode Euler constant ``ℇ`` (U+2107) is intentionally omitted: it is not a valid
+# OpenQASM 3 identifier under the language's identifier grammar (only letters, digits and
+# underscores are allowed), so it cannot appear as a declared symbol name in exported output.
+_BUILTIN_CONSTANTS = frozenset(
+    {
+        "pi",
+        "π",
+        "tau",
+        "τ",
+        "euler",
+    }
+)
 
-# This probably isn't precisely the same as the OQ3 spec, but we'd need an extra dependency to fully
-# handle all Unicode character classes, and this should be close enough for users who aren't
-# actively _trying_ to break us (fingers crossed).
-_VALID_DECLARABLE_IDENTIFIER = re.compile(r"([\w][\w\d]*)", flags=re.U)
-_VALID_HARDWARE_QUBIT = re.compile(r"\$[\d]+", flags=re.U)
-_BAD_IDENTIFIER_CHARACTERS = re.compile(r"[^\w\d]", flags=re.U)
+# This is deliberately more restrictive than the OQ3 spec - the builtin `re` module has weak Unicode
+# support, and this need here doesn't rise to the level of adding the third-party `regex` as a
+# dependency.  Python's `\w` matches way too much (basically anything in Unicode classes [L?] and
+# [N?], plus _), while `\d` matches way too little (only [Nd]) to be used as a negation.  As a
+# compromise, we allow ASCII letters, Greek letters (since they're a small, contiguous block in
+# Unicode that can be specified easily, and physicists like them), _ and [0-9].  Everything else is
+# escaped.
+_ALPHA = r"a-zA-Z\u0370-\u03ff"  # ASCII alpha, plus the "Greek and Coptic" Unicode block.
+_VALID_DECLARABLE_IDENTIFIER = re.compile(rf"[{_ALPHA}_][{_ALPHA}_0-9]*", flags=re.U)
+_VALID_HARDWARE_QUBIT = re.compile(r"\$[0-9]+", flags=re.U)
+_BAD_IDENTIFIER_CHARACTERS = re.compile(rf"[^{_ALPHA}_0-9]", flags=re.U)
 
 
 class Exporter:
@@ -190,8 +210,8 @@ class Exporter:
         includes: Sequence[str] = ("stdgates.inc",),
         basis_gates: Sequence[str] = ("U",),
         disable_constants: bool = False,
-        alias_classical_registers: bool = None,
-        allow_aliasing: bool = None,
+        alias_classical_registers: bool | None = None,
+        allow_aliasing: bool | None = None,
         indent: str = "  ",
         experimental: ExperimentalFeatures = ExperimentalFeatures(0),
         annotation_handlers: dict[str, OpenQASM3Serializer] | None = None,
@@ -413,6 +433,7 @@ class SymbolTable:
         """Whether this identifier has a defined meaning already."""
         return (
             name in _RESERVED_KEYWORDS
+            or name in _BUILTIN_CONSTANTS
             or name in self.gates
             or name in itertools.chain.from_iterable(reversed(self.variables))
         )
@@ -424,6 +445,7 @@ class SymbolTable:
             name not in self.variables[-1]
             and name not in self.gates
             and name not in _RESERVED_KEYWORDS
+            and name not in _BUILTIN_CONSTANTS
         )
 
     def escaped_declarable_name(self, name: str, *, allow_rename: bool, unique: bool = False):
@@ -446,6 +468,10 @@ class SymbolTable:
             raise QASM3ExporterError(f"cannot use '{name}' as a name; it is not a valid identifier")
         if name in _RESERVED_KEYWORDS:
             raise QASM3ExporterError(f"cannot use the keyword '{name}' as a variable name")
+        if name in _BUILTIN_CONSTANTS:
+            raise QASM3ExporterError(
+                f"cannot use '{name}' as a variable name; it shadows a built-in OpenQASM 3 constant"
+            )
         if not name_allowed(name):
             if self.gates.get(name) is not None:
                 raise QASM3ExporterError(
@@ -729,7 +755,7 @@ class QASM3Builder:
         #   handling, so they get the lowest priority; they get defined as they are encountered.
         #
         # An alternative approach would be to defer naming decisions until we are outputting the
-        # AST, and using some UUID for each symbol we're going to define in the interrim.  This
+        # AST, and using some UUID for each symbol we're going to define in the interim.  This
         # would require relatively large changes to the symbol-table and AST handling, however.
 
         for builtin, gate in _BUILTIN_GATES.items():
@@ -747,7 +773,7 @@ class QASM3Builder:
             self.symbols.register_defcal(defcal)
         for builtin in self.basis_gates:
             if builtin in _BUILTIN_GATES:
-                # It's built into the langauge; we don't need to re-add it.
+                # It's built into the language; we don't need to re-add it.
                 continue
             try:
                 self.symbols.register_gate_without_definition(builtin, None)
@@ -843,7 +869,7 @@ class QASM3Builder:
             if defn.num_parameters > 0:
                 if defn.num_parameters != len(gate.params):
                     raise QASM3ExporterError(
-                        "parameter mismatch in definition of '{gate}':"
+                        f"parameter mismatch in definition of '{gate.name}':"
                         f" call has {len(gate.params)}, definition has {defn.num_parameters}"
                     )
                 params = [
@@ -1019,7 +1045,7 @@ class QASM3Builder:
             )
         return loose_qubits + registers
 
-    def build_aliases(self, registers: Iterable[Register]) -> List[ast.AliasStatement]:
+    def build_aliases(self, registers: Iterable[Register]) -> list[ast.AliasStatement]:
         """Return a list of alias declarations for the given registers.  The registers can be either
         classical or quantum."""
         out = []
@@ -1034,7 +1060,7 @@ class QASM3Builder:
             out.append(ast.AliasStatement(name, ast.IndexSet(elements)))
         return out
 
-    def build_current_scope(self) -> List[ast.Statement]:
+    def build_current_scope(self) -> list[ast.Statement]:
         """Build the instructions that occur in the current scope.
 
         In addition to everything literally in the circuit's ``data`` field, this also includes
@@ -1229,7 +1255,13 @@ class QASM3Builder:
                         f" '{indexset}'."
                     ) from None
             body_ast = ast.ProgramBlock(self.build_current_scope())
-        return ast.ForLoopStatement(indexset_ast, loop_parameter_ast, body_ast)
+            type_ = (
+                _build_ast_type(loop_parameter.type)
+                if isinstance(loop_parameter, expr.Var)
+                # If in legacy iterable mode, we only support integer index sets.
+                else ast.IntType()
+            )
+        return ast.ForLoopStatement(indexset_ast, loop_parameter_ast, body_ast, type_)
 
     def build_annotation(self, annotation: Annotation) -> ast.Annotation:
         """Use the custom serializers to construct an annotation object."""
@@ -1357,13 +1389,13 @@ class QASM3Builder:
         if ident is None:
             ident = self.define_gate(operation)
         qubits = [self._lookup_bit(qubit) for qubit in instruction.qubits]
-        parameters = self._build_quantum_call_parameters(instruction.params)
+        parameters = self._build_quantum_call_parameters(operation.params)
         return ast.QuantumGateCall(ident, qubits, parameters=parameters)
 
 
 def _infer_variable_declaration(
     circuit: QuantumCircuit, parameter: Parameter, parameter_name: ast.Identifier
-) -> Union[ast.ClassicalDeclaration, None]:
+) -> ast.ClassicalDeclaration | None:
     """Attempt to infer what type a parameter should be declared as to work with a circuit.
 
     This is very simplistic; it assumes all parameters are real numbers that need to be input to the
@@ -1449,7 +1481,6 @@ class _ExprBuilder(expr.ExprVisitor[ast.Expression]):
     def visit_stretch(self, node, /):
         return self.lookup(node)
 
-    # pylint: disable=too-many-return-statements
     def visit_value(self, node, /):
         if node.type.kind is types.Bool:
             return ast.BooleanLiteral(node.value)

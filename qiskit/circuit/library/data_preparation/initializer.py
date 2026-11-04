@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,8 +21,8 @@ import typing
 from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit import QuantumRegister
 from qiskit.circuit.instruction import Instruction
-from qiskit.circuit.library.generalized_gates import Isometry
 from .state_preparation import StatePreparation
+from qiskit.circuit.exceptions import CircuitError
 
 if typing.TYPE_CHECKING:
     from qiskit.quantum_info.states.statevector import Statevector
@@ -91,8 +91,7 @@ class Initialize(Instruction):
             QuantumCircuit: circuit to take ``self.params`` vector to :math:`|{00\\ldots0}\\rangle`
         """
 
-        isom = Isometry(self.params, 0, 0)
-        return isom._gates_to_uncompute()
+        return self._stateprep.definition.inverse()
 
     @property
     def params(self):
@@ -106,3 +105,10 @@ class Initialize(Instruction):
 
     def broadcast_arguments(self, qargs, cargs):
         return self._stateprep.broadcast_arguments(qargs, cargs)
+
+    def inverse(self, annotated: bool = False):
+        """Raises an error as Initialize cannot be inverted."""
+        raise CircuitError(
+            "Initialize is not unitary thus can not be inverted. "
+            "If you want an invertible state preparation, use StatePreparation instead."
+        )

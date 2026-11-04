@@ -1,0 +1,7 @@
+---
+features_transpiler:
+  - |
+    Added a new ``filter_fn`` argument to the analysis passes :class:`.Collect1qRuns` and
+    :class:`.Collect2qBlocks`. This optional callable allows to filter collected circuits
+    based on custom criteria, for example to return only single-qubits runs with at least
+    one Hadamard gate, or only 2-qubit blocks with at least 3 CX-gates.

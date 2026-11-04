@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,14 +14,14 @@
 
 
 __all__ = [
-    "Expr",
-    "Var",
-    "Stretch",
-    "Value",
-    "Cast",
-    "Unary",
     "Binary",
+    "Cast",
+    "Expr",
     "Index",
+    "Stretch",
+    "Unary",
+    "Value",
+    "Var",
 ]
 
 import enum
@@ -35,7 +35,7 @@ from qiskit._accelerate.circuit.classical.expr import (
     Unary,
     Binary,
     Index,
-)  # pylint: disable=unused-import
+)
 
 
 class _UnaryOp(enum.Enum):
@@ -46,6 +46,9 @@ class _UnaryOp(enum.Enum):
 
     The logical negation :data:`LOGIC_NOT` takes an input that is implicitly coerced to a
     Boolean, and returns a Boolean.
+
+    The arithmetic negation :data:`NEGATE` takes an input that is either float or duration and
+    returns a value of the same type.
     """
 
     # If adding opcodes, remember to add helper constructor functions in `constructors.py`.
@@ -57,6 +60,8 @@ class _UnaryOp(enum.Enum):
     """Bitwise negation. ``~operand``."""
     LOGIC_NOT = 2
     """Logical negation. ``!operand``."""
+    NEGATE = 3
+    """Arithmetic negation. ``-operand``."""
 
     def __str__(self):
         return f"Unary.{super().__str__()}"
@@ -92,7 +97,7 @@ class _BinaryOp(enum.Enum):
     right-hand operand.  In all cases, the output bit width is the same as the input, and zeros
     fill in the "exposed" spaces.
 
-    The binary arithmetic operators :data:`ADD`, :data:`SUB:, :data:`MUL`, and :data:`DIV`
+    The binary arithmetic operators :data:`ADD`, :data:`SUB`, :data:`MUL`, and :data:`DIV`
     can be applied to two floats or two unsigned integers, which should be made to be of
     the same width during construction via a cast.
     The :data:`ADD`, :data:`SUB`, and :data:`DIV` operators can be applied on two durations

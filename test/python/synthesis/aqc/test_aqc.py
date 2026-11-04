@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -24,8 +24,8 @@ from qiskit.synthesis.unitary.aqc.cnot_structures import make_cnot_network
 from qiskit.synthesis.unitary.aqc.cnot_unit_circuit import CNOTUnitCircuit
 from qiskit.synthesis.unitary.aqc.cnot_unit_objective import DefaultCNOTUnitObjective
 from qiskit.synthesis.unitary.aqc.fast_gradient.fast_gradient import FastCNOTUnitObjective
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
-from test.python.synthesis.aqc.sample_data import (  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
+from test.python.synthesis.aqc.sample_data import (
     ORIGINAL_CIRCUIT,
     INITIAL_THETAS,
 )
@@ -41,7 +41,7 @@ class TestAqc(QiskitTestCase):
 
         seed = 12345
 
-        num_qubits = int(round(np.log2(ORIGINAL_CIRCUIT.shape[0])))
+        num_qubits = round(np.log2(ORIGINAL_CIRCUIT.shape[0]))
         cnots = make_cnot_network(
             num_qubits=num_qubits, network_layout="spin", connectivity_type="full", depth=0
         )
@@ -75,7 +75,7 @@ class TestAqc(QiskitTestCase):
         seed = 12345
         np.random.seed(seed)
 
-        num_qubits = int(3)
+        num_qubits = 3
         cnots = make_cnot_network(
             num_qubits=num_qubits, network_layout="spin", connectivity_type="full", depth=0
         )
@@ -108,7 +108,7 @@ class TestAqc(QiskitTestCase):
         """
         seed = 12345
 
-        num_qubits = int(3)
+        num_qubits = 3
         cnots = make_cnot_network(
             num_qubits=num_qubits, network_layout="spin", connectivity_type="full", depth=0
         )

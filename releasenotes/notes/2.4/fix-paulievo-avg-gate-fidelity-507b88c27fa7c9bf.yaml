@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed a bug around :class:`.PauliEvolutionGate`, where the average gate
+    fidelity was slightly larger than the actual fidelity.  This had knock-on effects
+    in passes such as :class:`.RemoveIdentityEquivalent`, which would remove
+    gates at slightly larger angles than it should have.  This has now been fixed
+    and the :class:`.PauliEvolutionGate` is guaranteed to handle cutoffs the same way as
+    other standard rotation gates.

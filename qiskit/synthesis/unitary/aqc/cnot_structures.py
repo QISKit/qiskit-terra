@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -171,7 +171,7 @@ def _sequential_network(num_qubits: int, links: dict, depth: int) -> np.ndarray:
     layer = 0
     cnots = np.zeros((2, depth), dtype=int)
     while True:
-        for i in range(0, num_qubits - 1):
+        for i in range(num_qubits - 1):
             for j in range(i + 1, num_qubits):
                 if j in links[i]:
                     cnots[0, layer] = i

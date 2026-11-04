@@ -1,0 +1,5 @@
+---
+build:
+  - |
+    The in-repository bindings-generation tool was renamed from ``qiskit-bindgen-c`` to ``qiskit-bindgen-cli``.
+    The preferred ``Makefile`` recipe ``make c`` is unaffected.

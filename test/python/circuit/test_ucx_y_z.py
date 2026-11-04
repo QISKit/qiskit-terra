@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -22,8 +22,9 @@ from qiskit.quantum_info.operators.predicates import matrix_equal
 from qiskit.quantum_info import Operator
 from qiskit.compiler import transpile
 from qiskit.circuit.library import UCRXGate, UCRYGate, UCRZGate
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
+rng = np.random.default_rng(2026_02_05)
 angles_list = [
     [0],
     [0.4],
@@ -31,9 +32,9 @@ angles_list = [
     [0, 0.8],
     [0, 0, 1, 1],
     [0, 1, 0.5, 1],
-    (2 * np.pi * np.random.rand(2**3)).tolist(),
-    (2 * np.pi * np.random.rand(2**4)).tolist(),
-    (2 * np.pi * np.random.rand(2**5)).tolist(),
+    (2 * np.pi * rng.random(2**3)).tolist(),
+    (2 * np.pi * rng.random(2**4)).tolist(),
+    (2 * np.pi * rng.random(2**5)).tolist(),
 ]
 
 rot_axis_list = ["X", "Y", "Z"]
@@ -55,11 +56,13 @@ class TestUCRXYZ(QiskitTestCase):
                 qc.append(gate, q)
 
                 # Decompose the gate
-                qc = transpile(qc, basis_gates=["u1", "u3", "u2", "cx", "id"])
+                qc = transpile(
+                    qc, basis_gates=["u1", "u3", "u2", "cx", "id"], seed_transpiler=2026_02_05
+                )
                 # Simulate the decomposed gate
                 unitary = Operator(qc)
                 unitary_desired = _get_ucr_matrix(angles, rot_axis)
-                self.assertTrue(matrix_equal(unitary_desired, unitary, ignore_phase=True))
+                self.assertTrue(matrix_equal(unitary_desired, unitary))
 
 
 def _get_ucr_matrix(angles, rot_axis):

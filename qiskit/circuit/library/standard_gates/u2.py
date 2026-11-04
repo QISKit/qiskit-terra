@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,7 +13,7 @@
 """One-pulse single-qubit gate."""
 from math import sqrt, pi
 from cmath import exp
-from typing import Optional
+
 import numpy
 from qiskit.circuit.gate import Gate
 from qiskit.circuit.parameterexpression import ParameterValueType
@@ -90,7 +90,7 @@ class U2Gate(Gate):
         self,
         phi: ParameterValueType,
         lam: ParameterValueType,
-        label: Optional[str] = None,
+        label: str | None = None,
     ):
         r"""
         Args:
@@ -102,7 +102,7 @@ class U2Gate(Gate):
 
     def _define(self):
         """Default definition"""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit import QuantumCircuit
 
         #    ┌────────────┐

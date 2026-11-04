@@ -1,0 +1,30 @@
+---
+
+features_providers:
+  - |
+    The :class:`~qiskit.providers.basic_provider.BasicSimulator` now
+    automatically detects and optimizes simulation of Clifford circuits
+    by using the stabilizer formalism via
+    :class:`~qiskit.quantum_info.StabilizerState`. This provides
+    significant performance improvements for circuits containing only
+    Clifford gates (H, S, CX, CZ, X, Y, Z, etc.), with polynomial
+    scaling instead of exponential scaling in the number of qubits.
+    Non-Clifford circuits continue to use the existing statevector
+    simulation method. This optimization is transparent to users and
+    requires no code changes.
+    
+    For example::
+    
+      from qiskit import QuantumCircuit
+      from qiskit.providers.basic_provider import BasicSimulator
+      
+      # Clifford circuit (Bell state)
+      qc = QuantumCircuit(2, 2)
+      qc.h(0)
+      qc.cx(0, 1)
+      qc.measure([0, 1], [0, 1])
+      
+      # Automatically uses optimized StabilizerState simulation
+      backend = BasicSimulator()
+      result = backend.run(qc, shots=1000).result()
+      counts = result.get_counts()

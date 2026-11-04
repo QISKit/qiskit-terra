@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -19,8 +19,7 @@ use pyo3::types::PyString;
 use qiskit_circuit::impl_intopyobject_for_copy_pyclass;
 
 /// Affect the dynamic scaling of the weight of node-set-based heuristics (basic and lookahead).
-#[pyclass]
-#[pyo3(module = "qiskit._accelerate.sabre", frozen, eq)]
+#[pyclass(module = "qiskit._accelerate.sabre", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SetScaling {
     /// No dynamic scaling of the weight.
@@ -47,8 +46,7 @@ impl SetScaling {
 
 /// Define the characteristics of the basic heuristic.  This is a simple sum of the physical
 /// distances of every gate in the front layer.
-#[pyclass]
-#[pyo3(module = "qiskit._accelerate.sabre", frozen)]
+#[pyclass(module = "qiskit._accelerate.sabre", frozen, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct BasicHeuristic {
     /// The relative weighting of this heuristic to others.  Typically you should just set this to
@@ -81,34 +79,47 @@ impl BasicHeuristic {
     }
 }
 
-/// Define the characteristics of the lookahead heuristic.  This is a sum of the physical distances
-/// of every gate in the lookahead set, which is gates immediately after the front layer.
-#[pyclass]
-#[pyo3(module = "qiskit._accelerate.sabre", frozen)]
-#[derive(Clone, Copy, PartialEq, Debug)]
+/// Define the characteristics of the lookahead heuristic.
+#[pyclass(module = "qiskit._accelerate.sabre", frozen, from_py_object)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct LookaheadHeuristic {
-    /// The relative weight of this heuristic.  Typically this is defined relative to the
-    /// :class:`.BasicHeuristic`, which generally has its weight set to 1.0.
-    pub weight: f64,
-    /// Number of gates to consider in the heuristic.
-    pub size: usize,
-    /// Dynamic scaling of the heuristic weight depending on the lookahead set.
+    /// The relative weights of each sequential layer in this heuristic.  Typically each of these is
+    /// defined relative to the :class:`.BasicHeuristic`, which generally has its weight set to 1.0.
+    weights: Vec<f64>,
+    /// Dynamic scaling of the heuristic weight depending on the size of each layer.
     pub scale: SetScaling,
 }
-impl_intopyobject_for_copy_pyclass!(LookaheadHeuristic);
+impl LookaheadHeuristic {
+    /// Construct a new lookahead heuristic.
+    ///
+    /// Fails if `weights` has $2^{16}$ or more elements (these are layers - 65,536 is too many!).
+    pub fn new(weights: Vec<f64>, scale: SetScaling) -> Option<Self> {
+        let _: u16 = weights.len().try_into().ok()?;
+        Some(Self { weights, scale })
+    }
+
+    pub fn num_layers(&self) -> u16 {
+        self.weights
+            .len()
+            .try_into()
+            .expect("constructor enforces sufficiently few layers")
+    }
+
+    #[inline]
+    pub fn weights(&self) -> &[f64] {
+        &self.weights
+    }
+}
 #[pymethods]
 impl LookaheadHeuristic {
     #[new]
-    pub fn new(weight: f64, size: usize, scale: SetScaling) -> Self {
-        Self {
-            weight,
-            size,
-            scale,
-        }
+    pub fn py_new(weights: Vec<f64>, scale: SetScaling) -> PyResult<Self> {
+        Self::new(weights, scale)
+            .ok_or_else(|| PyValueError::new_err("must have fewer than 65,536 layers"))
     }
 
     pub fn __getnewargs__(&self, py: Python) -> PyResult<Py<PyAny>> {
-        (self.weight, self.size, self.scale).into_py_any(py)
+        (self.weights.as_slice().into_pyobject(py)?, self.scale).into_py_any(py)
     }
 
     pub fn __eq__(&self, py: Python, other: Py<PyAny>) -> bool {
@@ -116,9 +127,12 @@ impl LookaheadHeuristic {
     }
 
     pub fn __repr__(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let fmt = "LookaheadHeuristic(weight={!r}, size={!r}, scale={!r})";
+        let fmt = "LookaheadHeuristic(weights={!r}, scale={!r})";
         PyString::new(py, fmt)
-            .call_method1("format", (self.weight, self.size, self.scale))?
+            .call_method1(
+                "format",
+                (self.weights.as_slice().into_pyobject(py)?, self.scale),
+            )?
             .into_py_any(py)
     }
 }
@@ -127,7 +141,7 @@ impl LookaheadHeuristic {
 /// multiplier associated with it, beginning at 1.0, and has :attr:`increment` added to it each time
 /// the qubit is involved in a swap.  The final heuristic is calculated by multiplying all other
 /// components by the maximum multiplier involved in a given swap.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[pyo3(module = "qiskit._accelerate.sabre", frozen)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct DecayHeuristic {
@@ -162,8 +176,15 @@ impl DecayHeuristic {
 
 /// A complete description of the heuristic that Sabre will use.  See the individual elements for a
 /// greater description.
-#[pyclass]
-#[pyo3(module = "qiskit._accelerate.sabre", frozen)]
+///
+/// .. note::
+///
+///     This is an internal Qiskit object, not a formal part of the API.  You can use this for
+///     fine-grained control over the Sabre heuristic, including for research, but beware that the
+///     available options and configuration of it may change without warning in minor versions of
+///     Qiskit.  If you are doing research using this, be sure to pin the version of Qiskit in your
+///     requirements.
+#[pyclass(module = "qiskit._accelerate.sabre", frozen, eq)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Heuristic {
     pub basic: Option<BasicHeuristic>,
@@ -209,7 +230,7 @@ impl Heuristic {
     pub fn __getnewargs__(&self, py: Python) -> PyResult<Py<PyAny>> {
         (
             self.basic,
-            self.lookahead,
+            self.lookahead.clone(),
             self.decay,
             self.attempt_limit,
             self.best_epsilon,
@@ -227,15 +248,11 @@ impl Heuristic {
         }
     }
 
-    /// Set the weight and extended-set size of the ``lookahead`` heuristic.  The weight here
-    /// should typically be less than that of ``basic``.
-    pub fn with_lookahead(&self, weight: f64, size: usize, scale: SetScaling) -> Self {
+    /// Set the layer weights of the ``lookahead`` heuristic.  The weight here should typically be
+    /// less than that of ``basic``.  The number of weights dictates the number of layers.
+    pub fn with_lookahead(&self, weights: Vec<f64>, scale: SetScaling) -> Self {
         Self {
-            lookahead: Some(LookaheadHeuristic {
-                weight,
-                size,
-                scale,
-            }),
+            lookahead: Some(LookaheadHeuristic { weights, scale }),
             ..self.clone()
         }
     }
@@ -253,10 +270,6 @@ impl Heuristic {
         }
     }
 
-    pub fn __eq__(&self, py: Python, other: Py<PyAny>) -> bool {
-        other.extract::<Self>(py).is_ok_and(|other| self == &other)
-    }
-
     pub fn __repr__(&self, py: Python) -> PyResult<Py<PyAny>> {
         let fmt = "Heuristic(basic={!r}, lookahead={!r}, decay={!r}, attempt_limit={!r}, best_epsilon={!r})";
         PyString::new(py, fmt)
@@ -264,7 +277,7 @@ impl Heuristic {
                 "format",
                 (
                     self.basic,
-                    self.lookahead,
+                    self.lookahead.clone(),
                     self.decay,
                     self.attempt_limit,
                     self.best_epsilon,

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+build = "build.rs"
 
 [lib]
 name = "qiskit_pyext"
@@ -19,17 +20,28 @@ workspace = true
 # `libpython` is *not* linked, and if the feature isn't present, then it is.  To test the Rust
 # crates as standalone binaries, executables, we need `libpython` to be linked in, so we make the
 # feature a default, and run `cargo test --no-default-features` to turn it off.
-default = ["pyo3/extension-module"]
-cache_pygates = ["pyo3/extension-module", "qiskit-circuit/cache_pygates", "qiskit-accelerate/cache_pygates", "qiskit-transpiler/cache_pygates", "qiskit-cext/cache_pygates"]
+cache_pygates = ["qiskit-circuit/cache_pygates", "qiskit-accelerate/cache_pygates", "qiskit-transpiler/cache_pygates", "qiskit-cext/cache_pygates", "qiskit-qpy/cache_pygates"]
+
+[build-dependencies]
+anyhow.workspace = true
+cbindgen.workspace = true
+qiskit-bindgen.workspace = true
+qiskit-cext-vtable = { workspace = true, features = ["python_binding"] }
 
 [dependencies]
+anyhow.workspace = true
 pyo3.workspace = true
 qiskit-accelerate.workspace = true
-qiskit-circuit.workspace = true
+qiskit-circuit = { workspace = true, features = ["passmanager"] }
 qiskit-circuit-library.workspace = true
+qiskit-passmanager.workspace = true
 qiskit-qasm2.workspace = true
 qiskit-qasm3.workspace = true
+qiskit-qpy.workspace = true
 qiskit-cext = { workspace = true, features = ["python_binding"] }
+qiskit-cext-vtable = { workspace = true, features = ["python_binding", "addr"] }
 qiskit-transpiler.workspace = true
-qiskit-quantum-info.workspace = true
+qiskit-util.workspace = true
+qiskit-quantum-info = { workspace = true, features = ["python"] }
 qiskit-synthesis.workspace = true
+mimalloc = { workspace = true, optional = true, features = ["local_dynamic_tls"] }

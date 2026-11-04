@@ -1,0 +1,20 @@
+---
+features_c:
+  - |
+    Added DAG-based variants of the standalone transpiler pass functions in the C API.
+    These new functions operate directly on :c:struct:`QkDag` objects instead of :c:struct:`QkCircuit`,
+    avoiding the overhead of circuit-to-DAG and DAG-to-circuit conversions when chaining
+    multiple passes together. The new functions follow the naming convention
+    ``qk_transpiler_pass_*`` and include:
+
+    * :c:func:`qk_transpiler_pass_elide_permutations`
+    * :c:func:`qk_transpiler_pass_check_gate_direction`
+    * :c:func:`qk_transpiler_pass_gate_direction`
+    * :c:func:`qk_transpiler_pass_optimize_1q_sequences`
+    * :c:func:`qk_transpiler_pass_remove_diagonal_gates_before_measure`
+    * :c:func:`qk_transpiler_pass_remove_identity_equivalent`
+    * :c:func:`qk_transpiler_pass_split_2q_unitaries`
+
+    These are useful when building custom transpilation pipelines in C where you want
+    to apply multiple passes sequentially without repeated conversions between
+    circuit and DAG representations.

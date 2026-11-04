@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -57,7 +57,7 @@ class BoxOp(ControlFlowOp):
         Args:
             body: the circuit to use as the body of the box.  This should explicitly close over any
                 :class:`.expr.Var` variables that must be incident from the outer circuit.  The
-                required number of qubit and clbits for the resulting instruction are inferred from
+                required number of qubits and clbits for the resulting instruction are inferred from
                 the number in the circuit, even if they are idle.
             duration: an optional duration for the box as a whole.
             unit: the unit of the ``duration``.
@@ -76,7 +76,7 @@ class BoxOp(ControlFlowOp):
 
     @params.setter
     def params(self, parameters):
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit import QuantumCircuit
 
         (body,) = parameters
@@ -86,6 +86,8 @@ class BoxOp(ControlFlowOp):
                 "BoxOp expects a body parameter of type "
                 f"QuantumCircuit, but received {type(body)}."
             )
+        if body.num_input_vars:
+            raise self._unexpected_input_var_error()
 
         if body.num_qubits != self.num_qubits or body.num_clbits != self.num_clbits:
             raise CircuitError(
@@ -137,7 +139,7 @@ class BoxContext:
     This is not part of the public interface, and should not be instantiated by users.
     """
 
-    __slots__ = ("_circuit", "_duration", "_unit", "_label", "_annotations")
+    __slots__ = ("_annotations", "_circuit", "_duration", "_label", "_unit")
 
     def __init__(
         self,
@@ -154,6 +156,9 @@ class BoxContext:
             duration: the final duration of the box.
             unit: the unit of ``duration``.
             label: an optional label for the box.
+            annotations: any :class:`.Annotation`\\ s to apply to the box.  In cases where order
+                is important, annotations are to be interpreted in the same order they appear in
+                the iterable.
         """
         self._circuit = circuit
         self._duration = duration

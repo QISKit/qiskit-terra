@@ -4,15 +4,15 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
 """Cancel the redundant (self-adjoint) gates through commutation relations."""
+
 from __future__ import annotations
-import warnings
 from qiskit.circuit import Gate, Qubit
 from qiskit.circuit.commutation_library import SessionCommutationChecker as scc
 from qiskit.circuit.library import PauliGate, ZGate
@@ -104,23 +104,13 @@ class LightCone(TransformationPass):
         new_dag = dag.copy_empty_like()
 
         # Iterate over the nodes in reverse topological order
-        for node in reversed(list(dag.topological_op_nodes())):
+        for node in dag.topological_op_nodes(reverse=True):
             # Check if the node belongs to the light-cone
             if lightcone_qubits.intersection(node.qargs):
                 # Check commutation with all previous operations
                 commutes_bool = True
                 for op in lightcone_operations:
-                    max_num_qubits = max(len(op[1]), len(node.qargs))
-                    if max_num_qubits > 10:
-                        warnings.warn(
-                            "LightCone pass is checking commutation of"
-                            f"operators of size {max_num_qubits}."
-                            "This operation can be slow.",
-                            category=RuntimeWarning,
-                        )
-                    commute_bool = scc.commute(
-                        op[0], op[1], [], node.op, node.qargs, [], max_num_qubits=max_num_qubits
-                    )
+                    commute_bool = scc.commute(op[0], op[1], [], node.op, node.qargs, [])
                     if not commute_bool:
                         # If the current node does not commute, update the light-cone
                         lightcone_qubits.update(node.qargs)

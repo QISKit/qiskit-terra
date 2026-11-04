@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -26,6 +26,15 @@ development environment:
 .. code-block:: bash
 
    pip install 'qiskit[visualization]'
+
+.. warning::
+
+    In general, the visualization tooling in Qiskit may call system programs on arbitrary user
+    input, and should only be used on trusted inputs.  The visualization tooling provided in Qiskit
+    is mostly intended for local visualization, and deliberately allows user code injection in
+    several places, such as Graphviz node labels like register names in :meth:`.DAGCircuit.draw`, or
+    LaTeX instruction labels from :attr:`.Instruction.label` in the ``latex`` mode of
+    :meth:`.QuantumCircuit.draw`.
 
 Common Keyword Arguments
 ========================
@@ -140,6 +149,7 @@ This section contains functions that visualize quantum states.
    plot_state_hinton
    plot_state_paulivec
    plot_state_qsphere
+   state_to_latex
 
 Example Usage
 -------------
@@ -259,8 +269,6 @@ Exceptions
 .. autoexception:: VisualizationError
 """
 
-import os
-import sys
 
 from .array import array_to_latex
 
@@ -274,6 +282,7 @@ from .state_visualization import (
     plot_state_paulivec,
     plot_state_qsphere,
     state_drawer,
+    state_to_latex,
 )
 from .transition_visualization import visualize_transition
 from .dag_visualization import dag_drawer
@@ -288,3 +297,31 @@ from .exceptions import VisualizationError
 # These modules aren't part of the public interface, and were moved in Terra 0.22.  They're
 # re-imported here to allow a backwards compatible path, and should be deprecated in Terra 0.23.
 from .circuit import text, matplotlib, latex
+
+__all__ = [
+    "VisualizationError",
+    "array_to_latex",
+    "circuit_drawer",
+    "dag_drawer",
+    "latex",
+    "matplotlib",
+    "pass_manager_drawer",
+    "plot_bloch_multivector",
+    "plot_bloch_vector",
+    "plot_circuit_layout",
+    "plot_coupling_map",
+    "plot_distribution",
+    "plot_error_map",
+    "plot_gate_map",
+    "plot_histogram",
+    "plot_state_city",
+    "plot_state_hinton",
+    "plot_state_paulivec",
+    "plot_state_qsphere",
+    "staged_pass_manager_drawer",
+    "state_drawer",
+    "state_to_latex",
+    "text",
+    "timeline_drawer",
+    "visualize_transition",
+]

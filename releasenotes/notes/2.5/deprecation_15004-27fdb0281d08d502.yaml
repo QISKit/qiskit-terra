@@ -1,0 +1,8 @@
+---
+deprecations_synthesis:
+  - |
+    Some of the arguments in the function :func:`.qs_decomposition` are now deprecated:
+
+     * `opt_a1` and `opt_a2` are no longer needed, as the funcion automatically determines if the optimizations should run
+     * `decomposer_1q` won't accept any callable anymore, only instances of :class:`.OneQubitBasisDecomposer`
+     * `decomposer_2q` won't accept any callable anymore, only instances of :class:`.TwoQubitBasisDecomposer`

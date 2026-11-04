@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -18,7 +18,8 @@ import gzip
 import io
 import shutil
 from json import JSONEncoder, JSONDecoder
-from typing import Union, List, BinaryIO, Type, Optional, Callable, TYPE_CHECKING
+from typing import BinaryIO, TYPE_CHECKING
+from collections.abc import Callable
 from collections.abc import Iterable, Mapping
 import struct
 import warnings
@@ -30,12 +31,12 @@ from qiskit.qpy import formats, common, binary_io, type_keys
 from qiskit.qpy.exceptions import QpyError
 from qiskit import user_config
 from qiskit.version import __version__
+from qiskit._accelerate import qpy as _qpy
 
 if TYPE_CHECKING:
     from qiskit.circuit import annotation
 
 
-# pylint: disable=invalid-name
 QPY_SUPPORTED_TYPES = QuantumCircuit
 
 # Some standard-library types claim to be `IOBase.seekable`, but don't actually support arbitrary
@@ -87,12 +88,12 @@ VERSION_PATTERN_REGEX = re.compile(VERSION_PATTERN, re.VERBOSE | re.IGNORECASE)
 
 
 def dump(
-    programs: Union[List[QPY_SUPPORTED_TYPES], QPY_SUPPORTED_TYPES],
+    programs: list[QPY_SUPPORTED_TYPES] | QPY_SUPPORTED_TYPES,
     file_obj: BinaryIO,
-    metadata_serializer: Optional[Type[JSONEncoder]] = None,
+    metadata_serializer: type[JSONEncoder] | None = None,
     use_symengine: bool = False,
     version: int = common.QPY_VERSION,
-    annotation_factories: Optional[Mapping[str, Callable[[], annotation.QPYSerializer]]] = None,
+    annotation_factories: Mapping[str, Callable[[], annotation.QPYSerializer]] | None = None,
 ):
     """Write QPY binary data to a file
 
@@ -158,21 +159,11 @@ def dump(
                 from the QPY format at that version will persist. This should only be used if
                 compatibility with loading the payload with an older version of Qiskit is necessary.
 
-            .. note::
-
-                If serializing a :class:`.QuantumCircuit` that contains
-                :class:`.ParameterExpression` objects with ``version`` set low with the intent to
-                load the payload using a historical release of Qiskit, it is safest to set the
-                ``use_symengine`` flag to ``False``.  Versions of Qiskit prior to 1.2.4 cannot load
-                QPY files containing ``symengine``-serialized :class:`.ParameterExpression` objects
-                unless the version of ``symengine`` used between the loading and generating
-                environments matches.
         annotation_factories: Mapping of namespaces to functions that create new instances of
             :class:`.annotation.QPUSerializer`, for handling the dumping of custom
             :class:`.Annotation` objects.  The subsequent call to :func:`load` will need to use
             similar serializer objects, that understand the custom output format of those
             serializers.
-
 
     Raises:
         TypeError: When invalid data type is input.
@@ -194,6 +185,17 @@ def dump(
             f"this version of Qiskit. Try selecting a version between "
             f"{common.QPY_COMPATIBILITY_VERSION} and {common.QPY_VERSION} for `qpy.dump`."
         )
+
+    use_rust = version >= common.QPY_RUST_WRITE_MIN_VERSION
+    if use_rust:
+        _qpy.dump(
+            programs,
+            file_obj,
+            metadata_serializer,
+            version,
+            annotation_factories,
+        )
+        return
 
     version_match = VERSION_PATTERN_REGEX.search(__version__)
     version_parts = [int(x) for x in version_match.group("release").split(".")]
@@ -217,9 +219,10 @@ def dump(
             out_stream,
             circuit,
             metadata_serializer=metadata_serializer,
-            use_symengine=use_symengine,
+            use_symengine=bool(use_symengine),
             version=version,
             annotation_factories=annotation_factories,
+            use_rust=use_rust,
         )
 
     if version >= 16:
@@ -273,9 +276,9 @@ def dump(
 
 def load(
     file_obj: BinaryIO,
-    metadata_deserializer: Optional[Type[JSONDecoder]] = None,
-    annotation_factories: Optional[Mapping[str, Callable[[], annotation.QPYSerializer]]] = None,
-) -> List[QPY_SUPPORTED_TYPES]:
+    metadata_deserializer: type[JSONDecoder] | None = None,
+    annotation_factories: Mapping[str, Callable[[], annotation.QPYSerializer]] | None = None,
+) -> list[QPY_SUPPORTED_TYPES]:
     """Load a QPY binary file
 
     This function is used to load a serialized QPY Qiskit program file and create
@@ -339,6 +342,16 @@ def load(
             f"The QPY format version being read, {version}, isn't supported by "
             "this Qiskit version. Please upgrade your version of Qiskit to load this QPY payload"
         )
+    config = user_config.get_config()
+    min_qpy_version = config.get("min_qpy_version")
+    if min_qpy_version is not None and version < min_qpy_version:
+        raise QpyError(
+            f"QPY version {version} is lower than the configured minimum "
+            f"version {min_qpy_version}."
+        )
+    use_rust = version >= common.QPY_RUST_READ_MIN_VERSION
+    if use_rust:
+        return _qpy.load(file_obj, metadata_deserializer, annotation_factories)
 
     if version < 10:
         data = formats.FILE_HEADER._make(
@@ -355,21 +368,13 @@ def load(
             )
         )
 
-    config = user_config.get_config()
-    min_qpy_version = config.get("min_qpy_version")
-    if min_qpy_version is not None and data.qpy_version < min_qpy_version:
-        raise QpyError(
-            f"QPY version {data.qpy_version} is lower than the configured minimum "
-            f"version {min_qpy_version}."
-        )
-
     if data.preface.decode(common.ENCODE) != "QISKIT":
         raise QiskitError("Input file is not a valid QPY file")
     version_match = VERSION_PATTERN_REGEX.search(__version__)
     env_qiskit_version = [int(x) for x in version_match.group("release").split(".")]
 
     qiskit_version = (data.major_version, data.minor_version, data.patch_version)
-    # pylint: disable=too-many-boolean-expressions
+
     if (
         env_qiskit_version[0] < qiskit_version[0]
         or (
@@ -431,8 +436,9 @@ def load(
                 file_obj,
                 data.qpy_version,
                 metadata_deserializer=metadata_deserializer,
-                use_symengine=use_symengine,
+                use_symengine=bool(use_symengine),
                 annotation_factories=annotation_factories,
+                use_rust=use_rust,
             )
         )
     return programs

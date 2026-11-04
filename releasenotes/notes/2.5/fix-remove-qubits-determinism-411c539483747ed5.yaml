@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a non-determinism of the edge-removal order in :meth:`.DAGCircuit.remove_qubits` and
+    :meth:`~.DAGCircuit.remove_clbits`.  This caused later edge additions to have non-deterministic 
+    identifiers, affecting some traversal algorithms.  See `#16655
+    <https://github.com/Qiskit/qiskit/issues/16655>`__.

@@ -1,0 +1,4 @@
+features_transpiler:
+  - |
+    The transpiler passes :class:`.RemoveIdentityEquivalent` and :class:`.CommutativeOptimization`
+    have been extended to handle :class:`.PauliProductRotationGate` gates.

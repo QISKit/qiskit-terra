@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ use std::f64::consts::{FRAC_1_SQRT_2, PI};
 use nalgebra::{Matrix2, MatrixView2, Vector2};
 use numpy::{IntoPyArray, PyReadonlyArray2, ToPyArray};
 
-use qiskit_circuit::util::{C_ZERO, IM, c64};
+use qiskit_util::complex::{C_ZERO, IM, c64};
 
 const EPS: f64 = 1e-10;
 
@@ -133,7 +133,7 @@ pub fn dec_ucg_help(
     let num_controls = num_qubits - 1;
     for dec_step in 0..num_controls {
         let num_ucgs = 2_usize.pow(dec_step);
-        // The decomposition works recursively and the followign loop goes over the different
+        // The decomposition works recursively and the following loop goes over the different
         // UCGates that arise in the decomposition
         for ucg_index in 0..num_ucgs {
             let len_ucg = 2_usize.pow(num_controls - dec_step);

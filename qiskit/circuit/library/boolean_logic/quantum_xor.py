@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,7 +13,6 @@
 
 """Bitwise XOR circuit and gate."""
 
-from typing import Optional
 
 import numpy as np
 from qiskit.circuit import QuantumCircuit, Gate
@@ -38,8 +37,8 @@ class XOR(QuantumCircuit):
     def __init__(
         self,
         num_qubits: int,
-        amount: Optional[int] = None,
-        seed: Optional[int] = None,
+        amount: int | None = None,
+        seed: int | None = None,
     ) -> None:
         """
         Args:
@@ -137,7 +136,6 @@ class BitwiseXorGate(Gate):
             and self.amount == other.amount
         )
 
-    # pylint: disable=unused-argument
     def inverse(self, annotated: bool = False):
         r"""Return inverted BitwiseXorGate gate (itself).
 

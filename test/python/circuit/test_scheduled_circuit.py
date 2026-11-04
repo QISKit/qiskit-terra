@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=missing-function-docstring
 
 """Test scheduled circuit (quantum circuit with duration)."""
 from ddt import ddt, data
@@ -25,7 +24,7 @@ from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.providers.basic_provider import BasicSimulator
 from qiskit.transpiler import InstructionProperties, Target
 from qiskit.transpiler.exceptions import TranspilerError
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @ddt
@@ -158,8 +157,13 @@ class TestScheduledCircuit(QiskitTestCase):
             qc, backend=self.backend_with_dt, scheduling_method="alap", layout_method="trivial"
         )
         target_durations = self.backend_with_dt.target.durations()
+        # The longest path output is 3 sx gates 1 cx(1,) and two delays for
+        # alignment
+        cx_duration = target_durations.get("cx", (1, 0))
+        sx_duration = target_durations.get("sx", (0,))
+        expected_duration = sx_duration * 3 + cx_duration + 270 + 15
         with self.assertWarns(DeprecationWarning):
-            self.assertEqual(scheduled.duration, target_durations.get("cx", (0, 1)) + 450)
+            self.assertEqual(scheduled.duration, expected_duration)
 
     def test_transpile_circuit_with_custom_instruction(self):
         """See: https://github.com/Qiskit/qiskit-terra/issues/5154"""
@@ -240,8 +244,11 @@ class TestScheduledCircuit(QiskitTestCase):
             qc, backend=self.backend_with_dt, scheduling_method="alap", layout_method="trivial"
         )
         target_durations = self.backend_with_dt.target.durations()
+        cx_duration = target_durations.get("cx", (1, 0))
+        sx_duration = target_durations.get("sx", (0,))
+        expected_duration = cx_duration + 3 * sx_duration + 320 + 15
         with self.assertWarns(DeprecationWarning):
-            self.assertEqual(scheduled.duration, target_durations.get("cx", (0, 1)) + 500)
+            self.assertEqual(scheduled.duration, expected_duration)
 
     def test_per_qubit_durations(self):
         """Test target with custom instruction_durations"""
@@ -441,6 +448,17 @@ class TestScheduledCircuit(QiskitTestCase):
         self.assertIsInstance(res, int)
         self.assertEqual(res, 100)
 
+    def test_reset_circ(self):
+        backend = GenericBackendV2(num_qubits=2, seed=42)
+
+        circ = QuantumCircuit(1)
+        circ.reset(0)
+
+        circuit_reset = transpile(circ, backend, scheduling_method="asap")
+        res = circuit_reset.estimate_duration(backend.target, unit="dt")
+        self.assertIsInstance(res, int)
+        self.assertEqual(res, 9964)
+
     def test_estimate_duration_control_flow(self):
         backend = GenericBackendV2(num_qubits=3, seed=42, control_flow=True)
 
@@ -506,9 +524,10 @@ class TestScheduledCircuit(QiskitTestCase):
     def test_duration_on_same_instruction_instance(self, scheduling_method):
         """See: https://github.com/Qiskit/qiskit-terra/issues/5771"""
         backend = GenericBackendV2(3, seed=42, dt=self.dt)
-        assert backend.target.durations().get(
-            "cx", qubits=(0, 1), unit="dt"
-        ) != backend.target.durations().get("cx", qubits=(1, 2), unit="dt")
+        self.assertNotEqual(
+            backend.target.durations().get("cx", qubits=(0, 1), unit="dt"),
+            backend.target.durations().get("cx", qubits=(1, 2), unit="dt"),
+        )
         qc = QuantumCircuit(3)
         qc.cz(0, 1)
         qc.cz(1, 2)

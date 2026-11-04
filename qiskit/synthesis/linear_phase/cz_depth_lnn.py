@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -39,8 +39,9 @@ def synth_cz_depth_line_mr(mat: np.ndarray) -> QuantumCircuit:
     (:class:`.SGate`, :class:`.SdgGate` or :class:`.ZGate`).
 
     Args:
-        mat: an upper-diagonal matrix representing the CZ circuit.
-            ``mat[i][j]=1 for i<j`` represents a ``cz(i,j)`` gate
+        mat: a square upper-diagonal matrix of `bool` representing the CZ circuit.
+            ``mat[i][j]=1 for i<j`` represents a ``cz(i,j)`` gate.  Only the upper triangle is read
+            from; the diagonal and lower triangle have no effect.
 
     Returns:
         A circuit implementation of the CZ circuit of depth :math:`2n+2` for LNN
@@ -52,7 +53,7 @@ def synth_cz_depth_line_mr(mat: np.ndarray) -> QuantumCircuit:
            `arXiv:1705.09176 <https://arxiv.org/abs/1705.09176>`_.
     """
 
-    # Call Rust implementaton
+    # Call Rust implementation
     return QuantumCircuit._from_circuit_data(
         synth_cz_depth_line_mr_inner(mat.astype(bool)), legacy_qubits=True
     )

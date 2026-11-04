@@ -1,0 +1,21 @@
+fixes:
+  - |
+    Fixed an issue in the :func:`.qs_decomposition` function where
+    potential tolerance issues in the internal linear algebra routines
+    would panic, causing the program to crash. This has been fixed so in
+    these situations an appropriate :class:`.QiskitError` or subclass is
+    raised instead.
+
+    Fixed `#15610 <https://github.com/Qiskit/qiskit/issues/15610>`__.
+  - |
+    The default synthesis of a :class:`.UnitaryGate`
+    when access :attr:`.UnitaryGate.definition` and calling
+    :meth:`.UnitaryGate.control` for gates that involve more than two qubits
+    will internally rely on the :func:`.qs_decomposition` function. In some
+    situations due to the underlying floating point tolerance involved during
+    the linear algebra routines involved in the iterative Quantum Shannon
+    Decomposition the calculation may not always succeed. To prevent these
+    attributes or methods from failing, in such situations the decomposition
+    from :class:`.Isometry` is used instead. While this results in a less
+    efficient decomposition than :func:`.qs_decomposition` it will work as
+    a fallback when :func:`.qs_decomposition` fails.

@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed MCX synthesis methods to handle correctly the edge case where ``num_ctrl_qubits``
+    is 0.
+
+    Fixed `#15665 <https://github.com/Qiskit/qiskit-terra/issues/15665>`__.

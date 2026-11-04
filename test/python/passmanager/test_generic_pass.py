@@ -4,16 +4,16 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
-# pylint: disable=missing-class-docstring
+
 
 """Pass manager test cases."""
 
-from test.python.passmanager import PassManagerTestCase
+from test.python.passmanager import BasePassManagerTestCase
 
 from logging import getLogger
 
@@ -22,7 +22,7 @@ from qiskit.passmanager import PassManagerState, WorkflowStatus, PropertySet
 from qiskit.passmanager.compilation_status import RunState
 
 
-class TestGenericPass(PassManagerTestCase):
+class TestGenericPass(BasePassManagerTestCase):
     """Tests for the GenericPass subclass."""
 
     def setUp(self):
@@ -58,7 +58,7 @@ class TestGenericPass(PassManagerTestCase):
 
         class RaiseError(GenericPass):
             def run(self, passmanager_ir):
-                raise TestError()
+                raise TestError
 
         task = RaiseError()
         data = "test_data"
@@ -124,7 +124,6 @@ class TestGenericPass(PassManagerTestCase):
     def test_run_with_callable(self):
         """Test case: Callable is called after generic pass is run."""
 
-        # pylint: disable=unused-argument
         def test_callable(task, passmanager_ir, property_set, running_time, count):
             logger = getLogger()
             logger.info("%s is running on %s", task.name(), passmanager_ir)

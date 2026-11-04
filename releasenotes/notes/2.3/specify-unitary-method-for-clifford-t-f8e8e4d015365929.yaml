@@ -1,0 +1,6 @@
+---
+features_transpiler:
+  - |
+    The functions :func:`.generate_preset_pass_manager` and :func:`.transpile` now
+    take the argument ``unitary_synthesis_method`` into account when compiling into
+    Clifford+T basis set, thus allowing to invoke custom unitary synthesis plugins.

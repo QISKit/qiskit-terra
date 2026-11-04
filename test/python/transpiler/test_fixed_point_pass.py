@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,7 @@
 import unittest
 
 from qiskit.transpiler.passes import FixedPoint
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestFixedPointPass(QiskitTestCase):
@@ -64,6 +64,50 @@ class TestFixedPointPass(QiskitTestCase):
         self.pset["property"] = 2
         self.pass_.run(self.dag)
         self.assertFalse(self.pset["property_fixed_point"])
+
+    def test_fixed_point_tuple_getter(self):
+        """Test correctness of the FixedPoint pass when getter returns a tuple
+        of values from the property set.
+        """
+        pass_ = FixedPoint("xy", lambda pset: (pset["x"], pset["y"]))
+        pset = pass_.property_set
+
+        pset["x"] = 1
+        pset["y"] = 2
+        pass_.run(dag=None)
+        self.assertFalse(pset["xy_fixed_point"])
+
+        pset["x"] = 1
+        pset["y"] = 1
+        pass_.run(dag=None)
+        self.assertFalse(pset["xy_fixed_point"])
+
+        pset["x"] = 1
+        pset["y"] = 1
+        pass_.run(dag=None)
+        self.assertTrue(pset["xy_fixed_point"])
+
+    def test_fixed_point_sum_getter(self):
+        """Test correctness of the FixedPoint pass when getter returns a sum
+        of two values from the property set.
+        """
+        pass_ = FixedPoint("xy", lambda pset: pset["x"] + pset["y"])
+        pset = pass_.property_set
+
+        pset["x"] = 1
+        pset["y"] = 4
+        pass_.run(dag=None)
+        self.assertFalse(pset["xy_fixed_point"])
+
+        pset["x"] = 2
+        pset["y"] = 2
+        pass_.run(dag=None)
+        self.assertFalse(pset["xy_fixed_point"])
+
+        pset["x"] = 1
+        pset["y"] = 3
+        pass_.run(dag=None)
+        self.assertTrue(pset["xy_fixed_point"])
 
 
 if __name__ == "__main__":

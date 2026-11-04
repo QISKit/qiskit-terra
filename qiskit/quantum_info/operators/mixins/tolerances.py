@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -43,7 +43,7 @@ class TolerancesMeta(ABCMeta):
     @atol.setter
     def atol(cls, value):
         """Set default absolute tolerance parameter for float comparisons."""
-        cls._check_value(value, "atol")  # pylint: disable=no-value-for-parameter
+        cls._check_value(value, "atol")
         cls._ATOL_DEFAULT = value
 
     @property
@@ -54,7 +54,7 @@ class TolerancesMeta(ABCMeta):
     @rtol.setter
     def rtol(cls, value):
         """Set default relative tolerance parameter for float comparisons."""
-        cls._check_value(value, "rtol")  # pylint: disable=no-value-for-parameter
+        cls._check_value(value, "rtol")
         cls._RTOL_DEFAULT = value
 
 

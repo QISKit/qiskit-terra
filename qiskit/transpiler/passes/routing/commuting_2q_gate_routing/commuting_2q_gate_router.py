@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -20,10 +20,8 @@ from qiskit.dagcircuit import DAGCircuit, DAGOpNode
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.layout import Layout
-from qiskit.transpiler.passes.routing.commuting_2q_gate_routing.swap_strategy import SwapStrategy
-from qiskit.transpiler.passes.routing.commuting_2q_gate_routing.commuting_2q_block import (
-    Commuting2qBlock,
-)
+from .swap_strategy import SwapStrategy
+from .commuting_2q_block import Commuting2qBlock
 
 
 class Commuting2qGateRouter(TransformationPass):
@@ -49,7 +47,7 @@ class Commuting2qGateRouter(TransformationPass):
              |
              4
 
-    To do this we use a line swap strategy for qubits 0, 1, 3, and 4 defined it in terms
+    To do this we use a line swap strategy for qubits 0, 1, 3, and 4 defined in terms
     of virtual qubits 0, 1, 2, and 3.
 
     .. plot::
@@ -79,7 +77,7 @@ class Commuting2qGateRouter(TransformationPass):
         # Define the swap strategy on qubits before the initial_layout is applied.
         swap_strat = SwapStrategy.from_line([0, 1, 2, 3])
 
-        # Chose qubits 0, 1, 3, and 4 from the backend coupling map shown above.
+        # Choose qubits 0, 1, 3, and 4 from the backend coupling map shown above.
         backend_cmap = CouplingMap(couplinglist=[(0, 1), (1, 2), (1, 3), (3, 4)])
         initial_layout = Layout.from_intlist([0, 1, 3, 4], *circ.qregs)
 
@@ -174,6 +172,7 @@ class Commuting2qGateRouter(TransformationPass):
 
         # Used to keep track of nodes that do not decompose using swap strategies.
         accumulator = new_dag.copy_empty_like()
+        accumulator.global_phase = 0
 
         for node in dag.topological_op_nodes():
             if isinstance(node.op, Commuting2qBlock):
@@ -220,12 +219,15 @@ class Commuting2qGateRouter(TransformationPass):
         new_dag.compose(accumulator, qubits=order_bits)
 
         # Re-initialize the node accumulator
-        return new_dag.copy_empty_like()
+        accumulator = new_dag.copy_empty_like()
+        accumulator.global_phase = 0
+        return accumulator
 
     def _position_in_cmap(self, dag: DAGCircuit, j: int, k: int, layout: Layout) -> tuple[int, ...]:
         """A helper function to track the movement of virtual qubits through the swaps.
 
         Args:
+            dag: The dag the pass is being run on.
             j: The index of decision variable j (i.e. virtual qubit).
             k: The index of decision variable k (i.e. virtual qubit).
             layout: The current layout that takes into account previous swap gates.
@@ -377,6 +379,7 @@ class Commuting2qGateRouter(TransformationPass):
         """Check if the swap strategy can create the required connectivity.
 
         Args:
+            dag: The dag to check edges from.
             node: The dag node for which to check if the swap strategy provides enough connectivity.
             swap_strategy: The swap strategy that is being used.
 

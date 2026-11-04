@@ -4,18 +4,20 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=invalid-sequence-index
 
 """Circuit transpile function"""
+
 import logging
+import os
 from time import time
-from typing import List, Union, Dict, Callable, Any, Optional, TypeVar
+from typing import Any, TypeVar
+from collections.abc import Callable
 
 from qiskit import user_config
 from qiskit.circuit.quantumcircuit import QuantumCircuit
@@ -30,33 +32,33 @@ from qiskit.transpiler.target import Target
 
 logger = logging.getLogger(__name__)
 
-_CircuitT = TypeVar("_CircuitT", bound=Union[QuantumCircuit, List[QuantumCircuit]])
+_CircuitT = TypeVar("_CircuitT", bound=QuantumCircuit | list[QuantumCircuit])
 
 
-def transpile(  # pylint: disable=too-many-return-statements
+def transpile(
     circuits: _CircuitT,
-    backend: Optional[Backend] = None,
-    basis_gates: Optional[List[str]] = None,
-    coupling_map: Optional[Union[CouplingMap, List[List[int]]]] = None,
-    initial_layout: Optional[Union[Layout, Dict, List]] = None,
-    layout_method: Optional[str] = None,
-    routing_method: Optional[str] = None,
-    translation_method: Optional[str] = None,
-    scheduling_method: Optional[str] = None,
-    dt: Optional[float] = None,
-    approximation_degree: Optional[float] = 1.0,
-    seed_transpiler: Optional[int] = None,
-    optimization_level: Optional[int] = None,
-    callback: Optional[Callable[[BasePass, DAGCircuit, float, PropertySet, int], Any]] = None,
-    output_name: Optional[Union[str, List[str]]] = None,
+    backend: Backend | None = None,
+    basis_gates: list[str] | None = None,
+    coupling_map: CouplingMap | list[list[int]] | None = None,
+    initial_layout: Layout | dict | list | None = None,
+    layout_method: str | None = None,
+    routing_method: str | None = None,
+    translation_method: str | None = None,
+    scheduling_method: str | None = None,
+    dt: float | None = None,
+    approximation_degree: float | None = 1.0,
+    seed_transpiler: int | None = None,
+    optimization_level: int | None = None,
+    callback: Callable[[BasePass, DAGCircuit, float, PropertySet, int], Any] | None = None,
+    output_name: str | list[str] | None = None,
     unitary_synthesis_method: str = "default",
-    unitary_synthesis_plugin_config: Optional[dict] = None,
-    target: Optional[Target] = None,
-    hls_config: Optional[HLSConfig] = None,
-    init_method: Optional[str] = None,
-    optimization_method: Optional[str] = None,
+    unitary_synthesis_plugin_config: dict | None = None,
+    target: Target | None = None,
+    hls_config: HLSConfig | None = None,
+    init_method: str | None = None,
+    optimization_method: str | None = None,
     ignore_backend_supplied_default_methods: bool = False,
-    num_processes: Optional[int] = None,
+    num_processes: int | None = None,
     qubits_initially_zero: bool = True,
 ) -> _CircuitT:
     """Transpile one or more circuits, according to some desired transpilation targets.
@@ -83,13 +85,25 @@ def transpile(  # pylint: disable=too-many-return-statements
     **dt**                       target    dt
     ============================ ========= ========================
 
+    .. note::
+
+        When the target basis consists of Clifford+T gates, this function constructs
+        a specialized Clifford+T transpiler pipeline, see
+        :func:`.generate_preset_clifford_t_pass_manager` for more detailed documentation. Arguments
+        that apply only to transpiling into continuous basis sets are ignored in this flow.
+        For example, the ``"unitary_synthesis_method"`` is not taken into account when synthesizing
+        single-qubit unitaries into a Clifford+T sequence.
+
     Args:
         circuits: Circuit(s) to transpile
         backend: If set, the transpiler will compile the input circuit to this target
             device. If any other option is explicitly set (e.g., ``coupling_map``), it
-            will override the backend's.
+            will override the backend's. A :class:`~qiskit.transpiler.Target` instance
+            may also be passed here as a positional argument, in which case it is treated
+            as if it were passed as the ``target`` keyword argument instead. This mirrors
+            the behaviour of :func:`~.generate_preset_pass_manager`.
         basis_gates: List of basis gate names to unroll to
-            (e.g: ``['u1', 'u2', 'u3', 'cx']``). If ``None``, do not unroll.
+            (e.g.: ``['u1', 'u2', 'u3', 'cx']``). If ``None``, do not unroll.
         coupling_map: Directed coupling map (perhaps custom) to target in mapping. If
             the coupling map is symmetric, both directions need to be specified.
 
@@ -98,7 +112,7 @@ def transpile(  # pylint: disable=too-many-return-statements
             #. ``CouplingMap`` instance
             #. List, must be given as an adjacency matrix, where each entry
                specifies all directed two-qubit interactions supported by backend,
-               e.g: ``[[0, 1], [0, 3], [1, 2], [1, 5], [2, 5], [4, 1], [5, 3]]``
+               e.g.: ``[[0, 1], [0, 3], [1, 2], [1, 5], [2, 5], [4, 1], [5, 3]]``
         initial_layout: Initial position of virtual qubits on physical qubits.
             If this layout makes the circuit compatible with the coupling_map
             constraints, it will be used. The final layout is not guaranteed to be the same,
@@ -134,7 +148,7 @@ def transpile(  # pylint: disable=too-many-return-statements
             You can see a list of installed plugins by using :func:`~.list_stage_plugins` with
             ``"layout"`` for the ``stage_name`` argument.
         routing_method: Name of routing pass
-            ('basic', 'lookahead', 'stochastic', 'sabre', 'none'). Note
+            ('basic', 'lookahead', 'stochastic', 'sabre', 'none').
             This can also be the external plugin name to use for the ``routing`` stage.
             You can see a list of installed plugins by using :func:`~.list_stage_plugins` with
             ``"routing"`` for the ``stage_name`` argument.
@@ -153,9 +167,13 @@ def transpile(  # pylint: disable=too-many-return-statements
             argument.
         dt: Backend sample time (resolution) in seconds.
             If ``None`` (default), ``backend.dt`` is used.
-        approximation_degree (float): heuristic dial used for circuit approximation
-            (1.0=no approximation, 0.0=maximal approximation)
-        seed_transpiler: Sets random seed for the stochastic parts of the transpiler
+        approximation_degree: Heuristic dial used for circuit approximation, where ``1.0`` means
+            no approximation (up to numerical tolerance) and ``0.0`` means the maximum approximation.
+            If ``target`` is available, a value of ``None`` indicates that approximation is allowed up
+            to the reported error rate for an operation in the target.
+        seed_transpiler: Sets a seed for the PRNG used by the stochastic parts of the transpiler.
+            This parameter takes precedence over the ``QISKIT_TRANSPILER_SEED`` environment
+            variable and ``transpiler_seed`` setting in the user configuration file .
         optimization_level: How much optimization to perform on the circuits.
             Higher levels generate more optimized circuits,
             at the expense of longer transpilation time.
@@ -210,8 +228,8 @@ def transpile(  # pylint: disable=too-many-return-statements
         hls_config: An optional configuration class
             :class:`~qiskit.transpiler.passes.synthesis.HLSConfig` that will be passed directly
             to :class:`~qiskit.transpiler.passes.synthesis.HighLevelSynthesis` transformation pass.
-            This configuration class allows to specify for various high-level objects the lists of
-            synthesis algorithms and their parameters.
+            This configuration class allows specifying the lists of synthesis algorithms and
+            their parameters for various high-level objects.
         init_method: The plugin name to use for the ``init`` stage. By default an external
             plugin is not used. You can see a list of installed plugins by
             using :func:`~.list_stage_plugins` with ``"init"`` for the stage
@@ -239,6 +257,8 @@ def transpile(  # pylint: disable=too-many-return-statements
     Raises:
         TranspilerError: in case of bad inputs to transpiler (like conflicting parameters)
             or errors in passes
+        TypeError: if a :class:`~qiskit.transpiler.Target` is passed as the ``backend``
+            positional argument and ``target`` is also specified as a keyword argument.
     """
     arg_circuits_list = isinstance(circuits, list)
     circuits = circuits if arg_circuits_list else [circuits]
@@ -248,10 +268,26 @@ def transpile(  # pylint: disable=too-many-return-statements
 
     start_time = time()
 
+    if isinstance(backend, Target):
+        if target is not None:
+            raise TypeError(
+                "A 'Target' was passed as the 'backend' positional argument, but 'target' "
+                "was also specified as a keyword argument. Please use only one of the two."
+            )
+        target = backend
+        backend = None
+
     if optimization_level is None:
         # Take optimization level from the configuration or 2 as default.
         config = user_config.get_config()
         optimization_level = config.get("transpile_optimization_level", 2)
+
+    if seed_transpiler is None:
+        if (seed := os.getenv("QISKIT_TRANSPILER_SEED", None)) is not None:
+            seed_transpiler = int(seed)
+        else:
+            config = user_config.get_config()
+            seed_transpiler = config.get("transpiler_seed", None)
 
     if not ignore_backend_supplied_default_methods:
         if scheduling_method is None and hasattr(backend, "get_scheduling_stage_plugin"):
@@ -368,7 +404,7 @@ def _parse_output_name(output_name, circuits):
                 )
         else:
             raise TranspilerError(
-                "The parameter output_name should be a string or a"
+                "The parameter output_name should be a string or a "
                 f"list of strings: {type(output_name)} was used."
             )
     else:

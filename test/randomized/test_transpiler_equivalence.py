@@ -4,12 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
-# pylint: disable=invalid-name
+
 
 """Randomized tests of transpiler circuit equivalence.
 
@@ -64,11 +64,35 @@ from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.circuit import Measure, Reset, Barrier
 from qiskit.providers.fake_provider import GenericBackendV2
 
-# pylint: disable=wildcard-import,unused-wildcard-import
-from qiskit.circuit.library.standard_gates import *
+
+from qiskit.circuit.library.standard_gates import (
+    HGate,
+    IGate,
+    SGate,
+    SdgGate,
+    TGate,
+    TdgGate,
+    XGate,
+    YGate,
+    ZGate,
+    CXGate,
+    CYGate,
+    CZGate,
+    SwapGate,
+    CCXGate,
+    CSwapGate,
+    PhaseGate,
+    RXGate,
+    RYGate,
+    RZGate,
+    UGate,
+    RZZGate,
+    CPhaseGate,
+    CUGate,
+)
 from ..python.legacy_cmaps import ALMADEN_CMAP, KYOTO_CMAP
 
-from qiskit_aer import AerSimulator  # pylint: disable=wrong-import-order
+from qiskit_aer import AerSimulator
 
 default_profile = "transpiler_equivalence"
 settings.register_profile(
@@ -138,29 +162,33 @@ backend_needs_durations = _strtobool(
 )
 
 
-mock_backends = [
-    GenericBackendV2(num_qubits=5, seed=0),
-    GenericBackendV2(num_qubits=5, seed=2),
-    GenericBackendV2(num_qubits=20, coupling_map=ALMADEN_CMAP, seed=5),
-    GenericBackendV2(num_qubits=127, coupling_map=KYOTO_CMAP, seed=42),
+mock_backend_configs = [
+    {"num_qubits": 5, "seed": 0},
+    {"num_qubits": 5, "seed": 2},
+    {"num_qubits": 20, "coupling_map": ALMADEN_CMAP, "seed": 5},
+    {"num_qubits": 127, "coupling_map": KYOTO_CMAP, "seed": 42},
 ]
 
-mock_backends_with_scheduling = mock_backends
+mock_backend_configs_with_scheduling = mock_backend_configs
+
+
+def _mock_backend(config):
+    return GenericBackendV2(**config)
 
 
 @st.composite
 def transpiler_conf(draw):
     """Composite search strategy to pick a valid transpiler config."""
-    all_backends = st.one_of(st.none(), st.sampled_from(mock_backends))
-    scheduling_backends = st.sampled_from(mock_backends_with_scheduling)
+    all_backend_configs = st.one_of(st.none(), st.sampled_from(mock_backend_configs))
+    scheduling_backend_configs = st.sampled_from(mock_backend_configs_with_scheduling)
     scheduling_method = draw(st.sampled_from(scheduling_methods))
-    backend = (
-        draw(scheduling_backends)
+    backend_config = (
+        draw(scheduling_backend_configs)
         if scheduling_method or backend_needs_durations
-        else draw(all_backends)
+        else draw(all_backend_configs)
     )
     return {
-        "backend": backend,
+        "backend": None if backend_config is None else _mock_backend(backend_config),
         "optimization_level": draw(st.integers(min_value=0, max_value=3)),
         "layout_method": draw(st.sampled_from(layout_methods)),
         "routing_method": draw(st.sampled_from(routing_methods)),
@@ -261,7 +289,7 @@ class QCircuitMachine(RuleBasedStateMachine):
             + ", ".join(f"{key:s}={value!r}" for key, value in kwargs.items() if value is not None)
             + ")"
         )
-        print(f"Evaluating {call} for:\n{qasm2.dumps(self.qc)}")  # pylint: disable=bad-builtin
+        print(f"Evaluating {call} for:\n{qasm2.dumps(self.qc)}")  # noqa: T201
 
         shots = 4096
 

@@ -14,6 +14,9 @@ workspace = true
 
 [dependencies]
 qiskit-circuit.workspace = true
+qiskit-quantum-info.workspace = true
+qiskit-synthesis.workspace = true
+qiskit-util.workspace = true
 rayon.workspace = true
 num-complex.workspace = true
 nalgebra.workspace = true
@@ -22,6 +25,7 @@ rand.workspace = true
 rand_pcg.workspace = true
 rand_distr.workspace = true
 itertools.workspace = true
+thiserror.workspace = true
 
 [dependencies.pyo3]
 workspace = true
@@ -42,6 +46,3 @@ features = ["union", "const_generics"]
 [dependencies.numpy]
 workspace = true
 features = ["nalgebra"]
-
-[dev-dependencies]
-pyo3 = { workspace = true, features = ["auto-initialize"] }

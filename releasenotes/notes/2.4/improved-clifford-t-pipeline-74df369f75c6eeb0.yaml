@@ -1,0 +1,40 @@
+---
+features_transpiler:
+  - |
+    Added the function :func:`~.clifford_t_pass_manager` that creates a pass manager
+    for transpiling into Clifford+T basis sets. This function is automatically invoked
+    by :func:`.generate_preset_pass_manager` when the target basis consists of
+    Clifford+T gates. 
+    
+    The generated transpilation pipeline consisting of the following stages:
+
+    * Initialization: Decompose larger gates into 1-qubit and 2-qubits gates and perform
+      logical optimizations.
+    * Layout: Apply the default layout strategy used for continuous basis sets.
+    * Routing: Apply the default routing strategy used for continuous basis sets.
+    * RZ translation: Translate the circuit into Clifford+RZ basis.
+    * RZ optimization: Optimize the circuit within Clifford+RZ basis.
+    * T translation: Translate the circuit into Clifford+T basis.
+    * T optimization: Optimizes the circuit within Clifford+T basis.
+    * Scheduling: Apply the default scheduling strategy used for continuous basis sets.
+
+    These stages are still experimental and subject to change. In particular,
+    they are not yet exposed as transpiler stage plugins (unlike the stages
+    for continuous basis sets).
+
+    For best results, consider including both :math:`T` and :math:`T^\dagger` into the
+    specified Clifford+T basis and as many Clifford gates as possible. For example::
+
+        basis_gates = get_clifford_gate_names() + ["t", "tdg"]
+
+  - |
+    The standard equivalence library has been expanded and refined:
+
+    * Added decompositions for :class:`.RXGate` (in terms of :class:`.HGate` and :class:`.RZGate`)
+      and :class:`.ZGate` (in terms of :class:`.SdgGate`)
+    * Simplified decompositions for :class:`.TGate` and :class:`.TdgGate` to use a single
+      corresponding dagger gate plus Clifford gates
+
+  - |
+    The :class:`.OptimizeCliffordT` transpiler optimization pass now accepts a ``basis_gates``
+    argument, preferring decompositions that use Clifford gates from the target basis.

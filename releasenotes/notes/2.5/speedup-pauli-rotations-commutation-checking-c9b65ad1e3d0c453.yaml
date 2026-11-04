@@ -1,0 +1,14 @@
+---
+features_transpiler:
+  - |
+    Improved performance of :class:`.CommutationChecker` when evaluating commutations
+    between :class:`.PauliProductRotationGate` and :class:`.PauliProductMeasurement` objects.
+    This is achieved by representing their generators as single-term Paulis and performing
+    commutativity checks using these representations.
+  - |
+    Improved performance of the :class:`.CommutativeOptimization` transpiler pass on
+    circuits containing :class:`.PauliProductRotationGate` and :class:`.PauliProductMeasurement`
+    objects.
+  - |
+    The :class:`.CommutativeOptimization` transpiler pass now removes gates that are equivalent to
+    identity up to a global phase.

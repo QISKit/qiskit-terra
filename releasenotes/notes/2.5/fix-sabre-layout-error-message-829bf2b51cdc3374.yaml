@@ -1,0 +1,6 @@
+fixes:
+  - |
+    The error message from :class:`.SabreLayout` when setting incompatible
+    arguments now correctly states the limitations. See `#16632
+    <https://github.com/Qiskit/qiskit/issues/16632>`__.
+

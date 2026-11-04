@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,12 +13,17 @@
 """Code from commutative_analysis pass that checks commutation relations between DAG nodes."""
 
 from __future__ import annotations
-from typing import List, Union, Set, Optional
+
 from collections.abc import Sequence
+import typing
 
 from qiskit.circuit.operation import Operation
 from qiskit.circuit import Qubit
 from qiskit._accelerate.commutation_checker import CommutationChecker as RustChecker
+from qiskit.utils import deprecate_arg, deprecate_func
+
+if typing.TYPE_CHECKING:
+    from qiskit.dagcircuit import DAGOpNode
 
 
 class CommutationChecker:
@@ -45,27 +50,31 @@ class CommutationChecker:
     gates with free parameters (such as :class:`.RXGate` with a :class:`.ParameterExpression` as
     angle). Otherwise, a matrix-based check is performed, where two operations are said to
     commute, if the average gate fidelity of performing the commutation is above a certain threshold
-    (see ``approximation_degree``). The result of this commutation is then added to the
-    cached lookup table.
+    (see ``approximation_degree``).
     """
 
+    @deprecate_arg("cache_max_entries", since="2.5.0", removal_timeline="in Qiskit 3.0")
     def __init__(
         self,
-        standard_gate_commutations: dict = None,
+        standard_gate_commutations: dict | None = None,
         cache_max_entries: int = 10**6,
         *,
-        gates: Optional[Set[str]] = None,
+        gates: set[str] | None = None,
     ):
-        self.cc = RustChecker(standard_gate_commutations, cache_max_entries, gates)
+        self.cc = RustChecker(standard_gate_commutations, gates)
 
     def commute_nodes(
         self,
-        op1,
-        op2,
+        op1: DAGOpNode,
+        op2: DAGOpNode,
         max_num_qubits: int = 3,
         approximation_degree: float = 1.0,
     ) -> bool:
-        """Checks if two DAGOpNodes commute."""
+        """Checks if two :class:`.DAGOpNode` objects commute.
+
+        This is equivalent to :meth:`commute` but with the operation, qubits, and clbits
+        bundled in the :class:`.DAGOpNode` object. See :meth:`commute` for more details.
+        """
         return self.cc.commute_nodes(op1, op2, max_num_qubits, approximation_degree, max_num_qubits)
 
     def commute(
@@ -79,6 +88,7 @@ class CommutationChecker:
         max_num_qubits: int | None = None,
         approximation_degree: float = 1.0,
         matrix_max_num_qubits: int = 3,
+        check_inputs: bool = True,
     ) -> bool:
         """
         Checks if two Operations commute. The return value of ``True`` means that the operations
@@ -100,8 +110,11 @@ class CommutationChecker:
             approximation_degree: If the average gate fidelity in between the two operations
                 is above this number (up to ``1e-12``) they are assumed to commute.
             matrix_max_num_qubits: the maximum number of qubits for which it is allowed to compute
-                the matrix representation. This is needed if there is no efficient heck readily
+                the matrix representation. This is needed if there is no efficient check readily
                 available, e.g. for custom gates.
+            check_inputs: If ``True`` (default), reject duplicate qubit arguments with
+                :exc:`.QiskitError` at the public boundary. Pass ``False`` to skip that
+                validation when the caller already guarantees distinct qubits.
 
         Returns:
             Whether two operations commute.
@@ -116,23 +129,32 @@ class CommutationChecker:
             max_num_qubits,
             approximation_degree,
             matrix_max_num_qubits,
+            check_inputs,
         )
 
+    @deprecate_func(since="2.5", removal_timeline="in Qiskit 3.0")
     def num_cached_entries(self):
-        """Returns number of cached entries"""
-        return self.cc.num_cached_entries()
+        """Returns number of cached entries
 
+        This method will always return 0 because there is no longer an
+        internal cache.
+        """
+        return 0
+
+    @deprecate_func(since="2.5", removal_timeline="in Qiskit 3.0")
     def clear_cached_commutations(self):
-        """Clears the dictionary holding cached commutations"""
-        self.cc.clear_cached_commutations()
+        """Clears the dictionary holding cached commutations
+
+        This method is a no-op as there is no longer an internal cache
+        """
 
     def check_commutation_entries(
         self,
         first_op: Operation,
-        first_qargs: List,
+        first_qargs: list,
         second_op: Operation,
-        second_qargs: List,
-    ) -> Union[bool, None]:
+        second_qargs: list,
+    ) -> bool | None:
         """Returns stored commutation relation if any
 
         Args:

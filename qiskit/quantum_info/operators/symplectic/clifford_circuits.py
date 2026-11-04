@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -93,7 +93,7 @@ def _append_operation(clifford, operation, qargs=None):
     Raises:
         QiskitError: if input operation cannot be converted into Clifford operations.
     """
-    # pylint: disable=too-many-return-statements
+
     if isinstance(operation, (Barrier, Delay)):
         return clifford
 
@@ -149,7 +149,6 @@ def _append_operation(clifford, operation, qargs=None):
     # method, or we can compose the Cliffords directly. Experimentally, for large
     # cliffords the second method is considerably faster.
 
-    # pylint: disable=cyclic-import
     from qiskit.quantum_info import Clifford
 
     if isinstance(gate, Clifford):
@@ -157,7 +156,6 @@ def _append_operation(clifford, operation, qargs=None):
         clifford.tableau = composed_clifford.tableau
         return clifford
 
-    # pylint: disable=cyclic-import
     from qiskit.circuit.library import LinearFunction
 
     if isinstance(gate, LinearFunction):
@@ -166,7 +164,6 @@ def _append_operation(clifford, operation, qargs=None):
         clifford.tableau = composed_clifford.tableau
         return clifford
 
-    # pylint: disable=cyclic-import
     from qiskit.circuit.library import PermutationGate
 
     if isinstance(gate, PermutationGate):
@@ -216,7 +213,7 @@ def _prepend_operation(clifford, operation, qargs=None):
     Raises:
         QiskitError: if input operation cannot be converted into Clifford operations.
     """
-    # pylint: disable=too-many-return-statements
+
     if isinstance(operation, (Barrier, Delay)):
         return clifford
 
@@ -272,7 +269,6 @@ def _prepend_operation(clifford, operation, qargs=None):
     # method, or we can compose (dot) the Cliffords directly. Experimentally, for large
     # cliffords the second method is considerably faster.
 
-    # pylint: disable=cyclic-import
     from qiskit.quantum_info import Clifford
 
     if isinstance(gate, Clifford):
@@ -280,7 +276,6 @@ def _prepend_operation(clifford, operation, qargs=None):
         clifford.tableau = composed_clifford.tableau
         return clifford
 
-    # pylint: disable=cyclic-import
     from qiskit.circuit.library import LinearFunction
 
     if isinstance(gate, LinearFunction):
@@ -289,7 +284,6 @@ def _prepend_operation(clifford, operation, qargs=None):
         clifford.tableau = composed_clifford.tableau
         return clifford
 
-    # pylint: disable=cyclic-import
     from qiskit.circuit.library import PermutationGate
 
     if isinstance(gate, PermutationGate):
@@ -406,7 +400,7 @@ def _append_i(clifford, qubit):
     Returns:
         Clifford: the updated Clifford.
     """
-    # pylint: disable=unused-argument
+
     return clifford
 
 
@@ -420,7 +414,7 @@ def _prepend_i(clifford, qubit):
     Returns:
         Clifford: the updated Clifford.
     """
-    # pylint: disable=unused-argument
+
     return clifford
 
 
@@ -484,7 +478,7 @@ def _prepend_y(clifford, qubit):
 
 
 def _append_z(clifford, qubit):
-    """Apply an Z gate to a Clifford.
+    """Apply a Z gate to a Clifford.
 
     Args:
         clifford (Clifford): a Clifford.

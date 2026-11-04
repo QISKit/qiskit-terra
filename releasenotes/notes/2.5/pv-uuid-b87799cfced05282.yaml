@@ -1,0 +1,5 @@
+---
+features_circuits:
+  - :class:`.ParameterVector` now accepts an optional ``uuid`` constructor argument, and exposes
+    its base :class:`~uuid.UUID` through its :attr:`~.ParameterVector.uuid` attribute.  This can
+    be used to reconstruct vectors whose elements compare equal.

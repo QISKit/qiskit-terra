@@ -1,3 +1,5 @@
+.. _capi-exit-code:
+
 ==========
 QkExitCode
 ==========

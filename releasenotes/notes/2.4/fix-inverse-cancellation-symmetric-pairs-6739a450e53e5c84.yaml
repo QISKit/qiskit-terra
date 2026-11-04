@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.InverseCancellation` where :class:`.CSGate` and :class:`.CSdgGate` pairs
+    with reversed qubit arguments were inconsistently cancelled.  Previously, a sequence of 
+    :math:`CS-CS^\dagger` (with reversed qubit args) was cancelled, but 
+    :math:`CS^\dagger-CS` was not.  Now both are consistently cancelled.
+
+    Fixed `#15855 <https://github.com/Qiskit/qiskit/issues/15855>`__.

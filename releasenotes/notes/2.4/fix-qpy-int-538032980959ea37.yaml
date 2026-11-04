@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed :func:`.qpy.load` for QPY versions >=13, where :class:`.Delay` instructions with integer
+    durations could deserialize to incorrect types. This could cause later code to raise errors,
+    such as :func:`.qasm3.dumps_experimental` returning an error saying "Failed to parse parameter
+    value". See `#16076 <https://github.com/Qiskit/qiskit/pull/16076>`__ for more detail.

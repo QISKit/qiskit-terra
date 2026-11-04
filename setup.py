@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,6 +13,7 @@
 "The Qiskit setup file."
 
 import os
+import warnings
 from setuptools import setup
 from setuptools_rust import Binding, RustExtension
 
@@ -26,9 +27,23 @@ from setuptools_rust import Binding, RustExtension
 # unergonomic to do otherwise.
 
 
-# If RUST_DEBUG is set, force compiling in debug mode. Else, use the default behavior of whether
-# it's an editable installation.
-rust_debug = True if os.getenv("RUST_DEBUG") == "1" else None
+# Check for a default build profile from the environment (`--release` or `--debug` flags to
+# `build_rust` override this default).  If not present, we also check if `RUST_DEBUG=1` for
+# convenience, since we did that (undocumented) until Qiskit 2.4.
+if (build_profile := os.getenv("QISKIT_BUILD_PROFILE", None)) is None:
+    rust_debug = os.getenv("RUST_DEBUG", None) == "1" or None
+else:
+    match build_profile.lower():
+        case "debug":
+            rust_debug = True
+        case "release":
+            rust_debug = False
+        case _:
+            warnings.warn(
+                f"QISKIT_BUILD_PROFILE set to unknown value '{build_profile}'."
+                " Valid values are 'debug' and 'release'."
+            )
+            rust_debug = None
 
 # If QISKIT_NO_CACHE_GATES is set then don't enable any features while building
 #
@@ -40,6 +55,9 @@ if os.getenv("QISKIT_NO_CACHE_GATES") == "1":
 else:
     features = ["cache_pygates"]
 
+if os.getenv("QISKIT_BUILD_WITH_MIMALLOC") == "1":
+    features.append("mimalloc")
+
 
 setup(
     rust_extensions=[
@@ -49,7 +67,8 @@ setup(
             binding=Binding.PyO3,
             debug=rust_debug,
             features=features,
+            generated_files={"include": "qiskit.capi", "_ctypes.py": "qiskit.capi"},
         )
     ],
-    options={"bdist_wheel": {"py_limited_api": "cp310"}},
+    options={"bdist_wheel": {"py_limited_api": "cp311"}},
 )

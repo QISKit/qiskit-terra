@@ -1,0 +1,7 @@
+---
+fixes:
+  - :meth:`.QuantumCircuit.append` now correctly rejects duplicate classical bits in the ``cargs``
+    argument, matching the behavior of ``qargs``.  While classical bits *can* in theory be copied,
+    unlike quantum bits, the internal data model of Qiskit cannot represent multiple use of the same
+    bit, and circuits using this would typically experience internal library panics or nonsensical
+    downstream simulator behavior due to the data-model assumption violation.

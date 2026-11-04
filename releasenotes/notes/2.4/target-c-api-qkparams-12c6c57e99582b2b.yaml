@@ -1,0 +1,5 @@
+---
+upgrade_c:
+  - Modified :c:struct:`QkTargetOp` to use :c:struct:`QkParam` as the type for its
+    :c:member:`QkTargetOp.params` attribute. Allowing users to access any free or fixed
+    parameter in an operation.

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,8 @@ from __future__ import annotations
 from collections import defaultdict
 from functools import partial
 from itertools import chain, repeat
-from typing import Callable, Iterable, Literal, Mapping, Sequence
+from typing import Literal
+from collections.abc import Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -29,9 +30,6 @@ from qiskit.result import Counts, sampled_expectation_value
 
 from .observables_array import ObservablesArray, ObservablesArrayLike
 from .shape import ShapedMixin, ShapeInput, shape_tuple
-
-# this lookup table tells you how many bits are 1 in each uint8 value
-_WEIGHT_LOOKUP = np.unpackbits(np.arange(256, dtype=np.uint8).reshape(-1, 1), axis=1).sum(axis=1)
 
 
 def _min_num_bytes(num_bits: int) -> int:
@@ -87,7 +85,7 @@ class BitArray(ShapedMixin):
         """
         Args:
             array: The ``uint8`` data array.
-            num_bits: How many bit are in each outcome.
+            num_bits: How many bits are in each outcome.
 
         Raises:
             TypeError: If the input is not a NumPy array with type ``numpy.uint8``.
@@ -110,7 +108,7 @@ class BitArray(ShapedMixin):
         # second last dimension is shots, last dimension is packed bits
         self._shape = self._array.shape[:-2]
 
-    def _prepare_broadcastable(self, other: "BitArray") -> tuple[NDArray[np.uint8], ...]:
+    def _prepare_broadcastable(self, other: BitArray) -> tuple[NDArray[np.uint8], ...]:
         """Validation and broadcasting of two bit arrays before element-wise binary operation."""
         if self.num_bits != other.num_bits:
             raise ValueError(f"'num_bits' must match in {self} and {other}.")
@@ -122,10 +120,10 @@ class BitArray(ShapedMixin):
             raise ValueError(f"{self} and {other} are not compatible for this operation.") from ex
         return np.broadcast_to(self.array, shape), np.broadcast_to(other.array, shape)
 
-    def __and__(self, other: "BitArray") -> "BitArray":
+    def __and__(self, other: BitArray) -> BitArray:
         return BitArray(np.bitwise_and(*self._prepare_broadcastable(other)), self.num_bits)
 
-    def __eq__(self, other: "BitArray") -> bool:
+    def __eq__(self, other: BitArray) -> bool:
         if (n := self.num_bits) != other.num_bits:
             return False
         arrs = [self._array, other._array]
@@ -135,13 +133,13 @@ class BitArray(ShapedMixin):
             arrs = [np.bitwise_and(arr, mask) for arr in arrs]
         return np.array_equal(*arrs, equal_nan=False)
 
-    def __invert__(self) -> "BitArray":
+    def __invert__(self) -> BitArray:
         return BitArray(np.bitwise_not(self._array), self.num_bits)
 
-    def __or__(self, other: "BitArray") -> "BitArray":
+    def __or__(self, other: BitArray) -> BitArray:
         return BitArray(np.bitwise_or(*self._prepare_broadcastable(other)), self.num_bits)
 
-    def __xor__(self, other: "BitArray") -> "BitArray":
+    def __xor__(self, other: BitArray) -> BitArray:
         return BitArray(np.bitwise_xor(*self._prepare_broadcastable(other)), self.num_bits)
 
     def __repr__(self):
@@ -206,12 +204,16 @@ class BitArray(ShapedMixin):
         Returns:
             A ``numpy.uint64``-array with shape ``(*shape, num_shots)``.
         """
-        return _WEIGHT_LOOKUP[self._array].sum(axis=-1)
+        result = np.bitwise_count(self._array).sum(axis=-1)
+        excess = self.num_bits % 8
+        if excess > 0:
+            result -= np.bitwise_count(self._array[..., 0] >> np.uint8(excess))
+        return result
 
     @staticmethod
     def from_bool_array(
         array: NDArray[np.bool_], order: Literal["big", "little"] = "big"
-    ) -> "BitArray":
+    ) -> BitArray:
         """Construct a new bit array from an array of bools.
 
         Args:
@@ -248,7 +250,7 @@ class BitArray(ShapedMixin):
     def from_counts(
         counts: Mapping[str | int, int] | Iterable[Mapping[str | int, int]],
         num_bits: int | None = None,
-    ) -> "BitArray":
+    ) -> BitArray:
         """Construct a new bit array from one or more ``Counts``-like objects.
 
         The ``counts`` can have keys that are (uniformly) integers, hexstrings, or bitstrings.
@@ -266,6 +268,7 @@ class BitArray(ShapedMixin):
         Raises:
             ValueError: If different mappings have different numbers of shots.
             ValueError: If no counts dictionaries are supplied.
+            ValueError: If a key is negative or does not fit in ``num_bits`` bits.
         """
         if singleton := isinstance(counts, Mapping):
             counts = [counts]
@@ -290,7 +293,7 @@ class BitArray(ShapedMixin):
     @staticmethod
     def from_samples(
         samples: Iterable[str] | Iterable[int], num_bits: int | None = None
-    ) -> "BitArray":
+    ) -> BitArray:
         """Construct a new bit array from an iterable of bitstrings, hexstrings, or integers.
 
         All samples are assumed to be integers if the first one is. Strings are all assumed to be
@@ -308,6 +311,7 @@ class BitArray(ShapedMixin):
 
         Raises:
             ValueError: If no strings are given.
+            ValueError: If a sample is negative or does not fit in ``num_bits`` bits.
         """
         samples = iter(samples)
         try:
@@ -329,7 +333,12 @@ class BitArray(ShapedMixin):
                 num_bits = 1
 
         num_bytes = _min_num_bytes(num_bits)
-        data = b"".join(val.to_bytes(num_bytes, "big") for val in ints)
+        try:
+            data = b"".join(val.to_bytes(num_bytes, "big") for val in ints)
+        except OverflowError as ex:
+            raise ValueError(
+                f"All samples must be non-negative integers that fit in num_bits={num_bits} bits."
+            ) from ex
         array = np.frombuffer(data, dtype=np.uint8, count=len(data))
         return BitArray(array.reshape(-1, num_bytes), num_bits)
 
@@ -399,7 +408,7 @@ class BitArray(ShapedMixin):
         arr = self._array.reshape(-1, self._array.shape[-1]) if loc is None else self._array[loc]
         return [converter(shot_row.tobytes()) for shot_row in arr]
 
-    def reshape(self, *shape: ShapeInput) -> "BitArray":
+    def reshape(self, *shape: ShapeInput) -> BitArray:
         """Return a new reshaped bit array.
 
         The :attr:`~num_shots` axis is either included or excluded from the reshaping procedure
@@ -427,7 +436,7 @@ class BitArray(ShapedMixin):
             raise ValueError("Cannot change the size of the array.")
         return BitArray(self._array.reshape(shape), self.num_bits)
 
-    def transpose(self, *axes) -> "BitArray":
+    def transpose(self, *axes) -> BitArray:
         """Return a bit array with axes transposed.
 
         Args:
@@ -457,7 +466,7 @@ class BitArray(ShapedMixin):
         axes = tuple(i if i >= 0 else self.ndim + i for i in axes) + (-2, -1)
         return BitArray(self._array.transpose(axes), self.num_bits)
 
-    def slice_bits(self, indices: int | Sequence[int]) -> "BitArray":
+    def slice_bits(self, indices: int | Sequence[int]) -> BitArray:
         """Return a bit array sliced along the bit axis of some indices of interest.
 
         .. note::
@@ -494,7 +503,7 @@ class BitArray(ShapedMixin):
         arr, num_bits = _pack(arr)
         return BitArray(arr, num_bits)
 
-    def slice_shots(self, indices: int | Sequence[int]) -> "BitArray":
+    def slice_shots(self, indices: int | Sequence[int]) -> BitArray:
         """Return a bit array sliced along the shots axis of some indices of interest.
 
         Args:
@@ -620,7 +629,7 @@ class BitArray(ShapedMixin):
 
         Args:
             observables: The observable(s) to take the expectation value of.
-                Must have a shape broadcastable with with this bit array and
+                Must have a shape broadcastable with this bit array and
                 the same number of qubits as the number of bits of this bit array.
                 The observables must be diagonal (I, Z, 0 or 1) too.
 

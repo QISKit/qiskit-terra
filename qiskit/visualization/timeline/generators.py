@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -103,7 +103,7 @@ the plotter API.
 """
 
 import warnings
-from typing import List, Union, Dict, Any, Optional
+from typing import Any
 
 from qiskit.circuit import Qubit, QuantumCircuit
 from qiskit.visualization.timeline import types, drawings
@@ -111,8 +111,8 @@ from qiskit.visualization.timeline import types, drawings
 
 def gen_sched_gate(
     gate: types.ScheduledGate,
-    formatter: Dict[str, Any],
-) -> List[Union[drawings.TextData, drawings.BoxData]]:
+    formatter: dict[str, Any],
+) -> list[drawings.TextData | drawings.BoxData]:
     """Generate time bucket or symbol of scheduled gate.
 
     If gate duration is zero or frame change a symbol is generated instead of time box.
@@ -196,8 +196,8 @@ def gen_sched_gate(
 
 
 def gen_full_gate_name(
-    gate: types.ScheduledGate, formatter: Dict[str, Any], program: Optional[QuantumCircuit] = None
-) -> List[drawings.TextData]:
+    gate: types.ScheduledGate, formatter: dict[str, Any], program: QuantumCircuit | None = None
+) -> list[drawings.TextData]:
     """Generate gate name.
 
     Parameters and associated bits are also shown.
@@ -289,8 +289,8 @@ gen_full_gate_name.accepts_program = True
 
 
 def gen_short_gate_name(
-    gate: types.ScheduledGate, formatter: Dict[str, Any]
-) -> List[drawings.TextData]:
+    gate: types.ScheduledGate, formatter: dict[str, Any]
+) -> list[drawings.TextData]:
     """Generate gate name.
 
     Only operand name is shown.
@@ -348,7 +348,7 @@ def gen_short_gate_name(
     return [drawing]
 
 
-def gen_timeslot(bit: types.Bits, formatter: Dict[str, Any]) -> List[drawings.BoxData]:
+def gen_timeslot(bit: types.Bits, formatter: dict[str, Any]) -> list[drawings.BoxData]:
     """Generate time slot of associated bit.
 
     Stylesheet:
@@ -381,9 +381,9 @@ def gen_timeslot(bit: types.Bits, formatter: Dict[str, Any]) -> List[drawings.Bo
 
 def gen_bit_name(
     bit: types.Bits,
-    formatter: Dict[str, Any],
-    program: Optional[QuantumCircuit] = None,
-) -> List[drawings.TextData]:
+    formatter: dict[str, Any],
+    program: QuantumCircuit | None = None,
+) -> list[drawings.TextData]:
     """Generate bit label.
 
     Stylesheet:
@@ -434,7 +434,7 @@ def gen_bit_name(
 gen_bit_name.accepts_program = True
 
 
-def gen_barrier(barrier: types.Barrier, formatter: Dict[str, Any]) -> List[drawings.LineData]:
+def gen_barrier(barrier: types.Barrier, formatter: dict[str, Any]) -> list[drawings.LineData]:
     """Generate barrier line.
 
     Stylesheet:
@@ -466,7 +466,7 @@ def gen_barrier(barrier: types.Barrier, formatter: Dict[str, Any]) -> List[drawi
     return [drawing]
 
 
-def gen_gate_link(link: types.GateLink, formatter: Dict[str, Any]) -> List[drawings.GateLinkData]:
+def gen_gate_link(link: types.GateLink, formatter: dict[str, Any]) -> list[drawings.GateLinkData]:
     """Generate gate link line.
 
     Line color depends on the operand type.

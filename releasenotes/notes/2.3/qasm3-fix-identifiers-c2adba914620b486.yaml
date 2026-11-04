@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    The OpenQASM 3 exporter (:func:`.qasm3.dumps` and :func:`~.qasm3.dump`) will now correctly
+    escape Unicode "number" characters other than ASCII digits, when used in identifiers.  Previously,
+    characters like superscripts would remain in the output, which is not valid OpenQASM 3.
+  - |
+    The OpenQASM 3 exporter (:func:`.qasm3.dumps` and :func:`~.qasm3.dump`) will now correctly
+    escape identifiers whose name begins with an ASCII digit.

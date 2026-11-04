@@ -1,0 +1,44 @@
+---
+upgrade_circuits:
+  - |
+    The internal representation of :class:`.ControlFlowOp`\ s has changed when
+    they're added to a :class:`.QuantumCircuit`. The object stored in the circuit 
+    and returned on future access will not necessarily be the same instance added
+    to the circuit. This was never guaranteed to be the case and mutating control
+    flow operation objects directly or by reference was unsound and always
+    likely to corrupt the circuit.
+
+    As with all in-place mutations to Python objects stored within a :class:`.QuantumCircuit` or
+    :class:`.DAGCircuit`, you must re-assign the instruction to the circuit in order for Rust space
+    to pick up the modifications.  For example, when adding annotations to a :class:`.BoxOp` that is
+    already on a circuit, a transpiler pass should make sure to use :meth:`.DAGCircuit.substitute_node`
+    to update the Rust-space object::
+
+      from qiskit.circuit import QuantumCircuit, Annotation
+
+      class MyAnnotation(Annotation):
+          namespace = "my"
+
+      qc = QuantumCircuit(2)
+      with qc.box():
+          qc.cx(0, 1)
+      dag = qc.to_dag()
+
+      # Modifications to the box's annotations in-place require
+      # writing back the information to Rust space.
+      box_node = next(dag.topological_op_nodes())
+      box_node.op.annotations.append(MyAnnotation())
+
+      # Write back the operation.
+      dag.substitute_node(box_node, box_node.op)
+  - |
+    Transpiler performance in the presence of :class:`.ControlFlowOp` instructions, including
+    :class:`.BoxOp`, is expected to be temporarily worse in Qiskit 2.3, as we transition the internal
+    representation of control flow from its previously Python-centred version to a Rust-native one.
+    We expect the performance to improve again in Qiskit 2.4, and to enable us to resolve
+    long-standing API deficiencies in transpiler passes acting on control-flow operations.
+  - |
+    The blocks of :class:`.ControlFlowOp` instances will no longer track :attr:`~.QuantumCircuit.name`
+    or :attr:`~.QuantumCircuit.metadata` fields.  These were already unsettable with the control-flow
+    builder interface, and their existence was an unintended implementation detail rather than an
+    intentional API.

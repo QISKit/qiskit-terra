@@ -1,0 +1,6 @@
+---
+# Choose only the "features" sections you need and delete the rest.  Try to be concise.  You may
+# use a code example for complicated features.
+features_c:
+  - Added two new functions for in-place arithmetic operations on :c:struct`QkObs`,
+    namely :c:func:`qk_obs_add_inplace` and :c:func:`qk_obs_multiply_inplace`.

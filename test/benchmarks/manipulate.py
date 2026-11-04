@@ -4,20 +4,21 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=no-member,invalid-name,missing-docstring,no-name-in-module
-# pylint: disable=attribute-defined-outside-init,unsubscriptable-object
-# pylint: disable=unused-wildcard-import,wildcard-import,undefined-variable
 
 import os
 
 from qiskit import QuantumCircuit
+from qiskit.providers.fake_provider import GenericBackendV2
+from qiskit.compiler import transpile
+from qiskit.transpiler import CouplingMap
 from qiskit.circuit import pauli_twirl_2q_gates
+from qiskit.circuit.library import quantum_volume
 from qiskit.passmanager import PropertySet
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from .utils import multi_control_circuit
@@ -28,8 +29,14 @@ class TestCircuitManipulate:
         qasm_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qasm")
         self.qft_qasm = os.path.join(qasm_dir, "dtc_100_cx_12345.qasm")
         self.qft_qc = QuantumCircuit.from_qasm_file(self.qft_qasm)
-        self.qv_qasm = os.path.join(qasm_dir, "qv_N100_12345.qasm")
-        self.qv_qc = QuantumCircuit.from_qasm_file(self.qv_qasm)
+
+        qv_circuit = quantum_volume(100, seed=2025_12345)
+        qv_circuit.measure_all()
+        backend = GenericBackendV2(100, coupling_map=CouplingMap.from_line(100), seed=2025_12345)
+        self.qv_qc = transpile(
+            qv_circuit, backend, optimization_level=0, seed_transpiler=2025_12345
+        )
+
         self.dtc_qasm = os.path.join(qasm_dir, "dtc_100_cx_12345.qasm")
         self.dtc_qc = QuantumCircuit.from_qasm_file(self.dtc_qasm)
         self.translate = generate_preset_pass_manager(1, basis_gates=["rx", "ry", "rz", "cz"])

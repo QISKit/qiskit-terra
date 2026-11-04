@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed an issue with :func:`.qpy.load` not respecting the ``min_qpy_version``
+    `user config file <https://quantum.cloud.ibm.com/docs/guides/configure-qiskit-local>`__
+    option if the specified version was > 13.

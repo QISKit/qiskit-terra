@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -13,6 +13,7 @@
 use crate::classical::expr::{Expr, ExprKind, PyExpr};
 use crate::classical::types::Type;
 use crate::imports;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use pyo3::{IntoPyObjectExt, intern};
@@ -40,13 +41,20 @@ pub struct Unary {
 pub enum UnaryOp {
     BitNot = 1,
     LogicNot = 2,
+    Negate = 3,
 }
 
 unsafe impl ::bytemuck::CheckedBitPattern for UnaryOp {
     type Bits = u8;
 
     fn is_valid_bit_pattern(bits: &Self::Bits) -> bool {
-        *bits > 0 && *bits < 3
+        *bits > 0 && *bits < 4
+    }
+}
+
+impl UnaryOp {
+    pub fn try_from_u8(value: u8) -> Result<UnaryOp, bytemuck::checked::CheckedCastError> {
+        bytemuck::checked::try_cast::<u8, UnaryOp>(value)
     }
 }
 
@@ -84,7 +92,8 @@ impl<'a, 'py> FromPyObject<'a, 'py> for UnaryOp {
 
     fn extract(ob: Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
         let value = ob.getattr(intern!(ob.py(), "value"))?;
-        Ok(bytemuck::checked::cast(value.extract::<u8>()?))
+        bytemuck::checked::try_cast(value.extract::<u8>()?)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 }
 
@@ -106,7 +115,13 @@ impl PyUnaryOp {
 ///     op: The opcode describing which operation is being done.
 ///     operand: The operand of the operation.
 ///     type: The resolved type of the result.
-#[pyclass(eq, extends = PyExpr, name = "Unary", module = "qiskit._accelerate.circuit.classical.expr")]
+#[pyclass(
+    eq,
+    extends = PyExpr,
+    name = "Unary",
+    module = "qiskit._accelerate.circuit.classical.expr",
+    from_py_object
+)]
 #[derive(PartialEq, Clone, Debug)]
 pub struct PyUnary(Unary);
 
@@ -179,5 +194,15 @@ impl PyUnary {
             self.get_operand(py)?.bind(py).repr()?,
             self.get_type(py)?.bind(py).repr()?,
         ))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_unary_op_from_u8_invalid_input() {
+        assert!(UnaryOp::try_from_u8(123).is_err())
     }
 }

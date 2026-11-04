@@ -1,0 +1,7 @@
+---
+performance:
+  - The internal hashing algorithm used for Rust `indexmap <https://github.com/indexmap-rs/indexmap>`__ types
+    has been changed to use `foldhash <https://github.com/orlp/foldhash>`__ instead of the previously used
+    `ahash <https://github.com/tkaitchuck/aHash>`__ library. This has led up to speedups for some of the
+    functionality that heavily uses indexmap internally. See
+    `#15920 <https://github.com/Qiskit/qiskit/pull/15920>`__ for more details.

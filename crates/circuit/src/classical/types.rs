@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -30,7 +30,7 @@ pub enum Type {
     Bool,
     Duration,
     Float,
-    Uint(u16),
+    Uint(u32),
 }
 
 impl<'py> IntoPyObject<'py> for Type {
@@ -76,7 +76,8 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Type {
     subclass,
     frozen,
     name = "Type",
-    module = "qiskit._accelerate.circuit.classical.types"
+    module = "qiskit._accelerate.circuit.classical.types",
+    from_py_object
 )]
 #[derive(PartialEq, Clone, Copy, Debug, Hash)]
 struct PyType(TypeKind);
@@ -87,7 +88,7 @@ impl PyType {
     ///
     /// This is exactly equal to the Python type object that defines
     /// this type, that is ``t.kind is type(t)``, but is exposed like this to make it clear that
-    /// this a hashable enum-like discriminator you can rely on."""
+    /// this a hashable enum-like discriminator you can rely on.
     #[getter]
     fn get_kind(&self, py: Python) -> Py<PyAny> {
         match self.0 {
@@ -124,7 +125,15 @@ enum TypeKind {
 }
 
 /// The Boolean type.  This has exactly two values: ``True`` and ``False``.
-#[pyclass(eq, hash, extends = PyType, frozen, name = "Bool", module = "qiskit._accelerate.circuit.classical.types")]
+#[pyclass(
+    eq,
+    hash,
+    extends = PyType,
+    frozen,
+    name = "Bool",
+    module = "qiskit._accelerate.circuit.classical.types",
+    from_py_object
+)]
 #[derive(PartialEq, Clone, Copy, Debug, Hash)]
 struct PyBool;
 
@@ -149,7 +158,15 @@ impl PyBool {
 }
 
 /// A length of time, possibly negative.
-#[pyclass(eq, hash, extends = PyType, frozen, name = "Duration", module = "qiskit._accelerate.circuit.classical.types")]
+#[pyclass(
+    eq,
+    hash,
+    extends = PyType,
+    frozen,
+    name = "Duration",
+    module = "qiskit._accelerate.circuit.classical.types",
+    from_py_object
+)]
 #[derive(PartialEq, Clone, Copy, Debug, Hash)]
 struct PyDuration;
 
@@ -176,7 +193,15 @@ impl PyDuration {
 /// An IEEE-754 double-precision floating point number.
 ///
 /// In the future, this may also be used to represent other fixed-width floats.
-#[pyclass(eq, hash, extends = PyType, frozen, name = "Float", module = "qiskit._accelerate.circuit.classical.types")]
+#[pyclass(
+    eq,
+    hash,
+    extends = PyType,
+    frozen,
+    name = "Float",
+    module = "qiskit._accelerate.circuit.classical.types",
+    from_py_object
+)]
 #[derive(PartialEq, Clone, Copy, Debug, Hash)]
 struct PyFloat;
 
@@ -201,19 +226,27 @@ impl PyFloat {
 }
 
 /// An unsigned integer of fixed bit width.
-#[pyclass(eq, hash, extends = PyType, frozen, name = "Uint", module = "qiskit._accelerate.circuit.classical.types")]
+#[pyclass(
+    eq,
+    hash,
+    extends = PyType,
+    frozen,
+    name = "Uint",
+    module = "qiskit._accelerate.circuit.classical.types",
+    from_py_object
+)]
 #[derive(PartialEq, Clone, Copy, Debug, Hash)]
-struct PyUint(u16);
+struct PyUint(u32);
 
 #[pymethods]
 impl PyUint {
     #[new]
-    fn new(py: Python, width: u16) -> Py<Self> {
+    fn new(py: Python, width: u32) -> Py<Self> {
         Py::new(py, (PyUint(width), PyType(TypeKind::Uint))).unwrap()
     }
 
     #[getter]
-    fn get_width(&self) -> u16 {
+    fn get_width(&self) -> u32 {
         self.0
     }
 

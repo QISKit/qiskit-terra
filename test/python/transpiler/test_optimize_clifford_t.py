@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ from ddt import ddt, data
 from qiskit.circuit import QuantumCircuit
 from qiskit.transpiler.passes import SolovayKitaev, OptimizeCliffordT
 from qiskit.quantum_info import Operator
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @ddt
@@ -170,6 +170,50 @@ class TestOptimizeCliffordT(QiskitTestCase):
         expected.s(0)
         expected.ry(0.5, 0)
         expected.tdg(0)
+
+        self.assertEqual(optimized, expected)
+        self.assertEqual(Operator(qc), Operator(expected))
+
+    def test_reduces_clifford_gates(self):
+        """A simple test that the pass reduces the number
+        of Clifford gates even when the number of T-gates
+        remains the same.
+        """
+        qc = QuantumCircuit(1)
+        qc.s(0)
+        qc.t(0)
+        qc.s(0)
+
+        optimized = OptimizeCliffordT()(qc)
+
+        expected = QuantumCircuit(1)
+        expected.t(0)
+        expected.z(0)
+
+        self.assertEqual(optimized, expected)
+        self.assertEqual(Operator(qc), Operator(expected))
+
+    def test_reduces_clifford_gates_2(self):
+        """A simple test that the pass reduces the number
+        of Clifford gates even when the number of T-gates
+        remains the same.
+        """
+        qc = QuantumCircuit(1)
+        qc.s(0)
+        qc.h(0)
+        qc.sx(0)
+        qc.t(0)
+        qc.h(0)
+        qc.z(0)
+        qc.x(0)
+
+        optimized = OptimizeCliffordT()(qc)
+
+        expected = QuantumCircuit(1, global_phase=np.pi / 4)
+        expected.h(0)
+        expected.tdg(0)
+        expected.h(0)
+        expected.x(0)
 
         self.assertEqual(optimized, expected)
         self.assertEqual(Operator(qc), Operator(expected))

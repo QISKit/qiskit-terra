@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,7 +14,8 @@
 
 from __future__ import annotations
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+
+from qiskit.circuit import QuantumCircuit
 from qiskit._accelerate.synthesis.permutation import _synth_permutation_depth_lnn_kms
 
 
@@ -47,7 +48,7 @@ def synth_permutation_depth_lnn_kms(pattern: list[int] | np.ndarray[int]) -> Qua
     # In Qiskit, the permutation pattern [2, 4, 3, 0, 1] means that
     # the permutation that maps qubit 2 to position 0, 4 to 1, 3 to 2, 0 to 3, and 1 to 4.
     # In the permutation synthesis code below the notation is opposite:
-    # [2, 4, 3, 0, 1] means that 0 maps to 2, 1 to 3, 2 to 3, 3 to 0, and 4 to 1.
+    # [2, 4, 3, 0, 1] means that 0 maps to 2, 1 to 4, 2 to 3, 3 to 0, and 4 to 1.
     # This is why we invert the pattern.
     return QuantumCircuit._from_circuit_data(
         _synth_permutation_depth_lnn_kms(pattern), legacy_qubits=True

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,7 +21,6 @@ import typing
 from numbers import Number
 import numpy as np
 
-from qiskit import _numpy_compat
 from qiskit.circuit.gate import Gate
 from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit import QuantumRegister
@@ -107,7 +106,7 @@ class HamiltonianGate(Gate):
             ) from ex
         arr = scipy.linalg.expm(-1j * self.params[0] * time)
         dtype = complex if dtype is None else dtype
-        return np.array(arr, dtype=dtype, copy=_numpy_compat.COPY_ONLY_IF_NEEDED)
+        return np.array(arr, dtype=dtype, copy=None)
 
     def inverse(self, annotated: bool = False):
         """Return the adjoint of the unitary."""

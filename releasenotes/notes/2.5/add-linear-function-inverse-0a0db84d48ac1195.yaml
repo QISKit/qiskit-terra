@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Previously, calling ``inverse`` on a :class:`.LinearFunction` raised an error;
+    this is no longer the case.
+    See `#16184 <https://github.com/Qiskit/qiskit/issues/16184>`__.
+
+features_circuits:
+  - |
+    Added a :meth:`.LinearFunction.inverse` method that returns a 
+    :class:`.LinearFunction` representing the inverse transformation.

@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,7 @@ use smallvec::smallvec;
 use crate::commutation_checker::{CommutationLibrary, CommutationLibraryEntry};
 use qiskit_circuit::Qubit;
 
-static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
+static SIMPLE_COMMUTE: [([&str; 2], bool); 348] = [
     (["id", "id"], true),
     (["id", "sx"], true),
     (["id", "cx"], true),
@@ -38,6 +38,9 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["id", "iswap"], true),
     (["id", "sxdg"], true),
     (["id", "tdg"], true),
+    (["id", "crx"], true),
+    (["id", "cry"], true),
+    (["id", "crz"], true),
     (["id", "rxx"], true),
     (["id", "ryy"], true),
     (["id", "rzz"], true),
@@ -58,6 +61,8 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["sx", "iswap"], false),
     (["sx", "sxdg"], true),
     (["sx", "tdg"], false),
+    (["sx", "cry"], false),
+    (["sx", "crz"], false),
     (["sx", "rxx"], true),
     (["sx", "ryy"], false),
     (["sx", "rzz"], false),
@@ -81,6 +86,8 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["x", "tdg"], false),
     (["x", "y"], false),
     (["x", "z"], false),
+    (["x", "cry"], false),
+    (["x", "crz"], false),
     (["x", "rxx"], true),
     (["x", "ryy"], false),
     (["x", "rzz"], false),
@@ -122,6 +129,7 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["cz", "ccz"], true),
     (["cz", "ecr"], false),
     (["cz", "csdg"], true),
+    (["cz", "crz"], true),
     (["cz", "rxx"], false),
     (["cz", "ryy"], false),
     (["cz", "rzz"], true),
@@ -153,6 +161,9 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["h", "tdg"], false),
     (["h", "y"], false),
     (["h", "z"], false),
+    (["h", "crx"], false),
+    (["h", "cry"], false),
+    (["h", "crz"], false),
     (["h", "rxx"], false),
     (["h", "ryy"], false),
     (["h", "rzz"], false),
@@ -184,6 +195,7 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["s", "tdg"], true),
     (["s", "y"], false),
     (["s", "z"], true),
+    (["s", "crz"], true),
     (["s", "rxx"], false),
     (["s", "ryy"], false),
     (["s", "rzz"], true),
@@ -198,6 +210,7 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["sdg", "iswap"], false),
     (["sdg", "sxdg"], false),
     (["sdg", "tdg"], true),
+    (["sdg", "crz"], true),
     (["sdg", "rxx"], false),
     (["sdg", "ryy"], false),
     (["sdg", "rzz"], true),
@@ -207,6 +220,7 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["cs", "ecr"], false),
     (["cs", "cs"], true),
     (["cs", "csdg"], true),
+    (["cs", "crz"], true),
     (["cs", "rxx"], false),
     (["cs", "ryy"], false),
     (["cs", "rzz"], true),
@@ -227,6 +241,8 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["sxdg", "swap"], false),
     (["sxdg", "iswap"], false),
     (["sxdg", "sxdg"], true),
+    (["sxdg", "cry"], false),
+    (["sxdg", "crz"], false),
     (["sxdg", "rxx"], true),
     (["sxdg", "ryy"], false),
     (["sxdg", "rzz"], false),
@@ -247,6 +263,7 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["t", "tdg"], true),
     (["t", "y"], false),
     (["t", "z"], true),
+    (["t", "crz"], true),
     (["t", "rxx"], false),
     (["t", "ryy"], false),
     (["t", "rzz"], true),
@@ -260,6 +277,7 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["tdg", "iswap"], false),
     (["tdg", "sxdg"], false),
     (["tdg", "tdg"], true),
+    (["tdg", "crz"], true),
     (["tdg", "rxx"], false),
     (["tdg", "ryy"], false),
     (["tdg", "rzz"], true),
@@ -286,6 +304,8 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["y", "tdg"], false),
     (["y", "y"], true),
     (["y", "z"], false),
+    (["y", "crx"], false),
+    (["y", "crz"], false),
     (["y", "rxx"], false),
     (["y", "ryy"], true),
     (["y", "rzz"], false),
@@ -304,9 +324,29 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
     (["z", "sxdg"], false),
     (["z", "tdg"], true),
     (["z", "z"], true),
+    (["z", "crz"], true),
     (["z", "rxx"], false),
     (["z", "ryy"], false),
     (["z", "rzz"], true),
+    (["crx", "dcx"], false),
+    (["crx", "swap"], false),
+    (["crx", "iswap"], false),
+    (["crx", "ryy"], false),
+    (["cry", "dcx"], false),
+    (["cry", "ecr"], false),
+    (["cry", "swap"], false),
+    (["cry", "iswap"], false),
+    (["cry", "rxx"], false),
+    (["crz", "dcx"], false),
+    (["crz", "ccz"], true),
+    (["crz", "ecr"], false),
+    (["crz", "csdg"], true),
+    (["crz", "swap"], false),
+    (["crz", "iswap"], false),
+    (["crz", "crz"], true),
+    (["crz", "rxx"], false),
+    (["crz", "ryy"], false),
+    (["crz", "rzz"], true),
     (["rxx", "ccz"], false),
     (["rxx", "rccx"], false),
     (["rxx", "rcccx"], false),
@@ -327,7 +367,7 @@ static SIMPLE_COMMUTE: [([&str; 2], bool); 308] = [
 ];
 
 pub fn get_commutation_library() -> CommutationLibrary {
-    let mut commutation_library = CommutationLibrary::with_capacity(528);
+    let mut commutation_library = CommutationLibrary::with_capacity(630);
     for (key, value) in SIMPLE_COMMUTE {
         commutation_library.add_entry(key, CommutationLibraryEntry::Commutes(value));
     }
@@ -391,6 +431,16 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .into_iter()
     .collect();
     commutation_library.add_entry(
+        ["sx", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
         ["sx", "rzx"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
@@ -445,6 +495,16 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .collect();
     commutation_library.add_entry(
         ["x", "ecr"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["x", "crx"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
     let commutation_map = [
@@ -675,6 +735,48 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .collect();
     commutation_library.add_entry(
         ["cx", "csdg"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cx", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cx", "cry"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cx", "crz"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
     let commutation_map = [
@@ -3200,6 +3302,48 @@ pub fn get_commutation_library() -> CommutationLibrary {
         (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
         (smallvec![Some(Qubit(0)), None,], true),
         (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["ch", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["ch", "cry"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["ch", "crz"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
         (smallvec![Some(Qubit(1)), None,], true),
         (smallvec![None, Some(Qubit(0)),], false),
         (smallvec![None, Some(Qubit(1)),], false),
@@ -4001,6 +4145,48 @@ pub fn get_commutation_library() -> CommutationLibrary {
     );
     let commutation_map = [
         (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cy", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cy", "cry"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cy", "crz"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
         (smallvec![Some(Qubit(0)), None,], false),
         (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
         (smallvec![Some(Qubit(1)), None,], false),
@@ -4197,6 +4383,34 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .collect();
     commutation_library.add_entry(
         ["cz", "iswap"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cz", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cz", "cry"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
     let commutation_map = [
@@ -6116,6 +6330,26 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .into_iter()
     .collect();
     commutation_library.add_entry(
+        ["s", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["s", "cry"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
         ["s", "rzx"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
@@ -6214,6 +6448,26 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .collect();
     commutation_library.add_entry(
         ["sdg", "rcccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["sdg", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["sdg", "cry"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
     let commutation_map = [
@@ -6410,6 +6664,34 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .collect();
     commutation_library.add_entry(
         ["cs", "iswap"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cs", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cs", "cry"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
     let commutation_map = [
@@ -6904,6 +7186,16 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .into_iter()
     .collect();
     commutation_library.add_entry(
+        ["sxdg", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
         ["sxdg", "rzx"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
@@ -7002,6 +7294,26 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .collect();
     commutation_library.add_entry(
         ["t", "rcccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["t", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["t", "cry"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
     let commutation_map = [
@@ -7118,6 +7430,26 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .into_iter()
     .collect();
     commutation_library.add_entry(
+        ["tdg", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["tdg", "cry"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
         ["tdg", "rzx"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
@@ -7129,6 +7461,16 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .collect();
     commutation_library.add_entry(
         ["y", "cy"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["y", "cry"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
     let commutation_map = [
@@ -7235,7 +7577,667 @@ pub fn get_commutation_library() -> CommutationLibrary {
     .into_iter()
     .collect();
     commutation_library.add_entry(
+        ["z", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["z", "cry"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
         ["z", "rzx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(3)),], true),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(3)),], true),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(3)),], true),
+        (smallvec![Some(Qubit(2)), None,], true),
+        (smallvec![Some(Qubit(3)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(3)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+        (smallvec![None, Some(Qubit(3)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "c3sx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], true),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], true),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "ccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "cswap"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "csx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "ccz"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "rccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(2)), None,], true),
+        (smallvec![Some(Qubit(3)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(3)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+        (smallvec![None, Some(Qubit(3)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "rcccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "ecr"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "csdg"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "crx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "cry"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "crz"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "rxx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "rzz"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crx", "rzx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(2)), None,], true),
+        (smallvec![Some(Qubit(3)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(3)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+        (smallvec![None, Some(Qubit(3)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "c3sx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "ccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "cswap"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "csx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "ccz"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], true),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "rccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(3)),], true),
+        (smallvec![Some(Qubit(2)), None,], true),
+        (smallvec![Some(Qubit(3)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(3)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+        (smallvec![None, Some(Qubit(3)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "rcccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "csdg"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "cry"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "crz"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], true),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "ryy"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "rzz"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], false),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["cry", "rzx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], true),
+        (smallvec![Some(Qubit(0)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(2)), None,], true),
+        (smallvec![Some(Qubit(3)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(3)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], true),
+        (smallvec![None, Some(Qubit(2)),], true),
+        (smallvec![None, Some(Qubit(3)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crz", "c3sx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], true),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crz", "ccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], false),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crz", "cswap"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crz", "csx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(2)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], true),
+        (smallvec![None, Some(Qubit(2)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crz", "rccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(0)), Some(Qubit(2)),], true),
+        (smallvec![Some(Qubit(0)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(2)),], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(1)), None,], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(0)),], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(1)),], true),
+        (smallvec![Some(Qubit(2)), Some(Qubit(3)),], false),
+        (smallvec![Some(Qubit(2)), None,], true),
+        (smallvec![Some(Qubit(3)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(3)), Some(Qubit(2)),], false),
+        (smallvec![Some(Qubit(3)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], true),
+        (smallvec![None, Some(Qubit(2)),], true),
+        (smallvec![None, Some(Qubit(3)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crz", "rcccx"],
+        CommutationLibraryEntry::QubitMapping(commutation_map),
+    );
+    let commutation_map = [
+        (smallvec![Some(Qubit(0)), Some(Qubit(1)),], false),
+        (smallvec![Some(Qubit(0)), None,], true),
+        (smallvec![Some(Qubit(1)), Some(Qubit(0)),], false),
+        (smallvec![Some(Qubit(1)), None,], false),
+        (smallvec![None, Some(Qubit(0)),], true),
+        (smallvec![None, Some(Qubit(1)),], false),
+    ]
+    .into_iter()
+    .collect();
+    commutation_library.add_entry(
+        ["crz", "rzx"],
         CommutationLibraryEntry::QubitMapping(commutation_map),
     );
     let commutation_map = [

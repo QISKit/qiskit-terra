@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -58,7 +58,7 @@ class SabreSwap(TransformationPass):
 
     This transpiler pass adds onto the SABRE algorithm in that it will run
     multiple trials of the algorithm with different seeds. The best output,
-    determined by the trial with the least amount of SWAPed inserted, will
+    determined by the trial with the least amount of SWAPs inserted, will
     be selected from the random trials.
 
     **References:**
@@ -114,7 +114,7 @@ class SabreSwap(TransformationPass):
             Second is the basic cost but now evaluated for the
             extended set as well (i.e. :math:`|E|` number of upcoming successors to gates in
             front_layer F). This is weighted by some amount EXTENDED_SET_WEIGHT (W) to
-            signify that upcoming gates are less important that the front_layer.
+            signify that upcoming gates are less important than the front_layer.
 
             .. math::
 
@@ -159,12 +159,12 @@ class SabreSwap(TransformationPass):
         self.fake_run = fake_run
 
     @functools.cached_property
-    def dist_matrix(self):  # pylint: disable=missing-function-docstring
+    def dist_matrix(self):
         # This property is not intended to be public API, it just keeps backwards compatibility.
         return None if self._routing_target is None else self._routing_target.distance_matrix()
 
     @functools.cached_property
-    def coupling_map(self):  # pylint: disable=missing-function-docstring
+    def coupling_map(self):
         # This property is not intended to be public API, it just keeps backwards compatibility.
         return (
             None
@@ -217,13 +217,13 @@ class SabreSwap(TransformationPass):
             heuristic = (
                 Heuristic(attempt_limit=10 * num_dag_qubits)
                 .with_basic(1.0, SetScaling.Constant)
-                .with_lookahead(0.5, 20, SetScaling.Size)
+                .with_lookahead([0.5 / num_coupling_qubits], SetScaling.Constant)
             )
         elif self.heuristic == "decay":
             heuristic = (
                 Heuristic(attempt_limit=10 * num_dag_qubits)
                 .with_basic(1.0, SetScaling.Constant)
-                .with_lookahead(0.5, 20, SetScaling.Size)
+                .with_lookahead([0.5 / num_coupling_qubits], SetScaling.Constant)
                 .with_decay(0.001, 5)
             )
         else:

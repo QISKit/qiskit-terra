@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -18,7 +18,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from collections.abc import Iterable, Mapping as _Mapping
-from typing import Union, Mapping, overload, TYPE_CHECKING
+from typing import overload, TYPE_CHECKING
+from collections.abc import Mapping
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -36,19 +37,13 @@ if TYPE_CHECKING:
 # Public API classes
 __all__ = ["ObservableLike", "ObservablesArrayLike"]
 
-IndexType = Union[int, slice, None]  # pylint: disable=used-before-assignment
+IndexType = int | slice | None
 
-ObservableLike = Union[
-    str,
-    Pauli,
-    SparsePauliOp,
-    SparseObservable,
-    Mapping[Union[str, Pauli], float],
-]
+ObservableLike = str | Pauli | SparsePauliOp | SparseObservable | Mapping[str | Pauli, float]
 """Types that can be natively used to construct a Hermitian Estimator observable."""
 
 
-ObservablesArrayLike = Union[ObservableLike, ArrayLike]
+ObservablesArrayLike = ObservableLike | ArrayLike
 """Types that can be natively converted to an array of Hermitian Estimator observables."""
 
 
@@ -156,9 +151,9 @@ class ObservablesArray(ShapedMixin):
         """
         return self.__array__().tolist()
 
-    def __array__(self, dtype=None, copy=None) -> np.ndarray:  # pylint: disable=unused-argument
+    def __array__(self, dtype=None, copy=None) -> np.ndarray:
         """Convert to a Numpy.ndarray with elements of type dict."""
-        if dtype is None or dtype == object:
+        if dtype is None or dtype is object:
             tmp_result = self.__getitem__(tuple(slice(None) for _ in self._array.shape))
             if len(self._array.shape) == 0:
                 result = np.ndarray(shape=self._array.shape, dtype=dict)

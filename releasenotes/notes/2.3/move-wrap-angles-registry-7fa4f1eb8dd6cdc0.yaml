@@ -1,0 +1,13 @@
+---
+upgrade_transpiler:
+  - |
+    The preferred location for the default registry for the :class:`.WrapAngles` transpiler pass is
+    now :attr:`.WrapAngles.DEFAULT_REGISTRY`.  The previous deeply nested
+    :data:`.WRAP_ANGLES_REGISTRY` path will continue to work for backwards compatibility, but we
+    encourage downstream packages to use the new location.  The previous path was an oversight in
+    Qiskit 2.2, and traverse modules that were never intended to be part of the public API.
+features_transpiler:
+  - |
+    Added :attr:`.WrapAngles.DEFAULT_REGISTRY` containing the default registry
+    for :class:`.WrapAngles`.  This new attribute supersedes the previous
+    :data:`.WRAP_ANGLES_REGISTRY`, see the upgrade notes for more details.

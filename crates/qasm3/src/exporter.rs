@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -14,18 +14,16 @@ use std::sync::Arc;
 
 use crate::ast::{
     Alias, Barrier, BitArray, Break, ClassicalDeclaration, ClassicalType, Continue, Delay,
-    Designator, DurationLiteral, DurationUnit, Expression, Float, GateCall, Header, IODeclaration,
-    IOModifier, Identifier, IdentifierOrSubscripted, Include, IndexSet, IntegerLiteral, Node,
-    Parameter, Program, QuantumBlock, QuantumDeclaration, QuantumGateDefinition,
-    QuantumGateSignature, QuantumInstruction, QuantumMeasurement, QuantumMeasurementAssignment,
-    Reset, Statement, SubscriptedIdentifier, Version,
+    Designator, DurationLiteral, Expression, Float, GateCall, Header, IODeclaration, IOModifier,
+    Identifier, IdentifierOrSubscripted, Include, IndexSet, IntegerLiteral, Node, Parameter,
+    Program, QuantumBlock, QuantumDeclaration, QuantumGateDefinition, QuantumGateSignature,
+    QuantumInstruction, QuantumMeasurement, QuantumMeasurementAssignment, Reset, Statement,
+    SubscriptedIdentifier, Version,
 };
 use std::io::Write;
 
 use crate::printer::BasicPrinter;
 use hashbrown::{HashMap, HashSet};
-use indexmap::IndexMap;
-use pyo3::Python;
 use pyo3::prelude::*;
 use qiskit_circuit::bit::{
     ClassicalRegister, QuantumRegister, Register, ShareableClbit, ShareableQubit,
@@ -36,6 +34,7 @@ use qiskit_circuit::operations::{Operation, Param};
 use qiskit_circuit::packed_instruction::PackedInstruction;
 use qiskit_circuit::parameter::parameter_expression::ParameterExpression;
 use qiskit_circuit::parameter::symbol_expr;
+use qiskit_util::IndexMap;
 use thiserror::Error;
 
 use lazy_static::lazy_static;
@@ -263,7 +262,7 @@ impl SymbolTable {
             symbols,
             bitinfo,
             reginfo,
-            gates: IndexMap::new(),
+            gates: IndexMap::default(),
             stdgates: HashSet::new(),
             _counter: Counter::new(),
         }
@@ -738,7 +737,7 @@ impl<'a> QASM3Builder {
         self.register_basis_gates();
         let header = self.build_header();
 
-        self.hoist_global_params()?;
+        self.hoist_global_params();
         let classical_decls = self.hoist_classical_bits()?;
         let qubit_decls = self.build_qubit_decls()?;
         let main_stmts = self.build_top_level_stmts()?;
@@ -791,28 +790,18 @@ impl<'a> QASM3Builder {
         }
     }
 
-    fn hoist_global_params(&mut self) -> ExporterResult<()> {
-        Python::attach(|py| {
-            for param in self.circuit_scope.circuit_data.get_parameters(py)? {
-                let raw_name: String = match param.getattr("name") {
-                    Ok(attr) => match attr.extract() {
-                        Ok(name) => name,
-                        Err(err) => return Err(QASM3ExporterError::PyErr(err)),
-                    },
-                    Err(err) => return Err(QASM3ExporterError::PyErr(err)),
-                };
-                let identifier = Identifier {
-                    string: raw_name.clone(),
-                };
-                let _ = self.symbol_table.bind(&raw_name);
-                self.global_io_decls.push(IODeclaration {
-                    modifier: IOModifier::Input,
-                    type_: ClassicalType::Float(Float::Double),
-                    identifier,
-                });
-            }
-            Ok(())
-        })
+    fn hoist_global_params(&mut self) {
+        for param in self.circuit_scope.circuit_data.parameters() {
+            let identifier = Identifier {
+                string: param.name().to_string(),
+            };
+            let _ = self.symbol_table.bind(param.name());
+            self.global_io_decls.push(IODeclaration {
+                modifier: IOModifier::Input,
+                type_: ClassicalType::Float(Float::Double),
+                identifier,
+            });
+        }
     }
 
     fn hoist_classical_bits(&mut self) -> ExporterResult<Vec<Statement>> {
@@ -1186,15 +1175,18 @@ impl<'a> QASM3Builder {
             ));
         };
         let param = &instr.params_view()[0];
-        let duration: f64 = Python::attach(|py| match param {
-            Param::Float(val) => *val,
+
+        let duration: DurationLiteral = match param {
+            Param::Float(val) => float_to_duration_literal(*val, delay_unit)?,
+            Param::Int(val) => int_to_duration_literal(*val, delay_unit)?,
             Param::ParameterExpression(p) => match p.try_to_value(true) {
-                Ok(symbol_expr::Value::Real(val)) => val,
+                Ok(symbol_expr::Value::Real(val)) => float_to_duration_literal(val, delay_unit)?,
+                Ok(symbol_expr::Value::Int(val)) => int_to_duration_literal(val, delay_unit)?,
                 _ => {
                     panic!("Failed to parse parameter value")
                 }
             },
-            Param::Obj(obj) => {
+            Param::Obj(obj) => Python::attach(|py| -> Result<DurationLiteral, _> {
                 let py_obj = obj.bind(py);
                 let py_str = py_obj.str().expect("Failed to call str() on Parameter");
                 let name = py_str
@@ -1202,36 +1194,10 @@ impl<'a> QASM3Builder {
                     .expect("Failed to convert PyString to &str")
                     .to_string();
                 match name.parse::<f64>() {
-                    Ok(val) => val,
+                    Ok(val) => float_to_duration_literal(val, delay_unit),
                     Err(_) => panic!("Failed to parse parameter value"),
                 }
-            }
-        });
-
-        let mut map = HashMap::new();
-        map.insert(DelayUnit::NS, DurationUnit::Nanosecond);
-        map.insert(DelayUnit::US, DurationUnit::Microsecond);
-        map.insert(DelayUnit::MS, DurationUnit::Millisecond);
-        map.insert(DelayUnit::S, DurationUnit::Second);
-        map.insert(DelayUnit::DT, DurationUnit::Sample);
-
-        let duration_literal: DurationLiteral = match map.get(&delay_unit) {
-            Some(found) => DurationLiteral {
-                value: duration,
-                unit: found.clone(),
-            },
-            None => {
-                if delay_unit == DelayUnit::PS {
-                    DurationLiteral {
-                        value: duration * 1000.0,
-                        unit: DurationUnit::Nanosecond,
-                    }
-                } else {
-                    return Err(QASM3ExporterError::Error(format!(
-                        "Unknown delay unit: {delay_unit}"
-                    )));
-                }
-            }
+            })?,
         };
 
         let mut qubits = Vec::new();
@@ -1248,10 +1214,7 @@ impl<'a> QASM3Builder {
             ))?;
             qubits.push(id.to_owned());
         }
-        Ok(Delay {
-            duration: duration_literal,
-            qubits,
-        })
+        Ok(Delay { duration, qubits })
     }
 
     fn build_gate_call(&mut self, instr: &PackedInstruction) -> ExporterResult<GateCall> {
@@ -1265,22 +1228,24 @@ impl<'a> QASM3Builder {
             self.define_gate(instr)?;
         }
         let params = if self.disable_constants {
-            Python::attach(|_py| {
-                instr
-                    .params_view()
-                    .iter()
-                    .map(|param| match param {
-                        Param::Float(val) => Expression::Parameter(Parameter {
-                            obj: val.to_string(),
-                        }),
-                        Param::ParameterExpression(p) => {
-                            let name = p.to_string();
-                            Expression::Parameter(Parameter { obj: name })
-                        }
-                        Param::Obj(_) => panic!("Objects not supported yet"),
-                    })
-                    .collect::<Vec<_>>()
-            })
+            instr
+                .params_view()
+                .iter()
+                .map(|param| match param {
+                    Param::Float(val) => Expression::Parameter(Parameter {
+                        obj: val.to_string(),
+                    }),
+                    Param::ParameterExpression(p) => {
+                        let name = p.to_string();
+                        Expression::Parameter(Parameter { obj: name })
+                    }
+                    Param::Obj(_) => panic!("Objects not supported yet"),
+                    Param::Int(i) => {
+                        let name = i.to_string();
+                        Expression::Parameter(Parameter { obj: name })
+                    }
+                })
+                .collect::<Vec<_>>()
         } else {
             return Err(QASM3ExporterError::Error(
                 "Constant parameters not supported yet".to_string(),
@@ -1317,9 +1282,8 @@ impl<'a> QASM3Builder {
             .map(|i| {
                 let name = format!("{}_{}", self._gate_param_prefix, i);
                 // TODO this need to be achievable more easily
-                let symbol = symbol_expr::Symbol::new(name.as_str(), None, None);
-                let symbol_expr = symbol_expr::SymbolExpr::Symbol(Arc::new(symbol));
-                let expr = ParameterExpression::from_symbol_expr(symbol_expr);
+                let symbol = symbol_expr::Symbol::standalone(name, None);
+                let expr = ParameterExpression::from_symbol(symbol);
                 Param::ParameterExpression(Arc::new(expr))
             })
             .collect();
@@ -1381,5 +1345,37 @@ impl<'a> QASM3Builder {
                 operation.name()
             )))
         }
+    }
+}
+
+fn float_to_duration_literal(
+    val: f64,
+    unit: DelayUnit,
+) -> Result<DurationLiteral, QASM3ExporterError> {
+    match DurationLiteral::try_from_float(unit, val) {
+        Ok(literal) => Ok(literal),
+        Err(incorrect_unit) => Err(QASM3ExporterError::Error(format!(
+            "The Delay instruction has incorrect units: Floating point '{val}' cannot be used for '{}'.",
+            incorrect_unit
+        ))),
+    }
+}
+
+fn int_to_duration_literal(
+    val: i64,
+    unit: DelayUnit,
+) -> Result<DurationLiteral, QASM3ExporterError> {
+    // Any param with an integer value should only be reserved for DT
+    let val: u64 = val.try_into().map_err(|_| {
+        QASM3ExporterError::Error(format!(
+            "The Delay instruction found a negative duration: '{val}'."
+        ))
+    })?;
+    match unit {
+        DelayUnit::DT => Ok(DurationLiteral::from(val)),
+        _ => Err(QASM3ExporterError::Error(format!(
+            "The Delay instruction has incorrect units: Integer '{val}' cannot be used for '{}'.",
+            unit
+        ))),
     }
 }

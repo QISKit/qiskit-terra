@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -61,6 +61,14 @@ class SubstitutionConfig:
 class TemplateSubstitution:
     """
     Class to run the substitution algorithm from the list of maximal matches.
+
+    .. warning::
+
+        This pass internally relies on using SymPy and will pass strings from the
+        :class:`.DAGCircuit` the pass is run on to SymPy. This is inherently unsafe as SymPy
+        heavily relies on Python's :func:`.eval` function for the processing of strings. This
+        pass should not be used with untrusted input.
+
     """
 
     def __init__(self, max_matches, circuit_dag_dep, template_dag_dep, user_cost_dict=None):
@@ -324,7 +332,7 @@ class TemplateSubstitution:
             if template is None or self._incr_num_parameters(template):
                 continue
 
-            template_list = range(0, self.template_dag_dep.size())
+            template_list = range(self.template_dag_dep.size())
             template_complement = list(set(template_list) - set(template_sublist))
 
             # If the match obey the rule then it is added to the list.
@@ -361,7 +369,7 @@ class TemplateSubstitution:
             circuit_list = circuit_list + elem.circuit_config + elem.pred_block
 
         # Unmatched gates that are not predecessors of any group of matches.
-        self.unmatched_list = sorted(set(range(0, self.circuit_dag_dep.size())) - set(circuit_list))
+        self.unmatched_list = sorted(set(range(self.circuit_dag_dep.size())) - set(circuit_list))
 
     def run_dag_opt(self):
         """
@@ -372,6 +380,7 @@ class TemplateSubstitution:
         dag_dep_opt = DAGDependency()
 
         dag_dep_opt.name = self.circuit_dag_dep.name
+        dag_dep_opt.global_phase = self.circuit_dag_dep.global_phase
 
         qregs = list(self.circuit_dag_dep.qregs.values())
         cregs = list(self.circuit_dag_dep.cregs.values())
@@ -427,6 +436,9 @@ class TemplateSubstitution:
                     node = group.template_dag_dep.get_node(index)
                     inst = node.op.copy()
                     dag_dep_opt.add_op_node(inst.inverse(), qargs, cargs)
+
+                # Update global phase to account for the template's phase.
+                dag_dep_opt.global_phase -= group.template_dag_dep.global_phase
 
             # Add the unmatched gates.
             for node_id in self.unmatched_list:
@@ -496,9 +508,6 @@ class TemplateSubstitution:
                 parameter constraints, returns None.
         """
         import sympy as sym
-
-        # Our native form is sympy, so we don't need to do anything.
-        to_native_symbolic = lambda x: x
 
         circuit_params, template_params = [], []
         # Set of all parameter names that are present in the circuits to be optimized.
@@ -590,7 +599,7 @@ class TemplateSubstitution:
             return None
         # If there's multiple solutions, arbitrarily pick the first one.
         sol = {
-            param.name: ParameterExpression(circ_dict, str(to_native_symbolic(expr)))
+            param.name: ParameterExpression(circ_dict, str(expr))
             for param, expr in sym_sol[0].items()
         }
         fake_bind = {key: sol[key.name] for key in temp_symbols}

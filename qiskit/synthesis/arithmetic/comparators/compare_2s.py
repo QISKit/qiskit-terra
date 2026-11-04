@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,8 +13,9 @@
 """Integer comparator based on 2s complement."""
 
 import math
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit.library.boolean_logic.quantum_or import OrGate
+
+from qiskit.circuit import QuantumCircuit
+from qiskit.circuit.library import OrGate
 
 
 def synth_integer_comparator_2s(
@@ -60,13 +61,12 @@ def synth_integer_comparator_2s(
                         circuit.append(OrGate(2), [qr_state[i], qr_ancilla[i - 1], qr_ancilla[i]])
                     else:
                         circuit.ccx(qr_state[i], qr_ancilla[i - 1], qr_ancilla[i])
+                elif twos[i] == 1:
+                    # OR needs the result argument as qubit not register, thus
+                    # access the index [0]
+                    circuit.append(OrGate(2), [qr_state[i], qr_ancilla[i - 1], q_compare])
                 else:
-                    if twos[i] == 1:
-                        # OR needs the result argument as qubit not register, thus
-                        # access the index [0]
-                        circuit.append(OrGate(2), [qr_state[i], qr_ancilla[i - 1], q_compare])
-                    else:
-                        circuit.ccx(qr_state[i], qr_ancilla[i - 1], q_compare)
+                    circuit.ccx(qr_state[i], qr_ancilla[i - 1], q_compare)
 
             # flip result bit if geq flag is false
             if not geq:
@@ -77,11 +77,10 @@ def synth_integer_comparator_2s(
                 if i == 0:
                     if twos[i] == 1:
                         circuit.cx(qr_state[i], qr_ancilla[i])
+                elif twos[i] == 1:
+                    circuit.append(OrGate(2), [qr_state[i], qr_ancilla[i - 1], qr_ancilla[i]])
                 else:
-                    if twos[i] == 1:
-                        circuit.append(OrGate(2), [qr_state[i], qr_ancilla[i - 1], qr_ancilla[i]])
-                    else:
-                        circuit.ccx(qr_state[i], qr_ancilla[i - 1], qr_ancilla[i])
+                    circuit.ccx(qr_state[i], qr_ancilla[i - 1], qr_ancilla[i])
         else:
 
             # num_state_qubits == 1 and value == 1:
@@ -91,9 +90,8 @@ def synth_integer_comparator_2s(
             if not geq:
                 circuit.x(q_compare)
 
-    else:
-        if not geq:  # otherwise the condition is never satisfied
-            circuit.x(q_compare)
+    elif not geq:  # otherwise the condition is never satisfied
+        circuit.x(q_compare)
 
     return circuit
 

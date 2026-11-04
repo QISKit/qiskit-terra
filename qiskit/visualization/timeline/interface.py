@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ The drawer canvas object is internally initialized from the input data and
 the configured canvas is passed to one of the plotter APIs to generate a visualization data.
 """
 
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any
 
 from qiskit import circuit
 from qiskit.transpiler.target import Target
@@ -33,21 +33,21 @@ from qiskit.utils import deprecate_arg
 @deprecate_arg("show_barriers", new_alias="plot_barriers", since="1.1.0", pending=True)
 def draw(
     program: circuit.QuantumCircuit,
-    style: Optional[Dict[str, Any]] = None,
-    time_range: Tuple[int, int] = None,
-    disable_bits: List[types.Bits] = None,
-    show_clbits: Optional[bool] = None,
-    idle_wires: Optional[bool] = None,
-    plot_barriers: Optional[bool] = None,
-    show_delays: Optional[bool] = None,
+    style: dict[str, Any] | None = None,
+    time_range: tuple[int, int] | None = None,
+    disable_bits: list[types.Bits] | None = None,
+    show_clbits: bool | None = None,
+    idle_wires: bool | None = None,
+    plot_barriers: bool | None = None,
+    show_delays: bool | None = None,
     show_labels: bool = True,
-    plotter: Optional[str] = types.Plotter.MPL.value,
-    axis: Optional[Any] = None,
-    filename: Optional[str] = None,
-    target: Optional[Target] = None,
+    plotter: str | None = types.Plotter.MPL.value,
+    axis: Any | None = None,
+    filename: str | None = None,
+    target: Target | None = None,
     *,
-    show_idle: Optional[bool] = None,
-    show_barriers: Optional[bool] = None,
+    show_idle: bool | None = None,
+    show_barriers: bool | None = None,
 ):
     r"""Generate visualization data for scheduled circuit programs.
 
@@ -119,7 +119,7 @@ def draw(
         formatter.margin.top: Margin from the top boundary of the figure canvas to
             the zero line of the first time slot (default `0.5`).
         formatter.margin.bottom: Margin from the bottom boundary of the figure canvas to
-            the zero lien of the last time slot (default `0.5`).
+            the zero line of the last time slot (default `0.5`).
         formatter.margin.left_percent:  Margin from the left boundary of the figure canvas to
             the left limit of the horizontal axis. The value is in units of percentage of
             the whole program duration. If the duration is 100 and the value of 0.5 is set,

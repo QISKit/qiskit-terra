@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed :func:`.random_clifford_circuit` to produce deterministic results across multiple runs given the same ``seed``.
+
+    Fixes `#16138 <https://github.com/Qiskit/qiskit/issues/16138>`__.
+

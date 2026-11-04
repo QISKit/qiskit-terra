@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=missing-docstring
 
 import os
 import configparser as cp
@@ -19,7 +18,7 @@ from unittest import mock
 
 from qiskit import exceptions
 from qiskit import user_config
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestUserConfig(QiskitTestCase):
@@ -182,6 +181,7 @@ class TestUserConfig(QiskitTestCase):
         suppress_packaging_warnings = true
         parallel = false
         num_processes = 15
+        transpiler_seed = 42
         """
         self.addCleanup(os.remove, self.file_path)
         with open(self.file_path, "w") as file:
@@ -200,6 +200,7 @@ class TestUserConfig(QiskitTestCase):
                 "transpile_optimization_level": 3,
                 "num_processes": 15,
                 "parallel_enabled": False,
+                "transpiler_seed": 42,
             },
             config.settings,
         )
@@ -216,6 +217,7 @@ class TestUserConfig(QiskitTestCase):
         user_config.set_config("parallel", "false", file_path=self.file_path)
         user_config.set_config("num_processes", "15", file_path=self.file_path)
         user_config.set_config("min_qpy_version", "10", file_path=self.file_path)
+        user_config.set_config("transpiler_seed", "42", file_path=self.file_path)
 
         config_settings = None
         with mock.patch.dict(os.environ, {"QISKIT_SETTINGS": self.file_path}, clear=True):
@@ -232,6 +234,7 @@ class TestUserConfig(QiskitTestCase):
                 "num_processes": 15,
                 "parallel_enabled": False,
                 "min_qpy_version": 10,
+                "transpiler_seed": 42,
             },
             config_settings,
         )
@@ -279,7 +282,7 @@ class TestUserConfig(QiskitTestCase):
         """Test that empty min_qpy_version is treated as wrong."""
         test_config = """
         [default]
-        min_qpy_version = 
+        min_qpy_version =
         """
         self.addCleanup(os.remove, self.file_path)
         with open(self.file_path, "w") as file:
@@ -319,6 +322,67 @@ class TestUserConfig(QiskitTestCase):
         test_config = """
         [default]
         min_qpy_version = abc
+        """
+        self.addCleanup(os.remove, self.file_path)
+        with open(self.file_path, "w") as file:
+            file.write(test_config)
+            file.flush()
+            config = user_config.UserConfig(self.file_path)
+            self.assertRaises(exceptions.QiskitUserConfigError, config.read_config_file)
+
+    def test_valid_transpiler_seed(self):
+        test_config = """
+        [default]
+        transpiler_seed = 42
+        """
+        self.addClassCleanup(os.remove, self.file_path)
+        with open(self.file_path, "w") as file:
+            file.write(test_config)
+            file.flush()
+            config = user_config.UserConfig(self.file_path)
+            config.read_config_file()
+            self.assertEqual({"transpiler_seed": 42}, config.settings)
+
+    def test_empty_seed_transpiler(self):
+        test_config = """
+        [default]
+        transpiler_seed =
+        """
+        self.addCleanup(os.remove, self.file_path)
+        with open(self.file_path, "w") as file:
+            file.write(test_config)
+            file.flush()
+            config = user_config.UserConfig(self.file_path)
+        self.assertRaises(exceptions.QiskitUserConfigError, config.read_config_file)
+
+    def test_invalid_transpiler_seed_non_integer(self):
+        test_config = """
+        [default]
+        transpiler_seed = 2.0
+        """
+        self.addCleanup(os.remove, self.file_path)
+        with open(self.file_path, "w") as file:
+            file.write(test_config)
+            file.flush()
+            config = user_config.UserConfig(self.file_path)
+            self.assertRaises(exceptions.QiskitUserConfigError, config.read_config_file)
+
+    def test_invalid_transpiler_seed_string(self):
+        test_config = """
+        [default]
+        transpiler_seed = xyz
+        """
+        self.addCleanup(os.remove, self.file_path)
+        with open(self.file_path, "w") as file:
+            file.write(test_config)
+            file.flush()
+            config = user_config.UserConfig(self.file_path)
+            self.assertRaises(exceptions.QiskitUserConfigError, config.read_config_file)
+
+    def test_invalid_transpiler_seed_negative(self):
+        test_config = """
+        [default]
+        transpiler_seed = -42
         """
         self.addCleanup(os.remove, self.file_path)
         with open(self.file_path, "w") as file:

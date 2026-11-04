@@ -1,0 +1,11 @@
+---
+features_circuits:
+  - |
+    Added support for :class:`.SparseObservable` to 
+    :func:`~qiskit.circuit.library.evolved_operator_ansatz`.
+fixes:
+  - |
+    Fixed a bug in :func:`~qiskit.circuit.library.evolved_operator_ansatz`, where
+    setting the ``parameter_prefix`` argument to a single string could cause an 
+    error if identity terms were removed, depending on the order of operators.
+

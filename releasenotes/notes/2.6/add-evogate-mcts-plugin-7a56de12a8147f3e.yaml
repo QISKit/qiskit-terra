@@ -1,0 +1,19 @@
+---
+features_synthesis:
+  - |
+    Added a new plugin, :class:`.PauliEvolutionSynthesisMcts`, for synthesizing
+    :class:`.PauliEvolutionGate` objects. The implementation combines ideas from
+    the papers *MonteQ: A Monte Carlo Tree Search Based Quantum Circuit Synthesis
+    Framework* by Machiya et al. (https://arxiv.org/abs/2604.19029) and *Faster
+    and shorter synthesis of Hamiltonian simulation circuits* by de Brugière et al.
+    (https://arxiv.org/abs/2404.03280).
+
+    Compared to the default plugin, :class:`.PauliEvolutionSynthesisDefault`,
+    :class:`.PauliEvolutionSynthesisMcts` typically requires more runtime but often
+    produces higher-quality circuits. It is also significantly faster than
+    :class:`.PauliEvolutionSynthesisRustiq` while generally achieving better
+    synthesis results.
+
+    The quality of the generated circuits can be further improved by increasing the
+    ``num_simulations`` option, at the cost of additional runtime. This overhead
+    can be partially mitigated by executing simulations in parallel.

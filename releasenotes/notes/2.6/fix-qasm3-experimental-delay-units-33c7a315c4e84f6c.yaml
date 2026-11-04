@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed :func:`.qasm3.dump_experimental` and :func:`~.qasm3.dumps_experimental` incorrectly
+    outputting a ``us`` suffix for delays specified in ``ms``.
+  - |
+    Fixed the conversion to ``ns`` in :func:`.qasm3.dump_experimental` and
+    :func:`~.qasm3.dumps_experimental` when outputting delays specified in ``ps``.

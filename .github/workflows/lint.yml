@@ -1,0 +1,48 @@
+---
+name: Lint
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version to test.
+        type: string
+        required: true
+      runner:
+        description: Runner image to use.
+        type: string
+        required: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # We need to fetch the whole history so 'reno' can do its job and we can inspect tags.
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install Rust
+        run:
+          rustup toolchain install
+            --profile minimal
+            --component rustfmt
+            --component clippy
+            --no-self-update
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade tox
+      - name: Run lint
+        run: |
+          set -e
+          # Check that `Cargo.lock` is checked in and up-to-date before attempting to build the
+          # package. The exact command isn't important, it should just be cheap and update the lock.
+          cargo metadata --format-version=1 --locked >/dev/null
+          make cformat
+          make ctidy
+          tox -e lint

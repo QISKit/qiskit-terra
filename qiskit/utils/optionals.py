@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -27,7 +27,7 @@ Qiskit Components
 
 .. py:data:: HAS_AER
 
-    `Qiskit Aer <https://qiskit.github.io/qiskit-aer/>` provides high-performance simulators for
+    `Qiskit Aer <https://qiskit.github.io/qiskit-aer/>`__ provides high-performance simulators for
     the quantum circuits constructed within Qiskit.
 
 .. py:data:: HAS_IBMQ
@@ -58,7 +58,7 @@ External Python Libraries
 
     The `IBM CPLEX Optimizer <https://www.ibm.com/analytics/cplex-optimizer>`__ is a
     high-performance mathematical programming solver for linear, mixed-integer and quadratic
-    programming. This is no longer by Qiskit, but it weas historically and the optional
+    programming. This is no longer used by Qiskit, but it was historically and the optional
     remains for backwards compatibility.
 
 .. py:data:: HAS_CVXPY
@@ -70,8 +70,8 @@ External Python Libraries
 .. py:data:: HAS_DOCPLEX
 
     `IBM Decision Optimization CPLEX Modelling
-    <http://ibmdecisionoptimization.github.io/docplex-doc/>`__ is a library for prescriptive
-    analysis.  Like CPLEX, this is no longer by Qiskit, but it weas historically and the
+    <https://ibmdecisionoptimization.github.io/docplex-doc/>`__ is a library for prescriptive
+    analysis.  Like CPLEX, this is no longer used by Qiskit, but it was historically and the
     optional remains for backwards compatibility.
 
 .. py:data:: HAS_FIXTURES
@@ -179,7 +179,7 @@ External Python Libraries
 
 .. py:data:: HAS_SYMPY
 
-    `SymPy <https://www.sympy.org/en/index.html>`__ is Python library for symbolic mathematics.
+    `SymPy <https://www.sympy.org/en/index.html>`__ is a Python library for symbolic mathematics.
     ``SymPy`` was historically used for the implementation of the :class:`.ParameterExpression`
     class but isn't any longer. However it is needed for some legacy functionality that uses
     :meth:`.ParameterExpression.sympify`. It is also used in some visualization functions
@@ -241,7 +241,7 @@ from :mod:`.utils` directly if required, such as::
 .. autoclass:: qiskit.utils.LazySubprocessTester
 """
 
-# NOTE: If you're changing this file, sync it with `requirements-optional.txt` and potentially
+# NOTE: If you're changing this file, sync it with the `optionals-all` dependency group in
 # `pyproject.toml` as well.
 
 import logging as _logging

@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    The :meth:`.DAGCircuit.substitute_node_with_dag` method now correctly transfers
+    DAG-level variable declarations (input, captured, and declared variables, and
+    stretches) from the replacement DAG to the target DAG. Previously, these were
+    omitted during substitution, which could lead to missing variable declarations
+    after replacing a node. This aligns the behavior with :meth:`.DAGCircuit.compose`.

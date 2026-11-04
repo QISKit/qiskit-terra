@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -23,7 +23,7 @@ import ddt
 
 from qiskit.exceptions import MissingOptionalLibraryError, OptionalDependencyImportWarning
 from qiskit.utils import LazyImportTester, LazySubprocessTester
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 def available_importer(**kwargs):
@@ -168,7 +168,6 @@ class TestLazyDependencyTester(QiskitTestCase):
     def test_require_in_call_silently_succeeds_for_available_tests(self, test_generator):
         """Test that the available loaders silently do nothing when they are required in the
         decorator form."""
-        # pylint: disable=function-redefined
 
         with self.subTest("direct decorator"):
             feature = test_generator()
@@ -200,7 +199,6 @@ class TestLazyDependencyTester(QiskitTestCase):
     def test_require_in_instance_silently_succeeds_for_available_tests(self, test_generator):
         """Test that the available loaders silently do nothing when they are required in the
         decorator form."""
-        # pylint: disable=function-redefined
 
         with self.subTest("direct decorator"):
             feature = test_generator()
@@ -242,7 +240,6 @@ class TestLazyDependencyTester(QiskitTestCase):
     def test_require_in_call_raises_for_unavailable_tests(self, test_generator):
         """Test that the unavailable loaders loudly raise when the inner functions of decorators are
         called, and not before, and raise each time they are called."""
-        # pylint: disable=function-redefined
 
         with self.subTest("direct decorator"):
             feature = test_generator()
@@ -282,7 +279,6 @@ class TestLazyDependencyTester(QiskitTestCase):
     def test_require_in_instance_raises_for_unavailable_tests(self, test_generator):
         """Test that the unavailable loaders loudly raise when the inner classes of decorators are
         instantiated, and not before, and raise each time they are instantiated."""
-        # pylint: disable=function-redefined
 
         with self.subTest("direct decorator"):
             feature = test_generator()
@@ -372,8 +368,6 @@ class TestLazyDependencyTester(QiskitTestCase):
         """Check that the module raising an `ImportError` other than being not found is warned
         against."""
 
-        # pylint: disable=missing-class-docstring,missing-function-docstring,abstract-method
-
         class RaisesImportErrorOnLoad(importlib.abc.Loader):
             def __init__(self, name):
                 self.name = name
@@ -398,8 +392,6 @@ class TestLazyDependencyTester(QiskitTestCase):
         (such as a module trying to import parts of Terra that don't exist any more) is caught and
         warned against, rather than silently caught as an expected `ModuleNotFoundError`."""
 
-        # pylint: disable=missing-class-docstring,missing-function-docstring,abstract-method
-
         class ImportsBadModule(importlib.abc.Loader):
             def create_module(self, spec):
                 # Doesn't matter what, we just want to return any module object; we're going to
@@ -408,7 +400,7 @@ class TestLazyDependencyTester(QiskitTestCase):
 
             def exec_module(self, module):
                 del module  # ABC parameter we don't care about.
-                import __qiskit__some_module_that_does_not_exist
+                import __qiskit__some_module_that_does_not_exist  # noqa: F401
 
         dummy = f"{__name__}_{type(self).__name__}_test_warns_on_internal_not_found_error".replace(
             ".", "_"

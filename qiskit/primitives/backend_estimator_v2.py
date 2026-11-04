@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -86,7 +86,7 @@ def _prepare_counts(results: list[Result]):
 
 def _pauli_expval_with_variance(counts: Counts, paulis: PauliList) -> tuple[np.ndarray, np.ndarray]:
     """Return array of expval and variance pairs for input Paulis.
-    Note: All non-identity Pauli's are treated as Z-paulis, assuming
+    Note: All non-identity Paulis are treated as Z-Paulis, assuming
     that basis rotations have been applied to convert them to the
     diagonal basis.
     """
@@ -250,7 +250,7 @@ class BackendEstimatorV2(BaseEstimatorV2):
 
     @property
     def backend(self) -> BackendV2:
-        """Returns the backend which this sampler object based on."""
+        """Returns the backend which this estimator object is based on."""
         return self._backend
 
     def run(
@@ -276,7 +276,7 @@ class BackendEstimatorV2(BaseEstimatorV2):
         pub_dict = defaultdict(list)
         # consolidate pubs with the same number of shots
         for i, pub in enumerate(pubs):
-            shots = int(math.ceil(1.0 / pub.precision**2))
+            shots = math.ceil(1.0 / pub.precision**2)
             pub_dict[shots].append(i)
 
         results = [None] * len(pubs)

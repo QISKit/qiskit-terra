@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from qiskit.circuit import ClassicalRegister, Clbit  # pylint: disable=cyclic-import
+from qiskit.circuit import ClassicalRegister, Clbit
 from qiskit.circuit.classical import expr
 from qiskit.circuit.exceptions import CircuitError
 from qiskit._accelerate.circuit import ControlFlowType
@@ -59,10 +59,6 @@ class WhileLoopOp(ControlFlowOp):
         self._condition = validate_condition(condition)
 
     @property
-    def params(self):
-        return self._params
-
-    @property
     def condition(self):
         """The condition for the while loop."""
         return self._condition
@@ -71,9 +67,13 @@ class WhileLoopOp(ControlFlowOp):
     def condition(self, value):
         self._condition = value
 
+    @property
+    def params(self):
+        return self._params
+
     @params.setter
     def params(self, parameters):
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit import QuantumCircuit
 
         (body,) = parameters
@@ -83,6 +83,8 @@ class WhileLoopOp(ControlFlowOp):
                 "WhileLoopOp expects a body parameter of type "
                 f"QuantumCircuit, but received {type(body)}."
             )
+        if body.num_input_vars:
+            raise self._unexpected_input_var_error()
 
         if body.num_qubits != self.num_qubits or body.num_clbits != self.num_clbits:
             raise CircuitError(

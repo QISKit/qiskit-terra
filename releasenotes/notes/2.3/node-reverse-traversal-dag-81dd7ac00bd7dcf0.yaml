@@ -1,0 +1,7 @@
+---
+features_transpiler:
+  - |
+    The :meth:`.DAGCircuit.topological_op_nodes` and :meth:`.DAGCircuit.topological_nodes` methods now support a reverse Boolean argument.
+    When set to True, the methods yield nodes in a reverse topological order, from the outputs of the circuit towards the inputs. 
+    This provides a direct and efficient way to iterate over a DAG backwards without the overhead of explicitly reversing the list of nodes 
+    returned by the functions, creating a new, structurally reversed DAG with :meth:`.DAGCircuit.reverse_ops.`

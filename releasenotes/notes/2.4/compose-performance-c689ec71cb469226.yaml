@@ -1,0 +1,8 @@
+---
+features_circuits:
+  - :meth:`.QuantumCircuit.compose` can be up to approximately two times faster when composing
+    very long circuits onto another.
+fixes:
+  - Fixed a runtime cost linear in the number of bits of the base circuit in :meth:`.QuantumCircuit.compose`.
+    This could cause performance problems when repeatedly composing small circuits with no clbits onto a base
+    with a very large number of clbits.

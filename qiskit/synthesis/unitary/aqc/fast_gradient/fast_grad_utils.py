@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,7 +14,7 @@
 Utility functions in the fast gradient implementation.
 """
 from __future__ import annotations
-from typing import Union
+
 import numpy as np
 
 
@@ -23,7 +23,7 @@ def is_permutation(x: np.ndarray) -> bool:
     Checks if array is really an index permutation.
 
     Args:
-        1D-array of integers that supposedly represents a permutation.
+        x: 1D-array of integers that supposedly represents a permutation.
 
     Returns:
         True, if array is really a permutation of indices.
@@ -36,7 +36,7 @@ def is_permutation(x: np.ndarray) -> bool:
     )
 
 
-def reverse_bits(x: Union[int, np.ndarray], nbits: int, enable: bool) -> Union[int, np.ndarray]:
+def reverse_bits(x: int | np.ndarray, nbits: int, enable: bool) -> int | np.ndarray:
     """
     Reverses the bit order in a number of ``nbits`` length.
     If ``x`` is an array, then operation is applied to every entry.
@@ -58,7 +58,7 @@ def reverse_bits(x: Union[int, np.ndarray], nbits: int, enable: bool) -> Union[i
         return x
 
     if isinstance(x, int):
-        res: int | np.ndarray = int(0)
+        res: int | np.ndarray = 0
     else:
         x = x.copy()
         res = np.full_like(x, fill_value=0)
@@ -150,13 +150,12 @@ def bit_permutation_2q(n: int, j: int, k: int) -> np.ndarray:
                 perm[v] = swap_bits(v, k, n - 1)
         else:
             pass
+    elif k < n - 2:
+        for v in range(dim):
+            perm[v] = swap_bits(swap_bits(v, n - 2, n - 1), k, n - 1)
     else:
-        if k < n - 2:
-            for v in range(dim):
-                perm[v] = swap_bits(swap_bits(v, n - 2, n - 1), k, n - 1)
-        else:
-            for v in range(dim):
-                perm[v] = swap_bits(v, n - 2, n - 1)
+        for v in range(dim):
+            perm[v] = swap_bits(v, n - 2, n - 1)
     return perm
 
 

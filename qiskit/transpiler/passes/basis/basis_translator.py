@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -38,7 +38,7 @@ class BasisTranslator(TransformationPass):
       is not already in the target_basis.
 
     If the target keyword argument is specified and that
-    :class:`~qiskit.transpiler.Target` objects contains operations
+    :class:`~qiskit.transpiler.Target` object contains operations
     which are non-global (i.e. they are defined only for a subset of qubits),
     as calculated by :meth:`~qiskit.transpiler.Target.get_non_global_operation_names`,
     this pass will attempt to match the output translation to those constraints.

@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -154,10 +154,7 @@ impl SabreDAG {
                 single.map_or(Predecessors::AllUnmapped, Predecessors::Single)
             };
 
-        for dag_node in dag
-            .topological_op_nodes()
-            .expect("infallible if DAG is in a valid state")
-        {
+        for dag_node in dag.topological_op_nodes(false) {
             let NodeType::Operation(inst) = &dag[dag_node] else {
                 panic!("op nodes should always be of type `Operation`");
             };

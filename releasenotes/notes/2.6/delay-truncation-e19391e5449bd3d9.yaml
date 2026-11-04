@@ -1,0 +1,5 @@
+---
+upgrade_circuits:
+  - |
+    The :class:`.Delay` instruction in circuits now has an upper bound of ``2**63 - 1`` on ``dt``
+    durations.  This is a consequence of the backing data model moving to Rust.

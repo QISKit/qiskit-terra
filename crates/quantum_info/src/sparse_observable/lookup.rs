@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -291,4 +291,141 @@ const fn matmul_generate(left: BitTerm, right: BitTerm) -> Option<&'static [(Com
         (One, Zero) => None,
         (One, One) => Some(const { &[(c64(1., 0.), One)] }),
     }
+}
+
+/// Getter method for the index of a [BitTerm] for use in lookup tables.
+#[inline(always)]
+const fn bitterm_index(b: BitTerm) -> usize {
+    match b {
+        BitTerm::X => 0,
+        BitTerm::Plus => 1,
+        BitTerm::Minus => 2,
+        BitTerm::Y => 3,
+        BitTerm::Right => 4,
+        BitTerm::Left => 5,
+        BitTerm::Z => 6,
+        BitTerm::Zero => 7,
+        BitTerm::One => 8,
+    }
+}
+
+/// Full 9×9 lookup table for P^{\dag} Q P.
+/// This is used to implement conjugation of BitTerms.
+///
+/// In the output, `None` means that the result was zero.
+/// Beyond that, the output is a tuple of the coefficient and resulting BitTerm.
+///
+/// These conjugation rules were computed symbolically using Qiskit's SparseObservable
+/// API and verified through automated testing. The factorization is minimal in the
+/// number of terms but otherwise uncurated among equivalent representations.
+///
+/// Note that P^{\dag} Q P = (P Q^{\dag} P)^{\dag}, so this table could be generated
+/// from the matrix multiplication table, but it was more efficient to generate it
+/// directly. This property may however be utilised in a future release for evolution
+/// in presence of cross-terms.
+///
+/// The layout is as follows:
+/// ```text
+/// Index = bitterm_index(P) * 9 + bitterm_index(Q)
+/// ```
+/// where `P` is the conjugating term and `Q` is the term being conjugated.
+static BITTERM_CONJUGATE: [&[(Complex64, BitTerm)]; 81] = [
+    // P = X
+    &[(c64(1.0, 0.0), BitTerm::X)],
+    &[(c64(1.0, 0.0), BitTerm::Plus)],
+    &[(c64(1.0, 0.0), BitTerm::Minus)],
+    &[(c64(-1.0, 0.0), BitTerm::Y)],
+    &[(c64(1.0, 0.0), BitTerm::Left)],
+    &[(c64(1.0, 0.0), BitTerm::Right)],
+    &[(c64(-1.0, 0.0), BitTerm::Z)],
+    &[(c64(1.0, 0.0), BitTerm::One)],
+    &[(c64(1.0, 0.0), BitTerm::Zero)],
+    // P = +
+    &[(c64(1.0, 0.0), BitTerm::Plus)],
+    &[(c64(1.0, 0.0), BitTerm::Plus)],
+    &[],
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Plus)],
+    &[(c64(0.5, 0.0), BitTerm::Plus)],
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Plus)],
+    &[(c64(0.5, 0.0), BitTerm::Plus)],
+    // P = -
+    &[(c64(-1.0, 0.0), BitTerm::Minus)],
+    &[],
+    &[(c64(1.0, 0.0), BitTerm::Minus)],
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Minus)],
+    &[(c64(0.5, 0.0), BitTerm::Minus)],
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Minus)],
+    &[(c64(0.5, 0.0), BitTerm::Minus)],
+    // P = Y
+    &[(c64(-1.0, 0.0), BitTerm::X)],
+    &[(c64(1.0, 0.0), BitTerm::Minus)],
+    &[(c64(1.0, 0.0), BitTerm::Plus)],
+    &[(c64(1.0, 0.0), BitTerm::Y)],
+    &[(c64(1.0, 0.0), BitTerm::Right)],
+    &[(c64(1.0, 0.0), BitTerm::Left)],
+    &[(c64(-1.0, 0.0), BitTerm::Z)],
+    &[(c64(1.0, 0.0), BitTerm::One)],
+    &[(c64(1.0, 0.0), BitTerm::Zero)],
+    // P = r
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Right)],
+    &[(c64(0.5, 0.0), BitTerm::Right)],
+    &[(c64(1.0, 0.0), BitTerm::Right)],
+    &[(c64(1.0, 0.0), BitTerm::Right)],
+    &[],
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Right)],
+    &[(c64(0.5, 0.0), BitTerm::Right)],
+    // P = l
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Left)],
+    &[(c64(0.5, 0.0), BitTerm::Left)],
+    &[(c64(-1.0, 0.0), BitTerm::Left)],
+    &[],
+    &[(c64(1.0, 0.0), BitTerm::Left)],
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Left)],
+    &[(c64(0.5, 0.0), BitTerm::Left)],
+    // P = Z
+    &[(c64(-1.0, 0.0), BitTerm::X)],
+    &[(c64(1.0, 0.0), BitTerm::Minus)],
+    &[(c64(1.0, 0.0), BitTerm::Plus)],
+    &[(c64(-1.0, 0.0), BitTerm::Y)],
+    &[(c64(1.0, 0.0), BitTerm::Left)],
+    &[(c64(1.0, 0.0), BitTerm::Right)],
+    &[(c64(1.0, 0.0), BitTerm::Z)],
+    &[(c64(1.0, 0.0), BitTerm::Zero)],
+    &[(c64(1.0, 0.0), BitTerm::One)],
+    // P = 0
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Zero)],
+    &[(c64(0.5, 0.0), BitTerm::Zero)],
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::Zero)],
+    &[(c64(0.5, 0.0), BitTerm::Zero)],
+    &[(c64(1.0, 0.0), BitTerm::Zero)],
+    &[(c64(1.0, 0.0), BitTerm::Zero)],
+    &[],
+    // P = 1
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::One)],
+    &[(c64(0.5, 0.0), BitTerm::One)],
+    &[],
+    &[(c64(0.5, 0.0), BitTerm::One)],
+    &[(c64(0.5, 0.0), BitTerm::One)],
+    &[(c64(-1.0, 0.0), BitTerm::One)],
+    &[],
+    &[(c64(1.0, 0.0), BitTerm::One)],
+];
+
+/// Calculate P^{dag} Q P for two BitTerms P and Q.
+/// This is done by a static lookup table.
+/// The output is a tuple of the coefficient and resulting BitTerm.
+#[inline(always)]
+pub fn conjugate_bitterm(p: BitTerm, q: BitTerm) -> &'static [(Complex64, BitTerm)] {
+    BITTERM_CONJUGATE[bitterm_index(p) * 9 + bitterm_index(q)]
 }

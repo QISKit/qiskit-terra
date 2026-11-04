@@ -1,0 +1,20 @@
+---
+features_c:
+  - |
+    The C API now supports converting :c:struct:`QkCircuit` to and from Python-space objects, using the methods:
+
+    * :c:func:`qk_circuit_borrow_from_python`
+    * :c:func:`qk_circuit_convert_from_python`
+    * :c:func:`qk_circuit_to_python_full`
+    * :c:func:`qk_circuit_to_python`
+
+    Note that :c:func:`qk_circuit_to_python` is not new, but its behavior changed in Qiskit 2.4 to return the
+    Python object that directly corresponds to :c:struct:`QkCircuit` (see :attr:`.QuantumCircuit._data`), instead
+    of :class:`.QuantumCircuit` itself.  :c:func:`qk_circuit_to_python_full` replaces the old method.
+features_circuits:
+  - The formally private attribute :attr:`.QuantumCircuit._data` is now public API, but only as a handle
+    for passing to C-API functions expecting :c:struct:`QkCircuit`.  The type of the object is not specified
+    in the public API, nor are any methods on it.
+upgrade_c:
+  - :c:func:`qk_circuit_to_python` no longer returns a complete :class:`.QuantumCircuit`, but only the type of
+    :attr:`.QuantumCircuit._data`.  The new method :c:func:`qk_circuit_to_python_full` provides the old functionality.

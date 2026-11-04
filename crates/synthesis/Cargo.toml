@@ -15,11 +15,10 @@ workspace = true
 [dependencies]
 qiskit-circuit.workspace = true
 qiskit-quantum-info.workspace = true
-bincode = "1.3"
+qiskit-util.workspace = true
 bytemuck.workspace = true
 num-complex.workspace = true
 nalgebra.workspace = true
-ahash.workspace = true
 itertools.workspace = true
 numpy.workspace = true
 rayon.workspace = true
@@ -27,16 +26,14 @@ num-traits.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
 rand_distr.workspace = true
-faer = "0.23.2"
+faer.workspace = true
 rustworkx-core.workspace = true
 rustiq-core = "0.0.11"
-rstar = "0.12.2"
-serde = { version = "1.0", features = ["derive"] }
+rsgridsynth = "0.2.0"
+rstar = "0.13.0"
 thiserror.workspace = true
-
-[dependencies.faer-ext]
-version = "0.7.1"
-features = ["ndarray"]
+fixedbitset.workspace = true
+binrw.workspace = true
 
 [dependencies.smallvec]
 workspace = true
@@ -58,12 +55,8 @@ features = ["num-complex"]
 workspace = true
 features = ["rayon", "serde"]
 
-[dependencies.indexmap]
-workspace = true
-features = ["rayon"]
-
 [dev-dependencies]
-pyo3 = { workspace = true, features = ["auto-initialize"] }
+tempfile.workspace = true
 
 [features]
 cache_pygates = ["qiskit-circuit/cache_pygates"]

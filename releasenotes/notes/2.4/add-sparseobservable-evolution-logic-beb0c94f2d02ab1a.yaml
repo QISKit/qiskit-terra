@@ -1,0 +1,36 @@
+---
+features:
+  - |
+    The evolution of :class:`~.quantum_info.SparseObservable` under conjugation is
+    implemented using a precomputed static lookup table for single-qubit
+    :class:`~.quantum_info.SparseObservable.BitTerm` conjugation.
+
+    This table encodes the full :math:`P^\dagger Q P` conjugation rules for all
+    supported BitTerms,
+    These include ``X``, ``Y``, ``Z``;
+    ``+`` and ``-``; ``l`` and ``r``;
+    and the computational-basis projectors ``0`` and ``1``
+    Each entry yields either zero or a minimal list of resulting BitTerms together
+    with their associated complex coefficients.
+
+    The lookup table was generated with a brute force generator using Qiskit's
+    :class:`~.quantum_info.SparseObservable` API and verified through tests.
+    This design avoids runtime matrix operations and enables deterministic,
+    allocation-free evolution with exact algebraic semantics.
+
+    As an example::
+
+        from qiskit.quantum_info import SparseObservable, Pauli
+
+        # SparseObservable to be evolved
+        obs = SparseObservable("Y")
+
+        # Conjugating operator
+        pauli = Pauli("X")
+
+        # Evolution via lookup table
+        evolved = obs.evolve(pauli)
+
+    This lookup-table–based conjugation forms the core of the
+    :meth:`~.quantum_info.SparseObservable.evolve` implementation and provides a
+    foundation for future extensions to cross-term and multi-term evolution.

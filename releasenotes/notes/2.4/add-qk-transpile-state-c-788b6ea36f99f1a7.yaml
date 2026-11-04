@@ -1,0 +1,5 @@
+---
+features_c:
+  - |
+    Add :c:struct:`QkTranspilerStageState` as a way of keeping a shared
+    state between transpilation stages.

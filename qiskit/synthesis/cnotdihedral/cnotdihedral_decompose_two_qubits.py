@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -31,7 +31,7 @@ def synth_cnotdihedral_two_qubits(elem: CNOTDihedral) -> QuantumCircuit:
         A circuit implementation of the :class:`.CNOTDihedral` element.
 
     Raises:
-        QiskitError: if the element in not 1-qubit or 2-qubit :class:`.CNOTDihedral`.
+        QiskitError: if the element is not 1-qubit or 2-qubit :class:`.CNOTDihedral`.
 
     References:
         1. Shelly Garion and Andrew W. Cross, *On the structure of the CNOT-Dihedral group*,
@@ -48,7 +48,7 @@ def synth_cnotdihedral_two_qubits(elem: CNOTDihedral) -> QuantumCircuit:
 
     if elem.num_qubits == 1:
         if elem.poly.weight_0 != 0 or elem.linear != [[1]]:
-            raise QiskitError("1-qubit element in not CNOT-Dihedral .")
+            raise QiskitError("1-qubit element is not CNOT-Dihedral.")
         tpow0 = elem.poly.weight_1[0]
         xpow0 = elem.shift[0]
         if tpow0 > 0:
@@ -61,7 +61,7 @@ def synth_cnotdihedral_two_qubits(elem: CNOTDihedral) -> QuantumCircuit:
 
     # case elem.num_qubits == 2:
     if elem.poly.weight_0 != 0:
-        raise QiskitError("2-qubit element in not CNOT-Dihedral .")
+        raise QiskitError("2-qubit element is not CNOT-Dihedral.")
     weight_1 = elem.poly.weight_1
     weight_2 = elem.poly.weight_2
     linear = elem.linear

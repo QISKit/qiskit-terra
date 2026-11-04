@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -36,7 +36,7 @@ class HoareOptimizer(TransformationPass):
             MissingOptionalLibraryError: if unable to import z3 solver
         """
         # This module is just a script that adds several post conditions onto existing classes.
-        from . import _gate_extension
+        from . import _gate_extension  # noqa: F401
 
         super().__init__()
         self.solver = None
@@ -284,7 +284,8 @@ class HoareOptimizer(TransformationPass):
         Returns:
             bool: if gate sequence combines to identity
         """
-        assert len(sequence) == 2
+        if len(sequence) != 2:
+            raise ValueError("Invalid sequence length")
         # some Instructions (e.g measurements) may not have an inverse.
         try:
             gate1, gate2 = sequence[0].op, sequence[1].op.inverse()
@@ -322,7 +323,8 @@ class HoareOptimizer(TransformationPass):
         from z3 import Or, And, Not
         import z3
 
-        assert len(sequence) == 2
+        if len(sequence) != 2:
+            raise ValueError("Invalid sequence length")
         ctrlvar1 = self._separate_ctrl_trgt(sequence[0])[1]
         ctrlvar2 = self._separate_ctrl_trgt(sequence[1])[1]
 

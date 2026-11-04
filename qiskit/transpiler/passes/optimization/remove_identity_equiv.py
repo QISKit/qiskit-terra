@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -32,11 +32,16 @@ class RemoveIdentityEquivalent(TransformationPass):
 
     .. math::
 
-        \bar{F} = \frac{1 + d F_{\text{process}}}{1 + d},\ 
+        \bar{F} = \frac{1 + d F_{\text{process}}}{1 + d},\
 
         F_{\text{process}} = \frac{|\mathrm{Tr}(G)|^2}{d^2}
 
     where :math:`d = 2^n` is the dimension of the gate for :math:`n` qubits.
+
+    This function is multithreaded and will potentially launch a thread pool with threads
+    equal to the number of CPUs by default. You can tune the number of threads with the
+    ``RAYON_NUM_THREADS`` environment variable. For example, setting ``RAYON_NUM_THREADS=4``
+    would limit the thread pool to 4 threads.
     """
 
     def __init__(

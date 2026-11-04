@@ -1,3 +1,5 @@
+.. _capi-quantum-register:
+
 =================
 QkQuantumRegister
 =================

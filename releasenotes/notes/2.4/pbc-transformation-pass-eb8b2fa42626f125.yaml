@@ -1,0 +1,8 @@
+---
+features_transpiler:
+  - |
+    Added a new transpiler pass :class:`.ConvertToPauliRotations`,
+    that converts a quantum circuit containing single-qubit, two-qubit and three-qubit
+    standard gates, barriers and measurements, into an equivalent circuit containing
+    :class:`.PauliProductRotationGate` gates
+    and :class:`.PauliProductMeasurement` instructions.

@@ -1,0 +1,6 @@
+---
+# Choose only the "features" sections you need and delete the rest.  Try to be concise.  You may
+# use a code example for complicated features.
+features_c:
+  - Added a scaled operator addition to the :c:struct:`QkObs` interace,
+    :c:func:`qk_obs_scaled_add` and :c:func:`qk_obs_scaled_add_inplace`.

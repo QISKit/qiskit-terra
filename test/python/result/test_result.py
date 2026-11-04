@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ from qiskit.result import marginal_counts
 from qiskit.result import marginal_distribution
 from qiskit.result import Result
 from qiskit.exceptions import QiskitError
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestResultOperations(QiskitTestCase):
@@ -38,7 +38,7 @@ class TestResultOperations(QiskitTestCase):
     def generate_qiskit_result(self):
         """Generate standard Result for testing"""
         memory = [hex(ii) for ii in range(8)]
-        counts = {m: 1 for m in memory}
+        counts = dict.fromkeys(memory, 1)
         data_1 = models.ExperimentResultData(counts=counts, memory=memory)
         exp_result_header_1 = {"creg_sizes": [["c0", 4]], "memory_slots": 4}
         exp_result_1 = models.ExperimentResult(

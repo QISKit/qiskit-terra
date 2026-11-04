@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -31,7 +31,7 @@ from qiskit.circuit.random import random_circuit
 from qiskit.exceptions import QiskitError
 from qiskit.quantum_info import Operator
 from qiskit.transpiler.target import Target
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @ddt.ddt
@@ -129,11 +129,11 @@ class TestTwirling(QiskitTestCase):
         """Test an error is raised with an unsupported string gate in list."""
         qc = QuantumCircuit(2)
         qc.swap(0, 1)
-        with self.assertRaises(QiskitError):
-            pauli_twirl_2q_gates(qc, twirling_gate=[CXGate, "swap"])
+        with self.assertRaisesRegex(QiskitError, "The specified gate name swap is not supported"):
+            pauli_twirl_2q_gates(qc, twirling_gate=["cx", "swap"])
 
     def test_invalid_class_entry_in_list(self):
-        """Test an error is raised with an unsupported string gate in list."""
+        """Test a mixed list accepts supported gate objects."""
         qc = QuantumCircuit(2)
         qc.swap(0, 1)
         res = pauli_twirl_2q_gates(qc, twirling_gate=[SwapGate(), "cx"])

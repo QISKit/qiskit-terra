@@ -1,0 +1,12 @@
+---
+features_c:
+  - |
+    :c:struct:`QkQuantumRegister` and :c:struct:`QkClassicalRegister` now have conversions to and
+    from Python space.  These use the functions:
+
+    * :c:func:`qk_quantum_register_to_python`
+    * :c:func:`qk_quantum_register_borrow_from_python`
+    * :c:func:`qk_quantum_register_convert_from_python`
+    * :c:func:`qk_classical_register_to_python`
+    * :c:func:`qk_classical_register_borrow_from_python`
+    * :c:func:`qk_classical_register_convert_from_python`

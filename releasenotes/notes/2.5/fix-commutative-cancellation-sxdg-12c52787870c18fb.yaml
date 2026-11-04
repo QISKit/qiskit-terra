@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a miscompilation in :class:`.CommutativeCancellation` when a run of single-qubit :math:`X`
+    rotations coalesced to a negative angle and :math:`\sqrt X` was available as a target gate.  See
+    `#16594 <https://github.com/Qiskit/qiskit/issues/16594>`__.

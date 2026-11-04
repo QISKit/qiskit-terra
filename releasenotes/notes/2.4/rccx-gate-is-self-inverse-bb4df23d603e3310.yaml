@@ -1,0 +1,5 @@
+---
+features_circuits:
+- |
+  The :class:`.RCCXGate` is self-inverse. The :meth:`.RCCXGate.inverse` now returns a new
+  :class:`.RCCXGate` instance instead of an instance of :class:`.Gate` with a custom definition.

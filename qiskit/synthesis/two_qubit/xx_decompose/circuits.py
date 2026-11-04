@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -30,8 +30,8 @@ from operator import itemgetter
 
 import numpy as np
 
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit.library.standard_gates import RXXGate, RYYGate, RZGate
+from qiskit.circuit import QuantumCircuit
+from qiskit.circuit.library import RXXGate, RYYGate, RZGate
 from qiskit.exceptions import QiskitError
 
 from .paths import decomposition_hop
@@ -45,7 +45,6 @@ from .weyl import (
 )
 
 
-# pylint:disable=invalid-name
 def decompose_xxyy_into_xxyy_xx(a_target, b_target, a_source, b_source, interaction):
     """
     Consumes a target canonical interaction CAN(a_target, b_target) and source interactions

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -44,11 +44,11 @@ from ..blueprintcircuit import BlueprintCircuit
 
 
 if typing.TYPE_CHECKING:
-    import qiskit  # pylint: disable=cyclic-import
+    import qiskit
 
 # entanglement for an individual block, e.g. if the block is CXGate() and we have
 # 3 qubits, this could be [(0, 1), (1, 2), (2, 0)]
-BlockEntanglement = typing.Union[str, Iterable[Iterable[int]]]
+BlockEntanglement = str | Iterable[Iterable[int]]
 
 
 def n_local(
@@ -108,7 +108,7 @@ def n_local(
     gate should acts, e.g. ``[[ctrl0, target0], [ctrl1, target1], ...]``.
     A set of default entanglement strategies is provided and can be selected by name:
 
-    * ``"full"`` entanglement is each qubit is entangled with all the others.
+    * ``"full"`` entanglement is where each qubit is entangled with all the others.
     * ``"linear"`` entanglement is qubit :math:`i` entangled with qubit :math:`i + 1`,
         for all :math:`i \in \{0, 1, ... , n - 2\}`, where :math:`n` is the total number of qubits.
     * ``"reverse_linear"`` entanglement is qubit :math:`i` entangled with qubit :math:`i + 1`,
@@ -189,7 +189,7 @@ def n_local(
         circuit = n_local(3, "x", "crx", entangler_map, reps=2)
         circuit.draw("mpl")
 
-    We can set different entanglements per layer, by specifing a callable that takes
+    We can set different entanglements per layer, by specifying a callable that takes
     as input the current layer index, and returns the entanglement structure. For example,
     the following uses different entanglements for odd and even layers:
 
@@ -446,7 +446,7 @@ class NLocal(BlueprintCircuit):
         """Set the number of qubits for the n-local circuit.
 
         Args:
-            The new number of qubits.
+            num_qubits: The new number of qubits.
         """
         if self._num_qubits != num_qubits:
             # invalidate the circuit
@@ -666,7 +666,7 @@ class NLocal(BlueprintCircuit):
         """Set the parameters used in the underlying circuit.
 
         Args:
-            The parameters to be used in the underlying circuit.
+            parameters: The parameters to be used in the underlying circuit.
 
         Raises:
             ValueError: If the length of ordered parameters does not match the number of
@@ -815,7 +815,6 @@ class NLocal(BlueprintCircuit):
         """
         return None
 
-    # pylint: disable=too-many-return-statements
     def get_entangler_map(
         self, rep_num: int, block_num: int, num_block_qubits: int
     ) -> Sequence[Sequence[int]]:
@@ -988,7 +987,7 @@ class NLocal(BlueprintCircuit):
         other: QuantumCircuit | qiskit.circuit.Instruction,
         entanglement: list[int] | str | list[list[int]] | None = None,
         front: bool = False,
-    ) -> "NLocal":
+    ) -> NLocal:
         """Append another layer to the NLocal.
 
         Args:
@@ -1081,7 +1080,7 @@ class NLocal(BlueprintCircuit):
         """Convert ``block`` to a circuit of correct width and parameterized using the iterator."""
         if self._overwrite_block_parameters:
             # check if special parameters should be used
-            # pylint: disable=assignment-from-none
+
             if params is None:
                 params = self._parameter_generator(rep_num, block_num, indices)
             if params is None:
@@ -1144,7 +1143,7 @@ class NLocal(BlueprintCircuit):
                 for indices in entangler_map:
                     # It's actually nontrivially faster to use a listcomp and pass that to `tuple`
                     # than to pass a generator expression directly.
-                    # pylint: disable=consider-using-generator
+
                     instr = CircuitInstruction(
                         simple_block.gate(*itertools.islice(param_iter, simple_block.num_params)),
                         tuple([target_qubits[i] for i in indices]),
@@ -1237,7 +1236,6 @@ class NLocal(BlueprintCircuit):
 
             self.append(block, self.qubits, copy=False)
 
-    # pylint: disable=unused-argument
     def _parameter_generator(self, rep: int, block: int, indices: list[int]) -> Parameter | None:
         """If certain blocks should use certain parameters this method can be overridden."""
         return None
@@ -1273,7 +1271,7 @@ def get_entangler_map(
         qubits on ``num_circuit_qubits`` qubits.
 
     Raises:
-        ValueError: If the entanglement mode ist not supported.
+        ValueError: If the entanglement mode is not supported.
     """
     try:
         return fast_entangler_map(num_circuit_qubits, num_block_qubits, entanglement, offset)

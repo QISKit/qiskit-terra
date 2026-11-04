@@ -1,0 +1,8 @@
+---
+features_transpiler:
+  - Added an argument ``use_ppr`` to the :class:`.LitinskiTransformation` pass, which, if ``True``,  
+    uses the Rust-native :class:`.PauliProductRotationGate` to represent Pauli product 
+    rotations. This improves performance and ergonomics, since the :class:`.PauliProductRotationGate`
+    directly represents single Pauli products instead of generic sums of Paulis. 
+    If ``use_ppr=False`` (the default), the pass keeps using :class:`.PauliEvolutionGate` objects
+    to represent the rotations.

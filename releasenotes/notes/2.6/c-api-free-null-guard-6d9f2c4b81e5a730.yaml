@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    :c:func:`qk_control_flow_instruction_free` now safely accepts null pointers, consistent with the
+    rest of the C API.  See `#17049 <https://github.com/Qiskit/qiskit/issues/17049>`__.

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,8 @@ import ast
 import itertools
 import re
 from os.path import isfile
-from typing import Union, Callable
+
+from collections.abc import Callable
 import numpy as np
 
 from .boolean_expression_visitor import (
@@ -60,7 +61,7 @@ class TruthTable:
             for assignment in itertools.product([False, True], repeat=self.num_bits)
         ]
 
-    def __getitem__(self, key: Union[str, tuple[bool]]) -> bool:
+    def __getitem__(self, key: str | tuple[bool]) -> bool:
         if isinstance(key, str):
             key = (bit != "0" for bit in key)
         if self.explicit_storage:
@@ -72,7 +73,7 @@ class TruthTable:
     def __str__(self) -> str:
         if self.explicit_storage:
             return "".join(
-                "1" if self[assignemnt] else "0" for assignemnt in self.all_assignments()
+                "1" if self[assignment] else "0" for assignment in self.all_assignments()
             )
         else:
             return f"Truth table on {self.num_bits} bits (implicit representation)"
@@ -81,7 +82,7 @@ class TruthTable:
 class BooleanExpression:
     """A Boolean Expression"""
 
-    def __init__(self, expression: str, var_order: list = None) -> None:
+    def __init__(self, expression: str, var_order: list | None = None) -> None:
         """
         Args:
             expression (str): The logical expression string.
@@ -103,7 +104,7 @@ class BooleanExpression:
             self.args.sort(key=var_order.index)
         self.truth_table_ = None
 
-    def simulate(self, bitstring: Union[str, tuple]) -> bool:
+    def simulate(self, bitstring: str | tuple) -> bool:
         """Evaluate the expression on a bitstring.
 
         This evaluation is done classically.
@@ -161,14 +162,14 @@ class BooleanExpression:
         Raises:
             ValueError: If ``circuit_type`` is not either 'bit' or 'phase'.
         """
-        # pylint: disable=cyclic-import
+
         from .boolean_expression_synth import (
             synth_bit_oracle_from_esop,
             synth_phase_oracle_from_esop,
             EsopGenerator,
         )  # import here to avoid cyclic import
 
-        # generating the esop currntly requires generating the full truth table
+        # generating the esop currently requires generating the full truth table
         # there are many optimizations that can be done to improve this step
         esop = EsopGenerator(self.truth_table).esop
         if circuit_type == "bit":
@@ -226,7 +227,7 @@ class BooleanExpression:
             FileNotFoundError: If filename is not found.
         """
         if not isfile(filename):
-            raise FileNotFoundError(f"The file {filename} does not exists.")
-        with open(filename, "r") as dimacs_file:
+            raise FileNotFoundError(f"The file {filename} does not exist.")
+        with open(filename) as dimacs_file:
             dimacs = dimacs_file.read()
         return BooleanExpression.from_dimacs(dimacs)

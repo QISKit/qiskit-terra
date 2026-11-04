@@ -13,12 +13,12 @@ doctest = false
 workspace = true
 
 [dependencies]
-indexmap.workspace = true
+qiskit-util.workspace = true
 hashbrown.workspace = true
 oq3_semantics = "0.7.0"
 oq3_syntax = "0.7.0"
 qiskit-circuit.workspace = true
-ahash.workspace = true
+foldhash.workspace = true
 regex = "1.12"
 lazy_static = "1.5"
 thiserror.workspace = true

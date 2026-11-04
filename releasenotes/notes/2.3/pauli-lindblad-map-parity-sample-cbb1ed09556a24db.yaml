@@ -1,0 +1,8 @@
+---
+features_quantum_info:
+  - |
+    Adds the :meth:`.PauliLindbladMap.parity_sample` method. This method is very similar to the
+    pre-existing :meth:`.PauliLindbladMap.signed_sample` method, however it uses a sign convention
+    that is more consistent with the rest of qiskit, and therefore is the preferred method to use
+    going forward. It has additional optional arguments to apply scalings to the rates when sampling
+    without modifying the instance.

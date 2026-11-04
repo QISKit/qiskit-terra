@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,7 +14,6 @@
 is a test for each subsection (except the description of 'qelib1.inc') in section 3 of
 https://arxiv.org/abs/1707.03429v2. The examples are copy/pasted from the source files there."""
 
-# pylint: disable=missing-module-docstring,missing-class-docstring,missing-function-docstring
 
 import math
 import os
@@ -25,7 +24,7 @@ import ddt
 from qiskit import qasm2
 from qiskit.circuit import QuantumCircuit, QuantumRegister, ClassicalRegister, Qubit
 from qiskit.circuit.library import U1Gate, U3Gate, CU1Gate
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 from . import gate_builder
 
@@ -33,7 +32,7 @@ from . import gate_builder
 def load(string, *args, **kwargs):
     # We're deliberately not using the context-manager form here because we need to use it in a
     # slightly odd pattern.
-    # pylint: disable=consider-using-with
+
     temp = tempfile.NamedTemporaryFile(mode="w", delete=False)
     try:
         temp.write(string)

@@ -1,0 +1,20 @@
+[package]
+name = "qiskit-cext-vtable"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "qiskit_cext_vtable"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+qiskit-cext = { workspace = true, optional = true }
+
+[features]
+addr = ["dep:qiskit-cext"]
+python_binding = ["qiskit-cext?/python_binding"]

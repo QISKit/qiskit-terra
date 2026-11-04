@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -16,9 +16,8 @@ use crate::operations::{Condition, SwitchTarget};
 use hashbrown::{HashMap, HashSet};
 use num_bigint::BigUint;
 use num_traits::Num;
-use pyo3::PyResult;
-use pyo3::prelude::*;
 use std::cell::RefCell;
+use std::error::Error;
 
 pub(crate) struct VariableMapper {
     target_cregs: Vec<ClassicalRegister>,
@@ -59,14 +58,15 @@ impl VariableMapper {
     /// [DAGCircuit::compose]; nowhere else does this, and in general this would require *far*
     /// more complex classical rewriting than Qiskit needs to worry about in the full expression
     /// era.
-    pub fn map_condition<F>(
+    pub fn map_condition<F, E>(
         &self,
         condition: &Condition,
         allow_reorder: bool,
         mut add_register: F,
-    ) -> PyResult<Condition>
+    ) -> Result<Condition, E>
     where
-        F: FnMut(&ClassicalRegister) -> PyResult<()>,
+        F: FnMut(&ClassicalRegister) -> Result<(), E>,
+        E: Error,
     {
         Ok(match condition {
             Condition::Bit(target, value) => {
@@ -99,7 +99,7 @@ impl VariableMapper {
                         mapped_bits_set == register_set
                     })
                     .cloned()
-                    .map(Ok::<_, PyErr>)
+                    .map(Ok::<_, E>)
                     .unwrap_or_else(|| {
                         let mapped_theirs =
                             ClassicalRegister::new_alias(None, mapped_bits_order.clone());
@@ -138,13 +138,14 @@ impl VariableMapper {
 
     /// Map the real-time variables in a `target` of a `SwitchCaseOp` to the new
     /// circuit.
-    pub fn map_target<F>(
+    pub fn map_target<F, E>(
         &self,
         target: &SwitchTarget,
         mut add_register: F,
-    ) -> PyResult<SwitchTarget>
+    ) -> Result<SwitchTarget, E>
     where
-        F: FnMut(&ClassicalRegister) -> PyResult<()>,
+        F: FnMut(&ClassicalRegister) -> Result<(), E>,
+        E: Error,
     {
         Ok(match target {
             SwitchTarget::Bit(bit) => SwitchTarget::Bit(self.bit_map.get(bit).cloned().unwrap()),
@@ -156,9 +157,10 @@ impl VariableMapper {
     }
 
     /// Map the variables in an [expr::Expr] node to the new circuit.
-    pub fn map_expr<F>(&self, expr: &expr::Expr, mut add_register: F) -> PyResult<expr::Expr>
+    pub fn map_expr<F, E>(&self, expr: &expr::Expr, mut add_register: F) -> Result<expr::Expr, E>
     where
-        F: FnMut(&ClassicalRegister) -> PyResult<()>,
+        F: FnMut(&ClassicalRegister) -> Result<(), E>,
+        E: Error,
     {
         let mut mapped = expr.clone();
         mapped.visit_mut(|e| match e {
@@ -193,14 +195,15 @@ impl VariableMapper {
     }
 
     /// Map the target's registers to suitable equivalents in the destination, adding an
-    /// extra one if there's no exact match."""
-    fn map_register<F>(
+    /// extra one if there's no exact match.
+    fn map_register<F, E>(
         &self,
         theirs: &ClassicalRegister,
         mut add_register: F,
-    ) -> PyResult<ClassicalRegister>
+    ) -> Result<ClassicalRegister, E>
     where
-        F: FnMut(&ClassicalRegister) -> PyResult<()>,
+        F: FnMut(&ClassicalRegister) -> Result<(), E>,
+        E: Error,
     {
         if let Some(mapped_theirs) = self.register_map.borrow().get(theirs.name()) {
             return Ok(mapped_theirs.clone());
@@ -215,7 +218,7 @@ impl VariableMapper {
                 mapped_bits == register
             })
             .cloned()
-            .map(Ok::<_, PyErr>)
+            .map(Ok::<_, E>)
             .unwrap_or_else(|| {
                 let mapped_theirs = ClassicalRegister::new_alias(None, mapped_bits.clone());
                 add_register(&mapped_theirs)?;

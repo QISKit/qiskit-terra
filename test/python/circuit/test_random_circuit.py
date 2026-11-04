@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -22,7 +22,7 @@ from qiskit.circuit.exceptions import CircuitError
 from qiskit.circuit.random import random_circuit
 from qiskit.circuit.random.utils import random_circuit_from_graph
 from qiskit.converters import circuit_to_dag
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestCircuitRandom(QiskitTestCase):
@@ -169,14 +169,14 @@ class TestCircuitRandom(QiskitTestCase):
 
 
 def incomplete_graph(n_nodes):
-    # pylint: disable=missing-function-docstring
+
     pydi_graph = rx.generators.directed_complete_graph(n_nodes)
     pydi_graph.remove_edge(1, 3)
     return pydi_graph
 
 
 def digraph_with_no_edges(n_nodes):
-    # pylint: disable=missing-function-docstring
+
     graph = rx.PyDiGraph()
     graph.add_nodes_from(range(n_nodes))
     return graph
@@ -190,7 +190,7 @@ test_cases = (
     (rx.generators.directed_heavy_hex_graph(3), 458),
     # Sparse connected graph
     (rx.generators.directed_path_graph(10), 458),
-    # A graph with no edges, should yeild a circuit with no edges,
+    # A graph with no edges, should yield a circuit with no edges,
     # this means there would be no 2Q gates on that circuit.
     (digraph_with_no_edges(10), 0),
     # A list of tuples of control qubit, target qubit, and edge probability
@@ -235,10 +235,8 @@ class TestRandomCircuitFromGraph(QiskitTestCase):
         n_nodes = 0
         if isinstance(inter_graph, list):
             for ctrl, trgt, _ in inter_graph:
-                if ctrl > n_nodes:
-                    n_nodes = ctrl
-                if trgt > n_nodes:
-                    n_nodes = trgt
+                n_nodes = max(n_nodes, ctrl)
+                n_nodes = max(n_nodes, trgt)
             n_nodes += 1  # ctrl, trgt are qubit indices.
         else:
             n_nodes = inter_graph.num_nodes()
@@ -254,7 +252,7 @@ class TestRandomCircuitFromGraph(QiskitTestCase):
         """the `min_2q_gate_per_edge` parameter specifies how often each qubit-pair must at
         least be used in a two-qubit gate before the circuit is returned"""
 
-        freq = 8  # Some arbitrary repetations, don't put 1.
+        freq = 8  # Some arbitrary repetitions, don't put 1.
         qc = random_circuit_from_graph(
             interaction_graph=inter_graph, min_2q_gate_per_edge=freq, seed=seed
         )
@@ -297,7 +295,7 @@ class TestRandomCircuitFromGraph(QiskitTestCase):
         cond_counter = 0
         for instr in qc:
             cond = getattr(instr.operation, "_condition", None)
-            if not cond is None:
+            if cond is not None:
                 cond_counter += 1
                 break  # even one conditional is enough for the check.
 
@@ -481,7 +479,7 @@ class TestRandomCircuitFromGraph(QiskitTestCase):
                 continue
 
             cond = getattr(instr.operation, "_condition", None)
-            if not cond is None:
+            if cond is not None:
                 if instr.operation.num_qubits == 1:
                     cond_counter_1q += 1
 

@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -13,10 +13,10 @@
 use pyo3::prelude::*;
 use pyo3::types::{PySequence, PyTuple};
 
-use ahash::RandomState;
+use foldhash::fast::RandomState;
 
 use hashbrown::HashMap;
-use indexmap::IndexMap;
+use qiskit_util::IndexMap;
 
 use oq3_semantics::asg;
 use oq3_semantics::symbols::{SymbolId, SymbolTable, SymbolType};
@@ -191,10 +191,11 @@ impl BuilderState {
         let qubits = if let Some(asg_qubits) = barrier.qubits().as_ref() {
             // We want any deterministic order for easier circuit reproducibility in Python space,
             // and to include each seen qubit once.  This simply maintains insertion order.
-            let mut qubits = IndexMap::<*const ::pyo3::ffi::PyObject, Py<PyAny>, RandomState>::with_capacity_and_hasher(
-                asg_qubits.len(),
-                RandomState::default()
-            );
+            let mut qubits =
+                IndexMap::<*const ::pyo3::ffi::PyObject, Py<PyAny>>::with_capacity_and_hasher(
+                    asg_qubits.len(),
+                    RandomState::default(),
+                );
             for qarg in asg_qubits.iter() {
                 let qarg = expr::expect_gate_operand(qarg)?;
                 match expr::eval_qarg(py, &self.symbols, ast_symbols, qarg)? {

@@ -1,0 +1,25 @@
+---
+# Delete all sections that you do not need.  You can have more than one section in a file, and
+# more than one bullet point per section.  This is a regular YAML file, and all text should use
+# Sphinx's flavor of rST (restructured text).  Each bullet point is a separate "release note".
+#
+# Each public bug fix, feature, deprecation, and behavior change needs a release note.
+# Documentation- or internal-only changes do not need release notes.
+#
+# Each bullet point appears without any context, so make sure each can be read in isolation.  The
+# reader will not see your code change, the issue, or any other bullet points in this file.  You
+# might need to repeat yourself between bullets.
+#
+# Use Sphinx cross-references like :meth:`.YourClass.your_method` whenever mentioning a
+# function/class/method by name.
+#
+# Use `- |` for multiline YAML strings (like in the "fixes" example in this template) to preserve
+# newlines, which you need for Sphinx syntax.
+#
+# There are some rare additional sections listed in `releasenotes/config.yaml` not included here.
+
+fixes:
+  - |
+    :func:`.plot_bloch_vector` no longer mutates a list input.
+features_visualization:
+  - :func:`.plot_bloch_vector` now accepts tuple input.

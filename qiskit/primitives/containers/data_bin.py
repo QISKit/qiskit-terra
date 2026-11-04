@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,8 @@ Dataclass tools for data namespaces (bins)
 """
 from __future__ import annotations
 
-from typing import Any, ItemsView, Iterable, KeysView, ValuesView
+from typing import Any
+from collections.abc import ItemsView, Iterable, KeysView, ValuesView
 
 import numpy as np
 
@@ -158,19 +159,18 @@ class DataBin(ShapedMixin):
     # projects have made the appropriate changes.
 
     @property
-    def _FIELDS(self) -> tuple[str, ...]:  # pylint: disable=invalid-name
+    def _FIELDS(self) -> tuple[str, ...]:
         return tuple(self._data)
 
     @property
-    def _FIELD_TYPES(self) -> tuple[Any, ...]:  # pylint: disable=invalid-name
+    def _FIELD_TYPES(self) -> tuple[Any, ...]:
         return tuple(map(type, self.values()))
 
     @property
-    def _SHAPE(self) -> tuple[int, ...]:  # pylint: disable=invalid-name
+    def _SHAPE(self) -> tuple[int, ...]:
         return self.shape
 
 
-# pylint: disable=unused-argument
 def make_data_bin(
     fields: Iterable[tuple[str, type]], shape: tuple[int, ...] | None = None
 ) -> type[DataBin]:

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -149,7 +149,7 @@ class ContextAwareDynamicalDecoupling(TransformationPass):
         self._skip_reset_qubits = skip_reset_qubits
         self._skip_dd_threshold = skip_dd_threshold
         self._target = target
-        self._coupling_map = target.build_coupling_map()  # build once and re-use for performance
+        self._coupling_map = target.build_coupling_map()  # build once and reuse for performance
         self._pulse_alignment = (
             target.pulse_alignment if pulse_alignment is None else pulse_alignment
         )
@@ -224,7 +224,8 @@ class ContextAwareDynamicalDecoupling(TransformationPass):
 
             # update node start times
             for node_id, start_time in zip(node_ids, delay.start_times):
-                self.property_set["node_start_time"][id_map[node_id]] = start_time
+                # Start times represent a list of times in dt times, so cast to 'int' when needed
+                self.property_set["node_start_time"][id_map[node_id]] = int(start_time)
 
         return dag
 
@@ -260,7 +261,7 @@ class ContextAwareDynamicalDecoupling(TransformationPass):
             )
             for node, start_time in self.property_set["node_start_time"].items()
             if (
-                node.op.name == "delay"
+                node.name == "delay"
                 and not is_after_reset(node)
                 and self._duration(node, qubit_map) > self._min_duration
             )
@@ -299,7 +300,7 @@ class ContextAwareDynamicalDecoupling(TransformationPass):
         wires = sorted(neighbors.union(merged_delay.indices))
         subgraph = self._coupling_map.graph.subgraph(list(wires)).to_undirected()
         glob2loc = dict(zip(wires, subgraph.node_indices()))
-        preset_coloring = {index: None for index in subgraph.node_indices()}
+        preset_coloring = dict.fromkeys(subgraph.node_indices())
 
         # find the neighbor wires and check if ctrl/tgt spectator
         for wire in neighbors:

@@ -1,0 +1,8 @@
+---
+features_transpiler:
+  - |
+    The functions :func:`.generate_preset_pass_manager` and :func:`.transpile` now forward
+    the ``approximation_degree`` argument to the :class:`.CommutativeOptimization` and
+    :class:`.SubstitutePi4Rotations` transpiler passes.
+    As these two passes do not support ``approximation_degree=None``, the value defaults
+    to ``1.0`` when ``None`` is specified.

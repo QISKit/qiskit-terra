@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    Fixed a bug in :meth:`~qiskit.circuit.ParameterExpression.sympify()` where reverse power
+    operations (RPOW) were incorrectly converting to sympy expressions with swapped operands.
+    Previously, expressions like ``a ** (b - 2)`` would incorrectly convert to ``(b - 2)**a``
+    instead of ``a ** (b - 2)``. The fix adds proper handling for reverse operations (RPOW,
+    RDIV, RSUB) to correctly swap operands before applying the operation, matching the Rust
+    implementation behavior.
+

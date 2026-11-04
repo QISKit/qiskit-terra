@@ -1,0 +1,6 @@
+---
+features_quantum_info:
+  - Added the :meth:`.PauliLindbladMap.parity_sample_with_history` method which is
+    identical to :meth:`.PauliLindbladMap.parity_sample` except for also tracking
+    and returning the underlying history of Paulis and signs that resulted in the
+    final sampled terms.

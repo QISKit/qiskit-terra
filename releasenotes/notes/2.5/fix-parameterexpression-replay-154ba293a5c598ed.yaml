@@ -1,0 +1,18 @@
+---
+fixes:
+  - |
+    :class:`.ParameterExpression` instances with cancelled-out variables (like ``x - x``) will now
+    retain the reference to ``x`` after a round-trip through QPY and pickle.
+  - |
+    :class:`.ParameterExpression` instances that evaluated to a bare value (like ``0*x + 2``) will
+    now successfully round-trip through QPY and pickle.
+issues:
+  - |
+    Qiskit v2.2 and v2.3 can generate unreadable QPY files for circuits containing a
+    :class:`.ParameterExpression` where all the contained :class:`.Parameter` instances were
+    cancelled out of the final expression.  For example, if the expression ``0*x + 1.5`` appears in
+    a circuit, Qiskit v2.2 and v2.3 will both produce a QPY file that cannot be read by any version
+    of Qiskit, including themselves and v2.4, due to errors in the QPY generation.
+
+    This error will typically appear (in Qiskit v2.4, at least) as a :exc:`.QpyError` with a message
+    such as "malformed expression: stack was empty before expression completed".

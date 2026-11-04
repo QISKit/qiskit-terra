@@ -1,0 +1,5 @@
+---
+features_circuits:
+  - |
+    :class:`.ClassicalRegister` objects with more than 65,535 bits can now be used with the
+    :mod:`qiskit.circuit.classical` expression system.

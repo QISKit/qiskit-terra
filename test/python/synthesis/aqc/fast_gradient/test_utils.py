@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -22,8 +22,8 @@ import qiskit.synthesis.unitary.aqc.fast_gradient.fast_grad_utils as myu
 from qiskit.synthesis.unitary.aqc.elementary_operations import rx_matrix as _rx
 from qiskit.synthesis.unitary.aqc.elementary_operations import ry_matrix as _ry
 from qiskit.synthesis.unitary.aqc.elementary_operations import rz_matrix as _rz
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
-import test.python.synthesis.aqc.fast_gradient.utils_for_testing as tut  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
+import test.python.synthesis.aqc.fast_gradient.utils_for_testing as tut
 
 
 class TestUtils(QiskitTestCase):
@@ -166,7 +166,7 @@ class TestUtils(QiskitTestCase):
 
         tol = np.finfo(np.float64).eps * 2.0
         out = np.full((2, 2), fill_value=0, dtype=np.complex128)
-        for test in range(self.num_repeats_gates2x2):  # pylint: disable=unused-variable
+        for test in range(self.num_repeats_gates2x2):
             phi = random.random() * 2.0 * np.pi
             self.assertTrue(np.allclose(myu.make_rx(phi, out=out), _rx(phi), atol=tol, rtol=tol))
             self.assertTrue(np.allclose(myu.make_ry(phi, out=out), _ry(phi), atol=tol, rtol=tol))

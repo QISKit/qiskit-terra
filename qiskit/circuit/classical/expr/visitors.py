@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,10 +16,10 @@ from __future__ import annotations
 
 __all__ = [
     "ExprVisitor",
-    "iter_vars",
-    "iter_identifiers",
-    "structurally_equivalent",
     "is_lvalue",
+    "iter_identifiers",
+    "iter_vars",
+    "structurally_equivalent",
 ]
 
 import typing
@@ -35,7 +35,6 @@ class ExprVisitor(typing.Generic[_T_co]):
     non-existent methods will never be called."""
 
     # The method names are self-explanatory and docstrings would just be noise.
-    # pylint: disable=missing-function-docstring
 
     __slots__ = ()
 
@@ -67,7 +66,6 @@ class ExprVisitor(typing.Generic[_T_co]):
 class _VarWalkerImpl(ExprVisitor[typing.Iterable[expr.Var]]):
     # We don't want docstrings for the inherited visitor methods, which are self-explanatory and
     # would just be noise.
-    # pylint: disable=missing-function-docstring
 
     __slots__ = ()
 
@@ -75,11 +73,11 @@ class _VarWalkerImpl(ExprVisitor[typing.Iterable[expr.Var]]):
         yield node
 
     def visit_stretch(self, node, /):
-        # pylint: disable=unused-argument
+
         yield from ()
 
     def visit_value(self, node, /):
-        # pylint: disable=unused-argument
+
         yield from ()
 
     def visit_unary(self, node, /):
@@ -97,7 +95,7 @@ class _VarWalkerImpl(ExprVisitor[typing.Iterable[expr.Var]]):
         yield from node.index.accept(self)
 
 
-class _IdentWalkerImpl(ExprVisitor[typing.Iterable[typing.Union[expr.Var, expr.Stretch]]]):
+class _IdentWalkerImpl(ExprVisitor[typing.Iterable[expr.Var | expr.Stretch]]):
     __slots__ = ()
 
     def visit_var(self, node, /):
@@ -153,7 +151,7 @@ def iter_vars(node: expr.Expr) -> typing.Iterator[expr.Var]:
     yield from node.accept(_VAR_WALKER)
 
 
-def iter_identifiers(node: expr.Expr) -> typing.Iterator[typing.Union[expr.Var, expr.Stretch]]:
+def iter_identifiers(node: expr.Expr) -> typing.Iterator[expr.Var | expr.Stretch]:
     """Get an iterator over the :class:`~.expr.Var` and :class:`~.expr.Stretch`
     nodes referenced at any level in the given :class:`~.expr.Expr`.
 
@@ -186,9 +184,9 @@ class _StructuralEquivalenceImpl(ExprVisitor[bool]):
     # `other` state in the class instance.
 
     __slots__ = (
-        "self_key",
-        "other_key",
         "other",
+        "other_key",
+        "self_key",
     )
 
     def __init__(self, other: expr.Expr, self_key, other_key):
@@ -342,7 +340,7 @@ def is_lvalue(node: expr.Expr, /) -> bool:
     """Return whether this expression can be used in l-value positions, that is, whether it has a
     well-defined location in memory, such as one that might be writeable.
 
-    Being an l-value is a necessary but not sufficient for this location to be writeable; it is
+    Being an l-value is necessary but not sufficient for this location to be writeable; it is
     permissible that a larger object containing this memory location may not allow writing from
     the scope that attempts to write to it.  This would be an access property of the containing
     program, however, and not an inherent property of the expression system.

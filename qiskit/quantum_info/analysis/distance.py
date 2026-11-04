@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ def hellinger_distance(dist_p: dict, dist_q: dict) -> float:
     """Computes the Hellinger distance between
     two counts distributions.
 
-    Parameters:
+    Args:
         dist_p (dict): First dict of counts.
         dist_q (dict): Second dict of counts.
 
@@ -65,7 +65,7 @@ def hellinger_fidelity(dist_p: dict, dist_q: dict) -> float:
     :math:`F(Q,P)=\\left(\\sum_{i}\\sqrt{p_{i}q_{i}}\\right)^{2}` that in turn
     is equal to the quantum state fidelity for diagonal density matrices.
 
-    Parameters:
+    Args:
         dist_p (dict): First dict of counts.
         dist_q (dict): Second dict of counts.
 

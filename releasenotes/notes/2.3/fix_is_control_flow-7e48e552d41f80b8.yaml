@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    The rust ``is_control_flow`` method now returns ``false`` on :class:`.ContinueLoopOp` and :class:`.BreakLoopOp` constructs
+    as is expected by the parts of the code that use it. Fixed `#15579 <https://github.com/Qiskit/qiskit/issues/15579>`__.

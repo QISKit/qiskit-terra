@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ from qiskit.converters.circuit_to_dag import circuit_to_dag
 from qiskit.converters.dag_to_dagdependency import dag_to_dagdependency
 from qiskit.converters.dagdependency_to_dag import dagdependency_to_dag
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestCircuitToDagDependency(QiskitTestCase):
@@ -65,7 +65,7 @@ class TestCircuitToDagDependency(QiskitTestCase):
         self.assertEqual(dag_out, dag_in)
 
     def test_metadata(self):
-        """Test circuit metadata is preservered through conversion."""
+        """Test circuit metadata is preserved through conversion."""
         meta_dict = {"experiment_id": "1234", "execution_number": 4}
         qr = QuantumRegister(2)
         circuit_in = QuantumCircuit(qr, metadata=meta_dict)

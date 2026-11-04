@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from qiskit import _numpy_compat
 from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit.instruction import Instruction
 from qiskit.exceptions import QiskitError
@@ -113,7 +112,7 @@ class DensityMatrix(QuantumState, TolerancesMixin):
             raise QiskitError("Invalid DensityMatrix input: not a square matrix.")
         super().__init__(op_shape=OpShape.auto(shape=self._data.shape, dims_l=dims, dims_r=dims))
 
-    def __array__(self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+    def __array__(self, dtype=None, copy=None):
         dtype = self.data.dtype if dtype is None else dtype
         return np.array(self.data, dtype=dtype, copy=copy)
 
@@ -136,7 +135,7 @@ class DensityMatrix(QuantumState, TolerancesMixin):
         return {"data": self.data, "dims": self._op_shape.dims_l()}
 
     def draw(self, output: str | None = None, **drawer_args):
-        """Return a visualization of the Statevector.
+        """Return a visualization of the density matrix.
 
         **repr**: ASCII TextMatrix of the state's ``__repr__``.
 
@@ -152,6 +151,13 @@ class DensityMatrix(QuantumState, TolerancesMixin):
 
         **bloch**: Matplotlib figure, rendering of density matrix using `plot_bloch_multivector()`.
 
+        .. warning::
+
+           Using this method with ``"latex"`` or ``"latex_source"`` output modes
+           relies on SymPy internally which is inherently unsafe as SymPy heavily
+           relies on Python's :func:`.eval` function. This method is not safe to
+           use with untrusted input.
+
         Args:
             output (str): Select the output method to use for drawing the
                 state. Valid choices are `repr`, `text`, `latex`, `latex_source`,
@@ -159,20 +165,28 @@ class DensityMatrix(QuantumState, TolerancesMixin):
                 be changed by adding the line ``state_drawer = <default>`` to
                 ``~/.qiskit/settings.conf`` under ``[default]``.
             drawer_args: Arguments to be passed directly to the relevant drawing
-                function or constructor (`TextMatrix()`, `array_to_latex()`,
-                `plot_state_qsphere()`, `plot_state_hinton()` or `plot_bloch_multivector()`).
-                See the relevant function under `qiskit.visualization` for that function's
-                documentation.
+                function or constructor:
+
+                * For ``'latex'`` and ``'latex_source'``: see
+                  :func:`~qiskit.visualization.state_to_latex` (which forwards to
+                  :func:`~qiskit.visualization.array_to_latex`).
+                * For ``'text'``: arguments such as ``max_size`` to control the
+                  summarization threshold.
+                * For Matplotlib figures (``'qsphere'``, ``'hinton'``, or ``'bloch'``):
+                  see the corresponding plotting functions in :mod:`qiskit.visualization`
+                  (such as :func:`~qiskit.visualization.plot_state_qsphere`,
+                  :func:`~qiskit.visualization.plot_state_hinton`, or
+                  :func:`~qiskit.visualization.plot_bloch_multivector`).
 
         Returns:
             :class:`matplotlib.Figure` or :class:`str` or
             :class:`TextMatrix` or :class:`IPython.display.Latex`:
-            Drawing of the Statevector.
+            Drawing of the density matrix.
 
         Raises:
             ValueError: when an invalid output method is selected.
         """
-        # pylint: disable=cyclic-import
+
         from qiskit.visualization.state_visualization import state_drawer
 
         return state_drawer(self, output=output, **drawer_args)
@@ -180,7 +194,7 @@ class DensityMatrix(QuantumState, TolerancesMixin):
     def _ipython_display_(self):
         out = self.draw()
         if isinstance(out, str):
-            print(out)  # pylint: disable=bad-builtin
+            print(out)  # noqa: T201
         else:
             from IPython.display import display
 
@@ -212,7 +226,8 @@ class DensityMatrix(QuantumState, TolerancesMixin):
         return Operator(self.data, input_dims=dims, output_dims=dims)
 
     def conjugate(self):
-        """Return the conjugate of the density matrix."""
+        """Return the complex conjugate of the density matrix with respect to the basis
+        of the vector components returned by :meth:`~DensityMatrix.data`."""
         return DensityMatrix(np.conj(self.data), dims=self.dims())
 
     def trace(self):
@@ -519,7 +534,7 @@ class DensityMatrix(QuantumState, TolerancesMixin):
 
         Additional Information:
             If all subsystems are reset this will return the ground state
-            on all subsystems. If only a some subsystems are reset this
+            on all subsystems. If only some subsystems are reset this
             function will perform evolution by the reset
             :class:`~qiskit.quantum_info.SuperOp` of the reset subsystems.
         """
@@ -560,7 +575,7 @@ class DensityMatrix(QuantumState, TolerancesMixin):
              - :math:`\frac{1}{2}\begin{pmatrix} 1 & i \\ -i & 1 \end{pmatrix}`
 
         Args:
-            label (string): a eigenstate string ket label (see table for
+            label (string): an eigenstate string ket label (see table for
                             allowed values).
 
         Returns:
@@ -593,7 +608,7 @@ class DensityMatrix(QuantumState, TolerancesMixin):
 
             * ``Int`` -- the integer specifies the total dimension of the
               state. If it is a power of two the state will be initialized
-              as an N-qubit state. If it is not a power of  two the state
+              as an N-qubit state. If it is not a power of two the state
               will have a single d-dimensional subsystem.
         """
         size = np.prod(dims)

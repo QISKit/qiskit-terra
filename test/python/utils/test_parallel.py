@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,7 @@ from unittest import mock
 
 from qiskit.utils import local_hardware_info, should_run_in_parallel, parallel_map
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 def _parfunc(x):
@@ -110,7 +110,7 @@ class TestUtilities(QiskitTestCase):
         # Windows is picky about opening files that are already opened for writing.  Ideally we'd
         # use a context manager with `delete_on_close=False` so we close the file, launch our
         # subprocess and let the CM clean up on exit, but that argument only arrived in Python 3.12.
-        # pylint: disable=consider-using-with
+
         # We're deliberately writing out to a temporary file.
         settings_file = tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False)
         settings_file.write(

@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Fixed :func:`.synth_qft_line` to correctly synthesize circuits with
+    32 or more qubits.

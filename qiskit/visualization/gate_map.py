@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,7 +13,6 @@
 """A module for visualizing device coupling maps"""
 
 import math
-from typing import List
 
 import numpy as np
 import rustworkx as rx
@@ -61,7 +60,7 @@ def plot_gate_map(
         filename (str): file path to save image to.
         qubit_coordinates (Sequence): An optional sequence input (list or array being the
             most common) of 2d coordinates for each qubit. The length of the
-            sequence much match the number of qubits on the backend. The sequence
+            sequence must match the number of qubits on the backend. The sequence
             should be the planar coordinates in a 0-based square grid where each
             qubit is located.
 
@@ -939,8 +938,8 @@ def plot_gate_map(
 @_optionals.HAS_GRAPHVIZ.require_in_call
 def plot_coupling_map(
     num_qubits: int,
-    qubit_coordinates: List[List[int]],
-    coupling_map: List[List[int]],
+    qubit_coordinates: list[list[int]],
+    coupling_map: list[list[int]],
     figsize=None,
     plot_directed=False,
     label_qubits=True,
@@ -957,6 +956,11 @@ def plot_coupling_map(
     planar=True,
 ):
     """Plots an arbitrary coupling map of qubits (embedded in a plane).
+
+    .. warning::
+        This function will call the system Graphviz tool on a file involving user-controllable
+        strings (such as qubit labels).  It is recommended to only call this function on trusted
+        input.
 
     Args:
         num_qubits (int): The number of qubits defined and plotted.
@@ -1010,9 +1014,8 @@ def plot_coupling_map(
 
     if qubit_labels is None:
         qubit_labels = list(range(num_qubits))
-    else:
-        if len(qubit_labels) != num_qubits:
-            raise QiskitError("Length of qubit labels does not equal number of qubits.")
+    elif len(qubit_labels) != num_qubits:
+        raise QiskitError("Length of qubit labels does not equal number of qubits.")
 
     if not label_qubits:
         qubit_labels = [""] * num_qubits
@@ -1075,7 +1078,7 @@ def plot_coupling_map(
         out_dict["style"] = "filled"
         out_dict["shape"] = "circle"
         out_dict["fontcolor"] = f'"{font_color}"'
-        out_dict["fontsize"] = f'"{str(font_size)}!"'
+        out_dict["fontsize"] = f'"{font_size!s}!"'
         out_dict["height"] = str(qubit_size * px)
         out_dict["fixedsize"] = "True"
         out_dict["fontname"] = '"DejaVu Sans"'
@@ -1239,7 +1242,7 @@ def plot_error_map(backend, figsize=(15, 12), show_title=True, qubit_coordinates
         show_title (bool): Show the title or not.
         qubit_coordinates (Sequence): An optional sequence input (list or array being the
             most common) of 2d coordinates for each qubit. The length of the
-            sequence much mast the number of qubits on the backend. The sequence
+            sequence must match the number of qubits on the backend. The sequence
             should be the planar coordinates in a 0-based square grid where each
             qubit is located.
 
@@ -1297,7 +1300,7 @@ def plot_error_map(backend, figsize=(15, 12), show_title=True, qubit_coordinates
         directed = False
         if num_qubits < 20:
             for edge in cmap:
-                if not [edge[1], edge[0]] in cmap:
+                if [edge[1], edge[0]] not in cmap:
                     directed = True
                     break
         for line in cmap.get_edges():

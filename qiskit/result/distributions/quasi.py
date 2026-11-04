@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -39,7 +39,7 @@ class QuasiDistribution(dict):
             and the parameter ``ndigits`` can be manipulated with the
             class attribute ``__ndigits__``. The default is ``15``.
 
-        Parameters:
+        Args:
             data (dict): Input quasiprobability data. Where the keys
                 represent a measured classical value and the value is a
                 float for the quasiprobability of that result.
@@ -66,7 +66,7 @@ class QuasiDistribution(dict):
                 # but the number of bits to represent the largest key.
                 self._num_bits = len(bin(max(data.keys()))) - 2
             elif isinstance(first_key, str):
-                if first_key.startswith("0x") or first_key.startswith("0b"):
+                if first_key.startswith(("0x", "0b")):
                     data = {int(key, 0): value for key, value in data.items()}
                     # `self._num_bits` is not always the exact number of qubits measured,
                     # but the number of bits to represent the largest key.
@@ -90,7 +90,7 @@ class QuasiDistribution(dict):
         it to the closest probability distribution as defined by
         the L2-norm.
 
-        Parameters:
+        Args:
             return_distance (bool): Return the L2 distance between distributions.
 
         Returns:
@@ -113,7 +113,7 @@ class QuasiDistribution(dict):
                 diff += val * val
             else:
                 diff += (beta / num_elems) * (beta / num_elems)
-                new_probs[key] = sorted_probs[key] + beta / num_elems
+                new_probs[key] = val + beta / num_elems
         if return_distance:
             return ProbDistribution(new_probs, self.shots), sqrt(diff)
         return ProbDistribution(new_probs, self.shots)
@@ -121,7 +121,7 @@ class QuasiDistribution(dict):
     def binary_probabilities(self, num_bits=None):
         """Build a quasi-probabilities dictionary with binary string keys
 
-        Parameters:
+        Args:
             num_bits (int): number of bits in the binary bitstrings (leading
                 zeros will be padded). If None, a default value will be used.
                 If keys are given as integers or strings with binary or hex prefix,

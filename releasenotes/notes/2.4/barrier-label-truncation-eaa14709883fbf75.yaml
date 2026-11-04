@@ -1,0 +1,9 @@
+---
+features_visualization:
+  - |
+    Added a new ``barrier_label_len`` parameter (default 16) to
+    :meth:`.QuantumCircuit.draw` and :func:`.circuit_drawer`. When a
+    :class:`.Barrier` label exceeds this length, it is truncated and ``"..."``
+    is appended. This prevents very long barrier labels from making circuit
+    diagrams unreadable. The parameter is supported by all three drawer
+    backends (text, mpl, latex).

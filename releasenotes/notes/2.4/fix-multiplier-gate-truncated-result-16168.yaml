@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed :class:`.MultiplierGate` so that its default decomposition preserves
+    the requested number of result qubits. Previously, it ignored this argument
+    and always decomposed using twice the number of state qubits for the 
+    result qubits.
+    Fixed `#16168 <https://github.com/Qiskit/qiskit/issues/16168>`__.

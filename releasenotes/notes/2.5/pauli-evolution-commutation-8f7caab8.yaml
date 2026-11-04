@@ -1,0 +1,13 @@
+---
+features_transpiler:
+  - |
+    The :class:`.CommutationChecker` can now efficiently check commutations between
+    standard gates and Pauli-based gates, like :class:`.PauliEvolutionGate`, 
+    :class:`.PauliProductRotationGate`, :class:`.PauliProductMeasurement`,
+    and :class:`~qiskit.quantum_info.Pauli`, without resorting to matrix-based checks.
+fixes:
+  - |
+    Fixes an issue where the :class:`.LightCone` pass would fail with index errors or
+    out-of-memory panics when encountering large or complex operations.
+    Fixed `#15021 <https://github.com/Qiskit/qiskit/issues/15021>`__
+    and `#13828 <https://github.com/Qiskit/qiskit/issues/13828>`__.

@@ -6,7 +6,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,6 +19,7 @@ from uuid import uuid4
 import io
 
 from qiskit.qpy import load, formats, QpyError
+from qiskit.qpy.common import QPY_RUST_READ_MIN_VERSION
 
 
 class TestMinQpyVersion(unittest.TestCase):
@@ -34,6 +35,21 @@ class TestMinQpyVersion(unittest.TestCase):
         mock_get_config.return_value = {"min_qpy_version": 12}
         with io.BytesIO() as buf:
             buf.write(struct.pack(formats.FILE_HEADER_PACK, b"QISKIT", 9, 1, 0, 0, 0))
+            buf.seek(0)
+            with self.assertRaises(QpyError) as cm:
+                load(buf)
+        self.assertIn("is lower than the configured minimum version", str(cm.exception))
+
+    @mock.patch("qiskit.user_config.get_config")
+    def test_enforce_min_qpy_version_with_rust(self, mock_get_config):
+        """Test that QPY file below min_qpy_version raises QiskitError."""
+        mock_get_config.return_value = {"min_qpy_version": QPY_RUST_READ_MIN_VERSION + 1}
+        with io.BytesIO() as buf:
+            buf.write(
+                struct.pack(
+                    formats.FILE_HEADER_PACK, b"QISKIT", QPY_RUST_READ_MIN_VERSION, 1, 0, 0, 0
+                )
+            )
             buf.seek(0)
             with self.assertRaises(QpyError) as cm:
                 load(buf)

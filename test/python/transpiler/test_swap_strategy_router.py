@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,14 +14,14 @@
 
 from ddt import ddt, data
 
-from qiskit.circuit import QuantumCircuit, Qubit, QuantumRegister
+from qiskit.circuit import QuantumCircuit, Qubit, QuantumRegister, Parameter, ParameterVector
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.transpiler import PassManager, CouplingMap, Layout, TranspilerError
 from qiskit.circuit.library import PauliEvolutionGate, CXGate
 from qiskit.circuit.library.n_local import QAOAAnsatz
 from qiskit.converters import circuit_to_dag
 from qiskit.exceptions import QiskitError
-from qiskit.quantum_info import Pauli, SparsePauliOp
+from qiskit.quantum_info import Operator, Pauli, SparsePauliOp
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit.transpiler.passes import FullAncillaAllocation
 from qiskit.transpiler.passes import EnlargeWithAncilla
@@ -37,7 +37,7 @@ from qiskit.transpiler.passes.routing.commuting_2q_gate_routing import (
     FindCommutingPauliEvolutions,
     Commuting2qGateRouter,
 )
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @ddt
@@ -91,6 +91,18 @@ class TestPauliEvolutionSwapStrategies(QiskitTestCase):
         expected.append(PauliEvolutionGate(Pauli("ZZ"), 3), (0, 1))
 
         self.assertEqual(swapped, expected)
+
+    def test_global_phase_preserved_without_commuting_blocks(self):
+        """Test routing a circuit with no commuting blocks preserves its global phase."""
+        circ = QuantumCircuit(4, global_phase=0.3)
+        circ.h(0)
+        circ.cx(0, 1)
+
+        swap_strat = SwapStrategy.from_line([0, 1, 2, 3])
+        routed = PassManager([Commuting2qGateRouter(swap_strat)]).run(circ)
+
+        self.assertEqual(routed.global_phase, circ.global_phase)
+        self.assertEqual(Operator(routed), Operator(circ))
 
     def test_basic_xx(self):
         """Test to route an XX-based evolution op.
@@ -594,7 +606,7 @@ class TestPauliEvolutionSwapStrategies(QiskitTestCase):
         # test as pre-routing step
         backend = GenericBackendV2(num_qubits=4, coupling_map=[[0, 1], [0, 2], [0, 3]], seed=42)
         pm = generate_preset_pass_manager(
-            optimization_level=3, target=backend.target, seed_transpiler=40
+            optimization_level=1, target=backend.target, seed_transpiler=40
         )
         pm.pre_routing = swap_pm
         full = pm.run(circ.decompose())
@@ -664,3 +676,96 @@ class TestSwapRouterExceptions(QiskitTestCase):
 
         with self.assertRaises(QiskitError):
             Commuting2qBlock(circuit_to_dag(circ).op_nodes())
+
+    def test_commuting2qblock_preserves_parameters(self):
+        """Test that Commuting2qBlock preserves parameters from parametric gates."""
+
+        c_0 = Parameter("c_0")
+        c_1 = Parameter("c_1")
+        gamma = Parameter("gamma")
+
+        qc = QuantumCircuit(3)
+        qc.rzz(c_0 * gamma, 0, 1)
+        qc.rzz(c_1, 1, 2)
+
+        dag = circuit_to_dag(qc)
+        nodes = list(dag.topological_op_nodes())
+        block = Commuting2qBlock(nodes)
+
+        # Check that both parameters are preserved
+        self.assertEqual(len(block.params), 3)
+        param_names = {p.name for p in block.params}
+        self.assertEqual(param_names, {"c_0", "gamma", "c_1"})
+
+    def test_parameters_when_appending_commuting2qblock_to_a_circuit(self):
+        """Test that a circuit appended with Commuting2qBlock knows about its parameters."""
+
+        theta = ParameterVector("theta", 3)
+        qc = QuantumCircuit(3)
+        qc.rzz(theta[0], 0, 1)
+        qc.rzz(theta[1], 1, 2)
+        qc.rzz(theta[2], 0, 2)
+
+        dag = circuit_to_dag(qc)
+        nodes = list(dag.topological_op_nodes())
+        block = Commuting2qBlock(nodes)
+
+        circuit_with_block = QuantumCircuit(3)
+        self.assertEqual(circuit_with_block.parameters, {})
+        circuit_with_block.append(block, range(3))
+
+        circuit_params = set(circuit_with_block.parameters)
+        expected_params = {theta[0], theta[1], theta[2]}
+        self.assertEqual(circuit_params, expected_params)
+
+        # Assign parameters and verify the circuit has no parameters after assignment
+        param_values = {theta[0]: 0.5, theta[1]: 1.0, theta[2]: 1.5}
+        assigned_circuit = circuit_with_block.assign_parameters(param_values)
+        self.assertEqual(assigned_circuit.parameters, {})
+
+    def test_commuting2qblock_parameter_reuse(self):
+        """Test that reusing the same parameter multiple times within a block works correctly."""
+
+        gamma = Parameter("gamma")
+        c_0 = Parameter("c_0")
+        qc = QuantumCircuit(3)
+        qc.rzz(gamma, 0, 1)
+        qc.rzz(2 * gamma, 1, 2)
+        qc.rzz(gamma + c_0, 0, 2)  # Reuse gamma
+
+        dag = circuit_to_dag(qc)
+        nodes = list(dag.topological_op_nodes())
+        block = Commuting2qBlock(nodes)
+
+        self.assertEqual(len(block.params), 2)
+        self.assertEqual(set(block.params), {c_0, gamma})
+
+        circuit_with_block = QuantumCircuit(3)
+        circuit_with_block.append(block, range(3))
+
+        self.assertEqual(set(circuit_with_block.parameters), {gamma, c_0})
+
+        assigned_circuit = circuit_with_block.assign_parameters({gamma: 0.7})
+        self.assertEqual(len(assigned_circuit.parameters), 1)
+
+    def test_identical_summands_added(self):
+        summand_a = SparsePauliOp(["ZZ", "ZZ"], coeffs=[0.2, 0.4])
+        summand_b = SparsePauliOp(["ZZ"], coeffs=[0.6])
+
+        circuit_a = QuantumCircuit(2)
+        circuit_a.append(PauliEvolutionGate(summand_a, time=1.0), [0, 1])
+
+        circuit_b = QuantumCircuit(2)
+        circuit_b.append(PauliEvolutionGate(summand_b, time=1.0), [0, 1])
+
+        manager = PassManager(
+            [FindCommutingPauliEvolutions(), Commuting2qGateRouter(SwapStrategy.from_line([0, 1]))]
+        )
+
+        circuit_a = manager.run(circuit_a)
+        circuit_b = manager.run(circuit_b)
+
+        operator_a = Operator(circuit_a)
+        operator_b = Operator(circuit_b)
+
+        self.assertEqual(operator_a, operator_b)

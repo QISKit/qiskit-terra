@@ -1,0 +1,12 @@
+---
+deprecations_transpiler:
+  - |
+    Deprecated the legacy serialization format used in :class:`.SolovayKitaevDecomposition`,
+    which was based on pickling the basic approximations in form of a Python dictionary.
+    The loading process is a potential security vulnerability and should only be used with trusted files.
+    The new serialization format avoids this vulnerability.
+    The functions to generate the legacy format, :func:`.generate_basic_approximations`, and load it,
+    :meth:`.SolovayKitaevDecomposition.load_basic_approximations` and in the initializer
+    of :class:`.SolovayKitaevDecomposition`, have been deprecated.
+    Instead, use :meth:`.SolovayKitaevDecomposition.save_basic_approximations` to generate a format
+    that can safely be loaded in the class initializer.

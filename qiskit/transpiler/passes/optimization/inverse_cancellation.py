@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,6 @@ A generic InverseCancellation pass for any set of gate-inverse pairs.
 """
 from __future__ import annotations
 
-from typing import List, Tuple, Union
 
 from qiskit.circuit import Gate
 from qiskit.dagcircuit import DAGCircuit
@@ -35,7 +34,7 @@ class InverseCancellation(TransformationPass):
 
     def __init__(
         self,
-        gates_to_cancel: List[Union[Gate, Tuple[Gate, Gate]]] | None = None,
+        gates_to_cancel: list[Gate | tuple[Gate, Gate]] | None = None,
         run_default: bool = False,
     ):
         """Initialize InverseCancellation pass.

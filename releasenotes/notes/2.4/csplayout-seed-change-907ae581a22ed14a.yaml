@@ -1,0 +1,10 @@
+---
+upgrade_transpiler:
+  - |
+    The internal random number generator usage for the :class:`.CSPLayout` pass
+    has been changed. This means that for a fixed seed the pass will potentially
+    return different results from previous releases. The seed for seed results
+    are not a guaranteed between releases for the :mod:`~qiskit.transpiler`
+    but if you were relying on the exact results from this pass you can run the
+    pass in an early release and use :mod:`~qiskit.qpy` to save the output and
+    load it with the latest release.

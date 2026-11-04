@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -23,7 +23,7 @@ def calc_final_ops(dag: DAGCircuit, final_op_names: set[str]) -> list[DAGOpNode]
         final_op_names: names of the operations to find at the end of the circuit.
 
     Returns:
-    List of nodes corresponding the the relevant operations at the end of the circuit.
+    List of nodes corresponding to the relevant operations at the end of the circuit.
     """
     final_ops = []
 
@@ -35,7 +35,7 @@ def calc_final_ops(dag: DAGCircuit, final_op_names: set[str]) -> list[DAGOpNode]
         if not isinstance(node, DAGOpNode):
             continue
 
-        if node.op.name == "barrier":
+        if node.name == "barrier":
             # Barrier is final if all children are final, so we track
             # how many times we still need to encounter each barrier
             # via a child node.

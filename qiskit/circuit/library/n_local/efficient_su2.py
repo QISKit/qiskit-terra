@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -25,7 +25,7 @@ from .n_local import n_local, BlockEntanglement
 from .two_local import TwoLocal
 
 if typing.TYPE_CHECKING:
-    import qiskit  # pylint: disable=cyclic-import
+    import qiskit
 
 
 def efficient_su2(
@@ -52,7 +52,7 @@ def efficient_su2(
     :math:`SU(2)` is the special unitary group of degree 2, its elements are :math:`2 \times 2`
     unitary matrices with determinant 1, such as the Pauli rotation gates.
 
-    On 3 qubits and using the Pauli :math:`Y` and :math:`Z` rotations as single qubit gates, the
+    On 3 qubits and using the Pauli :math:`Y` and :math:`Z` rotations as single qubit gates,
     this circuit is represented by:
 
     .. parsed-literal::
@@ -158,7 +158,7 @@ class EfficientSU2(TwoLocal):
         └──────────┘└──────────┘ ░ └───┘      ░       ░ └───────────┘└───────────┘
 
     See :class:`~qiskit.circuit.library.RealAmplitudes` for more detail on the possible arguments
-    and options such as skipping unentanglement qubits, which apply here too.
+    and options such as skipping unentangled qubits, which apply here too.
 
     Examples:
 
@@ -254,6 +254,8 @@ class EfficientSU2(TwoLocal):
                 for anything besides visualization its **strongly** recommended
                 to set this flag to ``True`` to avoid a large performance
                 overhead for parameter binding.
+            name: Name of the circuit.
+
         """
         if su2_gates is None:
             su2_gates = [RYGate, RZGate]

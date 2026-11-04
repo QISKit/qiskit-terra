@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,12 +13,12 @@
 """Schema and helper models for schema-conformant Results."""
 
 import copy
-from enum import Enum, IntEnum
+from enum import IntEnum, StrEnum
 
 from qiskit.exceptions import QiskitError
 
 
-class MeasReturnType(str, Enum):
+class MeasReturnType(StrEnum):
     """meas_return allowed values defined by legacy PulseQobjConfig object but still used by Result."""
 
     AVERAGE = "avg"
@@ -39,7 +39,7 @@ class ExperimentResultData:
     def __init__(
         self, counts=None, snapshots=None, memory=None, statevector=None, unitary=None, **kwargs
     ):
-        """Initialize an ExperimentalResult Data class
+        """Initialize an ExperimentResultData class
 
         Args:
             counts (dict): A dictionary where the keys are the result in
@@ -164,7 +164,7 @@ class ExperimentResult:
             self.seed = seed
         if meas_return is not None:
             if meas_return not in list(MeasReturnType):
-                raise QiskitError("%s not a valid meas_return value")
+                raise QiskitError(f"{meas_return} not a valid meas_return value")
             self.meas_return = meas_return
         self._metadata.update(kwargs)
 

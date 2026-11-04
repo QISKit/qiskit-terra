@@ -1,0 +1,4 @@
+---
+features_c:
+  - The C API now provides :c:func:`qk_api_version`, which returns the version of the library that
+    has been loaded at runtime.  The return format is the same as :c:macro:`QISKIT_VERSION_HEX`.

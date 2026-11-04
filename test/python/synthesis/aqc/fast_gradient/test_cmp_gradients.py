@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,14 +15,13 @@ Tests equivalence of the default and fast gradient computation routines.
 """
 
 import unittest
-from typing import Tuple
 from time import perf_counter
 import numpy as np
 
 from qiskit.synthesis.unitary.aqc.fast_gradient.fast_gradient import FastCNOTUnitObjective
 from qiskit.synthesis.unitary.aqc.cnot_unit_objective import DefaultCNOTUnitObjective
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
-from test.python.synthesis.aqc.fast_gradient.utils_for_testing import (  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
+from test.python.synthesis.aqc.fast_gradient.utils_for_testing import (
     rand_circuit,
     rand_su_mat,
 )
@@ -42,7 +41,7 @@ class TestCompareGradientImpls(QiskitTestCase):
 
     def _compare(
         self, num_qubits: int, depth: int
-    ) -> Tuple[int, int, float, float, float, float, float]:
+    ) -> tuple[int, int, float, float, float, float, float]:
         """
         Calculates gradient and objective function value for the original
         and the fast implementations, and compares the outputs from both.

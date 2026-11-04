@@ -1,0 +1,13 @@
+---
+features_transpiler:
+  - |
+    Added a new ``optimization_level`` argument to the :class:`.HighLevelSynthesis`
+    transpiler pass. This allows the pass to select synthesis methods that can produce
+    more optimized circuits at the expense of increased runtime.
+  - |
+    Included the :class:`.PauliEvolutionSynthesisMcts` plugin to the default 
+    synthesis plugin for :class:`.PauliEvolutionGate`. The plugin may optionally be selected
+    when ``optimization_level >= 2`` and the target has all-to-all connectivity.
+  - |
+    Added a new method :meth:`.SparseObservable.contains_projectors` that returns
+    whether the observable contains any projector terms.

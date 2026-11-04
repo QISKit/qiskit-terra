@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -254,6 +254,8 @@ include as long as each plugin has a unique name.
 Using Plugins
 =============
 
+.. _unitary-synth-plugin:
+
 Unitary Synthesis Plugins
 -------------------------
 
@@ -329,6 +331,11 @@ Unitary Synthesis Plugins
    :no-inherited-members:
    :no-special-members:
 
+.. automodule:: qiskit.transpiler.passes.synthesis.ross_selinger_plugin
+   :no-members:
+   :no-inherited-members:
+   :no-special-members:
+
 .. automodule:: qiskit.transpiler.passes.synthesis.clifford_unitary_synth_plugin
    :no-members:
    :no-inherited-members:
@@ -390,7 +397,6 @@ a circuit adhering to the linear nearest-neighbor connectivity.
 """
 
 import abc
-from typing import List
 
 import stevedore
 
@@ -411,7 +417,6 @@ class UnitarySynthesisPlugin(abc.ABC):
         ``None`` and all unitaries (``>= min_qubits`` if it's defined) will be
         passed to this plugin when it's enabled.
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -423,7 +428,6 @@ class UnitarySynthesisPlugin(abc.ABC):
         ``None`` and all unitaries (``<= max_qubits`` if it's defined) will be
         passed to this plugin when it's enabled.
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -432,8 +436,8 @@ class UnitarySynthesisPlugin(abc.ABC):
 
         If this returns ``True`` the plugin's ``run()`` method will be
         passed a ``basis_gates`` kwarg with a list of gate names the target
-        backend supports. For example, ``['sx', 'x', 'cx', 'id', 'rz']``."""
-        pass
+        backend supports. For example, ``['sx', 'x', 'cx', 'id', 'rz']``.
+        """
 
     @property
     @abc.abstractmethod
@@ -449,7 +453,6 @@ class UnitarySynthesisPlugin(abc.ABC):
         unitary is on. Note that if the target backend doesn't have a coupling
         map set, the ``coupling_map`` kwarg's value will be ``(None, qubit_indices)``.
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -460,7 +463,6 @@ class UnitarySynthesisPlugin(abc.ABC):
         Refer to the documentation for :class:`~qiskit.transpiler.passes.UnitarySynthesis`
         for the possible values and meaning of these values.
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -471,7 +473,6 @@ class UnitarySynthesisPlugin(abc.ABC):
         Refer to the documentation for :class:`~qiskit.transpiler.passes.UnitarySynthesis`
         for the possible values and meaning of these values.
         """
-        pass
 
     @property
     def supports_gate_lengths_by_qubit(self):
@@ -544,7 +545,6 @@ class UnitarySynthesisPlugin(abc.ABC):
         as it depends on the target backend reporting gate lengths on every
         gate for each qubit.
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -565,7 +565,6 @@ class UnitarySynthesisPlugin(abc.ABC):
         are provided by the target device ``Backend`` object and the exact
         meaning might be different depending on the backend.
         """
-        pass
 
     @property
     @abc.abstractmethod
@@ -590,7 +589,6 @@ class UnitarySynthesisPlugin(abc.ABC):
         to an empty list, and a plugin can choose how to deal with the target
         basis gate set not matching the plugin's capabilities.
         """
-        pass
 
     @property
     def supports_target(self):
@@ -633,7 +631,6 @@ class UnitarySynthesisPlugin(abc.ABC):
             ``None`` no substitution will be made.
 
         """
-        pass
 
 
 class UnitarySynthesisPluginManager:
@@ -686,7 +683,6 @@ class HighLevelSynthesisPlugin(abc.ABC):
             QuantumCircuit: The quantum circuit representation of the Operation
                 when successful, and ``None`` otherwise.
         """
-        pass
 
 
 class HighLevelSynthesisPluginManager:
@@ -724,7 +720,7 @@ class HighLevelSynthesisPluginManager:
         return list(self.plugins_by_op.keys())
 
 
-def high_level_synthesis_plugin_names(op_name: str) -> List[str]:
+def high_level_synthesis_plugin_names(op_name: str) -> list[str]:
     """Return a list of plugin names installed for a given high level object name
 
     Args:

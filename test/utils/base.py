@@ -4,17 +4,16 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=invalid-name
 
 """Base TestCases for the unit tests.
 
-Implementors of unit tests for Qiskit should subclass
+Implementers of unit tests for Qiskit should subclass
 ``QiskitTestCase`` in order to take advantage of utility functions (for example,
 the environment variables for customizing different options), and the
 decorators in the ``decorators`` package.
@@ -60,8 +59,6 @@ else:
     class BaseTestCase(unittest.TestCase):
         """Base test class."""
 
-        pass
-
 
 @enforce_subclasses_call(["setUp", "setUpClass", "tearDown", "tearDownClass"])
 class QiskitTestCase(BaseTestCase):
@@ -99,31 +96,6 @@ class QiskitTestCase(BaseTestCase):
             category=RuntimeWarning,
             message="Aer not found using BasicSimulator and no noise",
             module="qiskit.providers.fake_provider.generic_backend_v2",
-        )
-
-        # Numpy 2 made a few new modules private, and have warnings that trigger if you try to
-        # access attributes that _would_ have existed.  Unfortunately, Python's `warnings` module
-        # adds a field called `__warningregistry__` to any module that triggers a warning, and
-        # `unittest.TestCase.assertWarns` then queries said fields on all existing modules.  On
-        # macOS ARM, we see some (we think harmless) warnings come out of `numpy.linalg._linalg` (a
-        # now-private module) during transpilation, which means that subsequent `assertWarns` calls
-        # can spuriously trick Numpy into sending out a nonsense `DeprecationWarning`.
-        # Tracking issue: https://github.com/Qiskit/qiskit/issues/12679
-        warnings.filterwarnings(
-            "ignore",
-            category=DeprecationWarning,
-            message=r".*numpy\.(\w+\.)*__warningregistry__",
-        )
-
-        # We only use pandas transitively through seaborn, so it's their responsibility to mark if
-        # their use of pandas would be a problem.
-        warnings.filterwarnings(
-            "default",
-            category=DeprecationWarning,
-            # The `(?s)` magic is to force use of the `re.DOTALL` flag, because the Pandas message
-            # includes hard-break newlines all over the place.
-            message="(?s).*Pyarrow.*required dependency.*next major release of pandas",
-            module=r"seaborn(\..*)?",
         )
 
     def __init__(self, *args, **kwargs):

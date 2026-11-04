@@ -4,16 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=invalid-name
-# pylint: disable=unused-variable
-# pylint: disable=missing-param-doc
-# pylint: disable=missing-type-doc
 
 """
 Generic isometries from m to n qubits.
@@ -144,16 +140,16 @@ class Isometry(Instruction):
         circuit = QuantumCircuit(q, name="isometry_to_uncompute")
         (
             q_input,
-            q_ancillas_for_output,
-            q_ancillas_zero,
-            q_ancillas_dirty,
+            _q_ancillas_for_output,
+            _q_ancillas_zero,
+            _q_ancillas_dirty,
         ) = self._define_qubit_role(q)
         # Copy the isometry (this is computationally expensive for large isometries but guarantees
         # to keep a copyof the input isometry)
         remaining_isometry = self.iso_data.astype(complex)  # note: "astype" does copy the isometry
         diag = []
         m = int(math.log2(self.iso_data.shape[1]))
-        # Decompose the column with index column_index and attache the gate to the circuit object.
+        # Decompose the column with index column_index and attach the gate to the circuit object.
         # Return the isometry that is left to decompose, where the columns up to index column_index
         # correspond to the firstfew columns of the identity matrix up to diag, and hence we only
         # have to save a list containing them.
@@ -268,8 +264,8 @@ class Isometry(Instruction):
         (
             q_input,
             q_ancillas_for_output,
-            q_ancillas_zero,
-            q_ancillas_dirty,
+            _q_ancillas_zero,
+            _q_ancillas_dirty,
         ) = self._define_qubit_role(q)
         n = int(math.log2(self.iso_data.shape[0]))
         qubits = q_input + q_ancillas_for_output

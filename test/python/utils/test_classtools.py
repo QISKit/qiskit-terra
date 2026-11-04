@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,13 +21,13 @@
 #
 # We use a lot of dummy classes in test cases, for which there is absolutely no point defining
 # docstrings.
-# pylint: disable=missing-class-docstring,missing-function-docstring
+
 
 import unittest
 import sys
 
 from qiskit.utils import wrap_method
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 def call_first_argument_with(*args, **kwargs):
@@ -246,7 +246,7 @@ class TestWrapMethod(QiskitTestCase):
 
     def test_can_wrap_with_builtin(self):
         """Test that builtin functions can be used a callback.  Many CPython builtins don't
-        implement the desriptor protocol that all functions defined with ``def`` or ``lambda`` do,
+        implement the descriptor protocol that all functions defined with ``def`` or ``lambda`` do,
         which means we need to take special care that they work.  This is most relevant for
         C-extension functions created via pybind11, Cython or similar, rather than actual Python
         builtins."""
@@ -357,7 +357,7 @@ class TestWrapMethod(QiskitTestCase):
         mock = unittest.mock.Mock()
         dummy = Dummy(mock)
         self.assertIs(dummy.mock, mock)
-        self.assertEqual(dummy.extra, "hello, world")  # pylint: disable=no-member
+        self.assertEqual(dummy.extra, "hello, world")
         mock.assert_has_calls(
             [unittest.mock.call("__init__"), unittest.mock.call("extra")],
             any_order=False,
@@ -401,7 +401,7 @@ class TestWrapMethod(QiskitTestCase):
         wrap_method(Dummy, "__new__", before=call_second_argument_with("extra"))
 
         mock = unittest.mock.Mock()
-        dummy = Dummy(mock)
+        Dummy(mock)
         mock.assert_has_calls(
             [unittest.mock.call(Dummy, "extra"), unittest.mock.call(Dummy, "__new__")],
             any_order=False,
@@ -420,7 +420,7 @@ class TestWrapMethod(QiskitTestCase):
 
         mock = unittest.mock.Mock()
         wrap_method(Dummy, "__new__", before=mock)
-        dummy = Dummy()
+        Dummy()
         mock.assert_called_once_with(Dummy)
 
     def test_wrapping_object___eq__(self):

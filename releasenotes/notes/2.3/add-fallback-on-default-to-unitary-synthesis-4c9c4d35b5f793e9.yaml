@@ -1,0 +1,19 @@
+---
+features_transpiler:
+  - |
+    Added a new option, ``fallback_on_default``, to the :class:`.UnitarySynthesis`
+    transpiler pass. This option applies when the pass is called with a
+    non-default synthesis plugin, specified via the argument ``method``.
+
+    By default, the specified plugin is used to synthesize every unitary
+    in the circuit (provided the plugin applies; for instance, it will not
+    run if it does not support the number of qubits over which the unitary
+    is defined). If the plugin cannot synthesize the unitary and returns
+    ``None``, the original unitary is left unchanged in the circuit.
+    When ``fallback_on_default`` is set to ``True``, the pass will instead
+    invoke :class:`~.DefaultUnitarySynthesis` plugin when the specified
+    method fails.
+    
+    This feature is particularly useful when custom plugins are intended to
+    handle only a subset of all unitaries: users can rely on their custom
+    logic when it applies and use the default synthesis where it does not.

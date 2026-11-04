@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -31,7 +31,7 @@ from qiskit.circuit.parameterexpression import (
     OpCode,
     op_code_to_method,
 )
-from qiskit.circuit.parametervector import ParameterVector, ParameterVectorElement
+from qiskit.circuit.parametervector import ParameterVector
 from qiskit.qpy import common, formats, exceptions, type_keys
 from qiskit.qpy.binary_io.parse_sympy_repr import parse_sympy_repr
 
@@ -56,7 +56,7 @@ def _write_parameter(file_obj, obj):
 
 
 def _write_parameter_vec(file_obj, obj):
-    name_bytes = obj.vector._name.encode(common.ENCODE)
+    name_bytes = obj.vector.name.encode(common.ENCODE)
     file_obj.write(
         struct.pack(
             formats.PARAMETER_VECTOR_ELEMENT_PACK,
@@ -92,18 +92,18 @@ def _encode_replay_entry(inst, file_obj, version, r_side=False):
             entry = struct.pack(
                 formats.PARAM_EXPR_ELEM_V13_PACK,
                 255,
-                "s".encode("utf8"),
+                b"s",
                 b"\x00",
-                "n".encode("utf8"),
+                b"n",
                 b"\x00",
             )
         else:
             entry = struct.pack(
                 formats.PARAM_EXPR_ELEM_V13_PACK,
                 255,
-                "n".encode("utf8"),
+                b"n",
                 b"\x00",
-                "s".encode("utf8"),
+                b"s",
                 b"\x00",
             )
         file_obj.write(entry)
@@ -112,18 +112,18 @@ def _encode_replay_entry(inst, file_obj, version, r_side=False):
             entry = struct.pack(
                 formats.PARAM_EXPR_ELEM_V13_PACK,
                 255,
-                "e".encode("utf8"),
+                b"e",
                 b"\x00",
-                "n".encode("utf8"),
+                b"n",
                 b"\x00",
             )
         else:
             entry = struct.pack(
                 formats.PARAM_EXPR_ELEM_V13_PACK,
                 255,
-                "n".encode("utf8"),
+                b"n",
                 b"\x00",
-                "e".encode("utf8"),
+                b"e",
                 b"\x00",
             )
         file_obj.write(entry)
@@ -147,9 +147,9 @@ def _encode_replay_subs(subs, file_obj, version):
     entry = struct.pack(
         formats.PARAM_EXPR_ELEM_V13_PACK,
         subs.op,
-        "u".encode("utf8"),
+        b"u",
         struct.pack("!QQ", len(data), 0),
-        "n".encode("utf8"),
+        b"n",
         b"\x00",
     )
     file_obj.write(entry)
@@ -205,7 +205,7 @@ def _write_parameter_expression(file_obj, obj, use_symengine, *, version):
 
         # serialize value
         value_key = symbol_key
-        value_data = bytes()
+        value_data = b""
 
         elem_header = struct.pack(
             formats.PARAM_EXPR_MAP_ELEM_V3_PACK,
@@ -241,7 +241,7 @@ def _write_parameter_expression(file_obj, obj, use_symengine, *, version):
 
 
 class _ExprWriter(expr.ExprVisitor[None]):
-    __slots__ = ("file_obj", "clbit_indices", "standalone_var_indices", "version")
+    __slots__ = ("clbit_indices", "file_obj", "standalone_var_indices", "version")
 
     def __init__(self, file_obj, clbit_indices, standalone_var_indices, version):
         self.file_obj = file_obj
@@ -458,16 +458,8 @@ def _read_parameter_vec(file_obj, vectors):
     root_uuid_int = uuid.UUID(bytes=data.uuid).int - data.index
     root_uuid = uuid.UUID(int=root_uuid_int)
     name = file_obj.read(data.vector_name_size).decode(common.ENCODE)
-
-    if root_uuid not in vectors:
-        vectors[root_uuid] = (ParameterVector(name, data.vector_size), set())
-    vector = vectors[root_uuid][0]
-
-    if vector[data.index].uuid != root_uuid:
-        vectors[root_uuid][1].add(data.index)
-        vector._params[data.index] = ParameterVectorElement(
-            vector, data.index, uuid=uuid.UUID(int=root_uuid_int + data.index)
-        )
+    if (vector := vectors.get(root_uuid, None)) is None:
+        vector = vectors[root_uuid] = ParameterVector(name, data.vector_size, uuid=root_uuid)
     return vector[data.index]
 
 
@@ -477,7 +469,6 @@ def _read_parameter_expression(file_obj):
     )
 
     sympy_str = file_obj.read(data.expr_size).decode(common.ENCODE)
-    expr_ = parse_sympy_repr(sympy_str)
     name_map = {}
     for _ in range(data.map_elements):
         elem_data = formats.PARAM_EXPR_MAP_ELEM(
@@ -503,8 +494,8 @@ def _read_parameter_expression(file_obj):
         else:
             raise exceptions.QpyError(f"Invalid parameter expression map type: {elem_key}")
         name_map[symbol.name] = value
-
-    return ParameterExpression(name_map, str(expr_))
+    expr_ = parse_sympy_repr(sympy_str, name_map)
+    return expr_
 
 
 def _read_parameter_expression_v3(file_obj, vectors, use_symengine):
@@ -517,7 +508,6 @@ def _read_parameter_expression_v3(file_obj, vectors, use_symengine):
         expr_ = common.load_symengine_payload(payload)
     else:
         sympy_str = payload.decode(common.ENCODE)
-        expr_ = parse_sympy_repr(sympy_str)
 
     name_map = {}
     for _ in range(data.map_elements):
@@ -556,8 +546,11 @@ def _read_parameter_expression_v3(file_obj, vectors, use_symengine):
         else:
             raise exceptions.QpyError(f"Invalid parameter expression map type: {elem_key}")
         name_map[symbol.name] = value
-
-    return ParameterExpression(name_map, str(expr_))
+    if use_symengine:
+        return ParameterExpression(name_map, str(expr_))
+    else:
+        expr_ = parse_sympy_repr(sympy_str, name_map)
+        return expr_
 
 
 def _read_parameter_expression_v13(file_obj, vectors, version):
@@ -680,25 +673,12 @@ def _read_parameter_expr_v13(buf, symbol_map, version, vectors):
         if expression_data.OP_CODE == 255:
             continue
         method_str = op_code_to_method(expression_data.OP_CODE)
-        if expression_data.OP_CODE in {0, 1, 2, 3, 4, 13, 15, 18, 19, 20}:
+        if expression_data.OP_CODE in (0, 1, 2, 3, 4, 13, 15, 18, 19, 20):
             rhs = stack.pop()
             lhs = stack.pop()
-            # Reverse ops for commutative ops, which are add, mul (0 and 2 respectively)
-            # op codes 13 and 15 can never be reversed and 18, 19, 20
-            # are the reversed versions of non-commutative operations
-            # so 1, 3, 4 and 18, 19, 20 handle this explicitly.
-            if (
-                not isinstance(lhs, ParameterExpression)
-                and isinstance(rhs, ParameterExpression)
-                and expression_data.OP_CODE in {0, 2}
-            ):
-                if expression_data.OP_CODE == 0:
-                    method_str = "__radd__"
-                elif expression_data.OP_CODE == 2:
-                    method_str = "__rmul__"
-                stack.append(getattr(rhs, method_str)(lhs))
-            else:
-                stack.append(getattr(lhs, method_str)(rhs))
+            if not isinstance(lhs, ParameterExpression):
+                lhs = ParameterExpression._Value(lhs)
+            stack.append(getattr(lhs, method_str)(rhs))
         else:
             lhs = stack.pop()
             stack.append(getattr(lhs, method_str)())
@@ -713,7 +693,7 @@ def _read_expr(
     cregs: collections.abc.Mapping[str, ClassicalRegister],
     standalone_vars: collections.abc.Sequence[expr.Var],
 ) -> expr.Expr:
-    # pylint: disable=too-many-return-statements
+
     type_key = file_obj.read(formats.EXPRESSION_DISCRIMINATOR_SIZE)
     type_ = _read_expr_type(file_obj)
     if type_key == type_keys.Expression.VAR:
@@ -1087,7 +1067,6 @@ def loads_value(
     Raises:
         QpyError: Serializer for given format is not ready.
     """
-    # pylint: disable=too-many-return-statements
 
     if isinstance(type_key, bytes):
         type_key = type_keys.Value(type_key)

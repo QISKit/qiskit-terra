@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -174,7 +174,7 @@ def concurrence(state: Statevector | DensityMatrix) -> float:
         C(|\psi\rangle) = \sqrt{2(1 - Tr[\rho_0^2])}
 
     where :math:`\rho_0 = Tr_1[|\psi\rangle\!\langle\psi|]` is the
-    reduced state from by taking the
+    reduced state by taking the
     :func:`~qiskit.quantum_info.partial_trace` of the input state.
 
     For density matrices the concurrence is only defined for

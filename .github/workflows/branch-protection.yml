@@ -1,0 +1,225 @@
+---
+
+# This is the shared configuration that defines all the jobs we include in branch protection.  This
+# needs to be run both by PRs and by the merge queue.
+#
+# All required branch-protection rules should be in here, and everything in here should listed in
+# the branch-protection rules (in the `finalize` job).
+
+name: Branch Protection
+
+on:
+  merge_group:
+  pull_request:
+    branches: ["main", "stable/*"]
+
+concurrency:
+  group: ${{ github.repository }}-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  config:
+    name: Configure
+    uses: ./.github/workflows/config.yml
+
+  # This 'finalize' job is a no-op; its sole purpose is to depend on all the other jobs and provide
+  # a single in-code determination of whether the branch-protection rules have been passed.  The
+  # branch-protection rules in the GitHub web interface can then depend only on this job.
+  finalize:
+    name: Finalize
+    runs-on: 'ubuntu-latest'
+    # This list should contain every other job in this file.
+    needs:
+      - docs
+      - lint
+      - test-linux
+      - test-macos
+      - test-windows
+      - test-rust
+      - test-c-defaults
+      - test-c-versions
+      - test-images
+      - miri
+      - qpy
+      - neko
+      - pyo3-ffi
+    # This job needs to trigger even if its predecessors failed and return the same status.  By
+    # default, GitHub Actions will "skip" the job if a requirement failed, but that counts as a
+    # "success" state, which is not acceptable for a branch-protection rule.  We don't use `always`
+    # because we don't want `cancelled` to trigger this.
+    if: success() || failure()
+    steps:
+      - run: |
+          echo "Successful run."
+        if: ${{ !contains(needs.*.result, 'failure') }}
+      - run: |
+          echo "Predecessor jobs failed.  See GitHub Actions logs." >&2
+          exit 1
+        if: ${{ contains(needs.*.result, 'failure') }}
+
+  docs:
+    name: Documentation
+    needs: config
+    uses: ./.github/workflows/docs.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-new }}
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+    secrets: inherit
+
+  lint:
+    name: Lint
+    needs: config
+    uses: ./.github/workflows/lint.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-old }}
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+
+  pyo3-ffi:
+    name: pyo3-ffi
+    needs: config
+    uses: ./.github/workflows/pyo3-ffi.yml
+    with:
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+
+  test-linux:
+    name: Unit Python / Linux / ${{ matrix.config.id }} - ${{ matrix.runner }}
+    needs: config
+    uses: ./.github/workflows/test-linux.yml
+    with:
+      runner: ${{ matrix.runner }}
+      python-version: ${{ matrix.config.python }}
+      install-optionals: ${{ matrix.config.install-optionals }}
+      install-from-sdist: ${{ matrix.config.install-from-sdist }}
+      qiskit-pycache: ${{ matrix.config.qiskit-pycache }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ${{ needs.config.outputs.runner-linux-x86_64 }}
+          - ${{ needs.config.outputs.runner-linux-arm64 }}
+        config:
+          - id: "Python oldest"
+            python: ${{ needs.config.outputs.python-old }}
+            install-optionals: true
+            install-from-sdist: false
+            qiskit-pycache: false
+            mimalloc: false
+          - id: "Python newest"
+            python: ${{ needs.config.outputs.python-new }}
+            install-optionals: false
+            install-from-sdist: true
+            qiskit-pycache: true
+
+  test-macos:
+    name: Unit Python / macOS / ${{ matrix.config.id }}
+    needs: config
+    uses: ./.github/workflows/test-mac.yml
+    with:
+      runner: ${{ needs.config.outputs.runner-macos-arm64 }}
+      python-version: ${{ matrix.config.python }}
+      install-optionals: ${{ matrix.config.install-optionals }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: "Python oldest"
+            python: ${{ needs.config.outputs.python-old }}
+            install-optionals: true
+            mimalloc: false
+          - id: "Python newest"
+            python: ${{ needs.config.outputs.python-new }}
+            install-optionals: false
+
+  test-windows:
+    name: Unit Python / Windows / ${{ matrix.config.id }}
+    needs: config
+    uses: ./.github/workflows/test-windows.yml
+    with:
+      runner: ${{ needs.config.outputs.runner-windows-x86_64 }}
+      python-version: ${{ matrix.config.python }}
+      install-optionals: ${{ matrix.config.install-optionals }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - id: "Python oldest"
+            python: ${{ needs.config.outputs.python-old }}
+            install-optionals: true
+            mimalloc: false
+          - id: "Python newest"
+            python: ${{ needs.config.outputs.python-new }}
+            install-optionals: false
+
+  test-rust:
+    name: Unit Rust
+    needs: config
+    uses: ./.github/workflows/rust-tests.yml
+    with:
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+
+  miri:
+    name: Miri
+    needs: config
+    uses: ./.github/workflows/miri.yml
+    with:
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+
+  test-c-defaults:
+    name: Unit C / Defaults / ${{ matrix.runner }}
+    needs: config
+    uses: ./.github/workflows/ctests.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-new }}
+      runner: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ${{ needs.config.outputs.runner-linux-x86_64 }}
+          - ${{ needs.config.outputs.runner-linux-arm64 }}
+          - ${{ needs.config.outputs.runner-macos-arm64 }}
+          - ${{ needs.config.outputs.runner-windows-x86_64 }}
+
+  test-c-versions:
+    name: Unit C / Versions / ${{ matrix.extensions && 'gnu' || 'c' }}${{ matrix.version }}
+    needs: config
+    uses: ./.github/workflows/ctests.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-new }}
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+      name: ${{ matrix.extensions && 'gnu' || 'c' }}${{ matrix.version }}
+      cmake_flags: "-DCMAKE_C_STANDARD=${{ matrix.version }} -DCMAKE_C_EXTENSIONS=${{ matrix.extensions && 'ON' || 'OFF' }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - ${{ needs.config.outputs.c-old }}
+          - ${{ needs.config.outputs.c-new }}
+        extensions:
+          - true
+          - false
+
+  test-images:
+    name: Image
+    needs: config
+    uses: ./.github/workflows/image-tests.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-old }}
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+
+  qpy:
+    name: QPY
+    needs: config
+    uses: ./.github/workflows/qpy.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-old }}
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+
+  neko:
+    name: Integration Neko
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner-linux-x86_64 }}
+    steps:
+      - uses: Qiskit/qiskit-neko@main
+        with:
+          test_selection: "terra"

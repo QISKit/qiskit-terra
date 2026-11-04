@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,7 +21,7 @@ from qiskit.circuit import Parameter, Qubit, Clbit, Gate
 from qiskit.circuit.library import C3SXGate, CCZGate, CSGate, CSdgGate, PermutationGate
 from qiskit.qasm2.exceptions import QASM2Error as QasmError
 from qiskit.qasm2 import dumps
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 # Regex pattern to match valid OpenQASM identifiers
 VALID_QASM2_IDENTIFIER = re.compile("[a-z][a-zA-Z_0-9]*")
@@ -162,17 +162,15 @@ measure qr[1] -> cr[1];"""
         circuit.append(my_gate_inst3, [qr[0]])
         my_gate_inst3_id = id(circuit.data[-1].operation)
         # pylint: disable-next=consider-using-f-string
-        expected_qasm = """OPENQASM 2.0;
+        expected_qasm = f"""OPENQASM 2.0;
 include "qelib1.inc";
 gate my_gate q0 {{ h q0; }}
-gate my_gate_{1} q0 {{ x q0; }}
-gate my_gate_{0} q0 {{ x q0; }}
+gate my_gate_{my_gate_inst2_id} q0 {{ x q0; }}
+gate my_gate_{my_gate_inst3_id} q0 {{ x q0; }}
 qreg qr[1];
 my_gate qr[0];
-my_gate_{1} qr[0];
-my_gate_{0} qr[0];""".format(
-            my_gate_inst3_id, my_gate_inst2_id
-        )
+my_gate_{my_gate_inst2_id} qr[0];
+my_gate_{my_gate_inst3_id} qr[0];"""
         self.assertEqual(dumps(circuit), expected_qasm)
 
     def test_circuit_qasm_with_composite_circuit_with_children_composite_circuit(self):
@@ -396,7 +394,6 @@ mcx q[0],q[1],q[2],q[3];"""
         self.assertEqual(dumps(qc), expected_qasm)
 
     def test_circuit_qasm_with_mcx_gate_variants(self):
-        # pylint: disable=line-too-long
         """Test circuit qasm() method with MCXGrayCode, MCXRecursive, MCXVChain"""
         import qiskit.circuit.library as cl
 
@@ -413,7 +410,7 @@ mcx q[0],q[1],q[2],q[3];"""
 include "qelib1.inc";
 gate mcx_gray q0,q1,q2,q3,q4,q5 { h q5; cu1(pi/16) q4,q5; cx q4,q3; cu1(-pi/16) q3,q5; cx q4,q3; cu1(pi/16) q3,q5; cx q3,q2; cu1(-pi/16) q2,q5; cx q4,q2; cu1(pi/16) q2,q5; cx q3,q2; cu1(-pi/16) q2,q5; cx q4,q2; cu1(pi/16) q2,q5; cx q2,q1; cu1(-pi/16) q1,q5; cx q4,q1; cu1(pi/16) q1,q5; cx q3,q1; cu1(-pi/16) q1,q5; cx q4,q1; cu1(pi/16) q1,q5; cx q2,q1; cu1(-pi/16) q1,q5; cx q4,q1; cu1(pi/16) q1,q5; cx q3,q1; cu1(-pi/16) q1,q5; cx q4,q1; cu1(pi/16) q1,q5; cx q1,q0; cu1(-pi/16) q0,q5; cx q4,q0; cu1(pi/16) q0,q5; cx q3,q0; cu1(-pi/16) q0,q5; cx q4,q0; cu1(pi/16) q0,q5; cx q2,q0; cu1(-pi/16) q0,q5; cx q4,q0; cu1(pi/16) q0,q5; cx q3,q0; cu1(-pi/16) q0,q5; cx q4,q0; cu1(pi/16) q0,q5; cx q1,q0; cu1(-pi/16) q0,q5; cx q4,q0; cu1(pi/16) q0,q5; cx q3,q0; cu1(-pi/16) q0,q5; cx q4,q0; cu1(pi/16) q0,q5; cx q2,q0; cu1(-pi/16) q0,q5; cx q4,q0; cu1(pi/16) q0,q5; cx q3,q0; cu1(-pi/16) q0,q5; cx q4,q0; cu1(pi/16) q0,q5; h q5; }
 gate mcx_recursive q0,q1,q2,q3,q4,q5,q6 { h q6; t q6; cx q2,q6; tdg q6; cx q3,q6; h q3; t q3; cx q1,q3; tdg q3; cx q0,q3; t q3; cx q1,q3; tdg q3; h q3; cx q3,q6; t q6; cx q2,q6; tdg q6; h q6; h q3; t q3; cx q1,q3; tdg q3; cx q0,q3; t q3; cx q1,q3; tdg q3; h q3; h q5; p(pi/8) q3; p(pi/8) q4; p(pi/8) q6; p(pi/8) q5; cx q3,q4; p(-pi/8) q4; cx q3,q4; cx q4,q6; p(-pi/8) q6; cx q3,q6; p(pi/8) q6; cx q4,q6; p(-pi/8) q6; cx q3,q6; cx q6,q5; p(-pi/8) q5; cx q4,q5; p(pi/8) q5; cx q6,q5; p(-pi/8) q5; cx q3,q5; p(pi/8) q5; cx q6,q5; p(-pi/8) q5; cx q4,q5; p(pi/8) q5; cx q6,q5; p(-pi/8) q5; cx q3,q5; h q5; h q3; t q3; cx q1,q3; tdg q3; cx q0,q3; t q3; cx q1,q3; tdg q3; h q3; h q6; t q6; cx q2,q6; tdg q6; cx q3,q6; h q3; t q3; cx q1,q3; tdg q3; cx q0,q3; t q3; cx q1,q3; tdg q3; h q3; cx q3,q6; t q6; cx q2,q6; tdg q6; h q6; h q5; p(pi/8) q3; p(pi/8) q4; p(pi/8) q6; p(pi/8) q5; cx q3,q4; p(-pi/8) q4; cx q3,q4; cx q4,q6; p(-pi/8) q6; cx q3,q6; p(pi/8) q6; cx q4,q6; p(-pi/8) q6; cx q3,q6; cx q6,q5; p(-pi/8) q5; cx q4,q5; p(pi/8) q5; cx q6,q5; p(-pi/8) q5; cx q3,q5; p(pi/8) q5; cx q6,q5; p(-pi/8) q5; cx q4,q5; p(pi/8) q5; cx q6,q5; p(-pi/8) q5; cx q3,q5; h q5; }
-gate mcx_vchain q0,q1,q2,q3,q4,q5,q6,q7,q8 { rccx q0,q1,q6; rccx q2,q6,q7; rccx q3,q7,q8; ccx q4,q8,q5; rccx q3,q7,q8; rccx q2,q6,q7; rccx q0,q1,q6; }
+gate mcx_vchain q0,q1,q2,q3,q4,q5,q6,q7,q8 { h q6; t q6; cx q1,q6; tdg q6; cx q0,q6; t q6; cx q1,q6; tdg q6; h q6; h q7; t q7; cx q3,q7; tdg q7; h q7; cx q6,q7; t q7; cx q2,q7; tdg q7; cx q6,q7; t q7; cx q2,q7; tdg q7; h q7; t q7; cx q3,q7; tdg q7; h q7; h q5; cx q4,q5; tdg q5; cx q7,q5; t q5; cx q4,q5; tdg q5; cx q7,q5; t q4; t q5; h q5; cx q7,q4; t q7; tdg q4; cx q7,q4; h q7; t q7; cx q3,q7; tdg q7; h q7; t q7; cx q2,q7; tdg q7; cx q6,q7; t q7; cx q2,q7; tdg q7; cx q6,q7; h q7; t q7; cx q3,q7; tdg q7; h q7; h q6; t q6; cx q1,q6; tdg q6; cx q0,q6; t q6; cx q1,q6; tdg q6; h q6; }
 qreg q[9];
 mcx_gray q[0],q[1],q[2],q[3],q[4],q[5];
 mcx_recursive q[0],q[1],q[2],q[3],q[4],q[5],q[6];
@@ -606,12 +603,13 @@ qreg ({VALID_QASM2_IDENTIFIER.pattern})\[1\];
         qc.p(pi * pi, 0)
         qc.p(MAX_FRAC * pi + 1, 0)
 
-        expected_qasm = """OPENQASM 2.0;
+        boundary = MAX_FRAC * pi + 1
+        expected_qasm = f"""OPENQASM 2.0;
 include "qelib1.inc";
 qreg q[1];
 p(0.123456789) q[0];
 p(9.869604401089358) q[0];
-p(51.26548245743669) q[0];"""
+p({boundary:#}) q[0];"""
         self.assertEqual(dumps(qc), expected_qasm)
 
     def test_circuit_qasm_with_rotation_angles_close_to_pi(self):
@@ -702,8 +700,6 @@ reset q[1];"""
     def test_nested_gate_naming_clashes(self):
         """Test that gates that have naming clashes but only appear in the body of another gate
         still get exported correctly."""
-
-        # pylint: disable=missing-class-docstring
 
         class Inner(Gate):
             def __init__(self, param):

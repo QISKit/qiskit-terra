@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -105,8 +105,6 @@ VERSION_PATTERN_REGEX = re.compile(VERSION_PATTERN, re.VERBOSE | re.IGNORECASE)
 class Arrow3D(Patch3D, FancyArrowPatch):
     """Makes a fancy arrow"""
 
-    # pylint: disable=missing-function-docstring,invalid-name
-
     # Nasty hack around a poorly implemented deprecation warning in Matplotlib 3.5 that issues two
     # deprecation warnings if an artist's module does not claim to be part of the below module.
     # This revolves around the method `Patch3D.do_3d_projection(self, renderer=None)`.  The
@@ -123,7 +121,7 @@ class Arrow3D(Patch3D, FancyArrowPatch):
         # how it goes on to call set_3d_properties, so we just have to do things ourselves.  The
         # parent of Patch3D is Patch, which is also a parent of FancyArrowPatch, so its __init__ is
         # still getting suitably called.
-        # pylint: disable=super-init-not-called
+
         FancyArrowPatch.__init__(self, (0, 0), (0, 0), **kwargs)
         self.set_3d_properties(tuple(zip(xs, ys)), zs, zdir)
         self._path2d = None
@@ -288,9 +286,9 @@ class Bloch:
                     - "01"
                     - "polarization jones"
                     - "polarization jones letters"
-                    see also: http://en.wikipedia.org/wiki/Jones_calculus
+                    see also: https://en.wikipedia.org/wiki/Jones_calculus
                     - "polarization stokes"
-                    see also: http://en.wikipedia.org/wiki/Stokes_parameters
+                    see also: https://en.wikipedia.org/wiki/Stokes_parameters
         Raises:
             Exception: If convention is not valid.
         """
@@ -736,7 +734,7 @@ class Bloch:
         """
         self.render(title=title)
         if self.fig:
-            plt.show(self.fig)
+            plt.show()
 
     def save(self, name=None, output="png", dirc=None):
         """Saves Bloch sphere to file of type ``format`` in directory ``dirc``.

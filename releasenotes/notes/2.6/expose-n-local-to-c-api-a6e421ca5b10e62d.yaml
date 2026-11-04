@@ -1,0 +1,19 @@
+---
+features_c:
+  - |
+    Exposed the n-local circuit to the C API. 
+
+    * A couple of new functions were added: 
+
+      * ``qk_circuit_library_n_local``
+
+        Constructs an n-local variational circuit.      
+      * ``qk_circuit_library_n_local_settings_default``
+
+        Generates default options for ``qk_circuit_library_n_local``.
+    * New struct ``QkNLocalSettings`` is added.
+
+      Holds settings needed to build the n-local circuit.
+    * New enum ``QkEntanglementStrategy`` is added. 
+
+      Enum representing all the strategies that can be used for the circuit entanglement blocks.

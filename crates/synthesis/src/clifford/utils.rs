@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -17,7 +17,17 @@ use qiskit_circuit::operations::{Param, StandardGate};
 use qiskit_quantum_info::clifford::Clifford;
 use smallvec::{SmallVec, smallvec};
 
-/// Symplectic matrix.
+/// A symplectic matrix representation.
+///
+/// Conceptually, a symplectic matrix is represented by a tableau in which the rows
+/// recorrespond to destabilizers and stabilizers, and the columns correspond
+/// to the X and Z components:
+///
+/// ```text
+/// [ destab_x | destab_z ]
+/// [  stab_x  |  stab_z  ]
+/// ```
+///
 /// Currently this class is internal to the synthesis library.
 pub struct SymplecticMatrix {
     /// Number of qubits.
@@ -129,13 +139,12 @@ pub fn adjust_final_pauli_gates(
 
     // compute the phase difference
     let target_phase = target_tableau.column(2 * num_qubits);
-    let sim_phase = simulated_clifford.tableau.column(2 * num_qubits);
+    let sim_phase = simulated_clifford.tableau.get_phase();
 
-    let delta_phase: Vec<bool> = target_phase
+    let delta_phase = target_phase
         .iter()
-        .zip(sim_phase.iter())
-        .map(|(&a, &b)| a ^ b)
-        .collect();
+        .zip((0..sim_phase.len()).map(|i| sim_phase[i]))
+        .map(|(&a, b)| a ^ b);
 
     // compute inverse of the symplectic matrix
     let smat = target_tableau.slice(s![.., ..2 * num_qubits]);
@@ -143,7 +152,7 @@ pub fn adjust_final_pauli_gates(
 
     // compute smat_inv * delta_phase
     let arr1 = smat_inv.map(|v| *v as usize);
-    let vec2: Vec<usize> = delta_phase.into_iter().map(|v| v as usize).collect();
+    let vec2: Vec<usize> = delta_phase.map(|v| v as usize).collect();
     let arr2 = Array1::from(vec2);
     let delta_phase_pre = arr1.dot(&arr2).map(|v| v % 2 == 1);
 
@@ -169,10 +178,7 @@ pub fn clifford_from_gate_sequence(
     num_qubits: usize,
 ) -> Result<Clifford, String> {
     // create the identity
-    let mut clifford = Clifford {
-        num_qubits,
-        tableau: Array2::from_shape_fn((2 * num_qubits, 2 * num_qubits + 1), |(i, j)| i == j),
-    };
+    let mut clifford = Clifford::identity(num_qubits);
 
     gate_seq
         .iter()

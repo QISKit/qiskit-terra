@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,7 +12,8 @@
 
 """Second-order Pauli-Z expansion circuit."""
 
-from typing import Callable, List, Union, Optional, Dict, Tuple
+
+from collections.abc import Callable
 import numpy as np
 from qiskit.utils.deprecation import deprecate_func
 from .pauli_feature_map import PauliFeatureMap
@@ -33,8 +34,11 @@ class ZZFeatureMap(PauliFeatureMap):
         ┤ H ├┤ P(2.0*φ(x[2])) ├─────────────────────────────────┤ X ├┤ P(2.0*φ(x[1],x[2])) ├┤ X ├
         └───┘└────────────────┘                                 └───┘└─────────────────────┘└───┘
 
-    where :math:`\varphi` is a classical non-linear function, which defaults to :math:`\varphi(x) = x`
-    if and :math:`\varphi(x,y) = (\pi - x)(\pi - y)`.
+    Here, :math:`\varphi` is a classical non-linear function, which defaults to
+    :math:`\varphi(x) = x` if :math:`|S| = 1` and
+    :math:`\varphi(x,y) = (\pi - x)(\pi - y)` if :math:`|S| > 1`, and
+    :math:`S` is the set of qubit indices describing the connections in the feature map.
+    See the docstring of :func:`~.pauli_feature_map.pauli_feature_map` for more detail.
 
     Examples:
 
@@ -107,12 +111,10 @@ class ZZFeatureMap(PauliFeatureMap):
         self,
         feature_dimension: int,
         reps: int = 2,
-        entanglement: Union[
-            str,
-            Dict[int, List[Tuple[int]]],
-            Callable[[int], Union[str, Dict[int, List[Tuple[int]]]]],
-        ] = "full",
-        data_map_func: Optional[Callable[[np.ndarray], float]] = None,
+        entanglement: (
+            str | dict[int, list[tuple[int]]] | Callable[[int], str | dict[int, list[tuple[int]]]]
+        ) = "full",
+        data_map_func: Callable[[np.ndarray], float] | None = None,
         parameter_prefix: str = "x",
         insert_barriers: bool = False,
         name: str = "ZZFeatureMap",
@@ -123,10 +125,11 @@ class ZZFeatureMap(PauliFeatureMap):
             reps: The number of repeated circuits, has a min. value of 1.
             entanglement: Specifies the entanglement structure. Refer to
                 :class:`~qiskit.circuit.library.PauliFeatureMap` for detail.
-            data_map_func: A mapping function for data x.
+            data_map_func: A mapping function for the data ``x``.
             parameter_prefix: The prefix used if default parameters are generated.
-            insert_barriers: If True, barriers are inserted in between the evolution instructions
+            insert_barriers: If ``True``, barriers are inserted in between the evolution instructions
                 and hadamard layers.
+            name: Name of the circuit.
 
         Raises:
             ValueError: If the feature dimension is smaller than 2.

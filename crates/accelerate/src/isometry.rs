@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -24,7 +24,7 @@ use ndarray::prelude::*;
 use numpy::{IntoPyArray, PyReadonlyArray1, PyReadonlyArray2};
 
 use qiskit_circuit::gate_matrix::ONE_QUBIT_IDENTITY;
-use qiskit_circuit::util::C_ZERO;
+use qiskit_util::complex::C_ZERO;
 
 /// Find special unitary matrix that maps [c0,c1] to [r,0] or [0,r] if basis_state=0 or
 /// basis_state=1 respectively

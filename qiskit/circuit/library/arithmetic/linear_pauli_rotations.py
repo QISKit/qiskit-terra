@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,7 +14,7 @@
 """Linearly-controlled X, Y or Z rotation."""
 
 from __future__ import annotations
-from typing import Optional
+
 
 from qiskit.circuit import QuantumRegister, QuantumCircuit, Gate
 from qiskit.circuit.exceptions import CircuitError
@@ -52,7 +52,7 @@ class LinearPauliRotations(FunctionalPauliRotations):
 
     def __init__(
         self,
-        num_state_qubits: Optional[int] = None,
+        num_state_qubits: int | None = None,
         slope: float = 1,
         offset: float = 0,
         basis: str = "Y",
@@ -93,7 +93,7 @@ class LinearPauliRotations(FunctionalPauliRotations):
         """Set the multiplicative factor of the rotation angles.
 
         Args:
-            The slope of the rotation angles.
+            slope: The slope of the rotation angles.
         """
         if self._slope is None or slope != self._slope:
             self._invalidate()
@@ -122,7 +122,7 @@ class LinearPauliRotations(FunctionalPauliRotations):
             self._invalidate()
             self._offset = offset
 
-    def _reset_registers(self, num_state_qubits: Optional[int]) -> None:
+    def _reset_registers(self, num_state_qubits: int | None) -> None:
         """Set the number of state qubits.
 
         Note that this changes the underlying quantum register, if the number of state qubits

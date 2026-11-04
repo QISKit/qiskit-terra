@@ -1,0 +1,20 @@
+[package]
+name = "qiskit-bindgen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+include = ["/include"]
+
+[lints]
+workspace = true
+
+[lib]
+name = "qiskit_bindgen"
+
+[dependencies]
+qiskit-cext-vtable = { workspace = true, features = ["python_binding"] }
+anyhow.workspace = true
+cbindgen  = { workspace = true, features = ["unstable_ir"] }
+hashbrown.workspace = true
+regex.version = "1.12"

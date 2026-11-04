@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -17,8 +17,8 @@ from __future__ import annotations
 import typing
 import warnings
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit.gate import Gate
+
+from qiskit.circuit import QuantumCircuit, Gate
 from qiskit.circuit.library import get_standard_gate_name_mapping, IGate
 from qiskit.utils.deprecation import deprecate_func
 from qiskit._accelerate.synthesis.discrete_basis import (
@@ -46,9 +46,16 @@ class SolovayKitaevDecomposition:
         check_input: bool = False,
     ) -> None:
         """
+
+        .. note::
+
+            If ``basic_approximations`` is passed as ``.npy`` file, pickle is used internally
+            to load the data. This is a potential security vulnerability and only trusted files
+            should be loaded.
+
         Args:
             basic_approximations: A specification of the basic SO(3) approximations in terms
-                of discrete gates. At each iteration this algorithm, the remaining error is
+                of discrete gates. At each iteration of this algorithm, the remaining error is
                 approximated with the closest sequence of gates in this set.
                 If a ``str``, this specifies a filename from which to load the
                 approximation. If a ``dict``, then this contains
@@ -59,7 +66,7 @@ class SolovayKitaevDecomposition:
 
                 Either this parameter, or ``basis_gates`` and ``depth`` can be specified.
             basis_gates: A list of discrete (i.e., non-parameterized) standard gates.
-                Defaults to ``["h", "t", "tdg"]``.
+                All gates must be single-qubit gates. Defaults to ``["h", "t", "tdg"]``.
             depth: The number of basis gate combinations to consider in the basis set. This
                 determines how fast (and if) the algorithm converges and should be chosen
                 sufficiently high.
@@ -76,15 +83,14 @@ class SolovayKitaevDecomposition:
                 "Either basic_approximations or basis_gates + depth can be specified, not both."
             )
 
+        # Fast Rust path to load the file
+        elif isinstance(basic_approximations, str) and basic_approximations[~3:] != ".npy":
+            self._sk = RustSolovayKitaevSynthesis.from_basic_approximations(
+                basic_approximations, True
+            )
         else:
-            # Fast Rust path to load the file
-            if isinstance(basic_approximations, str) and basic_approximations[~3:] != ".npy":
-                self._sk = RustSolovayKitaevSynthesis.from_basic_approximations(
-                    basic_approximations, True
-                )
-            else:
-                sequences = self.load_basic_approximations(basic_approximations)
-                self._sk = RustSolovayKitaevSynthesis.from_sequences(sequences, True)
+            sequences = self.load_basic_approximations(basic_approximations)
+            self._sk = RustSolovayKitaevSynthesis.from_sequences(sequences, True)
 
         self._depth = depth
         self._check_input = check_input
@@ -112,6 +118,12 @@ class SolovayKitaevDecomposition:
     def load_basic_approximations(data: list | str | dict) -> list[GateSequence]:
         """Load basic approximations.
 
+        .. note::
+
+            If ``data`` is given as string, this method internally relies on pickle to load
+            the file. This is a potential security vulnerability and only trusted files should be
+            loaded.
+
         Args:
             data: If a string, specifies the path to the file from where to load the data.
                 If a dictionary, directly specifies the decompositions as ``{gates: matrix}``
@@ -136,9 +148,9 @@ class SolovayKitaevDecomposition:
         warnings.warn(
             "It is suggested to pass basic_approximations in the binary format produced "
             "by SolovayKitaevDecomposition.save_basic_approximations, which is more "
-            "performant than other formats. Other formats are pending deprecation "
-            "and will be deprecated in a future release.",
-            category=PendingDeprecationWarning,
+            "performant than other formats. Passing a .npy format is deprecated since Qiskit 2.3 "
+            "and support will be removed no sooner than 3 months after the release date.",
+            category=DeprecationWarning,
         )
 
         # is already a list of GateSequences
@@ -157,7 +169,6 @@ class SolovayKitaevDecomposition:
             else:
                 matrix, global_phase = matrix_and_phase, 0
 
-            # gates = [_1q_gates[element] for element in gatestring.split()]
             gates = normalize_gates(gatestring.split())
             sequence = GateSequence.from_gates_and_matrix(gates, matrix, global_phase)
             sequences.append(sequence)
@@ -183,7 +194,7 @@ class SolovayKitaevDecomposition:
                 and storing as such can cause errors when loading the file again.
         """
         # Safety guard: previously, we serialized via npy, but this format is incompatible
-        # with the current serialization, using Rust's serde + bincode. While we can still load
+        # with the current serialization, using Rust's binrw. While we can still load
         # .npy files in legacy format, the new format should not be stored as .npy.
         if filename[~3:] == ".npy":
             raise ValueError(
@@ -229,10 +240,7 @@ class SolovayKitaevDecomposition:
         circuit = QuantumCircuit._from_circuit_data(data, legacy_qubits=True)
 
         if return_dag:
-            from qiskit.converters import circuit_to_dag  # pylint: disable=cyclic-import
-
-            return circuit_to_dag(circuit)
-
+            return circuit.to_dag()
         return circuit
 
     def query_basic_approximation(self, gate: np.ndarray | Gate) -> QuantumCircuit:
@@ -246,10 +254,9 @@ class SolovayKitaevDecomposition:
         return circuit
 
     @deprecate_func(
-        since="2.1",
+        since="2.3",
         additional_msg="Use query_basic_approximation instead, which takes a Gate or matrix "
         "as input and returns a QuantumCircuit object.",
-        pending=True,
     )
     def find_basic_approximation(self, sequence: GateSequence) -> GateSequence:
         """Find ``GateSequence`` in ``self._basic_approximations`` that approximates ``sequence``.
@@ -272,9 +279,17 @@ def normalize_gates(gates: list[Gate | str]) -> list[Gate]:
 
     def normalize(gate: Gate | str) -> Gate:
         if isinstance(gate, Gate):
-            return gate
-        if gate in name_to_gate:
-            return name_to_gate[gate]
-        raise ValueError(f"Unsupported gate: {gate}")
+            normalized = gate
+        elif gate in name_to_gate:
+            normalized = name_to_gate[gate]
+        else:
+            raise ValueError(f"Unsupported gate: {gate}")
+
+        if normalized.num_qubits != 1:
+            raise ValueError(
+                "Solovay-Kitaev synthesis only supports single-qubit basis gates, "
+                f"but '{normalized.name}' acts on {normalized.num_qubits} qubits."
+            )
+        return normalized
 
     return list(map(normalize, gates))

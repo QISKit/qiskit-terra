@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -14,7 +14,8 @@ use crate::linear::utils::{
     binary_matmul_inner, calc_inverse_matrix_inner, replace_row_inner, swap_rows_inner,
 };
 use ndarray::{Array1, Array2, ArrayView2, ArrayViewMut2, Axis, concatenate, s};
-use rand::{Rng, SeedableRng};
+use rand::prelude::*;
+use rand::rngs::SysRng;
 use rand_pcg::Pcg64Mcg;
 
 /// Sample from the quantum Mallows distribution.
@@ -67,7 +68,7 @@ fn inverse_tril(mat: ArrayView2<bool>) -> Array2<bool> {
 pub fn random_clifford_tableau_inner(num_qubits: usize, seed: Option<u64>) -> Array2<bool> {
     let mut rng = match seed {
         Some(seed) => Pcg64Mcg::seed_from_u64(seed),
-        None => Pcg64Mcg::from_os_rng(),
+        None => Pcg64Mcg::try_from_rng(&mut SysRng).unwrap(),
     };
 
     let (had, perm) = sample_qmallows(num_qubits, &mut rng);

@@ -1,0 +1,5 @@
+---
+features_circuits:
+  - |
+    Added :meth:`.ParameterExpression.structurally_equal`, which can be used to compare whether two
+    expressions have equal internal structures.  This is mostly useful for testing Qiskit itself.

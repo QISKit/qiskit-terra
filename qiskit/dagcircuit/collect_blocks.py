@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -31,7 +31,7 @@ class BlockCollector:
     into blocks of nodes that satisfy certain criteria. It works both with the
     :class:`~qiskit.dagcircuit.DAGCircuit` and
     :class:`~qiskit.dagcircuit.DAGDependency` representations of a DAG, where
-    DagDependency takes into account commutativity between nodes.
+    the latter takes into account commutativity between nodes.
 
     Collecting nodes from DAGDependency generally leads to more optimal results, but is
     slower, as it requires to construct a DAGDependency beforehand. Thus, DAGCircuit should
@@ -102,17 +102,14 @@ class BlockCollector:
                 return [pred for pred in self.dag.successors(node) if isinstance(pred, DAGOpNode)]
             else:
                 return [pred for pred in self.dag.predecessors(node) if isinstance(pred, DAGOpNode)]
+        elif self._collect_from_back:
+            return [
+                self.dag.get_node(pred_id) for pred_id in self.dag.direct_successors(node.node_id)
+            ]
         else:
-            if self._collect_from_back:
-                return [
-                    self.dag.get_node(pred_id)
-                    for pred_id in self.dag.direct_successors(node.node_id)
-                ]
-            else:
-                return [
-                    self.dag.get_node(pred_id)
-                    for pred_id in self.dag.direct_predecessors(node.node_id)
-                ]
+            return [
+                self.dag.get_node(pred_id) for pred_id in self.dag.direct_predecessors(node.node_id)
+            ]
 
     def _direct_succs(self, node):
         """Returns direct successors of a node. This function takes into account the
@@ -124,17 +121,14 @@ class BlockCollector:
                 return [succ for succ in self.dag.predecessors(node) if isinstance(succ, DAGOpNode)]
             else:
                 return [succ for succ in self.dag.successors(node) if isinstance(succ, DAGOpNode)]
+        elif self._collect_from_back:
+            return [
+                self.dag.get_node(succ_id) for succ_id in self.dag.direct_predecessors(node.node_id)
+            ]
         else:
-            if self._collect_from_back:
-                return [
-                    self.dag.get_node(succ_id)
-                    for succ_id in self.dag.direct_predecessors(node.node_id)
-                ]
-            else:
-                return [
-                    self.dag.get_node(succ_id)
-                    for succ_id in self.dag.direct_successors(node.node_id)
-                ]
+            return [
+                self.dag.get_node(succ_id) for succ_id in self.dag.direct_successors(node.node_id)
+            ]
 
     def _have_uncollected_nodes(self):
         """Returns whether there are uncollected (pending) nodes"""
@@ -339,7 +333,7 @@ def split_block_into_layers(block: list[DAGOpNode | DAGDepNode]):
 
 class BlockCollapser:
     """This class implements various strategies of consolidating blocks of nodes
-    in a DAG (direct acyclic graph). It works both with
+    in a DAG (directed acyclic graph). It works both with
     the :class:`~qiskit.dagcircuit.DAGCircuit`
     and :class:`~qiskit.dagcircuit.DAGDependency` DAG representations.
     """

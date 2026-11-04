@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -18,10 +18,9 @@ from collections.abc import Collection
 
 import numpy as np
 
-from qiskit.quantum_info import PauliList
+from qiskit.quantum_info import PauliList, Clifford
 from qiskit.exceptions import QiskitError
 from qiskit.circuit import QuantumCircuit
-from qiskit.quantum_info.operators.symplectic.clifford import Clifford
 
 
 def synth_circuit_from_stabilizers(
@@ -30,7 +29,6 @@ def synth_circuit_from_stabilizers(
     allow_underconstrained: bool = False,
     invert: bool = False,
 ) -> QuantumCircuit:
-    # pylint: disable=line-too-long
     """Synthesis of a circuit that generates a state stabilized by the stabilizers
     using Gaussian elimination with Clifford gates.
     If the stabilizers are underconstrained, and ``allow_underconstrained`` is ``True``,

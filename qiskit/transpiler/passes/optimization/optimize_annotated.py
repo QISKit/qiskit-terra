@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,7 +12,6 @@
 
 """Optimize annotated operations on a circuit."""
 
-from typing import Optional, List, Tuple, Union
 
 from qiskit.circuit.controlflow import CONTROL_FLOW_OP_NAMES
 from qiskit.converters import circuit_to_dag, dag_to_circuit
@@ -59,9 +58,9 @@ class OptimizeAnnotated(TransformationPass):
 
     def __init__(
         self,
-        target: Optional[Target] = None,
-        equivalence_library: Optional[EquivalenceLibrary] = None,
-        basis_gates: Optional[List[str]] = None,
+        target: Target | None = None,
+        equivalence_library: EquivalenceLibrary | None = None,
+        basis_gates: list[str] | None = None,
         recurse: bool = True,
         do_conjugate_reduction: bool = True,
     ):
@@ -69,10 +68,10 @@ class OptimizeAnnotated(TransformationPass):
         OptimizeAnnotated initializer.
 
         Args:
-            target: Optional, the backend target to use for this pass.
+            target:  the backend target to use for this pass.
             equivalence_library: The equivalence library used
                 (instructions in this library will not be optimized by this pass).
-            basis_gates: Optional, target basis names to unroll to, e.g. `['u3', 'cx']`
+            basis_gates:  target basis names to unroll to, e.g. `['u3', 'cx']`
                 (instructions in this list will not be optimized by this pass).
                 Ignored if ``target`` is also specified.
             recurse: By default, when either ``target`` or ``basis_gates`` is specified,
@@ -111,7 +110,7 @@ class OptimizeAnnotated(TransformationPass):
         dag, _ = self._run_inner(dag)
         return dag
 
-    def _run_inner(self, dag) -> Tuple[DAGCircuit, bool]:
+    def _run_inner(self, dag) -> tuple[DAGCircuit, bool]:
         """
         Optimizes annotated operations.
         Returns True if did something.
@@ -146,7 +145,7 @@ class OptimizeAnnotated(TransformationPass):
 
         return dag, opt1 or opt2 or opt3
 
-    def _canonicalize(self, dag) -> Tuple[DAGCircuit, bool]:
+    def _canonicalize(self, dag) -> tuple[DAGCircuit, bool]:
         """
         Combines recursive annotated operations and canonicalizes modifiers.
         Returns True if did something.
@@ -157,7 +156,7 @@ class OptimizeAnnotated(TransformationPass):
             modifiers = []
             cur = node.op
             while isinstance(cur, AnnotatedOperation):
-                modifiers.extend(cur.modifiers)
+                modifiers = cur.modifiers + modifiers
                 cur = cur.base_op
             canonical_modifiers = _canonicalize_modifiers(modifiers)
             if len(canonical_modifiers) > 0:
@@ -172,7 +171,7 @@ class OptimizeAnnotated(TransformationPass):
 
     def _conjugate_decomposition(
         self, dag: DAGCircuit
-    ) -> Union[Tuple[DAGCircuit, DAGCircuit, DAGCircuit], None]:
+    ) -> tuple[DAGCircuit, DAGCircuit, DAGCircuit] | None:
         """
         Decomposes a circuit ``A`` into 3 sub-circuits ``P``, ``Q``, ``R`` such that
         ``A = P -- Q -- R`` and ``R = P^{-1}``.
@@ -319,7 +318,7 @@ class OptimizeAnnotated(TransformationPass):
         return front_circuit, middle_circuit, back_circuit
 
     def _conjugate_reduce_op(
-        self, op: AnnotatedOperation, base_decomposition: Tuple[DAGCircuit, DAGCircuit, DAGCircuit]
+        self, op: AnnotatedOperation, base_decomposition: tuple[DAGCircuit, DAGCircuit, DAGCircuit]
     ) -> Operation:
         """
         We are given an annotated-operation ``op = M [ B ]`` (where ``B`` is the base operation and
@@ -359,7 +358,7 @@ class OptimizeAnnotated(TransformationPass):
         op_new.definition = circ
         return op_new
 
-    def _conjugate_reduction(self, dag) -> Tuple[DAGCircuit, bool]:
+    def _conjugate_reduction(self, dag) -> tuple[DAGCircuit, bool]:
         """
         Looks for annotated operations whose base operation has a nontrivial conjugate decomposition.
         In such cases, the modifiers of the annotated operation can be moved to the "middle" part of
@@ -435,7 +434,7 @@ class OptimizeAnnotated(TransformationPass):
 
         return opt
 
-    def _recurse(self, dag) -> Tuple[DAGCircuit, bool]:
+    def _recurse(self, dag) -> tuple[DAGCircuit, bool]:
         """
         Recursively handles gate definitions.
         Returns True if did something.

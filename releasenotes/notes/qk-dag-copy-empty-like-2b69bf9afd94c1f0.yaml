@@ -1,8 +1,0 @@
----
-features_c:
-  - |
-    Added :c:func:`qk_dag_copy_empty_like` to create a copy of the given DAG,
-    as a mirror of :meth:`.DAGCircuit.copy_empty_like`.
-  - |
-    Added :c:func:`qk_circuit_copy_empty_like` to create a copy of the given circuit,
-    as a mirror of :meth:`.CircuitData.copy_empty_like`.

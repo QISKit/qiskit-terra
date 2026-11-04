@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,7 @@ These are a number of elementary functions that are required for the AQC routine
 
 import numpy as np
 
-from qiskit.circuit.library.standard_gates import RXGate, RZGate, RYGate
+from qiskit.circuit.library import RXGate, RZGate, RYGate
 
 
 def place_unitary(unitary: np.ndarray, n: int, j: int) -> np.ndarray:

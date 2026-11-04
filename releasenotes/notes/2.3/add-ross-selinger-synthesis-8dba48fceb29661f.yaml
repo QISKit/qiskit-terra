@@ -1,0 +1,22 @@
+---
+features_synthesis:
+  - |
+    Added :func:`.gridsynth_rz` that contructs a 1-qubit quantum
+    circuit approximating a RZ-rotation with a specified angle. The algorithm
+    is described in the paper "Optimal ancilla-free Clifford+T approximation
+    of z-rotations" by Neil J. Ross, Peter Selinger and is implemented 
+    in https://github.com/qiskit-community/rsgridsynth.
+
+    Added :func:`.gridsynth_unitary` that construct a 1-qubit quantum
+    circuit approximating a given 1-qubit unitary matrix. The algorithm works
+    by decomposing the unitary matrix into RZ-rotation, RX-rotation, and another
+    RZ-rotation, and applying the Ross-Selinger algorithm to each of the
+    three rotations.
+features_transpiler:
+  - |
+    Added a new unitary synthesis plugin :class:`.RossSelingerSynthesis` that
+    synthesizes 1-qubit unitary gates using the Ross-Selinger algorithm
+    and produces a 1-qubit quantum circuit consisting of Clifford, T and Tdg gates.
+    
+    The plugin is invoked by the :class:`.UnitarySynthesis` transpiler pass
+    when the parameter ``method`` is set to ``"gridsynth"``.

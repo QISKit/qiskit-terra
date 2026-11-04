@@ -3,12 +3,6 @@ name: Rust Tests
 on:
   workflow_call:
     inputs:
-      python-version:
-        description: >
-          Python version to currently test
-        type: string
-        required: true
-
       runner:
         description: >
           Describes the system this workflow should run on.
@@ -16,18 +10,17 @@ on:
         required: true
 jobs:
   unit-tests:
-    name: Tests-Rust-${{ inputs.python-version }}
-    runs-on: ${{ inputs.runner }}
+    # The main name is set in the calling workflow.
+    name: ${{ inputs.runner }}
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
+    runs-on: ${{ inputs.runner }}
     steps:
-      - uses: actions/checkout@v6
-      - name: Set up Python ${{ inputs.python-version }}
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ inputs.python-version }}
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - name: Standalone checks for all crates
+        env:
+          RUSTFLAGS: "-D warnings"
         run: |
           set -e
           for crate in `ls -d ./crates/*/` ; do
@@ -35,11 +28,5 @@ jobs:
               cargo check
               popd
           done
-      - name: Install Qiskit directly
-        run: |
-          set -e
-          python -m pip install -c constraints.txt -e .
       - name: Run Rust Tests
-        run: |
-          python tools/report_numpy_state.py
-          python tools/run_cargo_test.py
+        run: cargo test

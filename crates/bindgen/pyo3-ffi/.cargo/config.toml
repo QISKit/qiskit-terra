@@ -1,0 +1,5 @@
+[build]
+# Share the `target` with the root of the repository as a developer convenience, so using
+# `rust-analyzer` or `clippy` within the template crate will not need to keep separate compilations
+# of `pyo3`; we can just re-use Qiskit's.
+target-dir = "../../../target"

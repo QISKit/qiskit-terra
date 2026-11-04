@@ -1,8 +1,11 @@
-INPUT = docs/cdoc/ dist/c/include/qiskit.h dist/c/include/qiskit/
+INPUT = docs/cdoc/ dist/c/include/
 
+RECURSIVE = YES
+INCLUDE_PATH = dist/c/include
 OPTIMIZE_OUTPUT_FOR_C = YES
 ENABLE_PREPROCESSING = YES
 MACRO_EXPANSION = YES
+SHOW_HEADERFILE = NO
 
 WARNINGS = YES
 WARN_IF_UNDOCUMENTED = YES
@@ -18,3 +21,10 @@ PREDEFINED = QISKIT_C_PYTHON_INTERFACE=1
 
 GENERATE_HTML = NO
 GENERATE_LATEX = NO
+
+# The command `\qk_deprecated{<version>|<note>}` (e.g. \qk_deprecated{2.3.0|Use :c:func:`other_fn` instead})
+# for outputting correct deprecation information across the Breathe bridge to Sphinx.
+#
+# We don't use the built-in `\deprecated` command in Doxygen because that only accepts free-form
+# input, but we want to retain the version information in the structured Sphinx output.
+ALIASES += qk_deprecated{2|}="\verbatim embed:rst^^.. deprecated:: \1^^    \2^^\endverbatim"

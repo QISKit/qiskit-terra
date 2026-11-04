@@ -1,0 +1,4 @@
+---
+fixes:
+  - |
+    Fixed :c:func:`qk_obs_term` when accessing an identity observable term. See `#15536 <https://github.com/Qiskit/qiskit/issues/15536>`__.

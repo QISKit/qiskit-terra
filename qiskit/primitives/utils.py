@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -25,7 +25,7 @@ def _statevector_from_circuit(
 ) -> Statevector:
     """Generate a statevector from a circuit. Used in StatevectorEstimator class.
 
-    If the input circuit includes any resets for a some subsystem,
+    If the input circuit includes any resets for some subsystem,
     :meth:`.Statevector.reset` behaves in a stochastic way in :meth:`.Statevector.evolve`.
     This function sets a random number generator to be reproducible.
 
@@ -33,7 +33,7 @@ def _statevector_from_circuit(
 
     Args:
         circuit: The quantum circuit.
-        seed: The random number generator or None.
+        rng: The random number generator or None.
     """
     sv = Statevector.from_int(0, 2**circuit.num_qubits)
     sv.seed(rng)

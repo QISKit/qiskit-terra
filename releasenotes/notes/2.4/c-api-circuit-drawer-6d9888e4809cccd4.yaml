@@ -1,0 +1,7 @@
+---
+features_c:
+  - |
+    Added a new function, :c:func:`qk_circuit_draw`, to enable visualizing a quantum circuit 
+    as text through the C API. The function uses :c:struct:`QkCircuitDrawerConfig` to configure 
+    visualization options. Refer to the function documentation for more details.
+

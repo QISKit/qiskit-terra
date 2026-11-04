@@ -4,13 +4,16 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
 """Cancel the redundant (self-adjoint) gates through commutation relations."""
+
+from __future__ import annotations
+
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.circuit.commutation_library import StandardGateCommutations
 
@@ -32,9 +35,21 @@ class CommutativeCancellation(TransformationPass):
     the commutation relations in the circuit. Gates considered include::
 
         H, X, Y, Z, CX, CY, CZ
+
+
+    This pass is multithreaded and will potentially launch a thread pool
+    with threads equal to the number of CPUs by default. You can tune the
+    number of threads with the ``RAYON_NUM_THREADS`` environment variable.
+    For example, setting ``RAYON_NUM_THREADS=4`` would limit the thread pool
+    to 4 threads.
     """
 
-    def __init__(self, basis_gates=None, target=None):
+    def __init__(
+        self,
+        basis_gates=None,
+        target=None,
+        approximation_degree: float = 1.0,
+    ):
         """
         CommutativeCancellation initializer.
 
@@ -46,6 +61,10 @@ class CommutativeCancellation(TransformationPass):
             target (Target): The :class:`~.Target` representing the target backend, if both
                 ``basis_gates`` and ``target`` are specified then this argument will take
                 precedence and ``basis_gates`` will be ignored.
+            approximation_degree: The threshold used in the average gate fidelity
+                computation to decide whether pairs of gates can be considered as
+                canceling or commuting. A floating point value between 0 and 1,
+                where ``1.0`` means no approximation (default).
         """
         super().__init__()
         if basis_gates:
@@ -53,13 +72,14 @@ class CommutativeCancellation(TransformationPass):
         else:
             self.basis = set()
         self.target = target
+        self._approximation_degree = approximation_degree
         if target is not None:
             self.basis = set(target.operation_names)
 
         self._var_z_map = {"rz": RZGate, "p": PhaseGate, "u1": U1Gate}
 
-        self._z_rotations = {"p", "z", "u1", "rz", "t", "s"}
-        self._x_rotations = {"x", "rx"}
+        self._z_rotations = {"p", "z", "u1", "rz", "t", "s", "tdg", "sdg"}
+        self._x_rotations = {"x", "rx", "sx", "sxdg"}
         self._gates = {"cx", "cy", "cz", "h", "y"}  # Now the gates supported are hard-coded
 
         # build a commutation checker restricted to the gates we cancel -- the others we
@@ -79,6 +99,9 @@ class CommutativeCancellation(TransformationPass):
             DAGCircuit: the optimized DAG.
         """
         commutation_cancellation.cancel_commutations(
-            dag, self._commutation_checker, sorted(self.basis)
+            dag,
+            self._commutation_checker,
+            sorted(self.basis),
+            self._approximation_degree,
         )
         return dag

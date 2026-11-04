@@ -2,18 +2,21 @@
 
 [![License](https://img.shields.io/github/license/Qiskit/qiskit.svg?)](https://opensource.org/licenses/Apache-2.0) <!--- long-description-skip-begin -->
 [![Current Release](https://img.shields.io/github/release/Qiskit/qiskit.svg?logo=Qiskit)](https://github.com/Qiskit/qiskit/releases)
-[![Extended Support Release](https://img.shields.io/github/v/release/Qiskit/qiskit?sort=semver&filter=1.*&logo=Qiskit&label=extended%20support)](https://github.com/Qiskit/qiskit/releases?q=tag%3A1)
 [![Downloads](https://img.shields.io/pypi/dm/qiskit.svg)](https://pypi.org/project/qiskit/)
 [![Coverage Status](https://coveralls.io/repos/github/Qiskit/qiskit/badge.svg?branch=main)](https://coveralls.io/github/Qiskit/qiskit?branch=main)
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/qiskit)
-[![Minimum rustc 1.85](https://img.shields.io/badge/rustc-1.85+-blue.svg)](https://rust-lang.github.io/rfcs/2495-min-rust-version.html)
+[![Minimum rustc 1.91](https://img.shields.io/badge/rustc-1.91+-blue.svg)](https://rust-lang.github.io/rfcs/2495-min-rust-version.html)
 [![Downloads](https://static.pepy.tech/badge/qiskit)](https://pepy.tech/project/qiskit)<!--- long-description-skip-end -->
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.2583252.svg)](https://doi.org/10.5281/zenodo.2583252)
 
-**Qiskit**  is an open-source SDK for working with quantum computers at the level of extended quantum circuits, operators, and primitives.
+**Qiskit** is an open-source SDK for working with quantum computers at the level of extended quantum circuits, operators, and primitives.
 
 This library is the core component of Qiskit, which contains the building blocks for creating and working with quantum circuits, quantum operators, and primitive functions (Sampler and Estimator).
 It also contains a transpiler that supports optimizing quantum circuits, and a quantum information toolbox for creating advanced operators.
+
+Qiskit provides two public APIs: a Python API and a C API. The Python API is the primary interface and prior to Qiskit 2.0 was the only public API available
+for Qiskit. The C API is designed to provide direct access to Qiskit's internal data model (which is written in Rust). The C API can be consumed as either a
+shared library (`libqiskit.so`) for standalone use, or from its embedding in the `qiskit` Python package [for writing Python extension modules](https://quantum.cloud.ibm.com/docs/guides/c-extension-for-python).
 
 For more details on how to use Qiskit, refer to the documentation located here:
 
@@ -22,7 +25,9 @@ For more details on how to use Qiskit, refer to the documentation located here:
 
 ## Installation
 
-We encourage installing Qiskit via ``pip``:
+### Python
+
+For running Qiskit on Python we recommend installing Qiskit via ``pip``:
 
 ```bash
 pip install qiskit
@@ -32,9 +37,27 @@ Pip will handle all dependencies automatically and you will always install the l
 
 To install from source, follow the instructions in the [documentation](https://quantum.cloud.ibm.com/docs/guides/install-qiskit-source).
 
+### Standalone C library
+
+To install Qiskit as a standalone C library the only option is currently to build Qiskit from source. This requires having the
+[Rust](https://rust-lang.org/) compiler installed.
+We recommend installing [GNU Make](https://www.gnu.org/software/make/) to simplify the build process.
+With these requirements installed you can run:
+
+```bash
+make c
+```
+
+This will compile the C library and put the `dist/c` directory in the root of the repository which will contain the shared library and C headers for
+the library.
+
+You can refer to the [documentation](https://quantum.cloud.ibm.com/docs/guides/install-c-api) on installing the C API for more details and how to
+use the built library.
+
 ## Create your first quantum program in Qiskit
 
-Now that Qiskit is installed, it's time to begin working with Qiskit. The essential parts of a quantum program are:
+Now that Qiskit is installed, it's time to begin working with Qiskit. We will use the Python interface to demonstrate creating a quantum program.
+The essential parts of a quantum program are:
 1. Define and build a quantum circuit that represents the quantum state
 2. Define the classical output by measurements or a set of observable operators
 3. Depending on the output, use the Sampler primitive to sample outcomes or the Estimator primitive to estimate expectation values.
@@ -110,8 +133,8 @@ qc_transpiled = transpile(qc, target=target)
 ### Executing your code on real quantum hardware
 
 Qiskit provides an abstraction layer that lets users run quantum circuits on hardware from any vendor that provides a compatible interface. 
-The best way to use Qiskit is with a runtime environment that provides optimized implementations of Sampler and Estimator for a given hardware platform. This runtime may involve using pre- and post-processing, such as optimized transpiler passes with error suppression, error mitigation, and, eventually, error correction built in. A runtime implements `qiskit.primitives.BaseSamplerV2` and `qiskit.primitives.BaseEstimatorV2` interfaces. For example,
-some packages that provide implementations of a runtime primitive implementation are:
+The best way to use Qiskit is with a runtime environment that provides optimized implementations of Sampler and Estimator for a given hardware platform. This runtime may involve using pre- and post-processing, such as optimized transpiler passes with error suppression, error mitigation, and, eventually, error correction built in. A runtime implements the `qiskit.primitives.BaseSamplerV2` and `qiskit.primitives.BaseEstimatorV2` interfaces. For example,
+some packages that provide implementations of a runtime primitive are:
 
 * https://github.com/Qiskit/qiskit-ibm-runtime
 
@@ -125,15 +148,15 @@ hardware or simulators to Qiskit. The backend class includes a common interface 
 * https://github.com/qiskit-community/qiskit-quantinuum-provider
 * https://github.com/rigetti/qiskit-rigetti
 
-<!-- This is not an exhaustive list, and if you maintain a provider package please feel free to open a PR to add new providers -->
+<!-- This is not an exhaustive list, and if you maintain a provider package, please feel free to open a PR to add new providers -->
 
 You can refer to the documentation of these packages for further instructions
 on how to get access and use these systems.
 
 ## Contribution Guidelines
 
-If you'd like to contribute to Qiskit, please take a look at our
-[contribution guidelines](CONTRIBUTING.md). By participating, you are expected to uphold our [code of conduct](CODE_OF_CONDUCT.md).
+If you'd like to contribute to Qiskit, please take a look at the [contribution guide](CONTRIBUTING.md).
+By participating, you are expected to uphold our [code of conduct](CODE_OF_CONDUCT.md).
 
 We use [GitHub issues](https://github.com/Qiskit/qiskit/issues) for tracking requests and bugs. Please
 [join the Qiskit Slack community](https://qisk.it/join-slack) for discussion, comments, and questions.
@@ -149,7 +172,7 @@ to the project at different levels. If you use Qiskit, please cite as per the in
 ## Changelog and Release Notes
 
 The changelog for a particular release is dynamically generated and gets
-written to the release page on Github for each release. For example, you can
+written to the release page on GitHub for each release. For example, you can
 find the page for the `1.2.0` release here:
 
 <https://github.com/Qiskit/qiskit/releases/tag/1.2.0>
@@ -160,8 +183,9 @@ The changelog provides a quick overview of notable changes for a given
 release.
 
 Additionally, as part of each release, detailed release notes are written to
-document in detail what has changed as part of a release. This includes any
-documentation on potential breaking changes on upgrade and new features. See [all release notes here](https://quantum.cloud.ibm.com/docs/api/qiskit/release-notes).
+document in detail what has changed. This includes any documentation on
+potential breaking changes on upgrade, and new features. See [all release notes
+here](https://quantum.cloud.ibm.com/docs/api/qiskit/release-notes).
 
 ## Acknowledgements
 

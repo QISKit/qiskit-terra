@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -13,21 +13,22 @@
 use crate::circuit_data::CircuitData;
 use crate::imports::{
     BARRIER, BOX_OP, BREAK_LOOP_OP, CONTINUE_LOOP_OP, DELAY, FOR_LOOP_OP, IF_ELSE_OP, MEASURE,
-    PAULI_PRODUCT_MEASUREMENT, RESET, SWITCH_CASE_OP, UNITARY_GATE, WHILE_LOOP_OP,
-    get_std_gate_class,
+    PAULI_PRODUCT_MEASUREMENT, PAULI_PRODUCT_ROTATION_GATE, RESET, STORE, SWITCH_CASE_OP,
+    UNITARY_GATE, WHILE_LOOP_OP, get_std_gate_class,
 };
 use crate::instruction::Parameters;
 use crate::interner::Interned;
 use crate::operations::{
-    ControlFlow, ControlFlowInstruction, Operation, OperationRef, Param, PauliProductMeasurement,
-    PyGate, PyInstruction, PyOperation, PythonOperation, StandardGate, StandardInstruction,
-    UnitaryGate,
+    BoxedCustomOperation, ControlFlow, ControlFlowInstruction, CustomOperation, Operation,
+    OperationRef, Param, PauliBased, PyInstruction, PyOpKind, PythonOperation, StandardGate,
+    StandardInstruction, Store, UnitaryGate,
 };
 use crate::{Block, Clbit, Qubit};
 use hashbrown::HashMap;
-use nalgebra::Matrix2;
-use ndarray::Array2;
+use nalgebra::{Matrix2, Matrix4};
+use ndarray::{Array2, CowArray, Ix2};
 use num_complex::Complex64;
+use pyo3::exceptions::PyNotImplementedError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyType};
 use smallvec::SmallVec;
@@ -43,12 +44,19 @@ enum PackedOperationType {
     // dereferencing.
     StandardGate = 0,
     StandardInstruction = 1,
-    PyGate = 2,
-    PyInstruction = 3,
-    PyOperation = 4,
-    UnitaryGate = 5,
-    PauliProductMeasurement = 6,
-    ControlFlow = 7,
+    PyInstruction = 2,
+    UnitaryGate = 3,
+    PauliBased = 4,
+    ControlFlow = 5,
+    Custom = 6,
+    Store = 7,
+}
+impl PackedOperationType {
+    /// Get `self` as a mask that can be used as a discriminant for `PackedOperation` pointers.
+    #[inline]
+    fn as_ptr_mask(self) -> usize {
+        (self as u8).into()
+    }
 }
 
 unsafe impl ::bytemuck::CheckedBitPattern for PackedOperationType {
@@ -60,6 +68,85 @@ unsafe impl ::bytemuck::CheckedBitPattern for PackedOperationType {
 }
 unsafe impl ::bytemuck::NoUninit for PackedOperationType {}
 
+#[cfg(target_pointer_width = "64")]
+mod inner {
+    use std::ptr;
+
+    #[derive(Clone, Copy, Debug)]
+    #[repr(transparent)]
+    pub struct PackedOperationInner(*mut ());
+    impl PackedOperationInner {
+        #[inline]
+        pub fn as_ptr(self) -> *mut () {
+            self.0
+        }
+        #[inline]
+        pub fn as_u64(self) -> u64 {
+            self.0
+                .addr()
+                .try_into()
+                .expect("usize is 64 bits on this platform")
+        }
+        #[inline]
+        pub fn from_ptr(ptr: *mut ()) -> Self {
+            Self(ptr)
+        }
+        #[inline]
+        pub fn from_u64(val: u64) -> Self {
+            Self(ptr::without_provenance_mut(
+                val.try_into().expect("usize is 64 bits"),
+            ))
+        }
+    }
+}
+#[cfg(target_pointer_width = "32")]
+mod inner {
+    use std::ptr;
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct PackedOperationInner {
+        pad: u32,
+        ptr: *mut (),
+    }
+    impl PackedOperationInner {
+        #[inline]
+        pub fn as_ptr(self) -> *mut () {
+            self.ptr
+        }
+        #[inline]
+        pub fn as_u64(self) -> u64 {
+            (u64::from(self.pad) << 32) | u64::try_from(self.ptr.addr()).expect("usize is 32 bits")
+        }
+        #[inline]
+        pub fn from_ptr(ptr: *mut ()) -> Self {
+            Self { pad: 0, ptr }
+        }
+        #[inline]
+        pub fn from_u64(val: u64) -> Self {
+            Self {
+                pad: (val >> 32) as u32,
+                // Rust numeric casting rules guarantee truncation to the least-significant bits.
+                // https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.as.numeric.int-truncation
+                ptr: ptr::without_provenance_mut(val as usize),
+            }
+        }
+    }
+}
+#[cfg(not(any(target_pointer_width = "32", target_pointer_width = "64")))]
+compile_error! { "Qiskit only supports 32- and 64-bit pointer widths." }
+
+use inner::*;
+impl From<u64> for PackedOperationInner {
+    fn from(val: u64) -> Self {
+        Self::from_u64(val)
+    }
+}
+impl From<*mut ()> for PackedOperationInner {
+    fn from(val: *mut ()) -> Self {
+        Self::from_ptr(val)
+    }
+}
+
 /// A bit-packed `OperationType` enumeration.
 ///
 /// This is logically equivalent to:
@@ -68,23 +155,26 @@ unsafe impl ::bytemuck::NoUninit for PackedOperationType {}
 /// enum Operation {
 ///     StandardGate(StandardGate),
 ///     StandardInstruction(StandardInstruction),
-///     Gate(Box<PyGate>),
-///     Instruction(Box<PyInstruction>),
-///     Operation(Box<PyOperation>),
+///     PyInstruction(Box<PyInstruction>),
 ///     UnitaryGate(Box<UnitaryGate>),
-///     PauliProductMeasurement(Box<PauliProductMeasurement>),
+///     PauliBased(Box<PauliBased>),
 ///     ControlFlow(Box<ControlFlowInstruction>),
+///     Custom(Box<dyn CustomOperation>),
+///     Store(Box<Store>),
 /// }
 /// ```
 ///
-/// including all ownership semantics, except it bit-packs the enumeration into a `u64`.
+/// including all ownership semantics, except it bit-packs the enumeration into 64 bits.
 ///
-/// The lowest three bits of this `u64` is always the discriminant and identifies which of the
-/// above variants the field contains (and thus the layout required to decode it).
-/// This works even for pointer variants (like `PyGate`) on 64-bit systems, which would normally
-/// span the entire `u64`, since pointers on these systems have a natural alignment of 8 (and thus
-/// their lowest three bits are always 0). This lets us store the discriminant within the address
-/// and mask it out before reinterpreting it as a pointer.
+/// The inner [PackedOperationInner] is guaranteed to be 64 bits, regardless of the pointer width of
+/// the platform, but we implement it with a pointer stored explicitly internally so that we can
+/// verify the provenance of our pointers through Miri.
+///
+/// The least-significant three bits is always the discriminant and identifies which of the above
+/// variants the field contains (and thus the layout required to decode it).  This works even for
+/// pointer variants (like `UnitaryGate`) on 64-bit systems, which are naturally 64 bits themselves,
+/// because we use `#[repr(align(8))]` on everything that can go into a `PackedOperation`, so we
+/// guarantee that the least-significant three bits carry no information (they're always 0).
 ///
 /// The layouts for each variant are described as follows, written out as a 64-bit binary integer.
 /// `x` marks padding bits with undefined values.
@@ -137,7 +227,15 @@ unsafe impl ::bytemuck::NoUninit for PackedOperationType {}
 /// * `PackedOperation` must take care to forward implementations of `Clone` and `Drop` to the
 ///   contained pointer.
 #[derive(Debug)]
-pub struct PackedOperation(u64);
+#[repr(transparent)]
+pub struct PackedOperation(PackedOperationInner);
+
+/// SAFETY: `PackedOperation` behaves like either an in-place `T` or `Box<T>` with respect to
+/// mutability and ownership semantics, and we require that everything that can be packed into a
+/// `PackedOperation` is both Send and Sync (the pointer variants via trait bounds on
+/// `PackablePointer`).
+unsafe impl Send for PackedOperation {}
+unsafe impl Sync for PackedOperation {}
 
 /// A private module to encapsulate the encoding of [StandardGate].
 mod standard_gate {
@@ -165,7 +263,8 @@ mod standard_gate {
                 StandardGateBits::new()
                     .with_discriminant(bytemuck::cast(PackedOperationType::StandardGate))
                     .with_standard_gate(bytemuck::cast(value))
-                    .into_bits(),
+                    .into_bits()
+                    .into(),
             )
         }
     }
@@ -176,7 +275,7 @@ mod standard_gate {
         fn try_from(value: &PackedOperation) -> Result<Self, Self::Error> {
             match value.discriminant() {
                 PackedOperationType::StandardGate => {
-                    let bits = StandardGateBits::from(value.0);
+                    let bits = StandardGateBits::from(value.0.as_u64());
                     Ok(bytemuck::checked::cast(bits.standard_gate()))
                 }
                 _ => Err("not a standard gate!"),
@@ -227,7 +326,8 @@ mod standard_instruction {
                     StandardInstruction::Reset => packed
                         .with_standard_instruction(bytemuck::cast(StandardInstructionType::Reset)),
                 }
-                .into_bits(),
+                .into_bits()
+                .into(),
             )
         }
     }
@@ -238,7 +338,7 @@ mod standard_instruction {
         fn try_from(value: &PackedOperation) -> Result<Self, Self::Error> {
             match value.discriminant() {
                 PackedOperationType::StandardInstruction => {
-                    let bits = StandardInstructionBits::from_bits(value.0);
+                    let bits = StandardInstructionBits::from_bits(value.0.as_u64());
                     let ty: StandardInstructionType =
                         bytemuck::checked::cast(bits.standard_instruction());
                     Ok(match ty {
@@ -261,19 +361,16 @@ mod standard_instruction {
 /// A private module to encapsulate the encoding of pointer types.
 mod pointer {
     use crate::operations::{
-        ControlFlowInstruction, PauliProductMeasurement, PyGate, PyInstruction, PyOperation,
-        UnitaryGate,
+        BoxedCustomOperation, ControlFlowInstruction, PyInstruction, Store, UnitaryGate,
     };
-    use crate::packed_instruction::{PackedOperation, PackedOperationType};
+    use crate::packed_instruction::{PackedOperation, PackedOperationType, PauliBased};
     use std::ptr::NonNull;
-
-    const POINTER_MASK: u64 = !PackedOperation::DISCRIMINANT_MASK;
 
     /// Used to associate a supported pointer type (e.g. PyGate) with a [PackedOperationType] and
     /// a drop implementation.
     ///
     /// Note: this is public only within this file for use by [PackedOperation]'s [Drop] impl.
-    pub trait PackablePointer: Sized {
+    pub trait PackablePointer: Sized + Send + Sync {
         const OPERATION_TYPE: PackedOperationType;
 
         /// Drops `op` as this pointer type.
@@ -288,22 +385,25 @@ mod pointer {
             // SAFETY: `PackedOperation` asserts ownership over its contents, and the contained
             // pointer can only be null if we were already dropped.  We set our discriminant to mark
             // ourselves as plain old data immediately just as a defensive measure.
-            let boxed = unsafe { Box::from_raw(pointer.as_ptr()) };
-            op.0 = PackedOperationType::StandardGate as u64;
-            ::std::mem::drop(boxed);
+            _ = unsafe { Box::from_raw(pointer.as_ptr()) };
+
+            // Clear out the last reference to the pointer.
+            op.0 = (PackedOperationType::StandardGate as u64).into();
         }
     }
 
     #[inline]
     fn try_pointer<T: PackablePointer>(value: &PackedOperation) -> Option<NonNull<T>> {
-        if value.discriminant() == T::OPERATION_TYPE {
-            let ptr = (value.0 & POINTER_MASK) as *mut ();
+        (value.discriminant() == T::OPERATION_TYPE).then(|| {
+            let ptr = value
+                .0
+                .as_ptr()
+                .map_addr(|addr| addr & !PackedOperation::DISCRIMINANT_MASK)
+                .cast::<T>();
             // SAFETY: `PackedOperation` can only be constructed from a pointer via `Box`, which
             // is always non-null (except in the case that we're partway through a `Drop`).
-            Some(unsafe { NonNull::new_unchecked(ptr) }.cast::<T>())
-        } else {
-            None
-        }
+            unsafe { NonNull::new_unchecked(ptr) }
+        })
     }
 
     macro_rules! impl_packable_pointer {
@@ -332,33 +432,30 @@ mod pointer {
 
             impl From<Box<$type>> for PackedOperation {
                 fn from(value: Box<$type>) -> Self {
-                    let discriminant = $operation_type as u64;
-                    let ptr = NonNull::from(Box::leak(value)).cast::<()>();
-                    let addr = ptr.as_ptr() as u64;
-                    assert!((addr & PackedOperation::DISCRIMINANT_MASK == 0));
-                    Self(discriminant | addr)
+                    let ptr = Box::into_raw(value).cast::<()>().map_addr(|addr| {
+                        debug_assert_eq!(addr & PackedOperation::DISCRIMINANT_MASK, 0);
+                        addr | $operation_type.as_ptr_mask()
+                    });
+                    Self(ptr.into())
                 }
             }
         };
     }
 
-    impl_packable_pointer!(PyGate, PackedOperationType::PyGate);
     impl_packable_pointer!(PyInstruction, PackedOperationType::PyInstruction);
-    impl_packable_pointer!(PyOperation, PackedOperationType::PyOperation);
     impl_packable_pointer!(UnitaryGate, PackedOperationType::UnitaryGate);
-    impl_packable_pointer!(
-        PauliProductMeasurement,
-        PackedOperationType::PauliProductMeasurement
-    );
+    impl_packable_pointer!(PauliBased, PackedOperationType::PauliBased);
     impl_packable_pointer!(ControlFlowInstruction, PackedOperationType::ControlFlow);
+    impl_packable_pointer!(BoxedCustomOperation, PackedOperationType::Custom);
+    impl_packable_pointer!(Store, PackedOperationType::Store);
 }
 
 impl PackedOperation {
-    const DISCRIMINANT_MASK: u64 = 0b111;
+    const DISCRIMINANT_MASK: usize = 0b111;
 
     #[inline]
     fn discriminant(&self) -> PackedOperationType {
-        bytemuck::checked::cast((self.0 & Self::DISCRIMINANT_MASK) as u8)
+        bytemuck::checked::cast((self.0.as_ptr().addr() & Self::DISCRIMINANT_MASK) as u8)
     }
 
     /// Get the contained `ControlFlowInstruction`, if any.
@@ -407,6 +504,12 @@ impl PackedOperation {
         self.try_into().ok()
     }
 
+    /// View the internal `PyInstruction`, if any.
+    #[inline]
+    pub fn try_py_custom(&self) -> Option<&PyInstruction> {
+        <&PyInstruction as TryFrom<&Self>>::try_from(self).ok()
+    }
+
     /// Get a safe view onto the packed data within, without assuming ownership.
     #[inline]
     pub fn view(&self) -> OperationRef<'_> {
@@ -416,15 +519,43 @@ impl PackedOperation {
             PackedOperationType::StandardInstruction => {
                 OperationRef::StandardInstruction(self.standard_instruction())
             }
-            PackedOperationType::PyGate => OperationRef::Gate(self.try_into().unwrap()),
-            PackedOperationType::PyInstruction => {
-                OperationRef::Instruction(self.try_into().unwrap())
-            }
-            PackedOperationType::PyOperation => OperationRef::Operation(self.try_into().unwrap()),
+            PackedOperationType::PyInstruction => OperationRef::PyCustom(self.try_into().unwrap()),
             PackedOperationType::UnitaryGate => OperationRef::Unitary(self.try_into().unwrap()),
-            PackedOperationType::PauliProductMeasurement => {
-                OperationRef::PauliProductMeasurement(self.try_into().unwrap())
+            PackedOperationType::PauliBased => {
+                let op: &PauliBased = self.try_into().unwrap();
+                match op {
+                    PauliBased::PauliProductMeasurement(measurement) => {
+                        OperationRef::PauliProductMeasurement(measurement)
+                    }
+                    PauliBased::PauliProductRotation(rotation) => {
+                        OperationRef::PauliProductRotation(rotation)
+                    }
+                }
             }
+            PackedOperationType::Custom => {
+                let custom_op: &BoxedCustomOperation = self.try_into().unwrap();
+                OperationRef::CustomOperation(&**custom_op)
+            }
+            PackedOperationType::Store => OperationRef::Store(self.try_into().unwrap()),
+        }
+    }
+
+    /// Does this [PackedOperation] potentially implement the gate-like matrix methods?
+    ///
+    /// This can be either a [StandardGate], or inside a Python/Rust custom operation.
+    #[inline]
+    pub fn is_gate(&self) -> bool {
+        match self.discriminant() {
+            PackedOperationType::StandardGate => true,
+            PackedOperationType::Custom => {
+                let opaque: &BoxedCustomOperation = self.try_into().unwrap();
+                opaque.is_unitary()
+            }
+            PackedOperationType::PyInstruction => {
+                let op: &PyInstruction = self.try_into().unwrap();
+                op.kind == PyOpKind::Gate
+            }
+            _ => false,
         }
     }
 
@@ -440,22 +571,10 @@ impl PackedOperation {
         instruction.into()
     }
 
-    /// Construct a new `PackedOperation` from an owned heap-allocated `PyGate`.
-    #[inline]
-    pub fn from_gate(gate: Box<PyGate>) -> Self {
-        gate.into()
-    }
-
     /// Construct a new `PackedOperation` from an owned heap-allocated `PyInstruction`.
     #[inline]
-    pub fn from_instruction(instruction: Box<PyInstruction>) -> Self {
-        instruction.into()
-    }
-
-    /// Construct a new `PackedOperation` from an owned heap-allocated `PyOperation`.
-    #[inline]
-    pub fn from_operation(operation: Box<PyOperation>) -> Self {
-        operation.into()
+    pub fn from_py_instruction(op: Box<PyInstruction>) -> Self {
+        op.into()
     }
 
     /// Construct a new `PackedOperation` from an owned heap-allocated `UnitaryGate`.
@@ -469,17 +588,65 @@ impl PackedOperation {
         control_flow.into()
     }
 
-    /// Construct a new `PackedOperation` from an owned heap-allocated `PauliProductMeasurement`.
+    /// Construct a new `PackedOperation` from an owned heap-allocated `PauliBased`.
     #[inline]
-    pub fn from_ppm(ppm: Box<PauliProductMeasurement>) -> Self {
-        ppm.into()
+    pub fn from_pauli_based(pbc: Box<PauliBased>) -> Self {
+        pbc.into()
+    }
+
+    /// Construct a new `PackedOperation` from an owned heap-allocated `CustomOperation`.
+    #[inline]
+    pub fn from_custom_operation(custom: Box<dyn CustomOperation>) -> Self {
+        BoxedCustomOperation::from(custom).into()
+    }
+
+    #[inline]
+    pub fn from_store(store: Box<Store>) -> Self {
+        store.into()
+    }
+
+    /// Clone this `PackedOperation`, deepcopying if the internal object is a Python object.
+    ///
+    /// This is similar to [py_deepcopy], but only attaches to a Python interpreter if it has to.
+    pub fn clone_with_py_deepcopy(&self) -> PyResult<Self> {
+        match self.view() {
+            OperationRef::PyCustom(inst) => {
+                Python::attach(|py| inst.py_deepcopy(py, None).map(|ob| ob.into()))
+            }
+            OperationRef::StandardGate(_)
+            | OperationRef::StandardInstruction(_)
+            | OperationRef::ControlFlow(_)
+            | OperationRef::Unitary(_)
+            | OperationRef::PauliProductMeasurement(_)
+            | OperationRef::PauliProductRotation(_)
+            | OperationRef::CustomOperation(_)
+            | OperationRef::Store(_) => Ok(self.clone()),
+        }
+    }
+
+    pub fn py_deepcopy<'py>(
+        &self,
+        py: Python<'py>,
+        memo: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Self> {
+        match self.view() {
+            OperationRef::PyCustom(inst) => inst.py_deepcopy(py, memo).map(|ob| ob.into()),
+            OperationRef::StandardGate(_)
+            | OperationRef::StandardInstruction(_)
+            | OperationRef::ControlFlow(_)
+            | OperationRef::Unitary(_)
+            | OperationRef::PauliProductMeasurement(_)
+            | OperationRef::PauliProductRotation(_)
+            | OperationRef::CustomOperation(_)
+            | OperationRef::Store(_) => Ok(self.clone()),
+        }
     }
 
     /// Check equality of the operation, including Python-space checks, if appropriate.
     pub fn py_eq(&self, py: Python, other: &PackedOperation) -> PyResult<bool> {
         match (self.view(), other.view()) {
             (OperationRef::ControlFlow(left), OperationRef::ControlFlow(right)) => {
-                left.py_eq(py, right)
+                Ok(left == right)
             }
             (OperationRef::StandardGate(left), OperationRef::StandardGate(right)) => {
                 Ok(left == right)
@@ -487,20 +654,19 @@ impl PackedOperation {
             (OperationRef::StandardInstruction(left), OperationRef::StandardInstruction(right)) => {
                 Ok(left == right)
             }
-            (OperationRef::Gate(left), OperationRef::Gate(right)) => {
-                left.gate.bind(py).eq(&right.gate)
-            }
-            (OperationRef::Instruction(left), OperationRef::Instruction(right)) => {
-                left.instruction.bind(py).eq(&right.instruction)
-            }
-            (OperationRef::Operation(left), OperationRef::Operation(right)) => {
-                left.operation.bind(py).eq(&right.operation)
+            (OperationRef::PyCustom(left), OperationRef::PyCustom(right)) => {
+                left.ob.bind(py).eq(&right.ob)
             }
             (OperationRef::Unitary(left), OperationRef::Unitary(right)) => Ok(left == right),
             (
                 OperationRef::PauliProductMeasurement(left),
                 OperationRef::PauliProductMeasurement(right),
             ) => Ok(left == right),
+            (
+                OperationRef::PauliProductRotation(left),
+                OperationRef::PauliProductRotation(right),
+            ) => Ok(left == right),
+            (OperationRef::Store(left), OperationRef::Store(right)) => Ok(left == right),
             _ => Ok(false),
         }
     }
@@ -510,77 +676,72 @@ impl PackedOperation {
     /// Python-space `Operator` instance if it can be avoided (i.e. for standard gates).
     pub fn py_op_is_instance(&self, py_type: &Bound<PyType>) -> PyResult<bool> {
         let py = py_type.py();
-        let py_op = match self.view() {
-            OperationRef::ControlFlow(control_flow) => {
-                return match &control_flow.control_flow {
-                    ControlFlow::Box { .. } => {
-                        BOX_OP.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
-                    }
-                    ControlFlow::BreakLoop => BREAK_LOOP_OP
-                        .get_bound(py)
-                        .cast::<PyType>()?
-                        .is_subclass(py_type),
-                    ControlFlow::ContinueLoop => CONTINUE_LOOP_OP
-                        .get_bound(py)
-                        .cast::<PyType>()?
-                        .is_subclass(py_type),
-                    ControlFlow::ForLoop { .. } => FOR_LOOP_OP
-                        .get_bound(py)
-                        .cast::<PyType>()?
-                        .is_subclass(py_type),
-                    ControlFlow::IfElse { .. } => IF_ELSE_OP
-                        .get_bound(py)
-                        .cast::<PyType>()?
-                        .is_subclass(py_type),
-                    ControlFlow::Switch { .. } => SWITCH_CASE_OP
-                        .get_bound(py)
-                        .cast::<PyType>()?
-                        .is_subclass(py_type),
-                    ControlFlow::While { .. } => WHILE_LOOP_OP
-                        .get_bound(py)
-                        .cast::<PyType>()?
-                        .is_subclass(py_type),
-                };
-            }
-            OperationRef::StandardGate(standard) => {
-                return get_std_gate_class(py, standard)?
-                    .bind(py)
-                    .cast::<PyType>()?
-                    .is_subclass(py_type);
-            }
-            OperationRef::StandardInstruction(standard) => {
-                return match standard {
-                    StandardInstruction::Barrier(_) => {
-                        BARRIER.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
-                    }
-                    StandardInstruction::Delay(_) => {
-                        DELAY.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
-                    }
-                    StandardInstruction::Measure => {
-                        MEASURE.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
-                    }
-                    StandardInstruction::Reset => {
-                        RESET.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
-                    }
-                };
-            }
-            OperationRef::Gate(gate) => gate.gate.bind(py),
-            OperationRef::Instruction(instruction) => instruction.instruction.bind(py),
-            OperationRef::Operation(operation) => operation.operation.bind(py),
-            OperationRef::Unitary(_) => {
-                return UNITARY_GATE
+        match self.view() {
+            OperationRef::ControlFlow(control_flow) => match &control_flow.control_flow {
+                ControlFlow::Box { .. } => {
+                    BOX_OP.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
+                }
+                ControlFlow::BreakLoop => BREAK_LOOP_OP
                     .get_bound(py)
                     .cast::<PyType>()?
-                    .is_subclass(py_type);
-            }
-            OperationRef::PauliProductMeasurement(_) => {
-                return PAULI_PRODUCT_MEASUREMENT
+                    .is_subclass(py_type),
+                ControlFlow::ContinueLoop => CONTINUE_LOOP_OP
                     .get_bound(py)
                     .cast::<PyType>()?
-                    .is_subclass(py_type);
-            }
-        };
-        py_op.is_instance(py_type)
+                    .is_subclass(py_type),
+                ControlFlow::ForLoop { .. } => FOR_LOOP_OP
+                    .get_bound(py)
+                    .cast::<PyType>()?
+                    .is_subclass(py_type),
+                ControlFlow::IfElse { .. } => IF_ELSE_OP
+                    .get_bound(py)
+                    .cast::<PyType>()?
+                    .is_subclass(py_type),
+                ControlFlow::Switch { .. } => SWITCH_CASE_OP
+                    .get_bound(py)
+                    .cast::<PyType>()?
+                    .is_subclass(py_type),
+                ControlFlow::While { .. } => WHILE_LOOP_OP
+                    .get_bound(py)
+                    .cast::<PyType>()?
+                    .is_subclass(py_type),
+            },
+            OperationRef::StandardGate(standard) => get_std_gate_class(py, standard)?
+                .bind(py)
+                .cast::<PyType>()?
+                .is_subclass(py_type),
+            OperationRef::StandardInstruction(standard) => match standard {
+                StandardInstruction::Barrier(_) => {
+                    BARRIER.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
+                }
+                StandardInstruction::Delay(_) => {
+                    DELAY.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
+                }
+                StandardInstruction::Measure => {
+                    MEASURE.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
+                }
+                StandardInstruction::Reset => {
+                    RESET.get_bound(py).cast::<PyType>()?.is_subclass(py_type)
+                }
+            },
+            OperationRef::PyCustom(inst) => inst.ob.bind(py).is_instance(py_type),
+            OperationRef::Unitary(_) => UNITARY_GATE
+                .get_bound(py)
+                .cast::<PyType>()?
+                .is_subclass(py_type),
+            OperationRef::PauliProductMeasurement(_) => PAULI_PRODUCT_MEASUREMENT
+                .get_bound(py)
+                .cast::<PyType>()?
+                .is_subclass(py_type),
+            OperationRef::PauliProductRotation(_) => PAULI_PRODUCT_ROTATION_GATE
+                .get_bound(py)
+                .cast::<PyType>()?
+                .is_subclass(py_type),
+            OperationRef::CustomOperation(_) => Err(PyNotImplementedError::new_err(
+                "Custom operations from Rust cannot be checked by instance",
+            )),
+            OperationRef::Store(_) => STORE.get_bound(py).cast::<PyType>()?.is_subclass(py_type),
+        }
     }
 }
 
@@ -591,11 +752,12 @@ impl Operation for PackedOperation {
             OperationRef::ControlFlow(control_flow) => control_flow.name(),
             OperationRef::StandardGate(ref standard) => standard.name(),
             OperationRef::StandardInstruction(ref instruction) => instruction.name(),
-            OperationRef::Gate(gate) => gate.name(),
-            OperationRef::Instruction(instruction) => instruction.name(),
-            OperationRef::Operation(operation) => operation.name(),
+            OperationRef::PyCustom(inst) => inst.name(),
             OperationRef::Unitary(unitary) => unitary.name(),
             OperationRef::PauliProductMeasurement(ppm) => ppm.name(),
+            OperationRef::PauliProductRotation(rotation) => rotation.name(),
+            OperationRef::CustomOperation(op) => op.name(),
+            OperationRef::Store(store) => store.name(),
         };
         // SAFETY: all of the inner parts of the view are owned by `self`, so it's valid for us to
         // forcibly reborrowing up to our own lifetime. We avoid using `<OperationRef as Operation>`
@@ -635,15 +797,18 @@ impl Clone for PackedOperation {
             OperationRef::StandardInstruction(instruction) => {
                 Self::from_standard_instruction(instruction)
             }
-            OperationRef::Gate(gate) => Self::from_gate(Box::new(gate.to_owned())),
-            OperationRef::Instruction(instruction) => {
-                Self::from_instruction(Box::new(instruction.to_owned()))
-            }
-            OperationRef::Operation(operation) => {
-                Self::from_operation(Box::new(operation.to_owned()))
-            }
+            OperationRef::PyCustom(inst) => Self::from_py_instruction(Box::new(inst.clone())),
             OperationRef::Unitary(unitary) => Self::from_unitary(Box::new(unitary.clone())),
-            OperationRef::PauliProductMeasurement(ppm) => Self::from_ppm(Box::new(ppm.clone())),
+            OperationRef::PauliProductMeasurement(ppm) => {
+                Self::from_pauli_based(Box::new(PauliBased::PauliProductMeasurement(ppm.clone())))
+            }
+            OperationRef::PauliProductRotation(rotation) => {
+                Self::from_pauli_based(Box::new(PauliBased::PauliProductRotation(rotation.clone())))
+            }
+            OperationRef::CustomOperation(custom_gate) => {
+                Self::from(BoxedCustomOperation::from(custom_gate.clone_dyn()))
+            }
+            OperationRef::Store(store) => Self::from_store(Box::new(store.clone())),
         }
     }
 }
@@ -653,14 +818,12 @@ impl Drop for PackedOperation {
         use crate::packed_instruction::pointer::PackablePointer;
         match self.discriminant() {
             PackedOperationType::StandardGate | PackedOperationType::StandardInstruction => (),
-            PackedOperationType::PyGate => PyGate::drop_packed(self),
             PackedOperationType::PyInstruction => PyInstruction::drop_packed(self),
-            PackedOperationType::PyOperation => PyOperation::drop_packed(self),
             PackedOperationType::UnitaryGate => UnitaryGate::drop_packed(self),
-            PackedOperationType::PauliProductMeasurement => {
-                PauliProductMeasurement::drop_packed(self)
-            }
+            PackedOperationType::PauliBased => PauliBased::drop_packed(self),
             PackedOperationType::ControlFlow => ControlFlowInstruction::drop_packed(self),
+            PackedOperationType::Custom => BoxedCustomOperation::drop_packed(self),
+            PackedOperationType::Store => Store::drop_packed(self),
         }
     }
 }
@@ -736,6 +899,29 @@ impl PackedInstruction {
         }
     }
 
+    /// Pack a [CustomOperation] with parameters into a complete instruction.
+    pub fn from_custom_operation<O>(
+        operation: O,
+        qubits: Interned<[Qubit]>,
+        clbits: Interned<[Clbit]>,
+        params: Option<SmallVec<[Param; 3]>>,
+    ) -> Self
+    where
+        O: CustomOperation,
+    {
+        let operation = BoxedCustomOperation::from(operation);
+        let label = operation.label().map(ToString::to_string);
+        Self {
+            op: operation.into(),
+            qubits,
+            clbits,
+            params: params.map(|params| Box::new(Parameters::Params(params))),
+            label: label.map(Box::new),
+            #[cfg(feature = "cache_pygates")]
+            py_op: OnceLock::new(),
+        }
+    }
+
     /// Get a slice view onto the contained parameters.
     #[inline]
     pub fn params_view(&self) -> &[Param] {
@@ -807,11 +993,8 @@ impl PackedInstruction {
         py: Python<'py>,
         memo: Option<&Bound<'py, PyDict>>,
     ) -> PyResult<()> {
-        match self.op.view() {
-            OperationRef::Gate(gate) => self.op = gate.py_deepcopy(py, memo)?.into(),
-            OperationRef::Instruction(inst) => self.op = inst.py_deepcopy(py, memo)?.into(),
-            OperationRef::Operation(op) => self.op = op.py_deepcopy(py, memo)?.into(),
-            _ => (),
+        if let OperationRef::PyCustom(inst) = self.op.view() {
+            self.op = inst.py_deepcopy(py, memo)?.into();
         };
         if let Some(Parameters::Params(params)) = self.params.as_deref_mut() {
             for param in params {
@@ -824,11 +1007,36 @@ impl PackedInstruction {
         Ok(())
     }
 
+    /// Extract an owned `ndarray` matrix from this instruction, if available.
+    ///
+    /// The returned value is always owned.  If you may be able to handle a read-only reference, see
+    /// [try_cow_array] instead.
     pub fn try_matrix(&self) -> Option<Array2<Complex64>> {
         match self.op.view() {
             OperationRef::StandardGate(g) => g.matrix(self.params_view()),
-            OperationRef::Gate(g) => g.matrix(),
+            OperationRef::CustomOperation(g) => g.matrix(self.params_view()).ok().flatten(),
+            OperationRef::PyCustom(p) => p.matrix(),
             OperationRef::Unitary(u) => u.matrix(),
+            OperationRef::PauliProductRotation(ppr) => ppr.matrix(),
+            _ => None,
+        }
+    }
+
+    /// Extract an `ndarray` matrix from this instruction, if available.
+    ///
+    /// The returned value will preferentially be a view, if the matrix already exists (e.g. for
+    /// `Unitary`).
+    pub fn try_cow_array(&self) -> Option<CowArray<'_, Complex64, Ix2>> {
+        match self.op.view() {
+            OperationRef::StandardGate(g) => g.matrix(self.params_view()).map(CowArray::from),
+            OperationRef::PyCustom(p) => p.matrix().map(CowArray::from),
+            OperationRef::PauliProductRotation(ppr) => ppr.matrix().map(CowArray::from),
+            OperationRef::Unitary(u) => Some(CowArray::from(u.matrix_view())),
+            OperationRef::CustomOperation(g) => g
+                .matrix(self.params_view())
+                .ok()
+                .flatten()
+                .map(CowArray::from),
             _ => None,
         }
     }
@@ -840,12 +1048,24 @@ impl PackedInstruction {
             OperationRef::StandardGate(standard) => {
                 standard.matrix_as_static_1q(self.params_view())
             }
-            OperationRef::Gate(gate) => gate.matrix_as_static_1q(),
+            OperationRef::PyCustom(inst) => inst.matrix_as_static_1q(),
+            OperationRef::PauliProductRotation(ppr) => ppr.matrix_as_static_1q(),
             OperationRef::Unitary(unitary) => unitary.matrix_as_static_1q(),
+            OperationRef::CustomOperation(g) => {
+                if g.num_qubits() == 1 {
+                    g.matrix(self.params_view())
+                        .ok()
+                        .flatten()
+                        .map(|mat| [[mat[(0, 0)], mat[(0, 1)]], [mat[(1, 0)], mat[(1, 1)]]])
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
 
+    #[inline]
     pub fn try_matrix_as_nalgebra_1q(&self) -> Option<Matrix2<Complex64>> {
         match self.op.view() {
             OperationRef::Unitary(u) => u.matrix_as_nalgebra_1q(),
@@ -856,11 +1076,40 @@ impl PackedInstruction {
         }
     }
 
+    /// Returns a static matrix for 1-qubit gates. Will return `None` when the gate is not 1-qubit.
+    #[inline]
+    pub fn try_matrix_as_static_2q(&self) -> Option<[[Complex64; 4]; 4]> {
+        match self.op.view() {
+            OperationRef::StandardGate(standard) => {
+                standard.matrix_as_static_2q(self.params_view())
+            }
+            OperationRef::PyCustom(p) => p.matrix_as_static_2q(),
+            OperationRef::PauliProductRotation(ppr) => ppr.matrix_as_static_2q(),
+            OperationRef::Unitary(unitary) => unitary.matrix_as_static_2q(),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn try_matrix_as_nalgebra_2q(&self) -> Option<Matrix4<Complex64>> {
+        match self.op.view() {
+            OperationRef::Unitary(u) => u.matrix_as_nalgebra_2q(),
+            // default implementation
+            _ => self.try_matrix_as_static_2q().map(|arr| {
+                Matrix4::new(
+                    arr[0][0], arr[0][1], arr[0][2], arr[0][3], arr[1][0], arr[1][1], arr[1][2],
+                    arr[1][3], arr[2][0], arr[2][1], arr[2][2], arr[2][3], arr[3][0], arr[3][1],
+                    arr[3][2], arr[3][3],
+                )
+            }),
+        }
+    }
+
     pub fn try_definition(&self) -> Option<CircuitData> {
         match self.op.view() {
             OperationRef::StandardGate(g) => g.definition(self.params_view()),
-            OperationRef::Gate(g) => g.definition(),
-            OperationRef::Instruction(i) => i.definition(),
+            OperationRef::PyCustom(i) => i.definition(),
+            OperationRef::CustomOperation(g) => g.definition(self.params_view()),
             _ => None,
         }
     }

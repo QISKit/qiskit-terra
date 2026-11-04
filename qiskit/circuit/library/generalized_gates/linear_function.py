@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,7 +19,6 @@ from qiskit.circuit.exceptions import CircuitError
 from qiskit.circuit.library.generalized_gates.permutation import PermutationGate
 from qiskit.utils.deprecation import deprecate_func
 
-# pylint: disable=cyclic-import
 from qiskit.quantum_info import Clifford
 
 
@@ -150,6 +149,19 @@ class LinearFunction(Gate):
             name="linear_function", num_qubits=len(linear), params=[linear, original_circuit]
         )
 
+    def inverse(self, annotated: bool = False) -> LinearFunction:
+        """Returns the inverse of this linear function.
+
+        Args:
+            annotated: when set to ``True``, this is typically used to return an
+                :class:`.AnnotatedOperation` with an inverse modifier set instead of a concrete
+                :class:`.Gate`. However, for this class this argument is ignored as the inverse
+                of this gate is always a :class:`.LinearFunction`.
+        """
+        from qiskit.synthesis.linear import calc_inverse_matrix
+
+        return LinearFunction(linear=calc_inverse_matrix(self.linear))
+
     @staticmethod
     def _circuit_to_mat(qc: QuantumCircuit):
         """This creates a nxn matrix corresponding to the given quantum circuit."""
@@ -157,16 +169,16 @@ class LinearFunction(Gate):
         mat = np.eye(nq, nq, dtype=bool)
 
         for instruction in qc.data:
-            if instruction.operation.name in ("barrier", "delay"):
+            if instruction.name in ("barrier", "delay"):
                 # can be ignored
                 continue
-            if instruction.operation.name == "cx":
+            if instruction.name == "cx":
                 # implemented directly
                 cb = qc.find_bit(instruction.qubits[0]).index
                 tb = qc.find_bit(instruction.qubits[1]).index
                 mat[tb, :] = (mat[tb, :]) ^ (mat[cb, :])
                 continue
-            if instruction.operation.name == "swap":
+            if instruction.name == "swap":
                 # implemented directly
                 cb = qc.find_bit(instruction.qubits[0]).index
                 tb = qc.find_bit(instruction.qubits[1]).index

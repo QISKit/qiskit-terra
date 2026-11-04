@@ -1,0 +1,6 @@
+---
+upgrade_c:
+  - |
+    The `QISKIT_VERSION_NUMERIC` symbol was removed from the header file, after being
+    marked deprecated in Qiskit 2.2.  Use `QISKIT_VERSION_HEX` instead, which correctly
+    includes information about the pre-release status.

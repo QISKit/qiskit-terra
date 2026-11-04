@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a mismatch in :c:struct:`QkTargetOp` in which the length of the array
+    stored in :c:member:`QkTargetOp.params` did not match the number exposed by
+    :c:member:`QkTargetOp.num_params`. Wildcard parameters are now represented
+    by ``NAN``, and the length of the array will always be :c:member:`QkTargetOp.num_params`.
+    This bug was only present in 2.3.0rc1.

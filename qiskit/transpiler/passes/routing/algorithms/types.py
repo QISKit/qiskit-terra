@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#     https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,21 +26,17 @@
 
 """Type definitions used within the permutation package."""
 
-from typing import TypeVar, Dict, Tuple, NamedTuple, Union
+from typing import TypeVar, NamedTuple
 
 from qiskit.circuit import Qubit
 from qiskit.dagcircuit import DAGCircuit
 
 PermuteElement = TypeVar("PermuteElement")
-Permutation = Dict[PermuteElement, PermuteElement]
-Swap = Tuple[PermuteElement, PermuteElement]
+Permutation = dict[PermuteElement, PermuteElement]
+Swap = tuple[PermuteElement, PermuteElement]
+
 
 # Represents a circuit for permuting to a mapping.
-PermutationCircuit = NamedTuple(
-    "PermutationCircuit",
-    [
-        ("circuit", DAGCircuit),
-        ("inputmap", Dict[Union[int, Qubit], Qubit]),
-        # A mapping from architecture nodes to circuit registers.
-    ],
-)
+class PermutationCircuit(NamedTuple):
+    circuit: DAGCircuit
+    inputmap: dict[int | Qubit, Qubit]  # A mapping from architecture nodes to circuit registers.

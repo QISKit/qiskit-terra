@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,7 @@
 import functools
 import inspect
 import types
-from typing import Type, Callable
+from collections.abc import Callable
 
 
 # On user-defined classes, `__new__` is magically inferred to be a staticmethod, `__init_subclass__`
@@ -26,7 +26,7 @@ _MAGIC_STATICMETHODS = {"__new__"}
 _MAGIC_CLASSMETHODS = {"__init_subclass__", "__prepare__"}
 
 
-class _lift_to_method:  # pylint: disable=invalid-name
+class _lift_to_method:
     """A decorator that ensures that an input callable object implements ``__get__``.  It is
     returned unchanged if so, otherwise it is turned into the default implementation for functions,
     which makes them bindable to instances.
@@ -71,7 +71,7 @@ class _WrappedMethod:
     function call, but with the ``function`` called before or after.
     """
 
-    __slots__ = ("_method_decorator", "_method_has_get", "_method", "_before", "_after")
+    __slots__ = ("_after", "_before", "_method", "_method_decorator", "_method_has_get")
 
     def __init__(self, method, before=None, after=None):
         if isinstance(method, (classmethod, staticmethod)):
@@ -117,7 +117,9 @@ class _WrappedMethod:
         return out
 
 
-def wrap_method(cls: Type, name: str, *, before: Callable = None, after: Callable = None):
+def wrap_method(
+    cls: type, name: str, *, before: Callable | None = None, after: Callable | None = None
+):
     """Wrap the functionality the instance- or class method ``cls.name`` with additional behavior
     ``before`` and ``after``.
 
@@ -141,6 +143,6 @@ def wrap_method(cls: Type, name: str, *, before: Callable = None, after: Callabl
     # The best time to apply decorators to methods is before they are bound (e.g. by using function
     # decorators during the class definition), but if we're making a class decorator, we can't do
     # that.  We need the actual definition of the method, so we have to dodge the normal output of
-    # `type.__getattribute__`, which evalutes descriptors if it finds them.
+    # `type.__getattribute__`, which evaluates descriptors if it finds them.
     method = inspect.getattr_static(cls, name)
     setattr(cls, name, _WrappedMethod(method, before, after))

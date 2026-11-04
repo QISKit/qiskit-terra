@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -75,8 +75,10 @@ Optimizations
    CommutationAnalysis
    CommutativeCancellation
    CommutativeInverseCancellation
+   CommutativeOptimization
    ConsolidateBlocks
    ContractIdleWiresInControlFlow
+   ConvertToPauliRotations
    ElidePermutations
    HoareOptimizer
    InverseCancellation
@@ -97,6 +99,7 @@ Optimizations
    Split2QUnitaries
    SubstitutePi4Rotations
    TemplateOptimization
+   TwoQubitPeepholeOptimization
 
 Scheduling
 =============
@@ -142,6 +145,7 @@ The synthesis transpiler plugin documentation can be found in the
    HighLevelSynthesis
    LinearFunctionsToPermutations
    SolovayKitaev
+   SynthesizeRZRotations
    UnitarySynthesis
 
 Post Layout
@@ -177,130 +181,32 @@ Additional Passes
    UnrollForLoops
    WrapAngles
 
-
 Additional data
 ===============
 
 .. py:data:: qiskit.transpiler.passes.utils.wrap_angles.WRAP_ANGLE_REGISTRY
 
-    A global instance of :class:`.WrapAngleRegistry` that is used by default by
-    :class:`.WrapAngles` when no explicit registry is specified.  See the documentation of
-    :class:`.WrapAngles` for how to add entries to a registry.
-
-    .. note::
-        Due to an oversight in Qiskit 2.2, this import path is the only valid way to access the
-        object in that version, despite traversing two non-public internal modules.
+    A legacy location for :attr:`.WrapAngles.DEFAULT_REGISTRY`.  This path should only be used when
+    full compatibility with Qiskit 2.2 is required.
 """
 
-# layout selection (placement)
-from .layout import SetLayout
-from .layout import TrivialLayout
-from .layout import DenseLayout
-from .layout import SabreLayout
-from .layout import CSPLayout
-from .layout import VF2Layout
-from .layout import VF2PostLayout
-from .layout import ApplyLayout
-from .layout import Layout2qDistance
-from .layout import EnlargeWithAncilla
-from .layout import FullAncillaAllocation
-from .layout import SabrePreLayout
+from . import analysis, basis, layout, optimization, routing, scheduling, synthesis, utils
 
-# routing
-from .routing import BasicSwap
-from .routing import Commuting2qGateRouter
-from .routing import LayoutTransformation
-from .routing import LookaheadSwap
-from .routing import SabreSwap
-from .routing import StarPreRouting
+from .analysis import *
+from .basis import *
+from .layout import *
+from .optimization import *
+from .routing import *
+from .scheduling import *
+from .synthesis import *
+from .utils import *
 
-# basis change
-from .basis import BasisTranslator
-from .basis import Decompose
-from .basis import TranslateParameterizedGates
-from .basis import Unroll3qOrMore
-from .basis import UnrollCustomDefinitions
-
-# optimization
-from .optimization import Collect1qRuns
-from .optimization import Collect2qBlocks
-from .optimization import CollectAndCollapse
-from .optimization import CollectCliffords
-from .optimization import CollectLinearFunctions
-from .optimization import CollectMultiQBlocks
-from .optimization import CommutationAnalysis
-from .optimization import CommutativeCancellation
-from .optimization import CommutativeOptimization
-from .optimization import CommutativeInverseCancellation
-from .optimization import ConsolidateBlocks
-from .optimization import ContractIdleWiresInControlFlow
-from .optimization import ElidePermutations
-from .optimization import HoareOptimizer
-from .optimization import InverseCancellation
-from .optimization import LightCone
-from .optimization import LitinskiTransformation
-from .optimization import Optimize1qGates
-from .optimization import Optimize1qGatesDecomposition
-from .optimization import Optimize1qGatesSimpleCommutation
-from .optimization import OptimizeAnnotated
-from .optimization import OptimizeCliffordT
-from .optimization import OptimizeCliffords
-from .optimization import OptimizeSwapBeforeMeasure
-from .optimization import RemoveDiagonalGatesBeforeMeasure
-from .optimization import RemoveFinalReset
-from .optimization import RemoveIdentityEquivalent
-from .optimization import RemoveResetInZeroState
-from .optimization import ResetAfterMeasureSimplification
-from .optimization import Split2QUnitaries
-from .optimization import SubstitutePi4Rotations
-from .optimization import TemplateOptimization
-
-# circuit analysis
-from .analysis import CountOps
-from .analysis import CountOpsLongestPath
-from .analysis import DAGLongestPath
-from .analysis import Depth
-from .analysis import NumTensorFactors
-from .analysis import ResourceEstimation
-from .analysis import Size
-from .analysis import Width
-
-# synthesis
-from .synthesis import AQCSynthesisPlugin
-from .synthesis import CliffordUnitarySynthesis
-from .synthesis import HLSConfig
-from .synthesis import HighLevelSynthesis
-from .synthesis import LinearFunctionsToPermutations
-from .synthesis import SolovayKitaev
-from .synthesis import SolovayKitaevSynthesis
-from .synthesis import UnitarySynthesis
-from .synthesis import unitary_synthesis_plugin_names
-
-# circuit scheduling
-from .scheduling import ALAPScheduleAnalysis
-from .scheduling import ASAPScheduleAnalysis
-from .scheduling import ConstrainedReschedule
-from .scheduling import ContextAwareDynamicalDecoupling
-from .scheduling import InstructionDurationCheck
-from .scheduling import PadDelay
-from .scheduling import PadDynamicalDecoupling
-from .scheduling import SetIOLatency
-from .scheduling import TimeUnitConversion
-
-# additional utility passes
-from .utils import BarrierBeforeFinalMeasurements
-from .utils import CheckGateDirection
-from .utils import CheckMap
-from .utils import ContainsInstruction
-from .utils import DAGFixedPoint
-from .utils import Error
-from .utils import FilterOpNodes
-from .utils import WrapAngles
-from .utils import FixedPoint
-from .utils import GateDirection
-from .utils import GatesInBasis
-from .utils import MergeAdjacentBarriers
-from .utils import MinimumPoint
-from .utils import RemoveBarriers
-from .utils import RemoveFinalMeasurements
-from .utils import UnrollForLoops
+__all__ = []
+__all__ += analysis.__all__
+__all__ += basis.__all__
+__all__ += layout.__all__
+__all__ += optimization.__all__
+__all__ += routing.__all__
+__all__ += scheduling.__all__
+__all__ += synthesis.__all__
+__all__ += utils.__all__

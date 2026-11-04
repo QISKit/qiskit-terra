@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Type
 from fnmatch import fnmatch
 
 from qiskit.transpiler.basepasses import TransformationPass
@@ -34,7 +33,7 @@ class Decompose(TransformationPass):
     def __init__(
         self,
         gates_to_decompose: (
-            str | Type[Instruction] | Sequence[str | Type[Instruction]] | None
+            str | type[Instruction] | Sequence[str | type[Instruction]] | None
         ) = None,
         apply_synthesis: bool = False,
     ) -> None:

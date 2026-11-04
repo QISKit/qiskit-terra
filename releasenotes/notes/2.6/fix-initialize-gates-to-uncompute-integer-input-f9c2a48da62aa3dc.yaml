@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed :meth:`.Initialize.gates_to_uncompute` to return a circuit with the
+    correct number of qubits, when the gate was constructed using an integer
+    form (e.g. ``Initialize(1, num_qubits=2)``).
+    Fixed `#16413 <https://github.com/Qiskit/qiskit/issues/16413>`__.

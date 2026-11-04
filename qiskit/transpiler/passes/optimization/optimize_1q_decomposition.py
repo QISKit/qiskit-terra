@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -40,7 +40,7 @@ from qiskit.dagcircuit.dagcircuit import DAGCircuit
 
 logger = logging.getLogger(__name__)
 
-# When expanding the list of supported gates this needs to updated in
+# When expanding the list of supported gates this needs to be updated in
 # lockstep with the VALID_BASES constant in src/euler_one_qubit_decomposer.rs
 # and the global variables in one_qubit_decompose.py
 NAME_MAP = {
@@ -67,6 +67,12 @@ class Optimize1qGatesDecomposition(TransformationPass):
      - whether the original chain amounts to identity: replace with null
 
      Error is computed as a multiplication of the errors of individual gates on that qubit.
+
+    This class is multithreaded and will potentially launch a thread pool
+    with threads equal to the number of CPUs by default. You can tune the
+    number of threads with the ``RAYON_NUM_THREADS`` environment variable.
+    For example, setting ``RAYON_NUM_THREADS=4`` would limit the thread pool
+    to 4 threads.
     """
 
     def __init__(self, basis=None, target=None):
@@ -98,6 +104,12 @@ class Optimize1qGatesDecomposition(TransformationPass):
             self._basis_gates = None
 
         self.error_map = self._build_error_map()
+        num_qubits = 0
+        if self._target:
+            num_qubits = self._target.num_qubits
+            if num_qubits is None:
+                num_qubits = 0
+        self._state = optimize_1q_gates_decomposition.Optimize1qGatesDecompositionState(num_qubits)
 
     def _build_error_map(self):
         # include path for when target exists but target.num_qubits is None (BasicSimulator)
@@ -210,16 +222,17 @@ class Optimize1qGatesDecomposition(TransformationPass):
         """
         optimize_1q_gates_decomposition.optimize_1q_gates_decomposition(
             dag,
+            self._state,
             target=self._target,
-            global_decomposers=self._global_decomposers,
             basis_gates=self._basis_gates,
+            global_decomposers=self._global_decomposers,
         )
         return dag
 
     def _error(self, circuit, qubit):
         """
         Calculate a rough error for a `circuit` that runs on a specific
-        `qubit` of `target` (`circuit` is a list of DAGOPNodes).
+        `qubit` of `target` (`circuit` is a list of DAGOpNodes).
 
         Use basis errors from target if available, otherwise use length
         of circuit as a weak proxy for error.

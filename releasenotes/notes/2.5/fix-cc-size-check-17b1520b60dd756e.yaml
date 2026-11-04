@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.CommutationChecker` where certain Rust-backed gates, such as
+    the :class:`.UnitaryGate`, could circumvent the matrix size check and cause the
+    calculation of large matrices.

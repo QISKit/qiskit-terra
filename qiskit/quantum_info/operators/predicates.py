@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -38,13 +38,13 @@ def _identity_matrix(size):
 
 def matrix_equal(mat1, mat2, ignore_phase=False, rtol=RTOL_DEFAULT, atol=ATOL_DEFAULT, props=None):
     # pylint: disable-next=consider-using-f-string
-    """Test if two arrays are equal.
+    f"""Test if two arrays are equal.
 
     The final comparison is implemented using Numpy.allclose. See its
     documentation for additional information on tolerance parameters.
 
     If ignore_phase is True both matrices will be multiplied by
-    exp(-1j * theta) where `theta` is the first nphase for a
+    exp(-1j * theta) where `theta` is the phase of the
     first non-zero matrix element `|a| * exp(1j * theta)`.
 
     Args:
@@ -52,17 +52,15 @@ def matrix_equal(mat1, mat2, ignore_phase=False, rtol=RTOL_DEFAULT, atol=ATOL_DE
         mat2 (matrix_like): a matrix
         ignore_phase (bool): ignore complex-phase differences between
             matrices [Default: False]
-        rtol (double): the relative tolerance parameter [Default {}].
-        atol (double): the absolute tolerance parameter [Default {}].
+        rtol (double): the relative tolerance parameter [Default {RTOL_DEFAULT}].
+        atol (double): the absolute tolerance parameter [Default {ATOL_DEFAULT}].
         props (dict | None): if not ``None`` and ``ignore_phase`` is ``True``
             returns the phase difference between the two matrices under
             ``props['phase_difference']``
 
     Returns:
         bool: True if the matrices are equal or False otherwise.
-    """.format(
-        RTOL_DEFAULT, ATOL_DEFAULT
-    )
+    """
 
     if atol is None:
         atol = ATOL_DEFAULT

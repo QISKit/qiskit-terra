@@ -1,0 +1,60 @@
+---
+features_c:
+  - |
+    The C API can now represent and manipulate :class:`.DAGCircuit` as the opaque :c:struct:`QkDag`.
+    The following functions have been added in relation to the DAG:
+
+    * :c:func:`qk_dag_new`
+    * :c:func:`qk_dag_add_quantum_register`
+    * :c:func:`qk_dag_add_classical_register`
+    * :c:func:`qk_dag_free`
+    * :c:func:`qk_dag_copy_empty_like`
+    * :c:func:`qk_dag_num_qubits`
+    * :c:func:`qk_dag_num_clbits`
+    * :c:func:`qk_dag_num_op_nodes`
+    * :c:func:`qk_dag_node_type`
+    * :c:func:`qk_dag_qubit_in_node`
+    * :c:func:`qk_dag_qubit_out_node`
+    * :c:func:`qk_dag_clbit_in_node`
+    * :c:func:`qk_dag_clbit_out_node`
+    * :c:func:`qk_dag_wire_node_value`
+    * :c:func:`qk_dag_op_node_clbits`
+    * :c:func:`qk_dag_op_node_gate_op`
+    * :c:func:`qk_dag_op_node_kind`
+    * :c:func:`qk_dag_op_node_num_clbits`
+    * :c:func:`qk_dag_op_node_num_params`
+    * :c:func:`qk_dag_op_node_num_qubits`
+    * :c:func:`qk_dag_op_node_qubits`
+    * :c:func:`qk_dag_op_node_unitary`
+    * :c:func:`qk_dag_apply_barrier`
+    * :c:func:`qk_dag_apply_gate`
+    * :c:func:`qk_dag_apply_measure`
+    * :c:func:`qk_dag_apply_reset`
+    * :c:func:`qk_dag_apply_unitary`
+    * :c:func:`qk_dag_get_instruction`
+    * :c:func:`qk_dag_compose`
+    * :c:func:`qk_dag_topological_op_nodes`
+    * :c:func:`qk_dag_substitute_node_with_dag`
+    * :c:func:`qk_dag_predecessors`
+    * :c:func:`qk_dag_successors`
+
+  - |
+    Added the :c:enum:`QkDagNodeType` enumeration to distinguish the type of a DAG node.
+    This is the return type of :c:func:`qk_dag_node_type`.
+  - |
+    Added the :c:enum:`QkOperationKind` enumeration to distinguish different
+    native operation types. This is the return type of :c:func:`qk_dag_op_node_kind`.
+  - |
+    Added :c:func:`qk_circuit_copy_empty_like` to create a copy of the given circuit,
+    as a mirror of :meth:`.QuantumCircuit.copy_empty_like`.
+  - |
+    Added new enumerations for use with some circuit and DAG API functions to specify
+    copying modes:
+
+    * :c:enum:`QkVarsMode`
+    * :c:enum:`QkBlocksMode`
+
+  - |
+    Added the :c:struct:`QkDagNeighbors` struct, which is the return type of
+    :c:func:`qk_dag_successors` and :c:func:`qk_dag_predecessors`, and its associated freeing function
+    :c:func:`qk_dag_neighbors_clear`.

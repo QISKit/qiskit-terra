@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -286,11 +286,10 @@ class BackwardMatch:
                     return False
         # For non controlled gates, the qubits indices for symmetric gates can be compared as sets
         # But for non-symmetric gates the qubits indices have to be compared as lists.
+        elif node_template.op.name in ["rxx", "ryy", "rzz", "swap", "iswap", "ms"]:
+            return set(qarg_circuit) == set(node_template.qindices)
         else:
-            if node_template.op.name in ["rxx", "ryy", "rzz", "swap", "iswap", "ms"]:
-                return set(qarg_circuit) == set(node_template.qindices)
-            else:
-                return qarg_circuit == node_template.qindices
+            return qarg_circuit == node_template.qindices
 
     def _is_same_c_conf(self, node_circuit, node_template, carg_circuit):
         """

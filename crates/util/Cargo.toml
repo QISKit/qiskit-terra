@@ -1,0 +1,23 @@
+[package]
+name = "qiskit-util"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "qiskit_util"
+doctest = false
+
+[features]
+py = ["dep:pyo3"]
+
+[lints]
+workspace = true
+
+[dependencies]
+num-complex.workspace = true
+pyo3 = { workspace = true, optional = true }
+thiserror.workspace = true
+indexmap.workspace = true
+foldhash.workspace = true

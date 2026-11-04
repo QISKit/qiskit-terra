@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,7 +14,7 @@
 
 import collections
 import io
-from typing import Sequence
+from collections.abc import Sequence
 
 from . import ast
 from .experimental import ExperimentalFeatures
@@ -38,25 +38,21 @@ _BINDING_POWER = {
     #
     ast.Unary.Op.LOGIC_NOT: _BindingPower(right=22),
     ast.Unary.Op.BIT_NOT: _BindingPower(right=22),
+    ast.Unary.Op.NEGATE: _BindingPower(right=22),
     #
     # Modulo: (19, 20)
     ast.Binary.Op.MUL: _BindingPower(19, 20),
     ast.Binary.Op.DIV: _BindingPower(19, 20),
-    #
     ast.Binary.Op.ADD: _BindingPower(17, 18),
     ast.Binary.Op.SUB: _BindingPower(17, 18),
-    #
     ast.Binary.Op.SHIFT_LEFT: _BindingPower(15, 16),
     ast.Binary.Op.SHIFT_RIGHT: _BindingPower(15, 16),
-    #
     ast.Binary.Op.LESS: _BindingPower(13, 14),
     ast.Binary.Op.LESS_EQUAL: _BindingPower(13, 14),
     ast.Binary.Op.GREATER: _BindingPower(13, 14),
     ast.Binary.Op.GREATER_EQUAL: _BindingPower(13, 14),
-    #
     ast.Binary.Op.EQUAL: _BindingPower(11, 12),
     ast.Binary.Op.NOT_EQUAL: _BindingPower(11, 12),
-    #
     ast.Binary.Op.BIT_AND: _BindingPower(9, 10),
     ast.Binary.Op.BIT_XOR: _BindingPower(7, 8),
     ast.Binary.Op.BIT_OR: _BindingPower(5, 6),
@@ -85,7 +81,6 @@ class BasicPrinter:
     _FLOAT_TYPE_LOOKUP = {type: f"float[{type.value}]" for type in ast.FloatType}
 
     # The visitor names include the class names, so they mix snake_case with PascalCase.
-    # pylint: disable=invalid-name
 
     def __init__(
         self,
@@ -125,6 +120,8 @@ class BasicPrinter:
                 default.  While the output of this printer is always unambiguous, using ``else``
                 without immediately opening an explicit scope with ``{ }`` in nested contexts can
                 cause issues, in the general case, which is why it is sometimes less supported.
+            experimental: any experimental features to enable during the export.  See
+                :class:`ExperimentalFeatures` for more details.
         """
         self.stream = stream
         self.indent = indent
@@ -534,6 +531,8 @@ class BasicPrinter:
     def _visit_ForLoopStatement(self, node: ast.ForLoopStatement) -> None:
         self._start_line()
         self.stream.write("for ")
+        self.visit(node.type)
+        self.stream.write(" ")
         self.visit(node.parameter)
         self.stream.write(" in ")
         if isinstance(node.indexset, ast.Range):

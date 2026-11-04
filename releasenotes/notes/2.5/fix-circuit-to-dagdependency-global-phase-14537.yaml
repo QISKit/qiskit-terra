@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed :func:`.circuit_to_dagdependency` failing to copy ``global_phase`` when converting
+    a template :class:`.QuantumCircuit` to a :class:`.DAGDependency`.
+
+    Fixes `#14537 <https://github.com/Qiskit/qiskit/issues/14537>`__.

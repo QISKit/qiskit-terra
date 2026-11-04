@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -261,7 +261,7 @@ class RealAmplitudes(TwoLocal):
             reps: Specifies how often the structure of a rotation layer followed by an entanglement
                 layer is repeated.
             entanglement: Specifies the entanglement structure. Can be a string ('full', 'linear'
-                'reverse_linear, 'circular' or 'sca'), a list of integer-pairs specifying the indices
+                'reverse_linear', 'circular' or 'sca'), a list of integer-pairs specifying the indices
                 of qubits entangled with one another, or a callable returning such a list provided with
                 the index of the entanglement layer.
                 Default to 'reverse_linear' entanglement.
@@ -286,6 +286,8 @@ class RealAmplitudes(TwoLocal):
                 for anything besides visualization its **strongly** recommended
                 to set this flag to ``True`` to avoid a large performance
                 overhead for parameter binding.
+            name: Name of the circuit.
+
         """
         super().__init__(
             num_qubits=num_qubits,

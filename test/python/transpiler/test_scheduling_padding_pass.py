@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -23,12 +23,14 @@ from qiskit.transpiler.instruction_durations import InstructionDurations
 from qiskit.transpiler.passes import (
     ASAPScheduleAnalysis,
     ALAPScheduleAnalysis,
+    ConstrainedReschedule,
     PadDelay,
+    TimeUnitConversion,
 )
 from qiskit.transpiler.passmanager import PassManager
 from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.target import Target, InstructionProperties
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @ddt
@@ -129,7 +131,7 @@ class TestSchedulingAndPaddingPass(QiskitTestCase):
 
     @data(ALAPScheduleAnalysis, ASAPScheduleAnalysis)
     def test_empty_circuit(self, schedule_pass):
-        """An empty cirucit is trivially scheduled, so we should succeed without error."""
+        """An empty circuit is trivially scheduled, so we should succeed without error."""
         target = Target(num_qubits=4)
         target.add_instruction(
             CXGate(), {(i, i + 1): InstructionProperties(duration=1e-3) for i in range(3)}
@@ -310,6 +312,25 @@ class TestSchedulingAndPaddingPass(QiskitTestCase):
         asap_expected.measure(1, 1)
 
         self.assertEqual(qc_asap, asap_expected)
+
+    def test_constrained_reschedule_accepts_barrier(self):
+        """Test that ConstrainedReschedule allows compiler directives."""
+        qc = QuantumCircuit(2)
+        qc.cx(0, 1)
+        qc.barrier(0)
+
+        target = Target(num_qubits=2, dt=1, pulse_alignment=1, acquire_alignment=1)
+        target.add_instruction(CXGate(), {(0, 1): InstructionProperties(duration=100)})
+
+        pm = PassManager(
+            [
+                TimeUnitConversion(target.durations()),
+                ALAPScheduleAnalysis(target=target),
+                ConstrainedReschedule(target=target),
+            ]
+        )
+
+        self.assertEqual(qc, pm.run(qc))
 
     def test_padding_not_working_without_scheduling(self):
         """Test padding fails when un-scheduled DAG is input."""

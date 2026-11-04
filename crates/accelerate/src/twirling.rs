@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -12,30 +12,31 @@
 
 use std::f64::consts::PI;
 
-use crate::QiskitError;
 use hashbrown::HashMap;
 use ndarray::ArrayView2;
 use ndarray::linalg::kron;
 use ndarray::prelude::*;
 use num_complex::Complex64;
-use pyo3::Python;
-use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use qiskit_circuit::circuit_data::CircuitData;
+use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::circuit_instruction::OperationFromPython;
-use qiskit_circuit::converters::dag_to_circuit;
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_circuit::gate_matrix::ONE_QUBIT_IDENTITY;
-use qiskit_circuit::imports::QUANTUM_CIRCUIT;
 use qiskit_circuit::instruction::Instruction;
 use qiskit_circuit::operations::StandardGate::{I, X, Y, Z};
 use qiskit_circuit::operations::{Operation, OperationRef, Param, StandardGate};
 use qiskit_circuit::packed_instruction::PackedInstruction;
-use qiskit_circuit::{BlocksMode, VarsMode};
-use qiskit_transpiler::passes::run_optimize_1q_gates_decomposition;
+
+use crate::QiskitError;
+
+use qiskit_circuit::{BlocksMode, NoBlocks, VarsMode};
+use qiskit_transpiler::passes::{
+    Optimize1qGatesDecompositionState, run_optimize_1q_gates_decomposition,
+};
 use qiskit_transpiler::target::Target;
 use rand::prelude::*;
+use rand::rngs::SysRng;
 use rand_pcg::Pcg64Mcg;
 
 static ECR_TWIRL_SET: [([StandardGate; 4], f64); 16] = [
@@ -221,7 +222,6 @@ fn twirl_gate(
 type CustomGateTwirlingMap = HashMap<String, Vec<([StandardGate; 4], f64)>>;
 
 fn generate_twirled_circuit(
-    py: Python,
     circ: &CircuitData,
     rng: &mut Pcg64Mcg,
     twirling_mask: u8,
@@ -231,35 +231,25 @@ fn generate_twirled_circuit(
     let mut out_circ = CircuitData::copy_empty_like(circ, VarsMode::Alike, BlocksMode::Drop)?;
 
     for inst in circ.data().iter() {
-        if let Some(custom_gate_map) = custom_gate_map {
-            if let Some(twirling_set) = custom_gate_map.get(inst.op.name()) {
-                twirl_gate(circ, rng, &mut out_circ, twirling_set.as_slice(), inst)?;
-                continue;
-            }
+        if let Some(custom_gate_map) = custom_gate_map
+            && let Some(twirling_set) = custom_gate_map.get(inst.op.name())
+        {
+            twirl_gate(circ, rng, &mut out_circ, twirling_set.as_slice(), inst)?;
+            continue;
         }
         if let Some(control_flow) = circ.try_view_control_flow(inst) {
             let new_blocks: Vec<_> = control_flow
                 .blocks()
                 .into_iter()
                 .map(|block| {
-                    // TODO: remove this once PackedInstruction's block type is CircuitData.
-                    let block = block
-                        .bind(py)
-                        .getattr(intern!(py, "_data"))?
-                        .extract::<CircuitData>()?;
                     let new_block = generate_twirled_circuit(
-                        py,
-                        &block,
+                        block,
                         rng,
                         twirling_mask,
                         custom_gate_map,
                         optimizer_target,
                     )?;
-                    Ok(out_circ.add_block(
-                        &QUANTUM_CIRCUIT
-                            .get_bound(py)
-                            .call_method1(intern!(py, "_from_circuit_data"), (new_block,))?,
-                    ))
+                    Ok(out_circ.add_block(new_block))
                 })
                 .collect::<PyResult<_>>()?;
             out_circ.push(PackedInstruction::from_control_flow(
@@ -308,10 +298,13 @@ fn generate_twirled_circuit(
             }
         }
     }
-    if optimizer_target.is_some() {
-        let mut dag = DAGCircuit::from_circuit_data(&out_circ, false, None, None, None, None)?;
-        run_optimize_1q_gates_decomposition(&mut dag, optimizer_target, None, None)?;
-        dag_to_circuit(&dag, false)
+    if let Some(optimizer_target) = optimizer_target {
+        let mut dag = DAGCircuit::from_circuit_data(&out_circ, false, None, None)?;
+        let state = Optimize1qGatesDecompositionState::new(
+            optimizer_target.num_qubits.unwrap_or(0) as usize,
+        );
+        run_optimize_1q_gates_decomposition(&mut dag, &state, Some(optimizer_target), None, None)?;
+        Ok(CircuitData::from_dag_ref(&dag)?)
     } else {
         Ok(out_circ)
     }
@@ -320,17 +313,16 @@ fn generate_twirled_circuit(
 #[pyfunction]
 #[pyo3(signature=(circ, twirled_gate=None, custom_twirled_gates=None, seed=None, num_twirls=1, optimizer_target=None))]
 pub(crate) fn twirl_circuit(
-    py: Python,
-    circ: &CircuitData,
+    circ: &PyCircuitData,
     twirled_gate: Option<Vec<StandardGate>>,
-    custom_twirled_gates: Option<Vec<OperationFromPython>>,
+    custom_twirled_gates: Option<Vec<OperationFromPython<NoBlocks>>>,
     seed: Option<u64>,
     num_twirls: usize,
     optimizer_target: Option<&Target>,
-) -> PyResult<Vec<CircuitData>> {
+) -> PyResult<Vec<PyCircuitData>> {
     let mut rng = match seed {
         Some(seed) => Pcg64Mcg::seed_from_u64(seed),
-        None => Pcg64Mcg::from_os_rng(),
+        None => Pcg64Mcg::try_from_rng(&mut SysRng).unwrap(),
     };
     let twirling_mask: u8 = match twirled_gate {
         Some(gates) => {
@@ -401,13 +393,13 @@ pub(crate) fn twirl_circuit(
     (0..num_twirls)
         .map(|_| {
             generate_twirled_circuit(
-                py,
                 circ,
                 &mut rng,
                 twirling_mask,
                 custom_gate_twirling_sets.as_ref(),
                 optimizer_target,
             )
+            .map(Into::into)
         })
         .collect()
 }

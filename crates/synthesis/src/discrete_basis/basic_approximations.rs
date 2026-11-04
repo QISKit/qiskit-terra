@@ -4,12 +4,15 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+use std::io;
+
+use binrw::{BinRead, BinWrite, binrw};
 use hashbrown::HashMap;
 use nalgebra::{Matrix2, Matrix3};
 use num_complex::{Complex, ComplexFloat};
@@ -17,13 +20,12 @@ use num_traits::FloatConst;
 use numpy::{Complex64, PyReadonlyArray2};
 use pyo3::{exceptions::PyValueError, prelude::*};
 use qiskit_circuit::{
-    Qubit,
+    NoBlocks, Qubit,
     circuit_data::CircuitData,
     circuit_instruction::OperationFromPython,
     operations::{Operation, OperationRef, Param, StandardGate},
 };
 use rstar::{Point, RTree};
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -31,11 +33,14 @@ use super::math;
 
 #[derive(Error, Debug)]
 pub enum DiscreteBasisError {
-    #[error("Parameterized gates cannot be decomposed.")]
+    #[error("parameterized gates cannot be decomposed")]
     ParameterizedGate,
 
-    #[error("Cannot extract matrix from operation.")]
+    #[error("cannot extract matrix from operation")]
     NoMatrix,
+
+    #[error("only standard gates are allowed in GateSequence.from_gates_and_matrix")]
+    NonStandardGate,
 }
 
 impl From<DiscreteBasisError> for PyErr {
@@ -49,7 +54,7 @@ impl From<DiscreteBasisError> for PyErr {
 /// Gates are stored in **circuit order**, not in matrix multiplication order. That means that
 /// e.g. [H, T] corresponds to the matrix U = T @ H. The matrix is not stored as U(2), but in
 /// a SO(3) representation, which discards the global phase.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone, Debug)]
 pub struct GateSequence {
     // The sequence of standard gates.
@@ -61,11 +66,49 @@ pub struct GateSequence {
 }
 
 /// A serializable version of the [GateSequence] used to store and retrieve [BasicApproximations].
-#[derive(Serialize, Deserialize)]
+#[binrw]
+#[brw(big)]
+#[derive(Clone, Debug)]
 struct SerializableGateSequence {
+    #[bw(calc = gates.len() as u64)]
+    #[br(temp)]
+    gates_len: u64,
+    #[br(count = gates_len)]
     gates: Vec<u8>,
+    #[bw(calc = matrix_so3.len() as u64)]
+    #[br(temp)]
+    matrix_so3_len: u64,
+    #[br(count = matrix_so3_len)]
     matrix_so3: Vec<f64>,
     phase: f64,
+}
+
+/// A serializable version of the [HashMap] used to store and retrieve [BasicApproximations].
+#[binrw]
+#[brw(big)]
+struct SerializableHashMap {
+    #[br(temp)]
+    #[bw(calc = data.len() as u64)]
+    len: u64,
+
+    #[br(count = len)]
+    data: Vec<(u64, SerializableGateSequence)>,
+}
+
+impl SerializableHashMap {
+    fn into_hashmap(self) -> HashMap<usize, SerializableGateSequence> {
+        self.data
+            .into_iter()
+            .map(|(key, value)| (key as usize, value))
+            .collect()
+    }
+    fn from_hashmap(map: HashMap<usize, SerializableGateSequence>) -> Self {
+        let data = map
+            .iter()
+            .map(|(key, value)| (*key as u64, value.clone()))
+            .collect::<Vec<_>>();
+        SerializableHashMap { data }
+    }
 }
 
 impl From<&GateSequence> for SerializableGateSequence {
@@ -88,23 +131,25 @@ impl From<&GateSequence> for SerializableGateSequence {
     }
 }
 
-impl From<&SerializableGateSequence> for GateSequence {
-    fn from(value: &SerializableGateSequence) -> Self {
+impl TryFrom<&SerializableGateSequence> for GateSequence {
+    type Error = bytemuck::checked::CheckedCastError;
+
+    fn try_from(value: &SerializableGateSequence) -> Result<Self, Self::Error> {
         // map u8 back into StandardGate
-        let gates = value
+        let gates: Vec<StandardGate> = value
             .gates
             .iter()
-            .map(|gate_id| ::bytemuck::checked::cast::<_, StandardGate>(*gate_id))
-            .collect::<Vec<StandardGate>>();
+            .map(|gate_id| ::bytemuck::checked::try_cast::<_, StandardGate>(*gate_id))
+            .collect::<Result<_, Self::Error>>()?;
 
         // map serialized matrix back into Matrix3
         let matrix_so3 = Matrix3::from_iterator(value.matrix_so3.clone());
 
-        Self {
+        Ok(Self {
             gates,
             matrix_so3,
             phase: value.phase,
-        }
+        })
     }
 }
 
@@ -283,7 +328,7 @@ impl GateSequence {
     /// Legacy method for backward compatibility with Python SK.
     #[staticmethod]
     fn from_gates_and_matrix(
-        gates: Vec<OperationFromPython>,
+        gates: Vec<OperationFromPython<NoBlocks>>,
         matrix_so3: PyReadonlyArray2<f64>,
         phase: f64,
     ) -> PyResult<Self> {
@@ -292,11 +337,9 @@ impl GateSequence {
             .iter()
             .map(|op| match op.operation.view() {
                 OperationRef::StandardGate(gate) => Ok(gate),
-                _ => Err(PyValueError::new_err(
-                    "Only standard gates are allowed in GateSequence.from_gates_and_matrix",
-                )),
+                _ => Err(DiscreteBasisError::NonStandardGate),
             })
-            .collect::<PyResult<_>>()?;
+            .collect::<Result<_, DiscreteBasisError>>()?;
 
         let matrix_so3 = matrix3_from_pyreadonly(&matrix_so3);
         Ok(Self {
@@ -355,7 +398,7 @@ impl Point for BasicPoint {
 ///
 /// This struct allows to construct a tree of basic approximations and to query the closest
 /// sequence given an target sequence (or SO(3) matrix).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BasicApproximations {
     /// All points as flattened SO(3) matrix stored in a R* tree. This does not include the
     /// sequence of gates, see ``approximations``.
@@ -446,7 +489,7 @@ impl BasicApproximations {
     /// Query the closest point to a [GateSequence].
     pub fn query(&self, matrix: &Matrix3<f64>) -> Option<&GateSequence> {
         let query_point = BasicPoint::from_matrix(matrix);
-        self.points.nearest_neighbor(&query_point).map(|point| {
+        self.points.nearest_neighbor(query_point).map(|point| {
             let index = point
                 .index
                 .expect("All registered sequences should have an index. Blame a dev.");
@@ -467,24 +510,26 @@ impl BasicApproximations {
             .map(|(key, value)| (*key, SerializableGateSequence::from(value)))
             .collect::<HashMap<usize, SerializableGateSequence>>();
 
-        // store the now serializable HashMap
-        let file = ::std::fs::File::create(filename)?;
-        bincode::serialize_into(file, &serializable_approx).map_err(::std::io::Error::other)?;
-        Ok(())
+        // Write the HashMap to file using binrw
+        let mut file = ::std::fs::File::create(filename)?;
+        SerializableHashMap::from_hashmap(serializable_approx)
+            .write(&mut file)
+            .map_err(::std::io::Error::other)
     }
 
     /// Load the basic approximations from a file. See [Self::save] for saving the object.
     pub fn load(filename: &str) -> ::std::io::Result<Self> {
-        // store the now serializable HashMap
-        let file = ::std::fs::File::open(filename)?;
-        let serializable_approx: HashMap<usize, SerializableGateSequence> =
-            bincode::deserialize_from(file).map_err(::std::io::Error::other)?;
+        let mut file = ::std::fs::File::open(filename)?;
+        let serializable_approx = SerializableHashMap::read(&mut file)
+            .map_err(::std::io::Error::other)?
+            .into_hashmap();
 
-        // construct the GateSequence from it's serializable version
+        // construct the GateSequence from its serializable version
         let approximations = serializable_approx
             .iter()
-            .map(|(key, value)| (*key, GateSequence::from(value)))
-            .collect::<HashMap<usize, GateSequence>>();
+            .map(|(key, value)| GateSequence::try_from(value).map(|seq| (*key, seq)))
+            .collect::<Result<HashMap<usize, GateSequence>, _>>()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         // build the RTree from the sequences
         let mut points: RTree<BasicPoint> = RTree::new();
@@ -502,4 +547,40 @@ impl BasicApproximations {
 #[inline]
 fn matrix3_from_pyreadonly(array: &PyReadonlyArray2<f64>) -> Matrix3<f64> {
     Matrix3::from_fn(|i, j| *array.get((i, j)).unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Miri is isolated from non-deterministic filesystem interactions by default.  This test
+    // doesn't need unsafe, so better to skip Miri than relax the rules everywhere.
+    #[cfg(not(miri))]
+    #[test]
+    fn invalid_approximations_do_not_panic() {
+        // This unfortunately has to couple to the internal details of `save`, but there's little
+        // other way to do the direct test of "a file that _looks_ right except for corrupt data".
+        let approx =
+            BasicApproximations::generate_from(&[StandardGate::H, StandardGate::T], 1, None)
+                .unwrap();
+        let bad_sequence = |seq: &GateSequence| {
+            let mut seq = SerializableGateSequence::from(seq);
+            if let Some(first) = seq.gates.first_mut() {
+                *first = u8::MAX;
+            }
+            seq
+        };
+        let bad_serialized = SerializableHashMap::from_hashmap(
+            approx
+                .approximations
+                .iter()
+                .map(|(key, seq)| (*key, bad_sequence(seq)))
+                .collect(),
+        );
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        bad_serialized.write(tmp.as_file_mut()).unwrap();
+        let path = tmp.into_temp_path();
+        let loaded = BasicApproximations::load(path.to_str().unwrap());
+        assert_eq!(loaded.unwrap_err().kind(), io::ErrorKind::InvalidData);
+    }
 }

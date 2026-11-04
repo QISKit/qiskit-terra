@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -37,9 +37,8 @@ from qiskit.circuit.library import (
     CCZGate,
 )
 from qiskit.quantum_info.operators import Operator
-from qiskit.quantum_info.operators import random
 from qiskit.quantum_info.operators.dihedral import CNOTDihedral
-from qiskit.quantum_info.random import random_cnotdihedral
+from qiskit.quantum_info import random_cnotdihedral, random_pauli
 from qiskit.synthesis.cnotdihedral import (
     synth_cnotdihedral_general,
     synth_cnotdihedral_full,
@@ -902,7 +901,7 @@ class TestCNOTDihedral(unittest.TestCase):
         rng = np.random.default_rng(999)
         for num_qubits in range(1, 5):
             for _ in range(samples):
-                pauli = random.random_pauli(num_qubits, seed=rng)
+                pauli = random_pauli(num_qubits, seed=rng)
                 elem = CNOTDihedral(pauli)
                 value = Operator(pauli)
                 target = Operator(elem)

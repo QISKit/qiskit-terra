@@ -1,0 +1,24 @@
+[package]
+name = "qiskit-pyo3-ffi"
+version = "0.1.0"
+edition = "2021"
+# This doesn't need to be the same as Qiskit itself.
+rust-version = "1.80"
+license = "Apache-2.0"
+homepage = "https://www.ibm.com/quantum/qiskit"
+repository = "https://github.com/Qiskit/qiskit"
+description = "Raw bindings to the Qiskit C FFI accessed through the Python-space 'qiskit' package"
+# These files are Qiskit developer convenience, and don't have a meaning for the packaged crate.
+exclude = [".cargo"]
+
+# Forcibly exclude this from any containing workspace.
+[workspace]
+
+[lib]
+name = "qiskit_pyo3_ffi"
+
+[dependencies]
+# We don't inherit from the workspace because this crate is intended for distribution to others to
+# use as a dependency.  For PyO3 in particular, we don't want to hard-pin the required version.
+pyo3.version = ">=0.22,<=0.28"
+num-complex.version = "0.4"

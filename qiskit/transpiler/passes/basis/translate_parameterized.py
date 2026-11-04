@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -84,7 +84,7 @@ class TranslateParameterizedGates(TransformationPass):
     ) -> None:
         """
         Args:
-            supported_gates: A list of suppported basis gates specified as string. If ``None``,
+            supported_gates: A list of supported basis gates specified as string. If ``None``,
                 a ``target`` must be provided.
             equivalence_library: The equivalence library to translate the gates. Defaults
                 to the equivalence library of all Qiskit standard gates.
@@ -161,9 +161,9 @@ def _is_supported(node: DAGOpNode, supported_gates: list[str], target: Target | 
     If the target is provided, check using the target, otherwise the supported_gates are used.
     """
     if target is not None:
-        return target.instruction_supported(node.op.name)
+        return target.instruction_supported(node.name)
 
-    return node.op.name in supported_gates
+    return node.name in supported_gates
 
 
 def _instruction_to_dag(op: Instruction) -> DAGCircuit:

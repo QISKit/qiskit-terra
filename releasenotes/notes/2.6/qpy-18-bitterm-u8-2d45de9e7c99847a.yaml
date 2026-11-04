@@ -1,0 +1,13 @@
+---
+upgrade_qpy:
+  - |
+    QPY has been upgraded to version 18, which narrows the bit-term elements of the
+    ``SPARSE_OBSERVABLE`` payload from ``uint16_t`` to ``uint8_t``.  The values of
+    :class:`.SparseObservable.BitTerm` always fit in a single byte, so the previous encoding
+    stored a byte of padding for every bit term.  Payloads containing a
+    :class:`.PauliEvolutionGate` whose operators are :class:`.SparseObservable` instances are
+    now one byte smaller per bit term, with no loss of information.
+
+    This change is backwards compatible.  QPY version 17 and earlier payloads load exactly as
+    before, and passing ``version=17`` to :func:`.qpy.dump` still emits the older encoding.
+    See :mod:`qiskit.qpy` for the updated format description.

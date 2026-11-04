@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,6 +14,7 @@
 """Test the BasisTranslator pass"""
 
 import os
+import unittest
 
 from numpy import pi
 import scipy
@@ -37,7 +38,10 @@ from qiskit.circuit.library import (
     CXGate,
     RXGate,
     RZZGate,
+    TGate,
+    TdgGate,
 )
+from qiskit.circuit.controlflow import IfElseOp
 from qiskit.converters import circuit_to_dag, dag_to_circuit, circuit_to_instruction
 from qiskit.exceptions import QiskitError
 from qiskit.providers.fake_provider import GenericBackendV2
@@ -49,7 +53,8 @@ from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit.circuit.library.standard_gates.equivalence_library import (
     StandardEquivalenceLibrary as std_eqlib,
 )
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from qiskit.utils.optionals import HAS_AER
+from test import QiskitTestCase
 
 
 class OneQubitZeroParamGate(Gate):
@@ -533,7 +538,7 @@ class TestBasisTranslator(QiskitTestCase):
 
 
 class TestUnrollerCompatability(QiskitTestCase):
-    """Tests backward compatability with the Unroller pass.
+    """Tests backward compatibility with the Unroller pass.
 
     Duplicate of TestUnroller from test.python.transpiler.test_unroller with
     Unroller replaced by UnrollCustomDefinitions -> BasisTranslator.
@@ -1231,3 +1236,81 @@ class TestBasisTranslatorWithTarget(QiskitTestCase):
         pm = generate_preset_pass_manager(optimization_level=1, target=target, seed_transpiler=134)
         cqc = pm.run(qc)
         self.assertEqual(Operator(qc), Operator.from_circuit(cqc))
+
+    def test_basis_nested_control_flow_op(self):
+        """Test nested handling of nested control flow operations under the basis translator"""
+        phi = Parameter("φ")
+        lam = Parameter("λ")
+
+        target = Target(num_qubits=3)
+        target.add_instruction(U2Gate(phi, lam))
+        target.add_instruction(IfElseOp, name="if_else")
+        target.add_instruction(TGate())
+        target.add_instruction(TdgGate())
+        target.add_instruction(CXGate())
+
+        qc = QuantumCircuit(3, 1)
+
+        with qc.if_test((0, False)) as else_:
+            pass
+        with else_:
+            with qc.if_test((0, False)) as else2:
+                qc.rccx(0, 1, 2)
+            with else2:
+                pass
+
+        transpiled = BasisTranslator(std_eqlib, target_basis=None, target=target)(qc)
+
+        expected_qc = QuantumCircuit(3, 1)
+        with expected_qc.if_test((0, False)) as else_:
+            pass
+        with else_:
+            with expected_qc.if_test((0, False)) as else2:
+                expected_qc.append(U2Gate(0, pi), [2])
+                expected_qc.t(2)
+                expected_qc.cx(1, 2)
+                expected_qc.tdg(2)
+                expected_qc.cx(0, 2)
+                expected_qc.t(2)
+                expected_qc.cx(1, 2)
+                expected_qc.tdg(2)
+                expected_qc.append(U2Gate(0, pi), [2])
+            with else2:
+                pass
+
+        self.assertEqual(transpiled, expected_qc)
+
+    @unittest.skipUnless(HAS_AER, "Aer backend required for simulation")
+    def test_basis_nested_control_flow_op_aer(self):
+        """Test nested handling of nested control flow operations under the basis translator
+        using an Aer Simulator backend"""
+        from qiskit_aer import AerSimulator
+
+        backend = AerSimulator()
+
+        qc = QuantumCircuit(3, 1)
+
+        with qc.if_test((0, False)) as else_:
+            pass
+        with else_:
+            with qc.if_test((0, False)) as else2:
+                qc.dcx(0, 2)
+            with else2:
+                pass
+
+        pm = generate_preset_pass_manager(
+            optimization_level=1, backend=backend, seed_transpiler=134
+        )
+        transpiled = pm.run(qc)
+
+        expected = QuantumCircuit(3, 1)
+        with expected.if_test((0, False)) as else_:
+            pass
+        with else_:
+            with expected.if_test((0, False)) as else2:
+                expected.cx(0, 2)
+                expected.cx(2, 0)
+            with else2:
+                pass
+
+        self.assertEqual(transpiled, expected)

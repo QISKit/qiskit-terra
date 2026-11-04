@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -37,10 +37,10 @@ def object_array(
 
     Args:
         arr: An array-like input.
-        order: Optional, the order of the returned array (C, F, A, K). If None
+        order:  the order of the returned array (C, F, A, K). If None
                the default NumPy ordering of C is used.
         copy: If True make a copy of the input if it is already an array.
-        list_types: Optional, a sequence of types to treat as lists of array
+        list_types:  a sequence of types to treat as lists of array
             element objects when inferring the array shape from the input.
 
     Returns:

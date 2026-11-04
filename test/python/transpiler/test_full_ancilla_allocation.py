@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -20,7 +20,7 @@ from qiskit.transpiler import CouplingMap, Layout, Target
 from qiskit.circuit.library import CXGate
 from qiskit.transpiler.passes import FullAncillaAllocation
 from qiskit.transpiler.exceptions import TranspilerError
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestFullAncillaAllocation(QiskitTestCase):
@@ -72,7 +72,7 @@ class TestFullAncillaAllocation(QiskitTestCase):
                     4 -> ancilla1
         """
         target = Target(num_qubits=5)
-        target.add_instruction(CXGate(), {edge: None for edge in self.cmap5.get_edges()})
+        target.add_instruction(CXGate(), dict.fromkeys(self.cmap5.get_edges()))
 
         qr = QuantumRegister(3, "q")
         circ = QuantumCircuit(qr)

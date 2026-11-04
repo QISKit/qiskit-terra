@@ -1,0 +1,9 @@
+---
+features_c:
+  - |
+    The functions :c:func:`qk_dag_borrow_from_python` and :c:func:`qk_dag_convert_from_python` allow
+    for extracting C-native types from a Python-space :class:`.DAGCircuit`.  C modules can create a
+    Python-space :class:`.DAGCircuit` using :c:func:`qk_dag_to_python`.
+  - |
+    The functions :c:func:`qk_target_borrow_from_python` and :c:func:`qk_target_convert_from_python` allow
+    for extracting C-native types from a Python-space :class:`.Target`.

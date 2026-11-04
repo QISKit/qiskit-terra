@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -87,7 +87,7 @@ class PMatrix:
     def mul_right_q1(self, layer: Layer1Q, temp_mat: np.ndarray, dagger: bool):
         """
         Multiplies ``NxN`` matrix, wrapped by this object, by a 1-qubit layer
-        matrix of the right, where ``N`` is the actual size of matrices involved,
+        matrix on the right, where ``N`` is the actual size of matrices involved,
         ``N = 2^{num. of qubits}``.
 
         Args:
@@ -151,7 +151,7 @@ class PMatrix:
     def mul_left_q1(self, layer: Layer1Q, temp_mat: np.ndarray):
         """
         Multiplies ``NxN`` matrix, wrapped by this object, by a 1-qubit layer
-        matrix of the left, where ``dim`` is the actual size of matrices involved,
+        matrix on the left, where ``dim`` is the actual size of matrices involved,
         ``dim = 2^{num. of qubits}``.
 
         Args:

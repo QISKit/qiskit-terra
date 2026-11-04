@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,14 +12,15 @@
 
 """Tests PassManager.run()"""
 
-from qiskit import QuantumRegister, QuantumCircuit
+from qiskit import QuantumRegister, QuantumCircuit, transpile
 from qiskit.circuit.library import CXGate
 from qiskit.transpiler.preset_passmanagers import level_1_pass_manager
 from qiskit.providers.fake_provider import GenericBackendV2
-from qiskit.transpiler import Layout, PassManager
+from qiskit.transpiler import CouplingMap, Layout, PassManager, PropertySet
 from qiskit.transpiler.passmanager_config import PassManagerConfig
+from qiskit.transpiler.passes import Decompose
 from ..legacy_cmaps import ALMADEN_CMAP
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestPassManagerRun(QiskitTestCase):
@@ -57,6 +58,23 @@ class TestPassManagerRun(QiskitTestCase):
         for qc, new_qc in zip([qc0, qc1], result):
             self.assertIsInstance(new_qc, QuantumCircuit)
             self.assertEqual(new_qc, qc)  # pm has no passes
+
+    def test_preserve_layout_metadata_from_initial_property_set(self):
+        """Test layout metadata in an initial property set is not overwritten."""
+        circuit = QuantumCircuit(2)
+        circuit.h(0)
+        laid_out = transpile(
+            circuit,
+            coupling_map=CouplingMap.from_line(3),
+            initial_layout=[0, 2],
+            optimization_level=0,
+        )
+        property_set = PropertySet()
+        laid_out.layout.write_into_property_set(property_set)
+
+        output = PassManager([Decompose()]).run(laid_out, property_set=property_set)
+
+        self.assertEqual(output.layout, laid_out.layout)
 
     def test_default_pass_manager_single(self):
         """Test default_pass_manager.run(circuit).

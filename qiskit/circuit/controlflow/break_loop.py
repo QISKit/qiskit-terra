@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,7 +12,6 @@
 
 "Circuit operation representing a ``break`` from a loop."
 
-from typing import Optional
 
 from qiskit.circuit.instruction import Instruction
 from qiskit._accelerate.circuit import ControlFlowType
@@ -26,11 +25,11 @@ class BreakLoopOp(Instruction):
 
     _control_flow_type = ControlFlowType.BreakLoop
 
-    def __init__(self, num_qubits: int, num_clbits: int, label: Optional[str] = None):
+    def __init__(self, num_qubits: int, num_clbits: int, label: str | None = None):
         """
         Args:
             num_qubits: the number of qubits this affects.
-            num_clbits: the number of qubits this affects.
+            num_clbits: the number of clbits this affects.
             label: an optional string label for the instruction.
         """
         super().__init__("break_loop", num_qubits, num_clbits, [], label=label)
@@ -46,7 +45,7 @@ class BreakLoopPlaceholder(InstructionPlaceholder):
         Terra.
     """
 
-    def __init__(self, *, label: Optional[str] = None):
+    def __init__(self, *, label: str | None = None):
         super().__init__("break_loop", 0, 0, [], label=label)
 
     def concrete_instruction(self, qubits, clbits):

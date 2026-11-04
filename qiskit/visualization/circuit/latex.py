@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -50,7 +50,7 @@ class QCircuitImage:
     Thanks to Eric Sabo for the initial implementation for Qiskit.
     """
 
-    def __init__(  # pylint: disable=bad-docstring-quotes
+    def __init__(
         self,
         qubits,
         clbits,
@@ -63,6 +63,7 @@ class QCircuitImage:
         cregbundle=None,
         with_layout=False,
         circuit=None,
+        barrier_label_len=16,
     ):
         """QCircuitImage initializer.
 
@@ -77,7 +78,10 @@ class QCircuitImage:
                circuit. Defaults to True.
             initial_state (bool): Optional. Adds |0> in the beginning of the line. Default: `False`.
             cregbundle (bool): Optional. If set True bundle classical registers.
+            with_layout (bool): Optional. If set to True display the layout in the circuit.
             circuit (QuantumCircuit): the circuit that's being displayed
+            barrier_label_len (int): Optional. The number of characters to display for
+               barrier labels. If this number is exceeded, the string will be truncated.
         Raises:
             ImportError: If pylatexenc is not installed
         """
@@ -85,6 +89,7 @@ class QCircuitImage:
         self._circuit = circuit
         self._qubits = qubits
         self._clbits = clbits
+        self._barrier_label_len = barrier_label_len
 
         # list of lists corresponding to layers of the circuit
         self._nodes = nodes
@@ -184,8 +189,7 @@ class QCircuitImage:
         output.write(header_scale)
         if self._global_phase:
             output.write(
-                r"""{$\mathrm{%s} \mathrm{%s}$}"""
-                % ("global\\,phase:\\,", pi_check(self._global_phase, output="latex"))
+                f"{{$\\mathrm{{global\\,phase:\\,}} \\mathrm{{{pi_check(self._global_phase, output='latex')}}}$}}"
             )
         output.write(qcircuit_line % (self._column_separation, self._wire_separation))
         for i in range(self._img_width):
@@ -492,22 +496,21 @@ class QCircuitImage:
                 num_cols_op = self._build_symmetric_gate(op, gate_text, wire_list, col)
             else:
                 self._latex[wireqargs[0]][col] = f"\\gate{{{gate_text}}}"
+        # Treat special cases of swap and rzz gates
+        elif isinstance(op.base_gate, (SwapGate, RZZGate)):
+            self._add_controls(wire_list, ctrlqargs, ctrl_state, col)
+            num_cols_op = self._build_symmetric_gate(op, gate_text, wire_list, col)
         else:
-            # Treat special cases of swap and rzz gates
-            if isinstance(op.base_gate, (SwapGate, RZZGate)):
-                self._add_controls(wire_list, ctrlqargs, ctrl_state, col)
-                num_cols_op = self._build_symmetric_gate(op, gate_text, wire_list, col)
+            # If any controls appear in the span of the multiqubit
+            # gate just treat the whole thing as a big gate
+            for ctrl in ctrlqargs:
+                if ctrl in range(wire_min, wire_max):
+                    wireqargs = wire_list
+                    break
             else:
-                # If any controls appear in the span of the multiqubit
-                # gate just treat the whole thing as a big gate
-                for ctrl in ctrlqargs:
-                    if ctrl in range(wire_min, wire_max):
-                        wireqargs = wire_list
-                        break
-                else:
-                    self._add_controls(wire_list, ctrlqargs, ctrl_state, col)
+                self._add_controls(wire_list, ctrlqargs, ctrl_state, col)
 
-                self._build_multi_gate(op, gate_text, wireqargs, [], col)
+            self._build_multi_gate(op, gate_text, wireqargs, [], col)
         return num_cols_op
 
     def _build_symmetric_gate(self, op, gate_text, wire_list, col):
@@ -553,7 +556,7 @@ class QCircuitImage:
                 wire2 = self._wire_map[node.cargs[0]]
             self._latex[wire2][col] = (
                 f"\\dstick{{_{{_{{\\hspace{{{cond_offset}em}}{idx_str}}}}}}} "
-                f"\\cw \\ar @{{<=}} [-{str(wire2 - wire1)},0]"
+                f"\\cw \\ar @{{<=}} [-{wire2 - wire1!s},0]"
             )
         else:
             wire2 = self._wire_map[node.cargs[0]]
@@ -577,7 +580,10 @@ class QCircuitImage:
             self._latex[pos][col - 1] += " \\barrier[0em]{" + str(last - first) + "}"
             if node.op.label is not None:
                 pos = indexes[0]
-                label = node.op.label.replace(" ", "\\,")
+                label = node.op.label
+                if len(label) > self._barrier_label_len:
+                    label = label[: self._barrier_label_len] + "..."
+                label = label.replace(" ", "\\,")  # \, is a LaTeX thin space
                 self._latex[pos][col] = f"\\cds{{0}}{{^{{\\mathrm{{{label}}}}}}}"
 
     def _add_controls(self, wire_list, ctrlqargs, ctrl_state, col):
@@ -622,7 +628,7 @@ class QCircuitImage:
             control = "\\control" if op.condition[1] else "\\controlo"
             self._latex[cwire][
                 col
-            ] = f"{control} \\cw^({meas_offset}){{^{{\\mathtt{{{label}}}}}}} \\cwx[-{str(gap)}]"
+            ] = f"{control} \\cw^({meas_offset}){{^{{\\mathtt{{{label}}}}}}} \\cwx[-{gap!s}]"
 
         # If condition is a register and cregbundle is false
         else:

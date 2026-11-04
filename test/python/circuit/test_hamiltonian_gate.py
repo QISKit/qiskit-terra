@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,7 +21,7 @@ from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
 from qiskit.circuit import Parameter
 from qiskit.quantum_info import Operator
 from qiskit.converters import circuit_to_dag, dag_to_circuit
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestHamiltonianGate(QiskitTestCase):

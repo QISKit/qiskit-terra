@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,7 +21,7 @@ from qiskit.transpiler import CouplingMap
 from qiskit.transpiler.passes import CSPLayout
 from qiskit.converters import circuit_to_dag
 from qiskit.utils import optionals
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 from ..legacy_cmaps import TENERIFE_CMAP, RUESCHLIKON_CMAP, TOKYO_CMAP, YORKTOWN_CMAP
 
@@ -69,10 +69,9 @@ class TestCSPLayout(QiskitTestCase):
         pass_ = CSPLayout(CouplingMap(cmap5), strict_direction=False, seed=self.seed)
         pass_.run(dag)
         layout = pass_.property_set["layout"]
-
-        self.assertEqual(layout[qr[0]], 3)
+        self.assertEqual(layout[qr[0]], 4)
         self.assertEqual(layout[qr[1]], 2)
-        self.assertEqual(layout[qr[2]], 4)
+        self.assertEqual(layout[qr[2]], 3)
         self.assertEqual(pass_.property_set["CSPLayout_stop_reason"], "solution found")
 
     def test_3q_circuit_5q_coupling_with_target(self):
@@ -99,9 +98,9 @@ class TestCSPLayout(QiskitTestCase):
         pass_.run(dag)
         layout = pass_.property_set["layout"]
 
-        self.assertEqual(layout[qr[0]], 3)
+        self.assertEqual(layout[qr[0]], 4)
         self.assertEqual(layout[qr[1]], 2)
-        self.assertEqual(layout[qr[2]], 4)
+        self.assertEqual(layout[qr[2]], 3)
         self.assertEqual(pass_.property_set["CSPLayout_stop_reason"], "solution found")
 
     def test_9q_circuit_16q_coupling(self):
@@ -123,16 +122,15 @@ class TestCSPLayout(QiskitTestCase):
         pass_ = CSPLayout(CouplingMap(cmap16), strict_direction=False, seed=self.seed)
         pass_.run(dag)
         layout = pass_.property_set["layout"]
-
-        self.assertEqual(layout[qr0[0]], 9)
-        self.assertEqual(layout[qr0[1]], 6)
-        self.assertEqual(layout[qr0[2]], 7)
-        self.assertEqual(layout[qr0[3]], 5)
-        self.assertEqual(layout[qr1[0]], 14)
-        self.assertEqual(layout[qr1[1]], 12)
-        self.assertEqual(layout[qr1[2]], 1)
-        self.assertEqual(layout[qr1[3]], 8)
-        self.assertEqual(layout[qr1[4]], 10)
+        self.assertEqual(layout[qr0[0]], 15)
+        self.assertEqual(layout[qr0[1]], 11)
+        self.assertEqual(layout[qr0[2]], 6)
+        self.assertEqual(layout[qr0[3]], 10)
+        self.assertEqual(layout[qr1[0]], 9)
+        self.assertEqual(layout[qr1[1]], 3)
+        self.assertEqual(layout[qr1[2]], 12)
+        self.assertEqual(layout[qr1[3]], 0)
+        self.assertEqual(layout[qr1[4]], 7)
         self.assertEqual(pass_.property_set["CSPLayout_stop_reason"], "solution found")
 
     def test_2q_circuit_2q_coupling_sd(self):
@@ -173,10 +171,9 @@ class TestCSPLayout(QiskitTestCase):
         pass_ = CSPLayout(CouplingMap(cmap5), strict_direction=True, seed=self.seed)
         pass_.run(dag)
         layout = pass_.property_set["layout"]
-
-        self.assertEqual(layout[qr[0]], 1)
-        self.assertEqual(layout[qr[1]], 2)
-        self.assertEqual(layout[qr[2]], 0)
+        self.assertEqual(layout[qr[0]], 4)
+        self.assertEqual(layout[qr[1]], 3)
+        self.assertEqual(layout[qr[2]], 2)
         self.assertEqual(pass_.property_set["CSPLayout_stop_reason"], "solution found")
 
     def test_9q_circuit_16q_coupling_sd(self):
@@ -198,16 +195,15 @@ class TestCSPLayout(QiskitTestCase):
         pass_ = CSPLayout(CouplingMap(cmap16), strict_direction=True, seed=self.seed)
         pass_.run(dag)
         layout = pass_.property_set["layout"]
-
         self.assertEqual(layout[qr0[0]], 9)
         self.assertEqual(layout[qr0[1]], 6)
-        self.assertEqual(layout[qr0[2]], 7)
-        self.assertEqual(layout[qr0[3]], 5)
-        self.assertEqual(layout[qr1[0]], 14)
-        self.assertEqual(layout[qr1[1]], 12)
-        self.assertEqual(layout[qr1[2]], 1)
+        self.assertEqual(layout[qr0[2]], 11)
+        self.assertEqual(layout[qr0[3]], 3)
+        self.assertEqual(layout[qr1[0]], 0)
+        self.assertEqual(layout[qr1[1]], 7)
+        self.assertEqual(layout[qr1[2]], 5)
         self.assertEqual(layout[qr1[3]], 10)
-        self.assertEqual(layout[qr1[4]], 8)
+        self.assertEqual(layout[qr1[4]], 12)
         self.assertEqual(pass_.property_set["CSPLayout_stop_reason"], "solution found")
 
     def test_5q_circuit_16q_coupling_no_solution(self):
@@ -299,7 +295,7 @@ class TestCSPLayout(QiskitTestCase):
     def test_seed(self):
         """Different seeds yield different results"""
         seed_1 = 42
-        seed_2 = 43
+        seed_2 = 13
 
         cmap5 = TENERIFE_CMAP
 

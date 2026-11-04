@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=missing-module-docstring,missing-class-docstring,missing-function-docstring
 
 import itertools
 import math
@@ -19,7 +18,7 @@ import sys
 import ddt
 
 import qiskit.qasm2
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @ddt.ddt
@@ -135,6 +134,31 @@ class TestSimple(QiskitTestCase):
         parameters = list(parsed.data[0].operation.params)
         self.assertEqual([bigint, -bigint, 2 * bigint], parameters)
 
+    def test_excessive_depth_unary(self):
+        """We should either succeed in the evaluation or raise a Python-space error. We should _not_
+        segfault."""
+        expr = "-" * 100_000 + "2.0"
+        program = f"qreg q[1]; U({expr}, -{expr}, 0.0) q[0];"
+        parsed = qiskit.qasm2.loads(program)
+        self.assertEqual(list(parsed.data[0].operation.params), [2.0, -2.0, 0.0])
+
+    def test_excessive_depth_binary(self):
+        """We should either succeed in the evaluation or raise a Python-space error. We should _not_
+        segfault."""
+        # We have to include the parentheses to go against standard associativity, or a naive
+        # implementation will be effectively iterative anyway.
+        expr = "1.0+(" * 100_000 + "1.0" + ")" * 100_000
+        program = f"qreg q[1]; U({expr}, 0.0, 0.0) q[0];"
+        parsed = qiskit.qasm2.loads(program)
+        self.assertEqual(list(parsed.data[0].operation.params), [100_001.0, 0.0, 0.0])
+
+    def test_parenthesised_lhs_followed_by_infix(self):
+        """A parenthesised subexpression on the left of an infix operator should evaluate
+        correctly regardless of the relative precedences involved."""
+        program = "qreg q[1]; U((1.0 + 2.0) + 3.0, (1.0 * 2.0) + 3.0, (4.0 / 2.0) * 3.0) q[0];"
+        parsed = qiskit.qasm2.loads(program)
+        self.assertEqual(list(parsed.data[0].operation.params), [6.0, 5.0, 6.0])
+
 
 class TestPrecedenceAssociativity(QiskitTestCase):
     def test_precedence(self):
@@ -188,7 +212,6 @@ class TestCustomClassical(QiskitTestCase):
     def test_evaluation_order(self):
         """We should be evaluating all functions, including custom user ones the exact number of
         times we expect, and left-to-right in parameter lists."""
-        # pylint: disable=invalid-name
 
         order = itertools.count()
 
@@ -243,6 +266,22 @@ class TestErrors(QiskitTestCase):
         program = f"gate rx(a) q {{ U(a + sqrt({operand}), 0.0, 0.0) q; }}"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "sqrt of negative"):
             qiskit.qasm2.loads(program)
+
+    @ddt.data(
+        ("a / (a - a)", "cannot divide by zero"),
+        ("ln(0 - a)", "'ln' is undefined for non-positive"),
+        ("sqrt(0 - a)", "'sqrt' is undefined for negative"),
+        ("(0 - a) ^ 0.5", "non-integer power"),
+    )
+    @ddt.unpack
+    def test_refuses_invalid_arithmetic_when_building_definition(self, expression, message):
+        # None of these can be constant-folded during the parse, since they all depend on the gate
+        # parameter, so unlike the cases above they are caught by the runtime evaluator when the
+        # definition is first built, rather than by `loads` itself.
+        program = f"qreg q[1]; gate g(a) qq {{ U({expression}, 0.0, 0.0) qq; }} g(1.0) q[0];"
+        parsed = qiskit.qasm2.loads(program)
+        with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, message):
+            _ = parsed.data[0].operation.definition
 
     @ddt.data("*", "/", "^")
     def test_cannot_use_nonunary_operators_in_unary_position(self, operator):

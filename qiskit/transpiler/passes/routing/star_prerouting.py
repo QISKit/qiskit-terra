@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,7 +12,8 @@
 
 """Search for star connectivity patterns and replace them with."""
 import itertools
-from typing import Iterable, Union, Optional, List, Tuple
+
+from collections.abc import Iterable
 from math import floor, log10
 
 from qiskit.circuit import Barrier
@@ -68,11 +69,10 @@ class StarBlock:
                 self.nodes.append(node)
                 self.num2q += 1
                 added = True
-        else:
-            if self.center in node.qargs:
-                self.nodes.append(node)
-                self.num2q += 1
-                added = True
+        elif self.center in node.qargs:
+            self.nodes.append(node)
+            self.num2q += 1
+            added = True
 
         return added
 
@@ -116,8 +116,8 @@ class StarPreRouting(TransformationPass):
     def __init__(self):
         """StarPreRouting"""
 
-        self._pending_nodes: Optional[list[Union[DAGOpNode, DAGDepNode]]] = None
-        self._in_degree: Optional[dict[Union[DAGOpNode, DAGDepNode], int]] = None
+        self._pending_nodes: list[DAGOpNode | DAGDepNode] | None = None
+        self._in_degree: dict[DAGOpNode | DAGDepNode, int] | None = None
         super().__init__()
 
     def _setup_in_degrees(self, dag):
@@ -138,7 +138,7 @@ class StarPreRouting(TransformationPass):
             if deg == 0:
                 self._pending_nodes.append(node)
 
-    def _op_nodes(self, dag) -> Iterable[Union[DAGOpNode, DAGDepNode]]:
+    def _op_nodes(self, dag) -> Iterable[DAGOpNode | DAGDepNode]:
         """Returns DAG nodes."""
         if not isinstance(dag, DAGDependency):
             return dag.op_nodes()
@@ -278,7 +278,7 @@ class StarPreRouting(TransformationPass):
         new_layout = Layout({dag.qubits[out]: idx for idx, out in enumerate(qubit_mapping)})
         if current_layout := self.property_set["virtual_permutation_layout"]:
             self.property_set["virtual_permutation_layout"] = new_layout.compose(
-                current_layout.inverse(dag.qubits, dag.qubits), dag.qubits
+                current_layout, dag.qubits
             )
         else:
             self.property_set["virtual_permutation_layout"] = new_layout
@@ -286,8 +286,8 @@ class StarPreRouting(TransformationPass):
         return new_dag
 
     def determine_star_blocks_processing(
-        self, dag: Union[DAGCircuit, DAGDependency], min_block_size: int
-    ) -> Tuple[List[StarBlock], Union[List[DAGOpNode], List[DAGDepNode]]]:
+        self, dag: DAGCircuit | DAGDependency, min_block_size: int
+    ) -> tuple[list[StarBlock], list[DAGOpNode] | list[DAGDepNode]]:
         """Returns star blocks in dag and the processing order of nodes within these star blocks
         Args:
             dag (DAGCircuit or DAGDependency): a dag on which star blocks should be determined.
@@ -405,7 +405,7 @@ class StarPreRouting(TransformationPass):
                         check=False,
                     )
 
-                    if not inner_node is last_2q_gate and not isinstance(inner_node.op, Barrier):
+                    if inner_node is not last_2q_gate and not isinstance(inner_node.op, Barrier):
                         new_dag.apply_operation_back(
                             SwapGate(),
                             _apply_mapping(inner_node.qargs, qubit_mapping, dag.qubits),

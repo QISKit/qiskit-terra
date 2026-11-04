@@ -1,0 +1,6 @@
+---
+build:
+  - |
+    The build system now reads the environment variable ``QISKIT_BUILD_PROFILE`` to
+    choose whether to build in ``release`` or ``debug`` modes. If this is not set, ``pip install .``
+    will (continue to) default to release mode, and ``pip install -e .`` to debug mode.

@@ -1,0 +1,8 @@
+fixes:
+  - |
+    Fixed a bug where the loop variable of a :class:`.ForLoopOp` was incorrectly
+    tracked in the outer circuit's parameter table, causing it to appear in
+    :attr:`.QuantumCircuit.parameters` and making :meth:`~.QuantumCircuit.assign_parameters` raise an internal
+    :exc:`RuntimeError`.
+    
+    See `#15657 <https://github.com/Qiskit/qiskit/issues/15657>`__ for details.

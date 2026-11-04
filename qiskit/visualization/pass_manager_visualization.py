@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -37,6 +37,11 @@ def pass_manager_drawer(pass_manager, filename=None, style=None, raw=False):
 
     This function needs `pydot <https://github.com/pydot/pydot>`__, which in turn needs
     `Graphviz <https://www.graphviz.org/>`__ to be installed.
+
+    .. warning::
+        This function will call the system Graphviz tool on a file involving user-controllable
+        strings (such as pass names).  It is recommended to only call this function on trusted
+        input.
 
     Args:
         pass_manager (PassManager): the pass manager to be drawn
@@ -114,6 +119,11 @@ def staged_pass_manager_drawer(pass_manager, filename=None, style=None, raw=Fals
 
         This function needs `pydot <https://github.com/erocarrera/pydot>`__, which in turn needs
     `Graphviz <https://www.graphviz.org/>`__ to be installed.
+
+    .. warning::
+        This function will call the system Graphviz tool on a file involving user-controllable
+        strings (such as pass names).  It is recommended to only call this function on trusted
+        input.
 
     Args:
         pass_manager (StagedPassManager): the staged pass manager to be drawn

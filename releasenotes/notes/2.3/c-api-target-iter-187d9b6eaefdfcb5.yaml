@@ -1,0 +1,77 @@
+---
+features_c:
+  - |
+    Ways of iterating and checking the ``QkTarget``'s gate map have
+    been added to the C API. The following methods were added:
+      
+      * :c:func:`qk_target_op_num_properties`.
+      * :c:func:`qk_target_op_index`.
+      * :c:func:`qk_target_op_name`.
+      * :c:func:`qk_target_op_qargs_index`.
+      * :c:func:`qk_target_op_qargs`.
+      * :c:func:`qk_target_op_props`.
+
+    And the following representation was added:
+      
+      * :c:struct:`QkInstructionProperties`: to represent the :class:`.InstructionProperties`.
+
+    Example:
+
+    .. code-block:: C
+      
+      #include <qiskit.h>
+
+      // Create Target with a mix of global and non-global gates.
+      QkTarget *target = qk_target_new(2);
+      
+      // Create a CX entry
+      QkTargetEntry *cx_entry = qk_target_entry_new(QkGate_CX);
+      uint32_t qarg_samples[2][2] = {
+          {0, 1}, {1, 0},
+      };
+      double props[2][2] = {
+          {2.7022e-11, 0.00713}, {3.0577e-11, 0.00713}
+      };
+      for (int i = 0; i < 2; i++) {
+          qk_target_entry_add_property(cx_entry, qarg_samples[i], 2, props[i][0], props[i][1]);
+      }
+      qk_target_add_instruction(target, cx_entry);
+
+      // Create an SX entry
+      QkTargetEntry *sx_entry = qk_target_entry_new(QkGate_SX);
+      for (int i = 0; i < 2; i++) {
+          uint32_t qargs[1] = {i};
+          qk_target_entry_add_property(sx_entry, qargs, 1, 35.5e-9, 0.);
+      }
+      qk_target_add_instruction(target, sx_entry);
+      
+      // Create an H entry
+      qk_target_add_instruction(target, qk_target_entry_new(QkGate_H));
+
+      // Get the size of the 
+      size_t target_length = qk_target_num_instructions(target);
+
+      for (size_t op_idx = 0; op_idx < target_length; op_idx++) {
+        // Allocate space for qargs and props
+        uint32_t *qargs;
+        uint32_t qargs_len;
+        QkInstructionProperties props;
+
+        // Retrieve the operation's name
+        char *name = qk_target_op_name(target, op_idx);
+        size_t num_props = qk_target_op_num_properties(target, op_idx);
+        for (size_t props_idx = 0; props_idx < num_props; props_idx++) {
+          // Populate qargs
+          qk_target_op_qargs(target, op_idx, props_idx, &qargs, &qargs_len);
+          // Populate properties
+          qk_target_op_props(target, op_idx, props_idx, &props);
+        }
+        // Free the name string
+        qk_str_free(name);
+      }
+    
+
+
+
+
+

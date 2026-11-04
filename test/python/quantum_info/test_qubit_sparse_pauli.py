@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=missing-module-docstring,missing-class-docstring,missing-function-docstring
 
 import copy
 import pickle
@@ -25,7 +24,7 @@ from qiskit.circuit import Measure, Parameter, library, QuantumCircuit
 from qiskit.quantum_info import QubitSparsePauli, QubitSparsePauliList, Pauli, PauliList
 from qiskit.transpiler import Target
 
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 def single_cases():
@@ -1227,6 +1226,28 @@ class TestQubitSparsePauliList(QiskitTestCase):
             pauli_list = QubitSparsePauliList.from_list(["IXI", "YII", "IIZ"])
             expected = np.array([[0, 2, 0], [0, 0, 3], [1, 0, 0]], dtype=np.uint8)
             np.testing.assert_array_equal(pauli_list.to_dense_array(), expected, strict=True)
+
+    def test_commutes(self):
+        p0 = QubitSparsePauliList.from_list(["XIY", "IXI", "IZI"])
+        p1 = QubitSparsePauliList.from_list(["IZI", "ZII"])
+        expected = np.array([[True, False], [False, True], [True, True]], dtype=np.bool_)
+        np.testing.assert_array_equal(p0.commutes(p1), expected, strict=True)
+        np.testing.assert_array_equal(p1.commutes(p0), expected.T, strict=True)
+
+    def test_commutes_empty(self):
+        p0 = QubitSparsePauliList.from_sparse_list([], num_qubits=3)
+        p1 = QubitSparsePauliList.from_list(["ZZZ"])
+        expected = np.empty((0, 1), dtype=np.bool_)
+        np.testing.assert_array_equal(p0.commutes(p1), expected, strict=True)
+        np.testing.assert_array_equal(p1.commutes(p0), expected.T, strict=True)
+
+    def test_commutes_errors(self):
+        p0 = QubitSparsePauliList.from_label("XZYI")
+        p1 = QubitSparsePauliList.from_label("ZIY")
+        with self.assertRaisesRegex(ValueError, "mismatched numbers of qubits: 4, 3"):
+            p0.commutes(p1)
+        with self.assertRaisesRegex(ValueError, "mismatched numbers of qubits: 3, 4"):
+            p1.commutes(p0)
 
 
 def canonicalize_term(pauli, indices):

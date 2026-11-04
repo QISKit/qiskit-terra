@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -236,7 +236,7 @@ def _isint(obj: Sequence[Sequence[float]] | Sequence[float] | float) -> bool:
 def _isreal(obj: Sequence[Sequence[float]] | Sequence[float] | float) -> bool:
     """Check if object is a real number: int or float except ``±Inf`` and ``NaN``."""
     float_types = (float, np.floating)
-    return _isint(obj) or isinstance(obj, float_types) and float("-Inf") < obj < float("Inf")
+    return _isint(obj) or (isinstance(obj, float_types) and float("-Inf") < obj < float("Inf"))
 
 
 def _has_measure(circuit: QuantumCircuit) -> bool:

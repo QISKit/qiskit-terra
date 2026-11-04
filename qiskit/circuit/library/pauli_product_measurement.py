@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,13 +14,16 @@
 
 from __future__ import annotations
 
+import typing
 import numpy as np
 
-from qiskit.circuit import QuantumCircuit, CircuitError
-from qiskit.circuit.instruction import Instruction
-from qiskit.quantum_info.operators.symplectic.pauli import Pauli
+from qiskit.circuit import QuantumCircuit, CircuitError, Instruction
+from qiskit.quantum_info import Pauli
 
-from qiskit._accelerate.synthesis.pauli_product_measurement import synth_pauli_product_measurement
+from qiskit._accelerate.synthesis.pauli_products import synth_pauli_product_measurement
+
+if typing.TYPE_CHECKING:
+    import qiskit
 
 
 class PauliProductMeasurement(Instruction):
@@ -41,7 +44,7 @@ class PauliProductMeasurement(Instruction):
 
     def __init__(
         self,
-        pauli: Pauli,
+        pauli: qiskit.quantum_info.Pauli,
         label: str | None = None,
     ):
         """
@@ -60,6 +63,9 @@ class PauliProductMeasurement(Instruction):
             as this does not change the actual measurement but specifies the instruction over
             a smaller set of qubits.
 
+        Raises:
+            CircuitError: If the Pauli is the all identity operator, has size 0, or a complex
+                phase.
         """
 
         if not isinstance(pauli, Pauli):
@@ -102,7 +108,7 @@ class PauliProductMeasurement(Instruction):
     @classmethod
     def _from_pauli_data(cls, z, x, phase, label):
         """
-        Instantiates a PauliProductMeasurement isntruction from pauli data and label.
+        Instantiates a PauliProductMeasurement instruction from pauli data and label.
         This function is used internally from within the rust code and from QPY
         serialization.
         """
@@ -135,6 +141,19 @@ class PauliProductMeasurement(Instruction):
         This function is used internally from QPY serialization.
         """
         return [self._pauli_z, self._pauli_x, self._pauli_phase]
+
+    def pauli(self) -> Pauli:
+        """Return the Pauli product implemented by this measurement.
+
+        This is a public accessor that reconstructs and returns the
+        :class:`~qiskit.quantum_info.Pauli` corresponding to this
+        instruction's underlying tensor product of Pauli operators,
+        including its global phase of ``+1`` or ``-1``.
+
+        Returns:
+            The Pauli product measured by this instruction.
+        """
+        return Pauli((self._pauli_z, self._pauli_x, self._pauli_phase))
 
 
 def _get_default_label(pauli: Pauli):

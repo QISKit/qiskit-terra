@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -302,11 +302,10 @@ def get_wire_label(drawer, register, index, layout=None, cregbundle=True):
                         f"{{{virt_reg[:].index(virt_bit)}}} "
                         f"\\mapsto {{{index}}}"
                     )
+            elif drawer == "text":
+                wire_label = f"{index_str} -> {index}"
             else:
-                if drawer == "text":
-                    wire_label = f"{index_str} -> {index}"
-                else:
-                    wire_label = f"{index_str} \\mapsto {{{index}}}"
+                wire_label = f"{index_str} \\mapsto {{{index}}}"
         if drawer != "text":
             wire_label = wire_label.replace(" ", "\\;")  # use wider spaces
     else:
@@ -435,6 +434,8 @@ def _get_layered_instructions(
             default `left` will be used.
         idle_wires (bool): Include idle wires. Default is True.
         wire_order (list): A list of ints that modifies the order of the bits.
+        wire_map (dict): The wire map
+        measure_arrows (bool): whether do draw arrows from measurements
 
     Returns:
         Tuple(list,list,list): To be consumed by the visualizer directly.
@@ -479,7 +480,8 @@ def _get_layered_instructions(
         for node in dag.topological_op_nodes():
             nodes.append([node])
     else:
-        nodes = _LayerSpooler(dag, qubits, clbits, justify, measure_map, measure_arrows)
+        ordered_qubits = sorted(dag.qubits, key=wire_map.__getitem__) if wire_map else qubits
+        nodes = _LayerSpooler(dag, ordered_qubits, clbits, justify, measure_map, measure_arrows)
 
     if not idle_wires:
         # Optionally remove all idle wires and instructions that are on them and
@@ -551,7 +553,13 @@ class _LayerSpooler(list):
     """Manipulate list of layer dicts for _get_layered_instructions."""
 
     def __init__(self, dag, qubits, clbits, justification, measure_map, measure_arrows):
-        """Create spool"""
+        """Create spool.
+
+        ``qubits`` must already be ordered by their position in the outer drawing, so that
+        crossover checks in :meth:`insertable` reflect the outer layout. This prevents layer
+        collisions when a control-flow body acts on qubits that are permuted relative to the
+        outer circuit.
+        """
         super().__init__()
         self.dag = dag
         self.qubits = qubits
@@ -617,8 +625,7 @@ class _LayerSpooler(list):
                 for carg in node.cargs:
                     try:
                         carg_bit = next(bit for bit in self.measure_map if carg == bit)
-                        if self.measure_map[carg_bit] > index_stop:
-                            index_stop = self.measure_map[carg_bit]
+                        index_stop = max(index_stop, self.measure_map[carg_bit])
                     except StopIteration:
                         pass
             while curr_index > index_stop:
@@ -649,8 +656,7 @@ class _LayerSpooler(list):
         if isinstance(node.op, Measure):
             if not measure_layer:
                 measure_layer = len(self) - 1
-            if measure_layer > self.measure_map[measure_bit]:
-                self.measure_map[measure_bit] = measure_layer
+            self.measure_map[measure_bit] = max(self.measure_map[measure_bit], measure_layer)
 
     def slide_from_right(self, node, index):
         """Insert node into rightmost layer as long there is no conflict."""
@@ -692,7 +698,7 @@ class _LayerSpooler(list):
         # as equal if their contents and node IDs happen to be the same.
         # This is particularly important for the matplotlib drawer, which
         # keys several of its internal data structures with these nodes.
-        global _GLOBAL_NID  # pylint: disable=global-statement
+        global _GLOBAL_NID  # noqa: PLW0603
         node._node_id = _GLOBAL_NID
         _GLOBAL_NID += 1
         if self.justification == "left":

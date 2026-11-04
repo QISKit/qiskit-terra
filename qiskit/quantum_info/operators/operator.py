@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -24,7 +24,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from qiskit import _numpy_compat
 from qiskit.circuit.instruction import Instruction
 from qiskit.circuit.library.standard_gates import HGate, IGate, SGate, TGate, XGate, YGate, ZGate
 from qiskit.circuit.operation import Operation
@@ -93,12 +92,9 @@ class Operator(LinearOp):
         """Initialize an operator object.
 
         Args:
-            data (QuantumCircuit or Operation or BaseOperator or matrix):
-                                data to initialize operator.
-            input_dims (tuple): the input subsystem dimensions.
-                                [Default: None]
-            output_dims (tuple): the output subsystem dimensions.
-                                 [Default: None]
+            data: data to initialize operator.
+            input_dims: the input subsystem dimensions.
+            output_dims: the output subsystem dimensions.
 
         Raises:
             QiskitError: if input data cannot be initialized as an operator.
@@ -148,7 +144,7 @@ class Operator(LinearOp):
             shape=self._data.shape,
         )
 
-    def __array__(self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+    def __array__(self, dtype=None, copy=None):
         dtype = self.data.dtype if dtype is None else dtype
         return np.array(self.data, dtype=dtype, copy=copy)
 
@@ -191,6 +187,13 @@ class Operator(LinearOp):
 
         **latex_source**: Raw, uncompiled ASCII source to generate array using LaTeX.
 
+        .. warning::
+
+           Using this method with ``"latex"`` or ``"latex_source"`` output modes
+           relies on SymPy internally which is inherently unsafe as SymPy heavily
+           relies on Python's :func:`.eval` function. This method is not safe to
+           use with untrusted input.
+
         Args:
             output (str): Select the output method to use for drawing the
                 state. Valid choices are `repr`, `text`, `latex`, `latex_source`,
@@ -210,7 +213,7 @@ class Operator(LinearOp):
                 ``'latex_source'`` is selected for ``output``.
 
         """
-        # pylint: disable=cyclic-import
+
         from qiskit.visualization import array_to_latex
 
         default_output = "repr"
@@ -240,7 +243,7 @@ class Operator(LinearOp):
     def _ipython_display_(self):
         out = self.draw()
         if isinstance(out, str):
-            print(out)  # pylint: disable=bad-builtin
+            print(out)  # noqa: T201
         else:
             from IPython.display import display
 
@@ -392,7 +395,7 @@ class Operator(LinearOp):
     ) -> Operator:
         """Create a new Operator object from a :class:`.QuantumCircuit`
 
-        While a :class:`~.QuantumCircuit` object can passed directly as ``data``
+        While a :class:`~.QuantumCircuit` object can be passed directly as ``data``
         to the class constructor this provides no options on how the circuit
         is used to create an :class:`.Operator`. This constructor method lets
         you control how the :class:`.Operator` is created so it can be adjusted
@@ -425,7 +428,7 @@ class Operator(LinearOp):
             if not ignore_set_layout:
                 layout = getattr(circuit, "_layout", None)
         else:
-            from qiskit.transpiler.layout import TranspileLayout  # pylint: disable=cyclic-import
+            from qiskit.transpiler.layout import TranspileLayout
 
             layout = TranspileLayout(
                 initial_layout=layout,
@@ -438,7 +441,7 @@ class Operator(LinearOp):
             if not ignore_set_layout and layout is not None:
                 final_layout = getattr(layout, "final_layout", None)
 
-        from qiskit.synthesis.permutation.permutation_utils import _inverse_pattern
+        from qiskit.synthesis.permutation import _inverse_pattern
 
         op = Operator(circuit)
 
@@ -477,7 +480,7 @@ class Operator(LinearOp):
 
     def to_instruction(self):
         """Convert to a UnitaryGate instruction."""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit.library.generalized_gates.unitary import UnitaryGate
 
         return UnitaryGate(self.data)
@@ -655,7 +658,7 @@ class Operator(LinearOp):
             QiskitError: if other is not an operator, or has incompatible
                          dimensions.
         """
-        # pylint: disable=cyclic-import
+
         from qiskit.quantum_info.operators.scalar_op import ScalarOp
 
         if qargs is None:
@@ -797,7 +800,6 @@ class Operator(LinearOp):
         # However, for backward compatibility we need to support constructing matrices
         # for Cliffords, which happen to have a to_matrix() method.
 
-        # pylint: disable=cyclic-import
         from qiskit.quantum_info import Clifford
         from qiskit.circuit.annotated_operation import AnnotatedOperation
 

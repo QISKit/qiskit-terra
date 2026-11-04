@@ -1,0 +1,5 @@
+---
+features_c:
+  - :mod:`qiskit.capi` now contains :mod:`ctypes` bindings for the entire C API.  These
+    are accessible as module attributes with the same name as the C API objects.  For example,
+    ``qiskit.capi.qk_circuit_new`` corresponds to :c:func:`qk_circuit_new`.

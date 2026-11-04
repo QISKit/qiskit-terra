@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -110,7 +110,7 @@ class TestDagDrawer(QiskitVisualizationTestCase):
     @unittest.skipUnless(_optionals.HAS_PIL, "PIL not installed")
     def test_dag_drawer_no_register(self):
         """Test dag visualization with a circuit with no registers."""
-        from PIL import Image  # pylint: disable=import-error
+        from PIL import Image
 
         qubit = Qubit()
         clbit = Clbit()
@@ -129,7 +129,7 @@ class TestDagDrawer(QiskitVisualizationTestCase):
     @unittest.skipUnless(_optionals.HAS_PIL, "PIL not installed")
     def test_dag_drawer_with_dag_dep(self):
         """Test dag dependency visualization."""
-        from PIL import Image  # pylint: disable=import-error
+        from PIL import Image
 
         bits = [Qubit(), Clbit()]
         qr = QuantumRegister(4, "qr")

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,14 +14,18 @@
 
 from __future__ import annotations
 import copy
-
+from typing import TYPE_CHECKING
 from qiskit.circuit.exceptions import CircuitError
 
-# pylint: disable=cyclic-import
+
 from . import QuantumRegister
 from .quantumcircuit import QuantumCircuit
 from .gate import Gate
 from ._utils import _ctrl_state_to_int
+
+
+if TYPE_CHECKING:
+    from qiskit.circuit.annotated_operation import AnnotatedOperation
 
 
 class ControlledGate(Gate):
@@ -34,7 +38,7 @@ class ControlledGate(Gate):
         params: list,
         label: str | None = None,
         num_ctrl_qubits: int | None = 1,
-        definition: "QuantumCircuit" | None = None,
+        definition: QuantumCircuit | None = None,
         ctrl_state: int | str | None = None,
         base_gate: Gate | None = None,
         *,
@@ -132,7 +136,7 @@ class ControlledGate(Gate):
             return super().definition
 
     @definition.setter
-    def definition(self, excited_def: "QuantumCircuit"):
+    def definition(self, excited_def: QuantumCircuit):
         """Set controlled gate definition with closed controls.
 
         Args:
@@ -157,14 +161,14 @@ class ControlledGate(Gate):
             return self._name
 
     @name.setter
-    def name(self, name_str):
+    def name(self, name_str: str) -> None:
         """Set the name of the gate. Note the reported name may differ
         from the set name if the gate has open controls.
         """
         self._name = name_str
 
     @property
-    def num_ctrl_qubits(self):
+    def num_ctrl_qubits(self) -> int:
         """Get number of control qubits.
 
         Returns:
@@ -173,14 +177,14 @@ class ControlledGate(Gate):
         return self._num_ctrl_qubits
 
     @num_ctrl_qubits.setter
-    def num_ctrl_qubits(self, num_ctrl_qubits):
+    def num_ctrl_qubits(self, num_ctrl_qubits: int) -> None:
         """Set the number of control qubits.
 
         Args:
             num_ctrl_qubits (int): The number of control qubits.
 
         Raises:
-            CircuitError: ``num_ctrl_qubits`` is not an integer in ``[1, num_qubits]``.
+            CircuitError: ``num_ctrl_qubits`` is not an integer in ``[0, num_qubits]``.
         """
         if num_ctrl_qubits != int(num_ctrl_qubits):
             raise CircuitError("The number of control qubits must be an integer.")
@@ -188,9 +192,11 @@ class ControlledGate(Gate):
         # This is a range rather than an equality limit because some controlled gates represent a
         # controlled version of the base gate whose definition also uses auxiliary qubits.
         upper_limit = self.num_qubits - getattr(self.base_gate, "num_qubits", 0)
-        if num_ctrl_qubits < 1 or num_ctrl_qubits > upper_limit:
+        if num_ctrl_qubits < 0:
+            raise CircuitError("The number of control qubits must be non-negative.")
+        if num_ctrl_qubits > upper_limit:
             limit = "num_qubits" if self.base_gate is None else "num_qubits - base_gate.num_qubits"
-            raise CircuitError(f"The number of control qubits must be in `[1, {limit}]`.")
+            raise CircuitError(f"The number of control qubits must be in `[0, {limit}]`.")
         self._num_ctrl_qubits = num_ctrl_qubits
 
     @property
@@ -262,7 +268,7 @@ class ControlledGate(Gate):
             and self.definition == other.definition
         )
 
-    def inverse(self, annotated: bool = False) -> "ControlledGate" | "AnnotatedOperation":
+    def inverse(self, annotated: bool = False) -> ControlledGate | AnnotatedOperation:
         """Invert this gate by calling inverse on the base gate."""
         if not annotated:
             inverse_gate = self.base_gate.inverse().control(

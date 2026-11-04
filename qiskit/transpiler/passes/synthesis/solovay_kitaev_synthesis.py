@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -107,28 +107,47 @@ class SolovayKitaev(TransformationPass):
                └───┘└───┘└───┘
             Error: 2.828408279166474
 
-        For individual basis gate sets, the ``generate_basic_approximations`` function can be used:
+        Individual basis gate sets can be specified in the initializer.
 
         .. plot::
            :include-source:
            :nofigs:
 
-            from qiskit.synthesis import generate_basic_approximations
             from qiskit.transpiler.passes import SolovayKitaev
 
             basis = ["s", "sdg", "t", "tdg", "z", "h"]
-            approx = generate_basic_approximations(basis, depth=3)
 
-            skd = SolovayKitaev(recursion_degree=2, basic_approximations=approx)
+            skd = SolovayKitaev(recursion_degree=2, basis_gates=basis)
+
+        To generate and store basic approximations in between different instances, the
+        :class:`.SolovayKitaevDecomposition` and its
+        :meth:`~.SolovayKitaevDecomposition.save_basic_approximations` method can be used.
+
+        .. code-block:: python
+
+            from qiskit.transpiler.passes import SolovayKitaev
+            from qiskit.synthesis import SolovayKitaevDecomposition
+
+            # generate basic approximations
+            basis = ["s", "sdg", "t", "tdg", "z", "h"]
+            decomp = SolovayKitaevDecomposition(basis_gates=basis, depth=5)
+
+            # store them in a local file
+            fname = "sk_approx.bin"
+            decomp.save_basic_approximations(fname)
+
+            # load them for running Solovay-Kitaev
+            skd = SolovayKitaev(recursion_degree=2, basic_approximations=fname)
+
 
     References:
 
-        [1]: Kitaev, A Yu (1997). Quantum computations: algorithms and error correction.
-             Russian Mathematical Surveys. 52 (6): 1191–1249.
-             `Online <https://iopscience.iop.org/article/10.1070/RM1997v052n06ABEH002155>`_.
+    [1] Kitaev, A Yu (1997). Quantum computations: algorithms and error correction.
+    Russian Mathematical Surveys. 52 (6): 1191–1249.
+    `Online <https://iopscience.iop.org/article/10.1070/RM1997v052n06ABEH002155>`_.
 
-        [2]: Dawson, Christopher M.; Nielsen, Michael A. (2005) The Solovay-Kitaev Algorithm.
-             `arXiv:quant-ph/0505030 <https://arxiv.org/abs/quant-ph/0505030>`_.
+    [2] Dawson, Christopher M.; Nielsen, Michael A. (2005) The Solovay-Kitaev Algorithm.
+    `arXiv:quant-ph/0505030 <https://arxiv.org/abs/quant-ph/0505030>`_.
 
     """
 
@@ -175,7 +194,7 @@ class SolovayKitaev(TransformationPass):
             Output dag with 1q gates synthesized in the discrete target basis.
 
         Raises:
-            TranspilerError: if a gates does not have to_matrix
+            TranspilerError: if a gate does not have to_matrix
         """
         for node in dag.op_nodes():
             # ignore operations on which the algorithm cannot run
@@ -285,7 +304,7 @@ class SolovayKitaevSynthesis(UnitarySynthesisPlugin):
 
     @property
     def supports_basis_gates(self):
-        """The plugin does not support basis gates. By default it synthesis to the
+        """The plugin does not support basis gates. By default it synthesizes to the
         ``["h", "t", "tdg"]`` gate basis."""
         return True
 
@@ -304,7 +323,7 @@ class SolovayKitaevSynthesis(UnitarySynthesisPlugin):
         recursion_degree = config.get("recursion_degree", 5)
 
         # Check if we didn't yet construct the Solovay-Kitaev instance (which contains the basic
-        # approximations) or if the basic approximations need need to be recomputed.
+        # approximations) or if the basic approximations need to be recomputed.
         if (SolovayKitaevSynthesis._sk is None) or (
             (basis_gates != SolovayKitaevSynthesis._basis_gates)
             or (depth != SolovayKitaevSynthesis._depth)

@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -29,7 +29,7 @@ static int test_qv(void) {
     QkCircuit *qv = qk_circuit_library_quantum_volume(num_qubits, num_qubits, 42);
     size_t num_instructions = qk_circuit_num_instructions(qv);
     if (num_instructions != 10) {
-        printf("Unexpected number of instructions: %zu\n", num_instructions);
+        fprintf(stderr, "Unexpected number of instructions: %zu\n", num_instructions);
         result = EqualityError;
         goto cleanup;
     }

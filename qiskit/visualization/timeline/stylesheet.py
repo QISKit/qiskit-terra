@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -37,7 +37,8 @@ Because a single stylesheet doesn't generate multiple images with different appe
 only one layout function can be chosen for each stylesheet.
 """
 
-from typing import Dict, Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from qiskit.visualization.timeline import generators, layouts
 
@@ -185,7 +186,7 @@ class IQXDebugging(dict):
         return "Timeline style sheet for timeline programmers."
 
 
-def default_style() -> Dict[str, Any]:
+def default_style() -> dict[str, Any]:
     """Define default values of the timeline stylesheet."""
     return {
         "formatter.general.fig_width": 14,

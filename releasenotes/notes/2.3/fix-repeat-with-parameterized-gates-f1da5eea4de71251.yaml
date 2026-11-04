@@ -1,0 +1,5 @@
+fixes:
+  - |
+    Fixed :meth:`.QuantumCircuit.repeat` for circuits with parameterized gates.
+
+    See `#15645 <https://github.com/Qiskit/qiskit/issues/15645>`__.

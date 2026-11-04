@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed :class:`.CommutativeCancellation` incorrectly shifting the global
+    phase by :math:`-\pi` when accumulating a :math:`2\pi` rotation using a
+    :class:`.PhaseGate` or :class:`.U1Gate`.
+    Fixed `#16377 <https://github.com/Qiskit/qiskit/issues/16377>`__.

@@ -4,14 +4,13 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
 """Unify time unit in circuit for scheduling and following passes."""
-from typing import Set
 
 from qiskit.circuit import Delay, Duration
 from qiskit.circuit.classical import expr
@@ -94,7 +93,7 @@ class TimeUnitConversion(TransformationPass):
                     # If any of the delays use a stretch expression, we can't run scheduling
                     # passes anyway, so we bail out. In theory, we _could_ still traverse
                     # through the stretch expression and replace any Duration value nodes it may
-                    # contain with ones of the same units, but it'd be complex and probably unuseful.
+                    # contain with ones of the same units, but it'd be complex and probably useless.
                     self.property_set["time_unit"] = "stretch"
                     return dag
 
@@ -111,11 +110,10 @@ class TimeUnitConversion(TransformationPass):
                         f"Expression '{node.op.duration}' resolves to a negative duration!"
                     )
                 expression_durations[node._node_id] = duration
+            elif node.op.unit == "dt":
+                has_dt = True
             else:
-                if node.op.unit == "dt":
-                    has_dt = True
-                else:
-                    has_si = True
+                has_si = True
             if inst_durations.dt is None and has_dt and has_si:
                 raise TranspilerError(
                     "Fail to unify time units in delays. SI units "
@@ -156,7 +154,7 @@ class TimeUnitConversion(TransformationPass):
         return dag
 
     @staticmethod
-    def _unified(unit_set: Set[str]) -> str:
+    def _unified(unit_set: set[str]) -> str:
         if not unit_set:
             return "none"
 

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
+from collections.abc import Callable
 
 from qiskit.exceptions import QiskitError
 from qiskit.providers.backend import Backend
@@ -42,7 +43,7 @@ class Job:
 class JobV1(Job, ABC):
     """Class to handle jobs
 
-    This first version of the Backend abstract class is written to be mostly
+    This first version of the Job abstract class is written to be mostly
     backwards compatible with the legacy providers interface. This was done to ease
     the transition for users and provider maintainers to the new versioned providers. Expect,
     future versions of this abstract class to change the data model and
@@ -52,7 +53,7 @@ class JobV1(Job, ABC):
     version = 1
     _async = True
 
-    def __init__(self, backend: Optional[Backend], job_id: str, **kwargs) -> None:
+    def __init__(self, backend: Backend | None, job_id: str, **kwargs) -> None:
         """Initializes the asynchronous job.
 
         Args:
@@ -92,7 +93,7 @@ class JobV1(Job, ABC):
         return self.status() in JOB_FINAL_STATES
 
     def wait_for_final_state(
-        self, timeout: Optional[float] = None, wait: float = 5, callback: Optional[Callable] = None
+        self, timeout: float | None = None, wait: float = 5, callback: Callable | None = None
     ) -> None:
         """Poll the job status until it progresses to a final state such as ``DONE`` or ``ERROR``.
 
@@ -104,7 +105,7 @@ class JobV1(Job, ABC):
 
                 * job_id: Job ID
                 * job_status: Status of the job from the last query
-                * job: This BaseJob instance
+                * job: This JobV1 instance
 
                 Note: different subclass might provide different arguments to
                 the callback function.
@@ -130,12 +131,10 @@ class JobV1(Job, ABC):
     @abstractmethod
     def submit(self):
         """Submit the job to the backend for execution."""
-        pass
 
     @abstractmethod
     def result(self) -> Result:
         """Return the results of the job."""
-        pass
 
     def cancel(self):
         """Attempt to cancel the job."""
@@ -144,4 +143,3 @@ class JobV1(Job, ABC):
     @abstractmethod
     def status(self) -> JobStatus:
         """Return the status of the job, among the values of ``JobStatus``."""
-        pass

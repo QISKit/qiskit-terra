@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -51,7 +51,14 @@ class RVGate(Gate):
                 \end{pmatrix}
     """
 
-    def __init__(self, v_x: float, v_y: float, v_z: float, basis: str = "U"):
+    def __init__(
+        self,
+        v_x: float,
+        v_y: float,
+        v_z: float,
+        basis: str = "U",
+        label: str | None = None,
+    ):
         """
         Args:
             v_x: x-component
@@ -59,11 +66,12 @@ class RVGate(Gate):
             v_z: z-component
             basis: basis (see
                 :class:`~qiskit.synthesis.one_qubit.one_qubit_decompose.OneQubitEulerDecomposer`)
+            label: An optional label for the gate.
         """
-        # pylint: disable=cyclic-import
+
         from qiskit.synthesis.one_qubit.one_qubit_decompose import OneQubitEulerDecomposer
 
-        super().__init__("rv", 1, [v_x, v_y, v_z])
+        super().__init__("rv", 1, [v_x, v_y, v_z], label=label)
         self._decomposer = OneQubitEulerDecomposer(basis=basis)
 
     def _define(self):

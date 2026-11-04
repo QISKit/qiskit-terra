@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -66,7 +66,8 @@ register_type!(PyClassicalRegister);
     module = "qiskit._accelerate.qasm3",
     frozen,
     name = "CustomGate",
-    get_all
+    get_all,
+    from_py_object
 )]
 #[derive(Clone, Debug)]
 pub struct PyGate {
@@ -117,7 +118,7 @@ impl PyGate {
         } else {
             Err(QASM3ImporterError::new_err(format!(
                 "internal error: wrong number of params for {} (got {}, expected {})",
-                &self.name, received_num_params, self.num_params
+                self.name, received_num_params, self.num_params
             )))
         }
     }

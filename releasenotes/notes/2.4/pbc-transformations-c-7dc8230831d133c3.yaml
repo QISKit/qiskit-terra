@@ -1,0 +1,9 @@
+---
+features_c:
+  - Added :c:func:`qk_transpiler_pass_standalone_litinski_transformation` to apply a Litinski
+    transformation to a ``QkCircuit`` in the C API. This is the equivalent of Python's
+    :class:`.LitinskiTransformation` pass.
+  - Added :c:func:`qk_transpiler_pass_standalone_convert_to_pauli_rotations` to convert a 
+    ``QkCircuit`` made up of standard gates and measurements into Pauli-based computation format 
+    using ``QkPauliProductRotation`` and ``QkPauliProductMeasurement`` instructions.
+    This is the equivalent of Python's :class:`.ConvertToPauliRotations` pass.

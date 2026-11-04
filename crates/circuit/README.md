@@ -17,7 +17,7 @@ In the future we'll be able to remove all of that except for label.
 
 At rest a `CircuitInstruction` is compacted into a `PackedInstruction` which caches reused qargs
 in the instructions to reduce the memory overhead of `CircuitData`. The `PackedInstruction` objects
-get unpacked back to `CircuitInstruction` when accessed for a more convienent working form.
+get unpacked back to `CircuitInstruction` when accessed for a more convenient working form.
 
 Additionally the `CircuitData` contains a `param_table` field which is used to track parameterized
 instructions that are using python defined `ParameterExpression` objects for any parameters and also
@@ -62,7 +62,7 @@ The `ParamTable` struct is used to track which circuit instructions are using `P
 objects for any of their parameters. The Python space `ParameterExpression` is comprised of a symengine
 symbolic expression that defines operations using `Parameter` objects. Each `Parameter` is modeled by
 a uuid and a name to uniquely identify it. The parameter table maps the `Parameter` objects to the
-`CircuitInstruction` in the `CircuitData` that are using them. The `ParamTable` comprises 3 `HashMaps` internally that map the uuid (as `u128`, which is accesible in Python by using `uuid.int`) to the `ParamEntry`, the `name` to the uuid, and the uuid to the PyObject for the actual `Parameter`.
+`CircuitInstruction` in the `CircuitData` that are using them. The `ParamTable` comprises 3 `HashMaps` internally that map the uuid (as `u128`, which is accessible in Python by using `uuid.int`) to the `ParamEntry`, the `name` to the uuid, and the uuid to the PyObject for the actual `Parameter`.
 
 The `ParamEntry` is just a `HashSet` of 2-tuples with usize elements. The two usizes represent the instruction index in the `CircuitData` and the index of the `CircuitInstruction.params` field of
 a give instruction where the given `Parameter` is used in the circuit. If the instruction index is

@@ -1,0 +1,23 @@
+
+---
+features_transpiler:
+  - |
+    Added a new transpiler pass, :class:`.SynthesizeRZRotations`,
+    which replaces all single-qubit :class:`.RZGate` rotation gates
+    with floating-point angles by equivalent Clifford+T sequences.
+    
+    The synthesis accuracy can be controlled by either specifying an
+    ``approximation_degree``, or alternatively by explicitly setting
+    both ``synthesis_error`` and ``cache_error``.
+    
+    Example usage::
+    
+      from qiskit import QuantumCircuit
+      from qiskit.transpiler.passes import SynthesizeRZRotations
+      
+      qc = QuantumCircuit(1)
+      qc.rz(1.23, 0)
+      
+      rz_synthesis_pass = SynthesizeRZRotations(approximation_degree=0.9999)
+      synthesized_qc = rz_synthesis_pass(qc)
+      synthesized_qc.draw()

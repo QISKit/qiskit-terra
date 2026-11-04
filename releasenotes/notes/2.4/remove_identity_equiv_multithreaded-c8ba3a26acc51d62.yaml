@@ -1,0 +1,14 @@
+---
+features_c:
+  - The :c:func:`qk_transpiler_pass_standalone_remove_identity_equivalent`
+    standalone transpiler pass function is now multithreaded by default.
+    This improves the runtime performance of the pass when running
+    the pass on large circuits. You can control the threading behavior using
+    the ``RAYON_NUM_THREADS`` environment variable. You can refer to the
+    function's documentation on how to use this environment variable.
+features_transpiler:
+  - The :class:`.RemoveIdentityEquivalent` transpiler pass is now multithreaded
+    by default. This improves the runtime performance of the pass when running
+    the pass on large circuits. You can control the threading behavior using
+    the ``RAYON_NUM_THREADS`` environment variable. You can refer to the
+    function's documentation on how to use this environment variable.

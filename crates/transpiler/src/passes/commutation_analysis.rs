@@ -4,29 +4,29 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::PyModule;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use pyo3::{Bound, PyResult, Python, pyfunction, wrap_pyfunction};
 
-use indexmap::IndexMap;
+use qiskit_util::IndexMap;
+use rayon::prelude::*;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 
-use crate::commutation_checker::CommutationChecker;
+use crate::commutation_checker::{CommutationChecker, CommutationError};
 use qiskit_circuit::Qubit;
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, Wire};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit, Wire};
 
 // Custom types to store the commutation sets and node indices,
 // see the docstring below for more information.
-type CommutationSet = IndexMap<Wire, Vec<Vec<NodeIndex>>, ::ahash::RandomState>;
-type NodeIndices = IndexMap<(NodeIndex, Wire), usize, ::ahash::RandomState>;
+type CommutationSet = Vec<Vec<Vec<NodeIndex>>>;
+type NodeIndices = Vec<IndexMap<NodeIndex, usize>>;
 
 // the maximum number of qubits we check commutativity for
 const MAX_NUM_QUBITS: u32 = 3;
@@ -51,22 +51,24 @@ const MAX_NUM_QUBITS: u32 = 3;
 ///     node_indices = {(0, 0): 0, (1, 0): 3, (2, 0): 1, (3, 0): 1, (4, 0): 2}
 ///
 pub fn analyze_commutations(
-    dag: &mut DAGCircuit,
-    commutation_checker: &mut CommutationChecker,
+    dag: &DAGCircuit,
+    commutation_checker: &CommutationChecker,
     approximation_degree: f64,
-) -> PyResult<(CommutationSet, NodeIndices)> {
-    let mut commutation_set: CommutationSet = Default::default();
-    let mut node_indices: NodeIndices = Default::default();
+) -> Result<(CommutationSet, NodeIndices), CommutationError> {
+    let mut commutation_set = vec![vec![]; dag.num_qubits()];
+    let mut node_indices: NodeIndices = vec![IndexMap::default(); dag.num_qubits()];
 
-    for qubit in 0..dag.num_qubits() {
+    let evaluate_qubit = |qubit: usize,
+                          commutation_entry: &mut Vec<Vec<NodeIndex>>,
+                          node_indices: &mut IndexMap<NodeIndex, usize>|
+     -> Result<(), CommutationError> {
         let wire = Wire::Qubit(Qubit(qubit as u32));
 
-        for current_gate_idx in dag.nodes_on_wire(wire, false) {
-            // get the commutation set associated with the current wire, or create a new
-            // index set containing the current gate
-            let commutation_entry = commutation_set
-                .entry(wire)
-                .or_insert_with(|| vec![vec![current_gate_idx]]);
+        for current_gate_idx in dag.nodes_on_wire(wire) {
+            // create a new inner vec if the entry is empty
+            if commutation_entry.is_empty() {
+                commutation_entry.push(vec![current_gate_idx]);
+            }
 
             // we can unwrap as we know the commutation entry has at least one element
             let last = commutation_entry.last_mut().unwrap();
@@ -127,19 +129,37 @@ pub fn analyze_commutations(
                     commutation_entry.push(vec![current_gate_idx]);
                 }
             }
-
-            node_indices.insert((current_gate_idx, wire), commutation_entry.len() - 1);
+            node_indices.insert(current_gate_idx, commutation_entry.len() - 1);
         }
-    }
+        Ok(())
+    };
 
-    Ok((commutation_set, node_indices))
+    if qiskit_util::getenv_use_multiple_threads() {
+        commutation_set
+            .par_iter_mut()
+            .zip(node_indices.par_iter_mut())
+            .enumerate()
+            .map(
+                |(qubit, (local_commutation_set, local_indices))| -> Result<(), CommutationError> {
+                    evaluate_qubit(qubit, local_commutation_set, local_indices)?;
+                    Ok(())
+                },
+            )
+            .collect::<Result<(), CommutationError>>()?;
+        Ok((commutation_set, node_indices))
+    } else {
+        for qubit in 0..dag.num_qubits() {
+            evaluate_qubit(qubit, &mut commutation_set[qubit], &mut node_indices[qubit])?;
+        }
+        Ok((commutation_set, node_indices))
+    }
 }
 
 #[pyfunction]
-#[pyo3(name = "analyze_commutations", signature = (dag, commutation_checker, approximation_degree=1.))]
+#[pyo3(name = "analyze_commutations", signature = (py_dag, commutation_checker, approximation_degree=1.))]
 pub fn py_analyze_commutations(
     py: Python,
-    dag: &mut DAGCircuit,
+    py_dag: &mut PyDAGCircuit,
     commutation_checker: &mut CommutationChecker,
     approximation_degree: f64,
 ) -> PyResult<Py<PyDict>> {
@@ -147,19 +167,24 @@ pub fn py_analyze_commutations(
     //   * The commuting nodes per wire: {wire: [commuting_nodes_1, commuting_nodes_2, ...]}
     //   * The index in which commutation set a given node is located on a wire: {(node, wire): index}
     // The Python dict will store both of these dictionaries in one.
+    // Release the GIL, otherwise rayon workers deadlock when they need it for Python-defined gates.
+    let dag = py_dag.try_read()?;
     let (commutation_set, node_indices) =
-        analyze_commutations(dag, commutation_checker, approximation_degree)?;
+        py.detach(|| analyze_commutations(dag, commutation_checker, approximation_degree))?;
 
     let out_dict = PyDict::new(py);
-
     // First set the {wire: [commuting_nodes_1, ...]} bit
-    for (wire, commutations) in commutation_set {
+    for (wire_index, commutations) in commutation_set.into_iter().enumerate() {
+        if commutations.is_empty() {
+            continue;
+        }
         // we know all wires are of type Wire::Qubit, since in analyze_commutations_inner
-        // we only iterater over the qubits
-        let py_wire = match wire {
-            Wire::Qubit(q) => dag.qubits().get(q).unwrap().into_pyobject(py),
-            _ => return Err(PyValueError::new_err("Unexpected wire type.")),
-        }?;
+        // we only iterate over the qubits
+        let py_wire = dag
+            .qubits()
+            .get(Qubit::new(wire_index))
+            .unwrap()
+            .into_pyobject(py)?;
 
         out_dict.set_item(
             py_wire,
@@ -177,14 +202,19 @@ pub fn py_analyze_commutations(
             )?,
         )?;
     }
-
     // Then we add the {(node, wire): index} dictionary
-    for ((node_index, wire), index) in node_indices {
-        let py_wire = match wire {
-            Wire::Qubit(q) => dag.qubits().get(q).unwrap().into_pyobject(py),
-            _ => return Err(PyValueError::new_err("Unexpected wire type.")),
-        }?;
-        out_dict.set_item((dag.get_node(py, node_index)?, py_wire), index)?;
+    for (qubit, node_index_map) in node_indices.iter().enumerate() {
+        if node_index_map.is_empty() {
+            continue;
+        }
+        for (node_index, index) in node_index_map {
+            let py_wire = dag
+                .qubits()
+                .get(Qubit::new(qubit))
+                .unwrap()
+                .into_pyobject(py)?;
+            out_dict.set_item((dag.get_node(py, *node_index)?, py_wire), index)?;
+        }
     }
 
     Ok(out_dict.unbind())

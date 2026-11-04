@@ -1,0 +1,6 @@
+fixes:
+  - |
+    Fixed :class:`.Commuting2qGateRouter` so it preserves the input circuit's
+    global phase instead of adding it again when composing accumulated
+    non-routed operations.
+    Fixed `#16205 <https://github.com/Qiskit/qiskit/issues/16205>`__.

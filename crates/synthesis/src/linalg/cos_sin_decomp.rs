@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -18,9 +18,10 @@ use numpy::PyReadonlyArray2;
 use numpy::ToPyArray;
 use pyo3::prelude::*;
 
+use crate::linalg::faer_to_ndarray;
 use faer::{Mat, MatRef};
-use faer_ext::IntoNdarray;
 use num_complex::{Complex64, ComplexFloat};
+
 const EPS: f64 = 1e-11;
 
 pub struct CosSinDecompReturn {
@@ -188,10 +189,10 @@ pub fn cossin<'py>(py: Python<'py>, u: PyReadonlyArray2<Complex64>) -> PyResult<
     let mat: Mat<Complex64> = Mat::from_fn(shape[0], shape[1], |i, j| array[[i, j]]);
     let res = cos_sin_decomposition(mat.as_ref());
 
-    let arr0 = res.l0.as_ref().into_ndarray().to_pyarray(py);
-    let arr1 = res.l1.as_ref().into_ndarray().to_pyarray(py);
-    let arr2 = res.r0.as_ref().into_ndarray().to_pyarray(py);
-    let arr3 = res.r1.as_ref().into_ndarray().to_pyarray(py);
+    let arr0 = faer_to_ndarray(res.l0.as_ref()).to_pyarray(py);
+    let arr1 = faer_to_ndarray(res.l1.as_ref()).to_pyarray(py);
+    let arr2 = faer_to_ndarray(res.r0.as_ref()).to_pyarray(py);
+    let arr3 = faer_to_ndarray(res.r1.as_ref()).to_pyarray(py);
 
     Ok(((arr0, arr1), res.thetas, (arr2, arr3))
         .into_pyobject(py)?

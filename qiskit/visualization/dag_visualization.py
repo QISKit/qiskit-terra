@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=invalid-name
 
 """
 Visualization function for DAG circuit representation.
@@ -87,6 +86,11 @@ def dag_drawer(
 
     This function calls the :func:`~rustworkx.visualization.graphviz_draw` function from the
     ``rustworkx`` package to draw the DAG.
+
+    .. warning::
+        This function will call the system Graphviz tool on a file involving user-controllable
+        strings (such as operation labels).  It is recommended to only call this function on trusted
+        input.
 
     Args:
         dag (DAGCircuit or DAGDependency): The dag to draw.
@@ -173,7 +177,7 @@ def dag_drawer(
     )
 
     if "DAGDependency" in type_str:
-        # pylint: disable=cyclic-import
+
         from qiskit.visualization.circuit._utils import get_bit_reg_index
 
         qubit_indices = {bit: index for index, bit in enumerate(dag.qubits)}

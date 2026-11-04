@@ -1,0 +1,6 @@
+---
+features_synthesis:
+  - |
+    The standard equivalence library now includes an :class:`.RXXGate`/:class:`.RYYGate`-based
+    equivalence for :class:`.XXMinusYYGate`, matching the one that already existed for
+    :class:`.XXPlusYYGate`.

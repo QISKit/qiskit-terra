@@ -4,51 +4,35 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 use num_complex::Complex64;
-use num_complex::ComplexFloat;
 use pyo3::prelude::*;
+use rayon::prelude::*;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
+use rustworkx_core::petgraph::visit::NodeIndexable;
 
 use crate::commutation_checker::try_matrix_with_definition;
 use crate::gate_metrics::rotation_trace_and_dim;
+use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
 use crate::target::Target;
 use qiskit_circuit::PhysicalQubit;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::imports;
 use qiskit_circuit::operations::Param;
 use qiskit_circuit::operations::StandardGate;
 use qiskit_circuit::operations::{Operation, OperationRef};
 use qiskit_circuit::packed_instruction::PackedInstruction;
+use qiskit_util::getenv_use_multiple_threads;
 
-const MINIMUM_TOL: f64 = 1e-12;
-
-/// Fidelity-based computation to check whether an operation `G` is equivalent
-/// to identity up to a global phase.
-///
-/// # Arguments
-///
-/// * `tr_over_dim`: `|Tr(G)| / dim(G)`.
-/// * `dim`: `dim(G)`.
-/// * `tol`: tolerance.
-///
-/// # Returns
-///
-/// * `Some(update to the global phase)` if the operation can be removed.
-/// * `None` if the operation cannot be removed.
-pub fn average_gate_fidelity_below_tol(tr_over_dim: Complex64, dim: f64, tol: f64) -> Option<f64> {
-    let f_pro = tr_over_dim.abs().powi(2);
-    let gate_fidelity = (dim * f_pro + 1.) / (dim + 1.);
-    if (1. - gate_fidelity).abs() < tol {
-        Some(tr_over_dim.arg())
-    } else {
-        None
-    }
-}
+// The point at which to start running the analysis in parallel.
+// This value was found experimentally during the development of
+// https://github.com/Qiskit/qiskit/pull/14719 it can be tweaked
+// if the performance of this pass changes over time.
+const PARALLEL_THRESHOLD: usize = 50_000;
 
 /// Fidelity-based computation to check whether an operation `inst` is equivalent
 /// to identity up to a global phase.
@@ -59,7 +43,7 @@ pub fn average_gate_fidelity_below_tol(tr_over_dim: Complex64, dim: f64, tol: f6
 /// * `matrix_from_definition`: if `true`, can call the Python-space `Operator` class to
 ///   construct the matrix.
 /// * `matrix_from_definition_max_qubits`: maximum number of qubits allowed for matrix-based
-///    checks.
+///   checks.
 /// * `error_cutoff_fn`: function to compute the allowed error tolerance.
 ///
 /// # Returns
@@ -170,24 +154,38 @@ where
         ));
     }
 
-    // Special handling for large pauli rotation gates.
-    if view.name() == "PauliEvolution" {
-        if let OperationRef::Gate(py_gate) = view {
-            let result = Python::attach(|py| -> PyResult<Option<(Complex64, usize)>> {
-                let result = imports::PAULI_ROTATION_TRACE_AND_DIM
-                    .get_bound(py)
-                    .call1((py_gate.gate.clone_ref(py),))?
-                    .extract()?;
-                Ok(result)
-            })?;
+    // Special handling for pauli product rotation gates.
+    if let OperationRef::PauliProductRotation(ppr) = view {
+        if let Some((tr_over_dim, dim)) = ppr.rotation_trace_and_dim() {
+            return Ok(average_gate_fidelity_below_tol(
+                tr_over_dim,
+                dim,
+                error_cutoff_fn(inst),
+            ));
+        } else {
+            // Parameterized rotation
+            return Ok(None);
+        }
+    }
 
-            if let Some((tr_over_dim, dim)) = result {
-                return Ok(average_gate_fidelity_below_tol(
-                    tr_over_dim,
-                    dim as f64,
-                    error_cutoff_fn(inst),
-                ));
-            }
+    // Special handling for pauli evolution gates.
+    if view.name() == "PauliEvolution"
+        && let OperationRef::PyCustom(py_gate) = view
+    {
+        let result = Python::attach(|py| -> PyResult<Option<(Complex64, usize)>> {
+            let result = imports::PAULI_ROTATION_TRACE_AND_DIM
+                .get_bound(py)
+                .call1((py_gate.ob.clone_ref(py),))?
+                .extract()?;
+            Ok(result)
+        })?;
+
+        if let Some((tr_over_dim, dim)) = result {
+            return Ok(average_gate_fidelity_below_tol(
+                tr_over_dim,
+                dim as f64,
+                error_cutoff_fn(inst),
+            ));
         }
     }
 
@@ -213,16 +211,38 @@ where
 
 #[pyfunction]
 #[pyo3(name = "remove_identity_equiv", signature=(dag, approx_degree=Some(1.0), target=None))]
+pub fn py_remove_identity_equiv(
+    py: Python,
+    dag: &mut PyDAGCircuit,
+    approx_degree: Option<f64>,
+    target: Option<&Target>,
+) -> PyResult<()> {
+    let dag = dag.try_write()?;
+    // TODO: This is a hack to avoid panicking in the case that the global phase contains `Py`
+    // pointers (such as backrefs to `ParameterVector` objects in an expression `Symbol`) that would
+    // get cloned when updating the global phase.  It's easier to do it out here than to try to
+    // reattach to Python-space within a pure-Rust function but only if we can spot a hiding `Py`
+    // (or we'd break standalone C).
+    //
+    // This doesn't account for control-flow blocks which _also_ might have set global phases, byt
+    // `run_remove_identity_equiv` as of Qiskit 2.4 doesn't recurse, so the hack should hold.
+    let old_phase = dag.set_global_phase_f64(0.0);
+
+    // Explicitly release GIL because threads may call Python to get
+    // the matrix for a PyGate
+    py.detach(|| run_remove_identity_equiv(dag, approx_degree, target))?;
+
+    dag.add_global_phase(&old_phase)?;
+    Ok(())
+}
+
 pub fn run_remove_identity_equiv(
     dag: &mut DAGCircuit,
     approx_degree: Option<f64>,
     target: Option<&Target>,
 ) -> PyResult<()> {
-    let mut remove_list: Vec<NodeIndex> = Vec::new();
-    let mut global_phase_update: f64 = 0.;
     // Minimum threshold to compare average gate fidelity to 1. This is chosen to account
     // for roundoff errors and to be consistent with other places.
-
     let get_error_cutoff = |inst: &PackedInstruction| -> f64 {
         match approx_degree {
             Some(degree) => {
@@ -264,25 +284,39 @@ pub fn run_remove_identity_equiv(
         }
     };
 
-    for (op_node, inst) in dag.op_nodes(false) {
-        if let Some(phase_update) = is_identity_equiv(inst, false, None, get_error_cutoff)? {
-            remove_list.push(op_node);
-            global_phase_update += phase_update;
-        }
-    }
-    for node in remove_list {
-        dag.remove_op_node(node);
-    }
+    let process_node = |op_node: NodeIndex, inst: &PackedInstruction| {
+        is_identity_equiv(inst, false, None, get_error_cutoff)
+            .map(|result| result.map(|x| (op_node, x)))
+    };
+    let run_in_parallel = getenv_use_multiple_threads();
+    let remove_list: Vec<(NodeIndex, f64)> =
+        if dag.num_ops() >= PARALLEL_THRESHOLD && run_in_parallel {
+            (0..dag.dag().node_bound())
+                .into_par_iter()
+                .filter_map(|index_val| {
+                    let index = NodeIndex::new(index_val);
+                    if let Some(NodeType::Operation(inst)) = dag.dag().node_weight(index) {
+                        process_node(index, inst).transpose()
+                    } else {
+                        None
+                    }
+                })
+                .collect::<PyResult<Vec<(NodeIndex, f64)>>>()?
+        } else {
+            dag.op_nodes(false)
+                .filter_map(|x| process_node(x.0, x.1).transpose())
+                .collect::<PyResult<Vec<(NodeIndex, f64)>>>()?
+        };
 
-    if global_phase_update != 0. {
-        dag.add_global_phase(&Param::Float(global_phase_update))
+    for (node, phase_update) in remove_list {
+        dag.remove_op_node(node);
+        dag.add_global_phase(&Param::Float(phase_update))
             .expect("The global phase is guaranteed to be a float");
     }
-
     Ok(())
 }
 
 pub fn remove_identity_equiv_mod(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(run_remove_identity_equiv))?;
+    m.add_wrapped(wrap_pyfunction!(py_remove_identity_equiv))?;
     Ok(())
 }

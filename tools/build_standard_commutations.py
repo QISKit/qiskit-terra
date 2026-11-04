@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -18,18 +18,28 @@ depending on the present commutation relation.
 import io
 import itertools
 from functools import lru_cache
-from typing import List
 
 import qiskit.circuit.library.standard_gates as stdg
 from qiskit.circuit import CommutationChecker, Gate
-from qiskit.circuit.library import PauliGate
+from qiskit.circuit.library import PauliGate, PauliEvolutionGate
+from qiskit.quantum_info import SparsePauliOp
 from qiskit.dagcircuit import DAGOpNode
 
+# Map a rotation gate to its generator
 SUPPORTED_ROTATIONS = {
-    "rxx": PauliGate("XX"),
-    "ryy": PauliGate("YY"),
-    "rzz": PauliGate("ZZ"),
-    "rzx": PauliGate("XZ"),
+    "rxx": PauliGate("XX"),  # RXX(t) = exp(-i  t/2 XX)
+    "ryy": PauliGate("YY"),  # RYY(t) = exp(-i  t/2 YY)
+    "rzz": PauliGate("ZZ"),  # RZZ(t) = exp(-i  t/2 ZZ)
+    "rzx": PauliGate("XZ"),  # RXX(t) = exp(-i  t/2 ZX)
+    "crx": PauliEvolutionGate(
+        SparsePauliOp(["XZ", "XI"], coeffs=[-1.0, 1.0])
+    ),  # CRX(t) = exp(-i t/4 (-ZX + IX))
+    "cry": PauliEvolutionGate(
+        SparsePauliOp(["YZ", "YI"], coeffs=[-1.0, 1.0])
+    ),  # CRY(t) = exp(-i t/4 (-ZY + IY))
+    "crz": PauliEvolutionGate(
+        SparsePauliOp(["ZZ", "ZI"], coeffs=[-1.0, 1.0])
+    ),  # CRZ(t) = exp(-i t/4 (-ZZ + IZ))
 }
 
 
@@ -92,7 +102,7 @@ def _get_relative_placement(first_qargs, second_qargs) -> tuple:
     return tuple(qubits_g2.get(q_g0, None) for q_g0 in first_qargs)
 
 
-def _get_unparameterizable_gates() -> List[Gate]:
+def _get_unparameterizable_gates() -> list[Gate]:
     """Retrieve a list of non-parmaterized gates with up to 3 qubits, using the python inspection module
     Return:
         A list of non-parameterized gates to be considered in the commutation library
@@ -103,7 +113,7 @@ def _get_unparameterizable_gates() -> List[Gate]:
     return [g for g in gates if len(g.params) == 0]
 
 
-def _get_rotation_gates() -> List[Gate]:
+def _get_rotation_gates() -> list[Gate]:
     """Retrieve a list of parmaterized gates we know the commutation relations of with up
     to 3 qubits, using the python inspection module
     Return:
@@ -114,11 +124,11 @@ def _get_rotation_gates() -> List[Gate]:
     return [g for g in gates if g.name in SUPPORTED_ROTATIONS]
 
 
-def _generate_commutation_dict(considered_gates: List[Gate] = None) -> dict:
+def _generate_commutation_dict(considered_gates: list[Gate] | None = None) -> dict:
     """Compute the commutation relation of considered gates
 
     Args:
-        considered_gates List[Gate]: a list of gates between which the commutation should be determined
+        considered_gates list[Gate]: a list of gates between which the commutation should be determined
 
     Return:
         A dictionary that includes the commutation relation for each
@@ -185,7 +195,14 @@ def _generate_commutation_dict(considered_gates: List[Gate] = None) -> dict:
                     qargs2 = node1.qargs
                     cargs2 = node1.cargs
                     commutation_relation = cc.commute(
-                        op1, qargs1, cargs1, op2, qargs2, cargs2, max_num_qubits=4
+                        op1,
+                        qargs1,
+                        cargs1,
+                        op2,
+                        qargs2,
+                        cargs2,
+                        max_num_qubits=4,
+                        matrix_max_num_qubits=4,
                     )
 
                     gate_pair_commutation[relative_placement] = commutation_relation
@@ -206,8 +223,8 @@ def _simplify_commuting_dict(commuting_dict: dict) -> dict:
         commuting_dict (dict): A commutation dictionary with simplified entries
     """
     # Remove relative placement key if commutation is independent of relative placement
-    for ops in commuting_dict.keys():
-        gates_commutations = set(commuting_dict[ops].values())
+    for ops, commuting_gates in commuting_dict.items():
+        gates_commutations = set(commuting_gates.values())
         if len(gates_commutations) == 1:
             commuting_dict[ops] = next(iter(gates_commutations))
 

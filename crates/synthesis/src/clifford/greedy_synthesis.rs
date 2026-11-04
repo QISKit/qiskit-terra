@@ -4,15 +4,14 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use ahash::RandomState;
-use indexmap::IndexSet;
-use ndarray::{ArrayView2, s};
+use ndarray::{Array2, ArrayView2, s};
+use qiskit_util::IndexSet;
 use smallvec::smallvec;
 
 use crate::clifford::utils::{
@@ -105,7 +104,7 @@ pub struct GreedyCliffordSynthesis<'a> {
     symplectic_matrix: SymplecticMatrix,
 
     /// Unprocessed qubits.
-    unprocessed_qubits: IndexSet<usize, RandomState>,
+    unprocessed_qubits: IndexSet<usize>,
 }
 
 impl GreedyCliffordSynthesis<'_> {
@@ -198,10 +197,10 @@ impl GreedyCliffordSynthesis<'_> {
         gate_seq: &mut CliffordGatesVec,
         min_qubit: usize,
     ) -> Result<(), String> {
-        let mut a_qubits: IndexSet<_, ::ahash::RandomState> = IndexSet::default();
-        let mut b_qubits: IndexSet<_, ::ahash::RandomState> = IndexSet::default();
-        let mut c_qubits: IndexSet<_, ::ahash::RandomState> = IndexSet::default();
-        let mut d_qubits: IndexSet<_, ::ahash::RandomState> = IndexSet::default();
+        let mut a_qubits: IndexSet<_> = IndexSet::default();
+        let mut b_qubits: IndexSet<_> = IndexSet::default();
+        let mut c_qubits: IndexSet<_> = IndexSet::default();
+        let mut d_qubits: IndexSet<_> = IndexSet::default();
 
         for qubit in &self.unprocessed_qubits {
             let pauli_pair_index = pauli_pair_to_index(
@@ -408,7 +407,10 @@ pub fn resynthesize_clifford_circuit(
     gates: &CliffordGatesVec,
 ) -> Result<CliffordGatesVec, String> {
     let sim_clifford = clifford_from_gate_sequence(gates, num_qubits)?;
-    let mut synthesis = GreedyCliffordSynthesis::new(sim_clifford.tableau.view())?;
+    let tableau = Array2::from_shape_fn((2 * num_qubits, 2 * num_qubits + 1), |(i, j)| {
+        sim_clifford.get_entry(i, j)
+    });
+    let mut synthesis = GreedyCliffordSynthesis::new(tableau.view())?;
     let (_, new_gates) = synthesis.run()?;
     Ok(new_gates)
 }

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -47,14 +47,14 @@ Following construction, an estimator is used by calling its :meth:`~.BaseEstimat
 with a list of pubs (Primitive Unified Blocs). Each pub contains three values that, together,
 define a computation unit of work for the estimator to complete:
 
-* a single :class:`~qiskit.circuit.QuantumCircuit`, possibly parametrized, whose final state we
+* a single :class:`~qiskit.circuit.QuantumCircuit`, possibly parameterized, whose final state we
   define as :math:`\psi(\theta)`,
 
-* one or more observables (specified as any :class:`~.ObservablesArrayLike`, including
+* one or more observables (specified as any ``ObservablesArrayLike``, including
   :class:`~.quantum_info.Pauli`, :class:`~.SparsePauliOp`, ``str``) that specify which expectation
   values to estimate, denoted :math:`H_j`, and
 
-* a collection parameter value sets to bind the circuit against, :math:`\theta_k`.
+* a collection of parameter value sets to bind the circuit against, :math:`\theta_k`.
 
 Running an estimator returns a :class:`~qiskit.primitives.BasePrimitiveJob` object, where calling
 the method :meth:`~qiskit.primitives.BasePrimitiveJob.result` results in expectation value estimates
@@ -127,7 +127,7 @@ define a computational unit of work for the sampler to complete:
 
 * Optionally, the number of shots to sample, determined in the run method if not set.
 
-Running an estimator returns a :class:`~qiskit.primitives.BasePrimitiveJob` object, where calling
+Running a sampler returns a :class:`~qiskit.primitives.BasePrimitiveJob` object, where calling
 the method :meth:`~qiskit.primitives.BasePrimitiveJob.result` results in output samples and metadata
 for each pub.
 
@@ -192,7 +192,7 @@ An ``EstimatorV1`` implementation is initialized with an empty parameter set.
   (list of list of float).
 
 The method should return a :class:`~qiskit.providers.JobV1` object. Calling
-:meth:`qiskit.providers.JobV1.result()` yields the
+:meth:`qiskit.providers.JobV1.result()` yields
 a list of expectation values plus optional metadata like confidence intervals for
 the estimation.
 
@@ -317,7 +317,7 @@ Migration from Primitives V1 to V2
 
 The formal distinction between the Primitives V1 and V2 APIs are the base classes from which
 primitives implementations inherit, which are all listed at the bottom of the page. At a conceptual
-level, however, here are some notable differences keep in mind when migrating from V1 to V2:
+level, however, here are some notable differences to keep in mind when migrating from V1 to V2:
 
 1. The V2 primitives favour vectorized inputs, where single circuits can be grouped with
    vector-valued (or more generally, array-valued) specifications. Each group is called a
@@ -384,9 +384,9 @@ level, however, here are some notable differences keep in mind when migrating fr
    via their inherent probabilistic nature, out of the options and into the API itself. For the
    sampler, this means that the ``shots`` argument is now part of the :meth:`~.BaseSamplerV2.run`
    signature, and moreover that each pub is able to specify its own value for ``shots``, which takes
-   precedence over any value given to the method. The sampler has an analogous ``precision``
+   precedence over any value given to the method. The estimator has an analogous ``precision``
    argument that specifies the error bars that the primitive implementation should target for
-   expectation values estimates.
+   expectation value estimates.
 
    This concept is not present in the API of the V1 primitives, though all implementations of the
    V1 primitives have related settings somewhere in their options.
@@ -408,6 +408,22 @@ level, however, here are some notable differences keep in mind when migrating fr
 Primitives API
 ==============
 
+Parameters V2
+-------------
+
+.. autosummary::
+   :toctree: ../stubs/
+
+   ParameterLike
+   BindingsArray
+
+.. list-table::
+   :widths: auto
+   :header-rows: 0
+
+   * - :py:obj:`BindingsArrayLike`
+     - alias of :py:obj:`Mapping[ParameterLike | Tuple[ParameterLike, ...], ArrayLike]`
+
 Estimator V2
 ------------
 
@@ -417,6 +433,22 @@ Estimator V2
    BaseEstimatorV2
    StatevectorEstimator
    BackendEstimatorV2
+   EstimatorPub
+   ObservablesArray
+   ObservableLike
+
+.. list-table::
+   :widths: auto
+   :header-rows: 0
+
+   * - :py:obj:`EstimatorPubLike`
+     - alias of :py:obj:`EstimatorPub` \|
+       :py:obj:`Tuple[QuantumCircuit, ObservablesArrayLike]` \|
+       :py:obj:`Tuple[QuantumCircuit, ObservablesArrayLike, BindingsArrayLike]` \|
+       :py:obj:`Tuple[QuantumCircuit, ObservablesArrayLike, BindingsArrayLike, Real]`
+
+   * - :py:obj:`ObservablesArrayLike`
+     - alias of :py:obj:`ObservableLike | ArrayLike`
 
 Sampler V2
 ----------
@@ -427,6 +459,19 @@ Sampler V2
    BaseSamplerV2
    StatevectorSampler
    BackendSamplerV2
+   SamplerPub
+
+.. list-table::
+   :widths: auto
+   :header-rows: 0
+
+   * - :py:obj:`SamplerPubLike`
+     - alias of :py:obj:`SamplerPub` \|
+       :py:obj:`QuantumCircuit` \|
+       :py:obj:`Tuple[QuantumCircuit]` \|
+       :py:obj:`Tuple[QuantumCircuit, BindingsArrayLike]` \|
+       :py:obj:`Tuple[QuantumCircuit, BindingsArrayLike, Integral | None]`
+
 
 Results V2
 ----------
@@ -463,28 +508,23 @@ Sampler V1
 
 """
 
-from .base import (
-    BaseEstimatorV1,
-    BaseEstimatorV2,
-    BaseSamplerV1,
-    BaseSamplerV2,
-)
-from .base.estimator_result_v1 import EstimatorResult
-from .base.sampler_result_v1 import SamplerResult
-from .containers import (
-    BitArray,
-    DataBin,
-    PrimitiveResult,
-    PubResult,
-    EstimatorPubLike,
-    SamplerPubLike,
-    SamplerPubResult,
-    BindingsArrayLike,
-    ObservableLike,
-    ObservablesArrayLike,
-)
+from . import base, containers
+
+from .base import *
+from .containers import *
 from .primitive_job import BasePrimitiveJob, PrimitiveJob
 from .statevector_estimator import StatevectorEstimator
 from .statevector_sampler import StatevectorSampler
 from .backend_estimator_v2 import BackendEstimatorV2
 from .backend_sampler_v2 import BackendSamplerV2
+
+__all__ = [
+    "BackendEstimatorV2",
+    "BackendSamplerV2",
+    "BasePrimitiveJob",
+    "PrimitiveJob",
+    "StatevectorEstimator",
+    "StatevectorSampler",
+]
+__all__ += base.__all__
+__all__ += containers.__all__

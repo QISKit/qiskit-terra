@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -24,6 +24,22 @@ from .while_loop import WhileLoopOp
 from .for_loop import ForLoopOp
 from .switch_case import SwitchCaseOp, CASE_DEFAULT
 
+__all__ = [
+    "CASE_DEFAULT",
+    "CONTROL_FLOW_OP_NAMES",
+    "BoxOp",
+    "BreakLoopOp",
+    "ContinueLoopOp",
+    "ControlFlowOp",
+    "ForLoopOp",
+    "IfElseOp",
+    "LegacyResources",
+    "SwitchCaseOp",
+    "WhileLoopOp",
+    "condition_resources",
+    "get_control_flow_name_mapping",
+    "node_resources",
+]
 
 CONTROL_FLOW_OP_NAMES = frozenset(("for_loop", "while_loop", "if_else", "switch_case", "box"))
 """Set of the instruction names of Qiskit's known control-flow operations."""

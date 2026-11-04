@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,8 +21,8 @@ from qiskit.circuit.library import PermutationGate
 from qiskit.synthesis.linear_phase import synth_cz_depth_line_mr
 from qiskit.synthesis.linear.linear_circuits_utils import check_lnn_connectivity
 from qiskit.quantum_info import Clifford
-from test import combine  # pylint: disable=wrong-import-order
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import combine
+from test import QiskitTestCase
 
 
 @ddt
@@ -63,6 +63,25 @@ class TestCZSynth(QiskitTestCase):
             perm.append(PermutationGate(pattern=range(num_qubits)[::-1]), range(num_qubits))
             qctest = qctest.compose(perm)
             self.assertEqual(Clifford(qc), Clifford(qctest))
+
+    def test_cz_synth_lnn_accepts_trivial_inputs(self):
+        zero = np.zeros((0, 0), dtype=bool)
+        empty = QuantumCircuit(0)
+        empty.ensure_physical()
+        self.assertEqual(synth_cz_depth_line_mr(zero), empty)
+
+        one = np.zeros((1, 1), dtype=bool)
+        self.assertEqual(synth_cz_depth_line_mr(one), QuantumCircuit(1))
+        one = np.eye(1, dtype=bool)
+        self.assertEqual(synth_cz_depth_line_mr(one), QuantumCircuit(1))
+
+    def test_cz_synth_lnn_rejects_nonsquare(self):
+        wide = np.zeros((2, 3))
+        with self.assertRaisesRegex(ValueError, "matrix must be square"):
+            synth_cz_depth_line_mr(wide)
+        tall = np.zeros((5, 2))
+        with self.assertRaisesRegex(ValueError, "matrix must be square"):
+            synth_cz_depth_line_mr(tall)
 
 
 if __name__ == "__main__":

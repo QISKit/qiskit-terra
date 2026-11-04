@@ -1,0 +1,5 @@
+---
+features_transpiler:
+  - The :class:`.LitinskiTransformation` now also supports circuits with
+    :class:`.PhaseGate` and :class:`.U1Gate` instructions. Previously, the only
+    accepted parameterized gate was :class:`.RZGate`.

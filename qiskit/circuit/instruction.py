@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -36,7 +36,6 @@ from __future__ import annotations
 import copy
 from itertools import zip_longest
 import math
-from typing import Type
 
 import numpy
 
@@ -57,13 +56,10 @@ class Instruction(Operation):
     _directive = False
     _standard_gate = None
 
-    def __init__(self, name, num_qubits, num_clbits, params, label=None):
+    def __init__(
+        self, name: str, num_qubits: int, num_clbits: int, params, label: str | None = None
+    ):
         """
-        .. deprecated:: 1.3
-           The parameters ``duration`` and ``unit`` are deprecated since
-           Qiskit 1.3, and they will be removed in 2.0 or later.
-           An instruction's duration is defined in a backend's Target object.
-
         Args:
             name (str): instruction name
             num_qubits (int): instruction's qubit width
@@ -102,7 +98,7 @@ class Instruction(Operation):
         self.params = params  # must be at last (other properties may be required for validation)
 
     @property
-    def base_class(self) -> Type[Instruction]:
+    def base_class(self) -> type[Instruction]:
         """Get the base class of this instruction.  This is guaranteed to be in the inheritance tree
         of ``self``.
 
@@ -162,7 +158,7 @@ class Instruction(Operation):
         Returns:
             bool: are self and other equal.
         """
-        if (  # pylint: disable=too-many-boolean-expressions
+        if (
             not isinstance(other, Instruction)
             or self.base_class is not other.base_class
             or self.name != other.name
@@ -176,9 +172,8 @@ class Instruction(Operation):
             if isinstance(self_param, numpy.ndarray):
                 if numpy.array_equal(self_param, other_param):
                     continue
-            else:
-                if self_param == other_param:
-                    continue
+            elif self_param == other_param:
+                continue
 
             try:
                 self_asarray = numpy.asarray(self_param)
@@ -213,7 +208,7 @@ class Instruction(Operation):
             f"num_clbits={self.num_clbits}, params={self.params})"
         )
 
-    def soft_compare(self, other: "Instruction") -> bool:
+    def soft_compare(self, other: Instruction) -> bool:
         """
         Soft comparison between gates. Their names, number of qubits, and classical
         bit numbers must match. The number of parameters must match. Each parameter
@@ -261,8 +256,8 @@ class Instruction(Operation):
         Subclasses should implement this method to provide lazy construction of their public
         :attr:`definition` attribute.  A subclass can use its :attr:`params` at the time of the
         call.  The method should populate :attr:`_definition` with a :class:`.QuantumCircuit` and
-        not return a value."""
-        pass
+        not return a value.
+        """
 
     @property
     def params(self):
@@ -304,7 +299,7 @@ class Instruction(Operation):
     @property
     def decompositions(self):
         """Get the decompositions of the instruction from the SessionEquivalenceLibrary."""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit.equivalence_library import SessionEquivalenceLibrary as sel
 
         return sel.get_entry(self)
@@ -312,14 +307,14 @@ class Instruction(Operation):
     @decompositions.setter
     def decompositions(self, decompositions):
         """Set the decompositions of the instruction from the SessionEquivalenceLibrary."""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit.equivalence_library import SessionEquivalenceLibrary as sel
 
         sel.set_entry(self, decompositions)
 
     def add_decomposition(self, decomposition):
         """Add a decomposition of the instruction to the SessionEquivalenceLibrary."""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit.equivalence_library import SessionEquivalenceLibrary as sel
 
         sel.add_equivalence(self, decomposition)
@@ -403,7 +398,7 @@ class Instruction(Operation):
         if self.definition is None:
             raise CircuitError(f"inverse() not implemented for {self.name}.")
 
-        from qiskit.circuit import Gate  # pylint: disable=cyclic-import
+        from qiskit.circuit import Gate
 
         if self.name.endswith("_dg"):
             name = self.name[:-3]
@@ -491,7 +486,7 @@ class Instruction(Operation):
         )
 
     def repeat(self, n):
-        """Creates an instruction with ``self`` repeated :math`n` times.
+        """Creates an instruction with ``self`` repeated :math:`n` times.
 
         Args:
             n (int): Number of times to repeat the instruction
@@ -509,7 +504,7 @@ class Instruction(Operation):
 
         instruction = self._return_repeat(n)
         if instruction.definition is None:
-            # pylint: disable=cyclic-import
+
             from qiskit.circuit import QuantumCircuit, CircuitInstruction
 
             qc = QuantumCircuit(self.num_qubits, self.num_clbits)
@@ -523,32 +518,32 @@ class Instruction(Operation):
         return instruction
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name."""
         return self._name
 
     @name.setter
-    def name(self, name):
+    def name(self, name: str) -> None:
         """Set the name."""
         self._name = name
 
     @property
-    def num_qubits(self):
+    def num_qubits(self) -> int:
         """Return the number of qubits."""
         return self._num_qubits
 
     @num_qubits.setter
-    def num_qubits(self, num_qubits):
+    def num_qubits(self, num_qubits: int) -> None:
         """Set num_qubits."""
         self._num_qubits = num_qubits
 
     @property
-    def num_clbits(self):
+    def num_clbits(self) -> int:
         """Return the number of clbits."""
         return self._num_clbits
 
     @num_clbits.setter
-    def num_clbits(self, num_clbits):
+    def num_clbits(self, num_clbits: int) -> None:
         """Set num_clbits."""
         self._num_clbits = num_clbits
 

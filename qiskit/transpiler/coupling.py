@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -20,7 +20,7 @@ onto a device with this coupling.
 """
 
 import math
-from typing import List
+import warnings
 
 import rustworkx as rx
 from rustworkx.visualization import graphviz_draw
@@ -38,12 +38,12 @@ class CouplingMap:
     """
 
     __slots__ = (
-        "description",
-        "graph",
         "_dist_matrix",
+        "_is_symmetric",
         "_qubit_list",
         "_size",
-        "_is_symmetric",
+        "description",
+        "graph",
     )
 
     def __init__(self, couplinglist=None, description=None):
@@ -55,11 +55,13 @@ class CouplingMap:
                 an adjacency list containing couplings, e.g. [[0,1], [0,2], [1,2]].
                 It is required that nodes are contiguously indexed starting at 0.
                 Missed nodes will be added as isolated nodes in the coupling map.
+                Repeated couplings are collapsed into a single edge.
             description (str): A string to describe the coupling map.
         """
         self.description = description
-        # the coupling map graph
-        self.graph = rx.PyDiGraph()
+        # the coupling map graph; parallel edges are meaningless for a coupling map, so
+        # ``multigraph=False`` makes duplicate couplings collapse onto the existing edge
+        self.graph = rx.PyDiGraph(multigraph=False)
         # a dict of dicts from node pairs to distances
         self._dist_matrix = None
         # a sorted list of physical qubits (integers) in this coupling map
@@ -69,7 +71,13 @@ class CouplingMap:
         self._is_symmetric = None
 
         if couplinglist is not None:
-            self.graph.extend_from_edge_list([tuple(x) for x in couplinglist])
+            edges = []
+            for src, dst in couplinglist:
+                if src == dst:
+                    warnings.warn(_loopback_warning(src), stacklevel=2)
+                    continue
+                edges.append((src, dst))
+            self.graph.extend_from_edge_list(edges)
 
     def size(self):
         """Return the number of physical qubits in this graph."""
@@ -112,9 +120,14 @@ class CouplingMap:
         """
         Add directed edge to coupling graph.
 
+        If the edge is already present in the coupling graph this is a no-op.
+
         src (int): source physical qubit
         dst (int): destination physical qubit
         """
+        if src == dst:
+            warnings.warn(_loopback_warning(src), stacklevel=2)
+            return
         if src not in self.physical_qubits:
             self.add_physical_qubit(src)
         if dst not in self.physical_qubits:
@@ -213,7 +226,7 @@ class CouplingMap:
         )
         if not paths:
             raise CouplingError(
-                f"Nodes {str(physical_qubit1)} and {str(physical_qubit2)} are not connected"
+                f"Nodes {physical_qubit1!s} and {physical_qubit2!s} are not connected"
             )
         return paths[physical_qubit2]
 
@@ -232,13 +245,7 @@ class CouplingMap:
         """
         Convert uni-directional edges into bi-directional.
         """
-        # TODO: replace with PyDiGraph.make_symmetric() after rustworkx
-        # 0.13.0 is released.
-        edges = self.get_edges()
-        edge_set = set(edges)
-        for src, dest in edges:
-            if (dest, src) not in edge_set:
-                self.graph.add_edge(dest, src, None)
+        self.graph.make_symmetric()
         self._dist_matrix = None  # invalidate
         self._is_symmetric = None  # invalidate
 
@@ -296,7 +303,7 @@ class CouplingMap:
         """Return a fully connected coupling map on n qubits."""
         cmap = cls(description="full")
         if bidirectional:
-            cmap.graph = rx.generators.directed_mesh_graph(num_qubits)
+            cmap.graph = rx.generators.directed_mesh_graph(num_qubits, multigraph=False)
         else:
             edge_list = []
             for i in range(num_qubits):
@@ -309,14 +316,18 @@ class CouplingMap:
     def from_line(cls, num_qubits, bidirectional=True) -> "CouplingMap":
         """Return a coupling map of n qubits connected in a line."""
         cmap = cls(description="line")
-        cmap.graph = rx.generators.directed_path_graph(num_qubits, bidirectional=bidirectional)
+        cmap.graph = rx.generators.directed_path_graph(
+            num_qubits, bidirectional=bidirectional, multigraph=False
+        )
         return cmap
 
     @classmethod
     def from_ring(cls, num_qubits, bidirectional=True) -> "CouplingMap":
         """Return a coupling map of n qubits connected to each of their neighbors in a ring."""
         cmap = cls(description="ring")
-        cmap.graph = rx.generators.directed_cycle_graph(num_qubits, bidirectional=bidirectional)
+        cmap.graph = rx.generators.directed_cycle_graph(
+            num_qubits, bidirectional=bidirectional, multigraph=False
+        )
         return cmap
 
     @classmethod
@@ -324,7 +335,7 @@ class CouplingMap:
         """Return a coupling map of qubits connected on a grid of num_rows x num_columns."""
         cmap = cls(description="grid")
         cmap.graph = rx.generators.directed_grid_graph(
-            num_rows, num_columns, bidirectional=bidirectional
+            num_rows, num_columns, bidirectional=bidirectional, multigraph=False
         )
         return cmap
 
@@ -349,7 +360,9 @@ class CouplingMap:
             CouplingMap: A heavy hex coupling graph
         """
         cmap = cls(description="heavy-hex")
-        cmap.graph = rx.generators.directed_heavy_hex_graph(distance, bidirectional=bidirectional)
+        cmap.graph = rx.generators.directed_heavy_hex_graph(
+            distance, bidirectional=bidirectional, multigraph=False
+        )
         return cmap
 
     @classmethod
@@ -374,7 +387,7 @@ class CouplingMap:
         """
         cmap = cls(description="heavy-square")
         cmap.graph = rx.generators.directed_heavy_square_graph(
-            distance, bidirectional=bidirectional
+            distance, bidirectional=bidirectional, multigraph=False
         )
         return cmap
 
@@ -393,7 +406,7 @@ class CouplingMap:
         """
         cmap = cls(description="hexagonal-lattice")
         cmap.graph = rx.generators.directed_hexagonal_lattice_graph(
-            rows, cols, bidirectional=bidirectional
+            rows, cols, bidirectional=bidirectional, multigraph=False
         )
         return cmap
 
@@ -401,7 +414,7 @@ class CouplingMap:
         """Return a set of qubits in the largest connected component."""
         return max(rx.weakly_connected_components(self.graph), key=len)
 
-    def connected_components(self) -> List["CouplingMap"]:
+    def connected_components(self) -> list["CouplingMap"]:
         """Separate a :Class:`~.CouplingMap` into subgraph :class:`~.CouplingMap`
         for each connected component.
 
@@ -433,7 +446,7 @@ class CouplingMap:
         This method will return a list of :class:`~.CouplingMap` objects, one for each connected
         component in this :class:`~.CouplingMap`. The data payload of each node in the
         :attr:`~.CouplingMap.graph` attribute will contain the qubit number in the original
-        graph. This will enables mapping the qubit index in a component subgraph to
+        graph. This will enable mapping the qubit index in a component subgraph to
         the original qubit in the combined :class:`~.CouplingMap`. For example::
 
             from qiskit.transpiler import CouplingMap
@@ -463,12 +476,10 @@ class CouplingMap:
 
     def __str__(self):
         """Return a string representation of the coupling graph."""
-        string = ""
-        if self.get_edges():
-            string += "["
-            string += ", ".join([f"[{src}, {dst}]" for (src, dst) in self.get_edges()])
-            string += "]"
-        return string
+        return str(list(self))
+
+    def __repr__(self):
+        return f"CouplingMap({list(self)!r})"
 
     def __eq__(self, other):
         """Check if the graph in ``other`` has the same node labels and edges as the graph in
@@ -486,15 +497,28 @@ class CouplingMap:
             return False
         return set(self.graph.edge_list()) == set(other.graph.edge_list())
 
-    def draw(self):
+    def draw(self, method="neato"):
         """Draws the coupling map.
 
         This function calls the :func:`~rustworkx.visualization.graphviz_draw` function from the
         ``rustworkx`` package to draw the :class:`CouplingMap` object.
+
+        .. warning::
+            This function will call the system Graphviz tool on a file involving user-controllable
+            strings (such as qubit objects).  It is recommended to only call this function on
+            trusted input.
+
+        Args:
+            method (str): The layout method to use. See the documentation for
+                :func:`~rustworkx.visualization.graphviz_draw` for the list of supported methods
 
         Returns:
             PIL.Image: Drawn coupling map.
 
         """
 
-        return graphviz_draw(self.graph, method="neato")
+        return graphviz_draw(self.graph, method=method)
+
+
+def _loopback_warning(src: int) -> Warning:
+    return UserWarning(f"qubits cannot be coupled to themselves: ignoring edge ({src}, {src})")

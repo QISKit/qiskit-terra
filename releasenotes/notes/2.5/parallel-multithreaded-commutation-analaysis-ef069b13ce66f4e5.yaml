@@ -1,0 +1,16 @@
+---
+performance:
+  - The :class:`.CommutationAnalysis` transpiler pass is now multithreaded
+    which results in improved runtime performance. See
+    `#16014 <https://github.com/Qiskit/qiskit/pull/16014/>`__ for more
+    details.
+  - The :class:`.CommutativeCancellation` transpiler pass is now partially
+    internally multithreaded (when it runs the commutation analysis). This
+    has led to a runtime performance improvement. See
+    `#16014 <https://github.com/Qiskit/qiskit/pull/16014/>`__ for more
+    details.
+  - The C API function :c:func:`qk_transpiler_pass_standalone_commutative_cancellation`
+    is now internally partially multithreaded (when it runs the commutation
+    analysis). This has led to a runtime performance improvement. See
+    `#16014 <https://github.com/Qiskit/qiskit/pull/16014/>`__ for more
+    details.

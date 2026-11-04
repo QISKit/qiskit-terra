@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,7 @@ Array shape related classes and functions
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Protocol, Union, runtime_checkable
+from typing import Protocol, runtime_checkable, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray

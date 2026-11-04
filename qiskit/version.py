@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=no-name-in-module,broad-except,cyclic-import
 
 """Contains Qiskit version."""
 
@@ -31,7 +30,7 @@ def _minimal_ext_cmd(cmd):
     env["LANGUAGE"] = "C"
     env["LANG"] = "C"
     env["LC_ALL"] = "C"
-    with subprocess.Popen(
+    with subprocess.Popen(  # noqa: S603  We are calling git with fixed arguments
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -72,7 +71,7 @@ def get_version_info():
         return full_version
     try:
         release = _minimal_ext_cmd(["git", "tag", "-l", "--points-at", "HEAD"])
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         return full_version
     git_revision = git_version()
     if not release:

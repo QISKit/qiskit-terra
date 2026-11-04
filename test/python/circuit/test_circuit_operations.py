@@ -4,21 +4,21 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=invalid-name
 
 """Test Qiskit's QuantumCircuit class."""
 import copy
 import pickle
+import warnings
 from itertools import combinations
 
 import numpy as np
-from ddt import data, ddt
+from ddt import data, ddt, unpack
 
 from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister, transpile
 from qiskit.circuit import Gate, Instruction, Measure, Parameter, Barrier, AnnotatedOperation
@@ -30,21 +30,82 @@ from qiskit.circuit.controlflow.switch_case import SwitchCaseOp
 from qiskit.circuit.controlflow.while_loop import WhileLoopOp
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.circuit.controlflow import IfElseOp
-from qiskit.circuit.library import CXGate, HGate
+from qiskit.circuit.library import CXGate, HGate, XGate, YGate, ZGate, SXGate
 from qiskit.circuit.library.standard_gates import SGate
 from qiskit.circuit.quantumcircuit import BitLocations
 from qiskit.circuit.quantumcircuitdata import CircuitInstruction
 from qiskit.circuit import AncillaQubit, AncillaRegister, Qubit
-from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.providers.basic_provider import BasicSimulator
 from qiskit.quantum_info import Operator
-from qiskit.transpiler import Layout, CouplingMap
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from qiskit.transpiler import Layout, CouplingMap, passes, Target, InstructionProperties
+from qiskit.providers.fake_provider import GenericBackendV2
+from test import QiskitTestCase
 
 
 @ddt
 class TestCircuitOperations(QiskitTestCase):
     """QuantumCircuit Operations tests."""
+
+    @data(
+        ("h", (0,)),
+        ("ch", (0, 1)),
+        ("id", (0,)),
+        ("ms", (0.2, [0, 1])),
+        ("p", (0.2, 0)),
+        ("cp", (0.2, 0, 1)),
+        ("mcp", (0.2, [0, 1, 2], 3)),
+        ("r", (0.2, 0.3, 0)),
+        ("rv", (0.2, 0.3, 0.4, 0)),
+        ("rccx", (0, 1, 2)),
+        ("rcccx", (0, 1, 2, 3)),
+        ("rx", (0.2, 0)),
+        ("crx", (0.2, 0, 1)),
+        ("rxx", (0.2, 0, 1)),
+        ("ry", (0.2, 0)),
+        ("cry", (0.2, 0, 1)),
+        ("ryy", (0.2, 0, 1)),
+        ("rz", (0.2, 0)),
+        ("crz", (0.2, 0, 1)),
+        ("rzx", (0.2, 0, 1)),
+        ("rzz", (0.2, 0, 1)),
+        ("ecr", (0, 1)),
+        ("s", (0,)),
+        ("sdg", (0,)),
+        ("cs", (0, 1)),
+        ("csdg", (0, 1)),
+        ("swap", (0, 1)),
+        ("iswap", (0, 1)),
+        ("cswap", (0, 1, 2)),
+        ("sx", (0,)),
+        ("sxdg", (0,)),
+        ("csx", (0, 1)),
+        ("t", (0,)),
+        ("tdg", (0,)),
+        ("u", (0.2, 0.3, 0.4, 0)),
+        ("cu", (0.2, 0.3, 0.4, 0.5, 0, 1)),
+        ("x", (0,)),
+        ("cx", (0, 1)),
+        ("dcx", (0, 1)),
+        ("ccx", (0, 1, 2)),
+        ("mcx", ([0, 1, 2], 3)),
+        ("y", (0,)),
+        ("cy", (0, 1)),
+        ("z", (0,)),
+        ("cz", (0, 1)),
+        ("ccz", (0, 1, 2)),
+        ("pauli", ("XZ", [0, 1])),
+        ("prepare_state", ("0", [0])),
+        ("unitary", (np.eye(2), [0])),
+        ("box", (QuantumCircuit(1), [0], [])),
+    )
+    @unpack
+    def test_quantum_circuit_standard_gate_label(self, method, args):
+        """Test QuantumCircuit instruction-methods for standard gates accept labels."""
+        qc = QuantumCircuit(4)
+
+        getattr(qc, method)(*args, label="a gate label")
+
+        self.assertEqual(qc.data[-1].operation.label, "a gate label")
 
     @data(0, 1, -1, -2)
     def test_append_resolves_integers(self, index):
@@ -113,6 +174,29 @@ class TestCircuitOperations(QiskitTestCase):
             opaque = Instruction("opaque", 1, len(specifier), [])
             test.append(opaque, [0], specifier)
 
+    def test_append_rejects_duplicates(self):
+        test = QuantumCircuit(3, 3)
+
+        qargs = Instruction("qargs", 2, 0, [])
+        with self.subTest("qubit-int"), self.assertRaisesRegex(CircuitError, "duplicate"):
+            test.append(qargs, [0, 0], [])
+        with self.subTest("qubit-bit"), self.assertRaisesRegex(CircuitError, "duplicate"):
+            test.append(qargs, [test.qubits[0]] * 2, [])
+        with self.subTest("qubit-mixed"), self.assertRaisesRegex(CircuitError, "duplicate"):
+            test.append(qargs, [0, test.qubits[0]], [])
+        with self.subTest("qubit-many"), self.assertRaisesRegex(CircuitError, "duplicate"):
+            test.append(Instruction("many", 3, 0, []), [0, 1, 0], [])
+
+        cargs = Instruction("cargs", 0, 2, [])
+        with self.subTest("clbit-int"), self.assertRaisesRegex(CircuitError, "duplicate"):
+            test.append(cargs, [], [0, 0])
+        with self.subTest("clbit-bit"), self.assertRaisesRegex(CircuitError, "duplicate"):
+            test.append(cargs, [], [test.clbits[0]] * 2)
+        with self.subTest("clbit-mixed"), self.assertRaisesRegex(CircuitError, "duplicate"):
+            test.append(cargs, [], [0, test.clbits[0]])
+        with self.subTest("clbit-many"), self.assertRaisesRegex(CircuitError, "duplicate"):
+            test.append(Instruction("many", 0, 3, []), [], [0, 1, -2])
+
     def test_append_rejects_bits_not_in_circuit(self):
         """Test that append rejects bits that are not in the circuit."""
         test = QuantumCircuit(2, 2)
@@ -161,6 +245,22 @@ class TestCircuitOperations(QiskitTestCase):
             qc.append(inst, [0, 1], bad_arg)
         with self.assertRaisesRegex(CircuitError, "The amount of qubit arguments"):
             qc.append(Barrier(4), bad_arg)
+
+    def test_append_warns_when_ignoring_qargs(self):
+        """Test that a warning is raised if qargs are passed when appending a CircuitInstruction."""
+        qr = QuantumRegister(2)
+        qc = QuantumCircuit(qr)
+
+        with self.assertWarnsRegex(
+            UserWarning,
+            r"Any qargs/cargs passed into append\(\) alongside a valid CircuitInstruction will be ignored",
+        ):
+            qc.append(CircuitInstruction(HGate(), [qr[0]], []), qargs=[qr[1]])
+
+        expected_qc = QuantumCircuit(qr)
+        expected_qc.h(0)
+
+        self.assertEqual(qc, expected_qc)
 
     def test_anding_self(self):
         """Test that qc &= qc finishes, which can be prone to infinite while-loops.
@@ -461,7 +561,6 @@ class TestCircuitOperations(QiskitTestCase):
         self.assertEqual({a, c}, set(qc.iter_declared_vars()))
         self.assertEqual(set(), set(qc.iter_declared_stretches()))
 
-    # pylint: disable=invalid-name
     def test_copy_empty_variables(self):
         """Test that an empty copy of circuits including variables copies them across, but does not
         initialise them."""
@@ -501,7 +600,6 @@ class TestCircuitOperations(QiskitTestCase):
         self.assertEqual({b}, set(qc.iter_captured_vars()))
         self.assertEqual(set(), set(qc.iter_captured_stretches()))
 
-    # pylint: disable=invalid-name
     def test_copy_empty_variables_alike(self):
         """Test that an empty copy of circuits including variables copies them across, but does not
         initialise them.  This is the same as the default, just spelled explicitly."""
@@ -541,7 +639,6 @@ class TestCircuitOperations(QiskitTestCase):
         self.assertEqual({e}, set(copied.iter_captured_stretches()))
         self.assertEqual({b}, set(qc.iter_captured_vars()))
 
-    # pylint: disable=invalid-name
     def test_copy_empty_variables_to_captures(self):
         """``vars_mode="captures"`` should convert all variables to captures."""
         a = expr.Var.new("a", types.Bool())
@@ -1038,6 +1135,28 @@ class TestCircuitOperations(QiskitTestCase):
         )
         qc.remove_final_measurements(inplace=True)
         self.assertEqual(qc.assign_parameters({a: 1}), expected)
+
+    def test_remove_final_measurement_with_layout(self):
+        def apply_layout(qc):
+            layout = Layout(dict(zip(qc.qubits, [1, 0])))
+            return passes.ApplyLayout()(qc, property_set={"layout": layout})
+
+        qc = QuantumCircuit(2, 2)
+        qc.h(0)
+        qc.cx(0, 1)
+        qc.measure([0, 1], [0, 1])
+        qc = apply_layout(qc)
+
+        expected = QuantumCircuit(2)
+        expected.h(0)
+        expected.cx(0, 1)
+        expected = apply_layout(expected)
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("error", module=r"(qiskit|test)")
+            self.assertEqual(qc.remove_final_measurements(inplace=False), expected)
+            qc.remove_final_measurements(inplace=True)
+            self.assertEqual(qc, expected)
 
     def test_reverse(self):
         """Test reverse method reverses but does not invert."""
@@ -1743,6 +1862,68 @@ class TestCircuitOperations(QiskitTestCase):
         qc = QuantumCircuit(10)
         with self.assertRaisesRegex(ValueError, "cannot have fewer physical qubits"):
             qc.ensure_physical(5)
+
+    def test_estimate_fidelity(self):
+        target = Target(num_qubits=1)
+        target.add_instruction(XGate(), {(0,): InstructionProperties(error=0.5)})
+        qc = QuantumCircuit(1)
+        qc.x(0)
+        qc.x(0)
+        qc.x(0)
+        expected = 0.5**3
+        fidelity = qc.estimate_fidelity(target)
+        self.assertEqual(fidelity, expected)
+
+    def test_estimate_fidelity_with_barrier(self):
+        target = Target(num_qubits=1)
+        target.add_instruction(XGate(), {(0,): InstructionProperties(error=0.5)})
+        qc = QuantumCircuit(1)
+        qc.x(0)
+        qc.barrier(0)
+        qc.x(0)
+        qc.barrier(0)
+        qc.x(0)
+        qc.barrier(0)
+        fidelity = qc.estimate_fidelity(target)
+        expected = 0.5**3
+        self.assertEqual(fidelity, expected)
+
+    def test_estimate_fidelity_non_physical(self):
+        target = Target(num_qubits=1)
+        target.add_instruction(YGate(), {(0,): InstructionProperties(error=0.5)})
+        qc = QuantumCircuit(1)
+        qc.x(0)
+        qc.x(0)
+        qc.x(0)
+        fidelity = qc.estimate_fidelity(target)
+        self.assertIsNone(fidelity)
+
+    def test_estimate_fidelity_errors_on_control_flow(self):
+        target = Target(num_qubits=1)
+        target.add_instruction(YGate(), {(0,): InstructionProperties(error=0.5)})
+        qc = QuantumCircuit(1, 1)
+        qc.x(0)
+        qc.measure(0, 0)
+        with qc.if_test((0, 1)):
+            qc.x(0)
+            qc.x(0)
+        with self.assertRaises(CircuitError):
+            qc.estimate_fidelity(target)
+
+    def test_estimate_fidelity_with_ideal_gates(self):
+        target = Target(num_qubits=1)
+        target.add_instruction(XGate(), {(0,): InstructionProperties(error=0.25)})
+        target.add_instruction(YGate(), {(0,): InstructionProperties(error=None)})
+        target.add_instruction(ZGate())
+        target.add_instruction(SXGate(), {None: InstructionProperties(error=0.1)})
+        qc = QuantumCircuit(1)
+        qc.x(0)
+        qc.y(0)
+        qc.z(0)
+        qc.sx(0)
+        expected = 0.75 * 0.9
+        fidelity = qc.estimate_fidelity(target)
+        self.assertEqual(fidelity, expected)
 
 
 class TestCircuitPrivateOperations(QiskitTestCase):

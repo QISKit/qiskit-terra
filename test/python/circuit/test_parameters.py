@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -22,17 +22,17 @@ from ddt import data, ddt, named_data
 
 import qiskit
 import qiskit.circuit.library as circlib
-from qiskit.circuit.library.standard_gates.rz import RZGate
+from qiskit.circuit.library import RZGate, PauliEvolutionGate
 from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
 from qiskit.circuit import Gate, Instruction, Parameter, ParameterExpression, ParameterVector
 from qiskit.circuit.parametertable import ParameterView
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.compiler import transpile
-from qiskit.quantum_info import Operator
+from qiskit.quantum_info import Operator, Pauli
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.providers.basic_provider import BasicSimulator
 from qiskit.utils import parallel_map
-from test import QiskitTestCase, combine  # pylint: disable=wrong-import-order
+from test import QiskitTestCase, combine
 from ..legacy_cmaps import BOGOTA_CMAP
 
 
@@ -949,6 +949,24 @@ class TestParameters(QiskitTestCase):
         self.assertEqual(hash(x1), hash(x1_expr))
         self.assertEqual(hash(x2), hash(x2_expr))
 
+    def test_parameter_vector_elements_can_be_recreated(self):
+        left = ParameterVector("a", 5)
+        right = ParameterVector("a", 5, uuid=left.uuid)
+        # We can't compare the two vectors directly because `ParameterVector` only implements
+        # identity-based equality, since it's internally mutable.
+        self.assertEqual(list(left), list(right))
+
+        # UUIDs don't match.
+        other = ParameterVector("a", 5)
+        self.assertNotEqual(list(left), list(other))
+
+    def test_parameter_vector_backrefs_equal(self):
+        vector = ParameterVector("a", 10)
+        # With `ParameterVector` implemented in Rust and the actual Python object not cached,
+        # there's no guarantee that `pv[0].vector is pv` (as the pure-Python implementation used to
+        # preserve), but we need to maintain `pv[0].vector == pv`.
+        self.assertEqual([x.vector for x in vector], [vector] * len(vector))
+
     def test_binding_parameterized_circuits_built_in_multiproc(self):
         """Verify subcircuits built in a subprocess can still be bound."""
         # ref: https://github.com/Qiskit/qiskit-terra/issues/2429
@@ -968,7 +986,7 @@ class TestParameters(QiskitTestCase):
         for qc in results:
             circuit.compose(qc, inplace=True)
 
-        parameter_values = {x: 1.0 for x in parameters}
+        parameter_values = dict.fromkeys(parameters, 1.0)
 
         bind_circuit = circuit.assign_parameters(parameter_values)
 
@@ -1447,7 +1465,6 @@ def _paramvec_names(prefix, length):
 
 @ddt
 class TestParameterExpressions(QiskitTestCase):
-    # pylint: disable=possibly-used-before-assignment
     """Test expressions of Parameters."""
 
     # supported operations dictionary operation : accuracy (0=exact match)
@@ -2144,6 +2161,36 @@ class TestParameterExpressions(QiskitTestCase):
         with self.assertRaisesRegex(TypeError, "unbound parameters"):
             (a + b).numeric()
 
+    def test_repeat_with_parameterized_gates(self):
+        """Tests that repeating a circuit with parameterized gates
+        handles parameters correctly.
+
+        See https://github.com/Qiskit/qiskit/issues/15645.
+        """
+
+        t_param = Parameter("t")
+
+        # Create a quantum circuit with 2 parameterized gates.
+        circuit = QuantumCircuit(5)
+        circuit.append(PauliEvolutionGate(Pauli("XZXZX"), time=t_param), [0, 1, 2, 3, 4])
+        circuit.append(PauliEvolutionGate(Pauli("IIIXX"), time=t_param / 2), [0, 1, 2, 3, 4])
+
+        # Repeat the circuit 10 times.
+        repeated_circuit = circuit.repeat(10)
+
+        # Divide each parameter by num_steps.
+        num_steps = 5
+        repeated_circuit.assign_parameters({t_param: t_param / num_steps}, inplace=True)
+
+        # Decompose the repeated circuit. The decomposed circuit has the two operations
+        # from the circuit repeated 10 times.
+        decomposed_circuit = repeated_circuit.decompose()
+
+        for idx in [0, 1]:
+            expected_param = circuit[idx].operation.params[0] / num_steps
+            actual_param = decomposed_circuit[idx].operation.params[0]
+            self.assertEqual(expected_param, actual_param)
+
 
 class TestParameterEquality(QiskitTestCase):
     """Test equality of Parameters and ParameterExpressions."""
@@ -2208,6 +2255,13 @@ class TestParameterEquality(QiskitTestCase):
 
         self.assertEqual(expr, theta)
         self.assertEqual(theta, expr)
+
+    def test_inverse_equals_negative_power(self):
+        """Verify 1/x is equal to x ** (-1) for parameter expressions."""
+        theta = Parameter("theta")
+
+        self.assertEqual(1 / theta, theta ** (-1))
+        self.assertEqual(theta ** (-2), 1 / (theta**2))
 
 
 class TestParameterView(QiskitTestCase):

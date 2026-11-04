@@ -1,0 +1,6 @@
+---
+deprecations_c:
+  - Deprecate the :c:func:`qk_transpiler_standalone_optimize_1q_sequences`
+    in favor of using :c:func:`qk_transpiler_pass_standalone_optimize_1q_sequences`
+    as it sticks closer to the naming convention of the C standalone
+    transpiler passes.

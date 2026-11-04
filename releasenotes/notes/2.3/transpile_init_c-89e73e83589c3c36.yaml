@@ -1,0 +1,24 @@
+---
+features_c:
+  - |
+    Added new functions for running transpiler stages to the C API. These
+    functions are:
+    
+      ========================================= ===========================================
+      C function                                Transpiler Stage
+      ========================================= ===========================================
+      :c:func:`qk_transpile_stage_init`         :ref:`transpiler-preset-stage-init`
+      :c:func:`qk_transpile_stage_layout`       :ref:`transpiler-preset-stage-layout`
+      :c:func:`qk_transpile_stage_routing`      :ref:`transpiler-preset-stage-routing`
+      :c:func:`qk_transpile_stage_translation`  :ref:`transpiler-preset-stage-translation`
+      :c:func:`qk_transpile_stage_optimization` :ref:`transpiler-preset-stage-optimization`
+      ========================================= ===========================================
+
+    These function are used to run these stages from the preset pass manager
+    on a ``QkDag`` object. The goal of these functions are to enable composable
+    transpilation workflows from C when combined with custom transpiler passes.
+  - |
+    Added a new function :c:func:`qk_transpile_layout_generate_from_mapping` which is
+    used to generate a custom :c:struct:`QkTranspileLayout` with an initial layout set
+    from a mapping array. The intent of this function is to enable creating a
+    layout object for custom layout transpiler passes.

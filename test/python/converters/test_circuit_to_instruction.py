@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -24,7 +24,7 @@ from qiskit.circuit import Parameter
 from qiskit.circuit.classical import expr, types
 from qiskit.quantum_info import Operator
 from qiskit.exceptions import QiskitError
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestCircuitToInstruction(QiskitTestCase):
@@ -177,6 +177,30 @@ class TestCircuitToInstruction(QiskitTestCase):
         self.assertEqual(inst.definition[1].operation.params, [phi])
         self.assertEqual(inst.definition[2].operation.params, [gamma, phi, 0])
         self.assertEqual(str(inst.definition[3].operation.params[0]), "gamma + phi")
+
+    def test_parameter_map_applies_to_global_phase(self):
+        """Regression test for #16181."""
+        p = Parameter("p")
+        q = Parameter("q")
+
+        qc = QuantumCircuit(1)
+        qc.global_phase = 2 * p
+        qc.rx(q, 0)
+
+        parameter_map = {p: 0.3, q: 0.5}
+        inst = circuit_to_instruction(qc, parameter_map=parameter_map)
+
+        # The substituted instruction must have no remaining parameters,
+        # neither in its ``params`` nor inside the hidden ``definition``.
+        self.assertEqual(inst.params, [0.3, 0.5])
+        self.assertEqual(inst.definition.parameters, set())
+        np.testing.assert_allclose(float(inst.definition.global_phase), 0.6)
+
+        # And it must be usable downstream without raising on unbound params.
+        outer = QuantumCircuit(1)
+        outer.append(inst, [0])
+        # This deliberately avoids `equiv` because we're testing the phase.
+        self.assertEqual(Operator(outer), Operator(qc.assign_parameters(parameter_map)))
 
     def test_zero_operands(self):
         """Test that an instruction can be created, even if it has zero operands."""

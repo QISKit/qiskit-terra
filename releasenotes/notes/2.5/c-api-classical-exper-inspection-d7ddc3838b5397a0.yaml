@@ -1,0 +1,28 @@
+---
+features_c:
+  - |
+    Added support for inspecting classical expressions in the C API. The new API enables users to 
+    traverse classical expression trees and extract information about node kinds, operands, 
+    underlying values, variable names, and more. To support this, new enums and structs have 
+    been introduced to represent expression node properties, along with corresponding accessor functions.
+    
+    The new functions are:
+    
+    * :c:func:`qk_expr_kind`
+    * :c:func:`qk_expr_binary_info`
+    * :c:func:`qk_expr_unary_info`
+    * :c:func:`qk_expr_cast_info`
+    * :c:func:`qk_expr_index_info`
+    * :c:func:`qk_expr_as_value`
+    * :c:func:`qk_expr_as_var`
+    * :c:func:`qk_expr_as_stretch`
+    * :c:func:`qk_value_type`
+    * :c:func:`qk_value_duration_info`
+    * :c:func:`qk_value_float`
+    * :c:func:`qk_value_uint`
+    * :c:func:`qk_value_bool`
+    * :c:func:`qk_var_name`
+    * :c:func:`qk_var_type_info`
+    * :c:func:`qk_stretch_name`
+    
+    Refer to the documentation of the functions for more details. 

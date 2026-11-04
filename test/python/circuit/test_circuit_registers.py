@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -26,7 +26,7 @@ from qiskit.circuit import (
 )
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.qasm2 import dumps
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestCircuitRegisters(QiskitTestCase):
@@ -82,7 +82,7 @@ class TestCircuitRegisters(QiskitTestCase):
         """Test attempt to pass different types of integer as indices
         of QuantumRegister and ClassicalRegister
         """
-        ints = [int(2), np.int32(2), np.int64(2)]
+        ints = [2, np.int32(2), np.int64(2)]
         for index in ints:
             with self.subTest(index=index):
                 qr = QuantumRegister(4)
@@ -310,9 +310,7 @@ class TestCircuitRegisters(QiskitTestCase):
         qc = QuantumCircuit(qcontrol, qtarget)
         qc.ccx(qcontrol[2:0:-1], qcontrol[4:6], qtarget[0:2])
         self.assertEqual(len(qc.data), 2)
-        for instruction, ictl1, ictl2, itgt in zip(
-            qc.data, range(2, 0, -1), range(4, 6), range(0, 2)
-        ):
+        for instruction, ictl1, ictl2, itgt in zip(qc.data, range(2, 0, -1), range(4, 6), range(2)):
             self.assertEqual(instruction.operation.name, "ccx")
             self.assertEqual(len(instruction.qubits), 3)
             self.assertEqual(instruction.qubits[0], qcontrol[ictl1])
@@ -361,7 +359,7 @@ class TestCircuitRegisters(QiskitTestCase):
         ctl_slice = slice(0, 2)
         tgt_slice = slice(2, 4)
         qc.ch(qr[ctl_slice], qr[tgt_slice])
-        for instruction, ictrl, itgt in zip(qc.data, range(0, 2), range(2, 4)):
+        for instruction, ictrl, itgt in zip(qc.data, range(2), range(2, 4)):
             self.assertEqual(instruction.operation.name, "ch")
             self.assertEqual(len(instruction.qubits), 2)
             self.assertEqual(instruction.qubits[0], qr[ictrl])
@@ -382,7 +380,7 @@ class TestCircuitRegisters(QiskitTestCase):
         cr2 = ClassicalRegister(5)
         qc = QuantumCircuit(qr, cr)
         qc.measure(qr[0:2], cr[2:4])
-        for instruction, ictrl, itgt in zip(qc.data, range(0, 2), range(2, 4)):
+        for instruction, ictrl, itgt in zip(qc.data, range(2), range(2, 4)):
             self.assertEqual(instruction.operation.name, "measure")
             self.assertEqual(len(instruction.qubits), 1)
             self.assertEqual(len(instruction.clbits), 1)
@@ -391,7 +389,7 @@ class TestCircuitRegisters(QiskitTestCase):
         # test single element slice
         qc = QuantumCircuit(qr, cr)
         qc.measure(qr[0:1], cr[2:3])
-        for instruction, ictrl, itgt in zip(qc.data, range(0, 1), range(2, 3)):
+        for instruction, ictrl, itgt in zip(qc.data, range(1), range(2, 3)):
             self.assertEqual(instruction.operation.name, "measure")
             self.assertEqual(len(instruction.qubits), 1)
             self.assertEqual(len(instruction.clbits), 1)

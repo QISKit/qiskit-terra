@@ -4,57 +4,61 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""Baseclasses for the Qiskit passmanager optimization tasks."""
+"""Base classes for the Qiskit passmanager optimization tasks."""
+
 from __future__ import annotations
 
 import logging
 import time
 from abc import abstractmethod, ABC
 from collections.abc import Iterable, Callable, Generator
-from typing import Any
+from typing import Any, TypeVar, Generic, TypeAlias
 
 from .compilation_status import RunState, PassManagerState, PropertySet
 
 logger = logging.getLogger(__name__)
 
-# Type alias
-PassManagerIR = Any
+IR = TypeVar("IR")
+IR_OUT = TypeVar("IR_OUT")
 
 
-class Task(ABC):
+class Task(ABC, Generic[IR, IR_OUT]):
     """An interface of the pass manager task.
 
-    The task takes a Qiskit IR, and outputs new Qiskit IR after some operation on it.
+    The task takes an IR, and outputs a (possibly different) IR after some operation on it.
     A task can rely on the :class:`.PropertySet` to communicate intermediate data among tasks.
     """
 
     @abstractmethod
     def execute(
         self,
-        passmanager_ir: PassManagerIR,
+        passmanager_ir: IR,
         state: PassManagerState,
-        callback: Callable = None,
-    ) -> tuple[PassManagerIR, PassManagerState]:
+        callback: Callable[[Task, IR_OUT, PropertySet, float, int], None] | None = None,
+    ) -> tuple[IR_OUT, PassManagerState]:
         """Execute optimization task for input Qiskit IR.
 
         Args:
             passmanager_ir: Qiskit IR to optimize.
             state: State associated with workflow execution by the pass manager itself.
-            callback: A callback function which is caller per execution of optimization task.
+            callback: A callback function which is called per execution of optimization task.
 
         Returns:
             Optimized Qiskit IR and state of the workflow.
         """
-        pass
 
 
-class GenericPass(Task, ABC):
+# We can only define this type alias after Task has been defined.
+Callback: TypeAlias = Callable[[Task, IR_OUT, PropertySet, float, int], None]
+
+
+class GenericPass(Task[IR, IR_OUT], ABC):
     """Base class of a single pass manager task.
 
     A pass instance can read and write to the provided :class:`.PropertySet`,
@@ -71,17 +75,17 @@ class GenericPass(Task, ABC):
 
     def execute(
         self,
-        passmanager_ir: PassManagerIR,
+        passmanager_ir: IR,
         state: PassManagerState,
-        callback: Callable = None,
-    ) -> tuple[PassManagerIR, PassManagerState]:
+        callback: Callback[IR_OUT] | None = None,
+    ) -> tuple[IR_OUT, PassManagerState]:
         # Overriding this method is not safe.
         # Pass subclass must keep current implementation.
         # Especially, task execution may break when method signature is modified.
         self.property_set = state.property_set
 
         if self.requires:
-            # pylint: disable=cyclic-import
+
             from .flow_controllers import FlowControllerLinear
 
             passmanager_ir, state = FlowControllerLinear(self.requires).execute(
@@ -140,8 +144,8 @@ class GenericPass(Task, ABC):
     @abstractmethod
     def run(
         self,
-        passmanager_ir: PassManagerIR,
-    ) -> PassManagerIR:
+        passmanager_ir: IR,
+    ) -> IR_OUT:
         """Run optimization task.
 
         Args:
@@ -150,10 +154,9 @@ class GenericPass(Task, ABC):
         Returns:
             Optimized Qiskit IR.
         """
-        pass
 
 
-class BaseController(Task, ABC):
+class BaseController(Task[IR, IR_OUT], ABC):
     """Base class of controller.
 
     A controller is built with a collection of pass manager tasks,
@@ -177,7 +180,7 @@ class BaseController(Task, ABC):
     def iter_tasks(
         self,
         state: PassManagerState,
-    ) -> Generator[Task, PassManagerState, None]:
+    ) -> Generator[Task[Any, Any], PassManagerState, None]:
         """A custom logic to choose a next task to run.
 
         Controller subclass can consume the state to build a proper task pipeline.  The updated
@@ -197,14 +200,13 @@ class BaseController(Task, ABC):
         Yields:
             Task: Next task to run.
         """
-        pass
 
     def execute(
         self,
-        passmanager_ir: PassManagerIR,
+        passmanager_ir: IR,
         state: PassManagerState,
-        callback: Callable = None,
-    ) -> tuple[PassManagerIR, PassManagerState]:
+        callback: Callable | None = None,
+    ) -> tuple[IR_OUT, PassManagerState]:
         # Overriding this method is not safe.
         # Pass subclass must keep current implementation.
         # Especially, task execution may break when method signature is modified.

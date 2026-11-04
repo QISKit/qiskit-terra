@@ -1,0 +1,4 @@
+---
+build:
+  - |
+    The minimum supported Rust version (MSRV) to build Qiskit from source is now 1.89.

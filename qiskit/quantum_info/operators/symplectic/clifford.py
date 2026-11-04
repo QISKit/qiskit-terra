@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -154,7 +154,6 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
     def __init__(self, data, validate=True, copy=True):
         """Initialize an operator object."""
 
-        # pylint: disable=cyclic-import
         from qiskit.circuit.library import LinearFunction, PermutationGate
 
         # Initialize from another Clifford
@@ -239,7 +238,7 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
         return 0
 
     def __repr__(self):
-        return f"Clifford({repr(self.tableau)})"
+        return f"Clifford({self.tableau!r})"
 
     def __str__(self):
         return (
@@ -257,8 +256,6 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
     # ---------------------------------------------------------------------
     # Attributes
     # ---------------------------------------------------------------------
-
-    # pylint: disable=bad-docstring-quotes
 
     @property
     def symplectic_matrix(self):
@@ -594,7 +591,7 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
         Returns:
             Clifford: the Clifford object for this linear function.
         """
-        from qiskit.synthesis.linear import calc_inverse_matrix  # pylint: disable=cyclic-import
+        from qiskit.synthesis.linear import calc_inverse_matrix
 
         mat = linear_function.linear
         mat_t = np.transpose(mat)
@@ -634,7 +631,7 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
 
     @classmethod
     def from_operator(cls, operator: Operator) -> Clifford:
-        """Create a Clifford from a operator.
+        """Create a Clifford from an operator.
 
         Note that this function takes exponentially long time w.r.t. the number of qubits.
 
@@ -671,7 +668,7 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
                Phys. Rev. A 70, 052328 (2004).
                `arXiv:quant-ph/0406196 <https://arxiv.org/abs/quant-ph/0406196>`_
         """
-        from qiskit.synthesis.clifford import synth_clifford_full  # pylint: disable=cyclic-import
+        from qiskit.synthesis.clifford import synth_clifford_full
 
         return synth_clifford_full(self)
 
@@ -949,7 +946,7 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
     def _pauli_matrix_to_row(mat, num_qubits):
         """Generate a binary vector (a row of tableau representation) from a Pauli matrix.
         Return None if the non-Pauli matrix is supplied."""
-        # pylint: disable=too-many-return-statements
+
         decimals = 6
 
         def find_one_index(x):
@@ -1011,7 +1008,7 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
 
     @staticmethod
     def _unitary_matrix_to_tableau(matrix):
-        # pylint: disable=invalid-name
+
         num_qubits = int(math.log2(len(matrix)))
 
         stab = np.empty((num_qubits, 2 * num_qubits + 1), dtype=bool)

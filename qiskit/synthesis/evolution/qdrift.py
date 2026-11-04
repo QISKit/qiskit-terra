@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,8 +19,9 @@ import typing
 from itertools import chain
 from collections.abc import Callable
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.quantum_info.operators import SparsePauliOp
+
+from qiskit.circuit import QuantumCircuit
+from qiskit.quantum_info import SparsePauliOp
 from qiskit.exceptions import QiskitError
 import qiskit.quantum_info
 
@@ -113,6 +114,10 @@ class QDrift(ProductFormula):
         # We artificially make the weights positive
         weights = np.abs(coeffs)
         lambd = np.sum(weights)
+
+        is_identity = lambd == 0 or time == 0
+        if is_identity:
+            return []
 
         num_gates = math.ceil(2 * (lambd**2) * (time**2) * self.reps)
 

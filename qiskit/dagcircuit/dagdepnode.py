@@ -4,18 +4,22 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=redefined-builtin
 
 """Object to represent the information at a node in the DAGCircuit."""
+
 from __future__ import annotations
 
+import typing
 from qiskit.exceptions import QiskitError
+
+if typing.TYPE_CHECKING:
+    from qiskit.circuit import Qubit, Clbit
 
 
 class DAGDepNode:
@@ -26,22 +30,35 @@ class DAGDepNode:
     """
 
     __slots__ = [
-        "type",
         "_op",
-        "name",
         "_qargs",
         "cargs",
-        "sort_key",
-        "node_id",
-        "successors",
-        "predecessors",
-        "reachable",
-        "matchedwith",
-        "isblocked",
-        "successorstovisit",
-        "qindices",
         "cindices",
+        "isblocked",
+        "matchedwith",
+        "name",
+        "node_id",
+        "predecessors",
+        "qindices",
+        "reachable",
+        "sort_key",
+        "successors",
+        "successorstovisit",
+        "type",
     ]
+    type: str
+    sort_key: str
+    name: str | None
+    qargs: tuple[Qubit, ...]
+    qindices: tuple[int, ...]
+    cargs: tuple[Clbit, ...]
+    cindices: tuple[int, ...]
+    successors: list[int]
+    predecessors: list[int]
+    reachable: bool | None
+    matchedwith: list[int] | None
+    successorstovisit: list[int] | None
+    isblocked: bool
 
     def __init__(
         self,
@@ -67,23 +84,21 @@ class DAGDepNode:
         self._qargs = tuple(qargs) if qargs is not None else ()
         self.cargs = tuple(cargs) if cargs is not None else ()
         self.node_id = nid
-        self.sort_key: str = str(self._qargs)
-        self.successors: list[int] = successors if successors is not None else []
-        self.predecessors: list[int] = predecessors if predecessors is not None else []
+        self.sort_key = str(self._qargs)
+        self.successors = successors if successors is not None else []
+        self.predecessors = predecessors if predecessors is not None else []
         self.reachable = reachable
-        self.matchedwith: list[int] = matchedwith if matchedwith is not None else []
-        self.isblocked: bool = isblocked
-        self.successorstovisit: list[int] = (
-            successorstovisit if successorstovisit is not None else []
-        )
-        self.qindices: list[int] = qindices if qindices is not None else []
-        self.cindices: list[int] = cindices if cindices is not None else []
+        self.matchedwith = matchedwith if matchedwith is not None else []
+        self.isblocked = isblocked
+        self.successorstovisit = successorstovisit if successorstovisit is not None else []
+        self.qindices = qindices if qindices is not None else []
+        self.cindices = cindices if cindices is not None else []
 
     @property
     def op(self):
         """Returns the Instruction object corresponding to the op for the node, else None"""
         if not self.type or self.type != "op":
-            raise QiskitError(f"The node {str(self)} is not an op node")
+            raise QiskitError(f"The node {self!s} is not an op node")
         return self._op
 
     @op.setter

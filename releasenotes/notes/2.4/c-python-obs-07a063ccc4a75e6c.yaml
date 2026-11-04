@@ -1,0 +1,12 @@
+---
+features_c:
+  - |
+    ``QkObs`` now supports two methods for borrowing a view of the observable from a Python-space
+    :class:`.SparseObservable`.  These are:
+
+    * :c:func:`qk_obs_borrow_from_python`
+    * :c:func:`qk_obs_convert_from_python`
+upgrade_c:
+  - :c:func:`qk_obs_to_python` now both requires and takes ownership of the given observable.  You
+    now must not free the observable after calling this function.  This is consistent with all other
+    ``*_to_python`` functions in the C API, and avoids the overhead of cloning the data.

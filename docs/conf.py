@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -55,6 +55,7 @@ extensions = [
 breathe_projects = {"qiskit": "xml/"}
 breathe_default_project = "qiskit"
 breathe_domain_by_extension = {"h": "c"}
+breathe_show_include = False
 
 templates_path = ["_templates"]
 
@@ -116,6 +117,12 @@ autodoc_default_options = {
 # Move type hints from signatures to the parameter descriptions (except in overload cases, where
 # that's not possible).
 autodoc_typehints = "description"
+# Tell Sphinx it does not need to attempt to parse `# type:` comments for type hints.  We don't use
+# them for documentation, and having this set causes Sphinx to use a custom static-analysis checker
+# to find type hints, which (as of Sphinx 9.1.0, at least) is not as reliable at finding type hints
+# inherited from parent classes.
+autodoc_use_type_comments = False
+# Pull class documentation from both the class docstring and the `__init__`.
 autoclass_content = "both"
 # Some type hints are too long to be understandable. So, we set up aliases to be used instead.
 autodoc_type_aliases = {

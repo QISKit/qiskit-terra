@@ -1,3 +1,5 @@
+.. _capi-sabre-layout-options:
+
 ====================
 QkSabreLayoutOptions
 ====================

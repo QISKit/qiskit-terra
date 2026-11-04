@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,7 +13,6 @@
 
 """Base class for functional Pauli rotations."""
 
-from typing import Optional
 
 from abc import ABC, abstractmethod
 from ..blueprintcircuit import BlueprintCircuit
@@ -23,7 +22,7 @@ class FunctionalPauliRotations(BlueprintCircuit, ABC):
     """Base class for functional Pauli rotations."""
 
     def __init__(
-        self, num_state_qubits: Optional[int] = None, basis: str = "Y", name: str = "F"
+        self, num_state_qubits: int | None = None, basis: str = "Y", name: str = "F"
     ) -> None:
         r"""
         Args:
@@ -60,7 +59,7 @@ class FunctionalPauliRotations(BlueprintCircuit, ABC):
             basis: The Pauli rotation to be used.
 
         Raises:
-            ValueError: The provided basis in not X, Y or Z.
+            ValueError: The provided basis is not X, Y or Z.
         """
         basis = basis.lower()
         if self._basis is None or basis != self._basis:
@@ -79,7 +78,7 @@ class FunctionalPauliRotations(BlueprintCircuit, ABC):
         return self._num_state_qubits
 
     @num_state_qubits.setter
-    def num_state_qubits(self, num_state_qubits: Optional[int]) -> None:
+    def num_state_qubits(self, num_state_qubits: int | None) -> None:
         """Set the number of state qubits.
 
         Note that this may change the underlying quantum register, if the number of state qubits
@@ -95,7 +94,7 @@ class FunctionalPauliRotations(BlueprintCircuit, ABC):
             self._reset_registers(num_state_qubits)
 
     @abstractmethod
-    def _reset_registers(self, num_state_qubits: Optional[int]) -> None:
+    def _reset_registers(self, num_state_qubits: int | None) -> None:
         """Reset the registers according to the new number of state qubits.
 
         Args:

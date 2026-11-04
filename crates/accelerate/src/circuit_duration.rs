@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -13,7 +13,7 @@
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, Wire};
+use qiskit_circuit::dag_circuit::{NodeType, PyDAGCircuit, Wire};
 use qiskit_circuit::operations::{DelayUnit, Operation, OperationRef, Param, StandardInstruction};
 
 use qiskit_transpiler::target::Target;
@@ -26,9 +26,9 @@ use rustworkx_core::petgraph::visit::{EdgeRef, IntoEdgeReferences};
 
 /// Estimate the duration of a scheduled circuit in seconds
 #[pyfunction]
-pub(crate) fn compute_estimated_duration(dag: &DAGCircuit, target: &Target) -> PyResult<f64> {
+pub(crate) fn compute_estimated_duration(dag: &PyDAGCircuit, target: &Target) -> PyResult<f64> {
     let dt = target.dt;
-
+    let dag = dag.try_read()?;
     let get_duration =
         |edge: <&StableDiGraph<NodeType, Wire> as IntoEdgeReferences>::EdgeRef| -> PyResult<f64> {
             let node_weight = &dag[edge.target()];
@@ -53,6 +53,7 @@ pub(crate) fn compute_estimated_duration(dag: &DAGCircuit, target: &Target) -> P
                                         Param::ParameterExpression(_) => Err(QiskitError::new_err(
                                             "Circuit contains parameterized delays, can't compute a duration estimate with this circuit",
                                         )),
+                                        Param::Int(value) => Ok(*value as f64 * dt),
                                     }
                                 } else {
                                     Err(QiskitError::new_err(

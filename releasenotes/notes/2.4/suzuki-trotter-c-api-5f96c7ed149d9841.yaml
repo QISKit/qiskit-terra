@@ -1,0 +1,29 @@
+---
+features_c:
+  - |
+    Included to the C API the Suzuki-Trotter evolution by adding the
+    circuit generator in the circuit library. The new function
+    ``qk_circuit_library_suzuki_trotter`` can be used as follows:
+    
+    .. code-block:: C
+
+      #include <qiskit.h>
+
+      // Create the observable 
+      QkObs *obs = qk_obs_zero(1);
+
+      // Add the pauli terms
+      QkBitTerm op1_bits[1] = {QkBitTerm_X};
+      QkObsTerm term1 = {(QkComplex64){1.0, 0.0}, 1, op1_bits, (uint32_t[1]){0}, 1};
+      qk_obs_add_term(obs, &term1);
+
+      QkBitTerm op2_bits[1] = {QkBitTerm_Y};
+      QkObsTerm term2 = {(QkComplex64){1.0, 0.0}, 1, op2_bits, (uint32_t[1]){0}, 1};
+      qk_obs_add_term(obs, &term2);
+
+      // Call the evolution
+      QkCircuit *qc = qk_circuit_library_suzuki_trotter(obs, 2, 1, 0.1, true, false);
+
+      // Free the objects
+      qk_obs_free(obs);
+      qk_circuit_free(qc);

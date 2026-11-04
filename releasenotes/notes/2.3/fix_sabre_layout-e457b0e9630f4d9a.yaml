@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixes a bug that caused :func:`.qpy.load` to crash on circuits
+    created using :class:`~qiskit.transpiler.passes.SabreLayout` when
+    a user-created register named 'ancilla' is present.
+    
+

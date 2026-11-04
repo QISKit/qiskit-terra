@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -44,14 +44,14 @@ from qiskit.circuit.annotated_operation import (
     ControlModifier,
     PowerModifier,
 )
-from qiskit.circuit import Parameter, Qubit, Clbit, IfElseOp, SwitchCaseOp
+from qiskit.circuit import Parameter, Qubit, Clbit, IfElseOp, SwitchCaseOp, BoxOp
 from qiskit.circuit.classical import expr, types
 from qiskit.quantum_info import random_clifford
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.utils import optionals
-from test.visual import VisualTestUtilities  # pylint: disable=wrong-import-order
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
-from test.python.legacy_cmaps import (  # pylint: disable=wrong-import-order
+from test.visual import VisualTestUtilities
+from test import QiskitTestCase
+from test.python.legacy_cmaps import (
     TENERIFE_CMAP,
     YORKTOWN_CMAP,
 )
@@ -1220,6 +1220,28 @@ class TestCircuitMatplotlibDrawer(QiskitTestCase):
         )
         self.assertGreaterEqual(ratio, self.threshold)
 
+    def test_box_permuted_qubits(self):
+        """Test control-flow bodies whose qubits are permuted relative to the outer circuit.
+        See https://github.com/Qiskit/qiskit/issues/16510.
+        """
+        qc = QuantumCircuit(3, 1)
+        body = QuantumCircuit(3)
+        body.cz(0, 1)
+        body.h(2)
+        qc.append(BoxOp(body), [0, 2, 1])
+        qc.append(IfElseOp((qc.clbits[0], 0), body, body), [0, 2, 1])
+
+        fname = "box_permuted_qubits.png"
+        self.circuit_drawer(qc, output="mpl", filename=fname)
+        ratio = VisualTestUtilities._save_diff(
+            self._image_path(fname),
+            self._reference_path(fname),
+            fname,
+            FAILURE_DIFF_DIR,
+            FAILURE_PREFIX,
+        )
+        self.assertGreaterEqual(ratio, self.threshold)
+
     def test_barrier_label(self):
         """Test the barrier label"""
         circuit = QuantumCircuit(2)
@@ -1232,6 +1254,25 @@ class TestCircuitMatplotlibDrawer(QiskitTestCase):
 
         fname = "barrier_label.png"
         self.circuit_drawer(circuit, output="mpl", filename=fname)
+
+        ratio = VisualTestUtilities._save_diff(
+            self._image_path(fname),
+            self._reference_path(fname),
+            fname,
+            FAILURE_DIFF_DIR,
+            FAILURE_PREFIX,
+        )
+        self.assertGreaterEqual(ratio, self.threshold)
+
+    def test_barrier_label_truncation(self):
+        """Test that long barrier labels are truncated"""
+        circuit = QuantumCircuit(2)
+        circuit.barrier()
+        circuit.barrier(label="a" * 10)
+        circuit.barrier(label="b" * 1000)
+
+        fname = "barrier_label_truncation.png"
+        self.circuit_drawer(circuit, output="mpl", filename=fname, barrier_label_len=9)
 
         ratio = VisualTestUtilities._save_diff(
             self._image_path(fname),

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -20,7 +20,8 @@ import importlib
 import subprocess
 import typing
 import warnings
-from typing import Union, Iterable, Dict, Optional, Callable, Type
+
+from collections.abc import Iterable, Callable
 
 from qiskit.exceptions import MissingOptionalLibraryError, OptionalDependencyImportWarning
 from .classtools import wrap_method
@@ -28,10 +29,10 @@ from .classtools import wrap_method
 
 class _RequireNow:
     """Helper callable that accepts all function signatures and simply calls
-    :meth:`.LazyDependencyManager.require_now`.  This helpful when used with :func:`.wrap_method`,
+    :meth:`.LazyDependencyManager.require_now`.  This is helpful when used with :func:`.wrap_method`,
     as the callable needs to be compatible with all signatures and be picklable."""
 
-    __slots__ = ("_tester", "_feature")
+    __slots__ = ("_feature", "_tester")
 
     def __init__(self, tester, feature):
         self._tester = tester
@@ -42,7 +43,7 @@ class _RequireNow:
 
 
 class LazyDependencyManager(abc.ABC):
-    """A mananger for some optional features that are expensive to import, or to verify the
+    """A manager for some optional features that are expensive to import, or to verify the
     existence of.
 
     These objects can be used as Booleans, such as ``if x``, and will evaluate ``True`` if the
@@ -83,7 +84,7 @@ class LazyDependencyManager(abc.ABC):
     command-line tools are available, respectively.
     """
 
-    __slots__ = ("_bool", "_callback", "_name", "_install", "_msg")
+    __slots__ = ("_bool", "_callback", "_install", "_msg", "_name")
 
     def __init__(self, *, name=None, callback=None, install=None, msg=None):
         """
@@ -167,10 +168,10 @@ class LazyDependencyManager(abc.ABC):
         return out
 
     @typing.overload
-    def require_in_instance(self, feature_or_class: Type) -> Type: ...
+    def require_in_instance(self, feature_or_class: type) -> type: ...
 
     @typing.overload
-    def require_in_instance(self, feature_or_class: str) -> Callable[[Type], Type]: ...
+    def require_in_instance(self, feature_or_class: str) -> Callable[[type], type]: ...
 
     def require_in_instance(self, feature_or_class):
         """A class decorator that requires the dependency is available when the class is
@@ -246,12 +247,12 @@ class LazyImportTester(LazyDependencyManager):
 
     def __init__(
         self,
-        name_map_or_modules: Union[str, Dict[str, Iterable[str]], Iterable[str]],
+        name_map_or_modules: str | dict[str, Iterable[str]] | Iterable[str],
         *,
-        name: Optional[str] = None,
-        callback: Optional[Callable[[bool], None]] = None,
-        install: Optional[str] = None,
-        msg: Optional[str] = None,
+        name: str | None = None,
+        callback: Callable[[bool], None] | None = None,
+        install: str | None = None,
+        msg: str | None = None,
     ):
         """
         Args:
@@ -260,6 +261,12 @@ class LazyImportTester(LazyDependencyManager):
                 module.  It should be valid to write ``from <module> import <name1>, <name2>, ...``.
                 If simply a string or iterable of strings, then it should be valid to write
                 ``import <module>`` for each of them.
+            name: the name of this optional dependency.
+            callback: a callback that is called immediately after the availability of the library is
+                tested with the result.  This will only be called once.
+            install: how to install this optional dependency.  Passed to
+                :class:`.MissingOptionalLibraryError` as the ``pip_install`` parameter.
+            msg: an extra message to include in the error raised if this is required.
 
         Raises:
             ValueError: if no modules are given.
@@ -269,7 +276,7 @@ class LazyImportTester(LazyDependencyManager):
         elif isinstance(name_map_or_modules, str):
             self._modules = {name_map_or_modules: ()}
         else:
-            self._modules = {module: () for module in name_map_or_modules}
+            self._modules = dict.fromkeys(name_map_or_modules, ())
         if not self._modules:
             raise ValueError("no modules supplied")
         if name is not None:
@@ -332,17 +339,23 @@ class LazySubprocessTester(LazyDependencyManager):
 
     def __init__(
         self,
-        command: Union[str, Iterable[str]],
+        command: str | Iterable[str],
         *,
-        name: Optional[str] = None,
-        callback: Optional[Callable[[bool], None]] = None,
-        install: Optional[str] = None,
-        msg: Optional[str] = None,
+        name: str | None = None,
+        callback: Callable[[bool], None] | None = None,
+        install: str | None = None,
+        msg: str | None = None,
     ):
         """
         Args:
             command: the strings that make up the command to be run.  For example,
                 ``["pdflatex", "-version"]``.
+            name: the name of this optional dependency.
+            callback: a callback that is called immediately after the availability of the library is
+                tested with the result.  This will only be called once.
+            install: how to install this optional dependency.  Passed to
+                :class:`.MissingOptionalLibraryError` as the ``pip_install`` parameter.
+            msg: an extra message to include in the error raised if this is required.
 
         Raises:
             ValueError: if an empty command is given.
@@ -354,7 +367,7 @@ class LazySubprocessTester(LazyDependencyManager):
 
     def _is_available(self):
         try:
-            subprocess.run(
+            subprocess.run(  # noqa: S603
                 self._command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
         except (OSError, subprocess.SubprocessError):

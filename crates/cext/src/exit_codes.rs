@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -42,6 +42,8 @@ pub enum ExitCode {
     IndexError = 103,
     /// Duplicate index.
     DuplicateIndexError = 104,
+    /// Invalid ``QkOperationKind``.
+    InvalidOperationKind = 105,
     /// Error related to arithmetic operations or similar.
     ArithmeticError = 200,
     /// Mismatching number of qubits.
@@ -60,12 +62,39 @@ pub enum ExitCode {
     TargetInvalidInstKey = 304,
     /// Transpilation failed
     TranspilerError = 400,
+    /// Incompatible types.
+    IncompatibleTypes = 401,
+    /// Type casting error.
+    CastingError = 402,
+    /// QkDag operation error
+    DagError = 500,
+    /// The DAGs have mismatching qubit/clbit amounts during compose.
+    DagComposeMismatch = 501,
+    /// One or more bit indices were not found during compose.
+    DagComposeMissingBit = 502,
+    /// Errors concerning parameter handling.
+    ParameterError = 600,
+    /// Parameter name conflict.
+    ParameterNameConflict = 601,
+    /// QPY serialization, deserialization, or file I/O failed.
+    QpyError = 700,
+    /// QkCircuit operation error
+    CircuitError = 800,
+    /// Incorrect delay unit added to the circuit. Use specialized function.
+    IncorrectDelayUnit = 801,
+    /// CustomOperation error
+    CustomOperation = 900,
+    /// Repeated vtable slot error
+    CustomOperationRepeatedSlot = 901,
 }
 
 impl From<ArithmeticError> for ExitCode {
     fn from(value: ArithmeticError) -> Self {
         match value {
             ArithmeticError::MismatchedQubits { left: _, right: _ } => ExitCode::MismatchedQubits,
+            ArithmeticError::InvalidOperation(_) => ExitCode::ArithmeticError,
+            ArithmeticError::DuplicatedIndex => ExitCode::DuplicateIndexError,
+            ArithmeticError::OutOfBounds(_) => ExitCode::IndexError,
         }
     }
 }

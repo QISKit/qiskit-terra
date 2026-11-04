@@ -4,19 +4,20 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""Implement a integer-weighted sum over a set of qubits."""
+"""Implement an integer-weighted sum over a set of qubits."""
 
 from __future__ import annotations
 
 import typing
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit, QuantumRegister, AncillaRegister
+
+from qiskit.circuit import QuantumCircuit, QuantumRegister, AncillaRegister
 from qiskit.synthesis.multi_controlled import synth_mcx_n_clean_m15
 
 if typing.TYPE_CHECKING:
@@ -93,25 +94,24 @@ def synth_weighted_sum_carry(weighted_sum: WeightedSumGate) -> QuantumCircuit:
                     circuit.x(qr_carry[j - 1])
                     circuit.cx(q_state, qr_sum[j])
                     circuit.ccx(q_state, qr_carry[j - 1], qr_sum[j])
+            elif num_sum_qubits == 1:
+                pass  # nothing to do, since nothing to add
+            elif j == 0:
+                pass  # nothing to do, since nothing to add
+            elif j == num_sum_qubits - 1:
+                # compute (q_sum[j] + q_carry[j-1]) into (q_sum[j])
+                # - controlled by q_state[i] / last qubit,
+                # no carry needed by construction
+                circuit.ccx(q_state, qr_carry[j - 1], qr_sum[j])
             else:
-                if num_sum_qubits == 1:
-                    pass  # nothing to do, since nothing to add
-                elif j == 0:
-                    pass  # nothing to do, since nothing to add
-                elif j == num_sum_qubits - 1:
-                    # compute (q_sum[j] + q_carry[j-1]) into (q_sum[j])
-                    # - controlled by q_state[i] / last qubit,
-                    # no carry needed by construction
-                    circuit.ccx(q_state, qr_carry[j - 1], qr_sum[j])
-                else:
-                    # compute (q_sum[j] + q_carry[j-1]) into (q_sum[j], q_carry[j])
-                    # - controlled by q_state[i]
-                    circuit.compose(
-                        c3x,
-                        [q_state, qr_sum[j], qr_carry[j - 1], qr_carry[j]] + qr_control[:],
-                        inplace=True,
-                    )
-                    circuit.ccx(q_state, qr_carry[j - 1], qr_sum[j])
+                # compute (q_sum[j] + q_carry[j-1]) into (q_sum[j], q_carry[j])
+                # - controlled by q_state[i]
+                circuit.compose(
+                    c3x,
+                    [q_state, qr_sum[j], qr_carry[j - 1], qr_carry[j]] + qr_control[:],
+                    inplace=True,
+                )
+                circuit.ccx(q_state, qr_carry[j - 1], qr_sum[j])
 
         # uncompute carry qubits
         for j in reversed(range(len(weight_binary))):
@@ -134,22 +134,21 @@ def synth_weighted_sum_carry(weighted_sum: WeightedSumGate) -> QuantumCircuit:
                     )
                     circuit.cx(q_state, qr_carry[j])
                     circuit.x(qr_carry[j - 1])
+            elif num_sum_qubits == 1:
+                pass
+            elif j == 0:
+                pass
+            elif j == num_sum_qubits - 1:
+                pass
             else:
-                if num_sum_qubits == 1:
-                    pass
-                elif j == 0:
-                    pass
-                elif j == num_sum_qubits - 1:
-                    pass
-                else:
-                    # compute (q_sum[j] + q_carry[j-1]) into (q_sum[j], q_carry[j])
-                    # - controlled by q_state[i]
-                    circuit.x(qr_sum[j])
-                    circuit.compose(
-                        c3x,
-                        [q_state, qr_sum[j], qr_carry[j - 1], qr_carry[j]] + qr_control[:],
-                        inplace=True,
-                    )
-                    circuit.x(qr_sum[j])
+                # compute (q_sum[j] + q_carry[j-1]) into (q_sum[j], q_carry[j])
+                # - controlled by q_state[i]
+                circuit.x(qr_sum[j])
+                circuit.compose(
+                    c3x,
+                    [q_state, qr_sum[j], qr_carry[j - 1], qr_carry[j]] + qr_control[:],
+                    inplace=True,
+                )
+                circuit.x(qr_sum[j])
 
     return circuit

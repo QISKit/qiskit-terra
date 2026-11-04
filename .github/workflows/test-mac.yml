@@ -8,36 +8,39 @@ on:
           Python version to currently test
         type: string
         required: true
-
       install-optionals:
         description: >
           Decides whether we install optyional dependencies
         type: boolean
         default: false
-
       runner:
         description: >
           Describes the system this workflow should run on.
         type: string
         required: true
+      mimalloc:
+        description: >
+          Whether to build with mimalloc or not
+        type: boolean
+        default: true
+
 jobs:
   tests-mac:
-    if: github.repository_owner == 'Qiskit'
-    name: ${{ inputs.runner }}-tests-Python-${{ inputs.python-version }}
+    name: ${{ inputs.runner }} - Python ${{ inputs.python-version }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 60
     env:
       QISKIT_TEST_CAPTURE_STREAMS: 1
-    strategy:
-      fail-fast: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ inputs.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
+      - name: Install Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - name: Cache stestr
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           key: 'stestr | "${{ runner.os }}" | "${{ inputs.python-version }}" | "${{ github.run_id }}"'
           restore-keys: |
@@ -45,24 +48,24 @@ jobs:
             stestr | "${{ runner.os }}"
             stestr
           path: .stestr
+      - name: Set mimalloc for build
+        if: ${{ inputs.mimalloc }}
+        run: 'echo "QISKIT_BUILD_WITH_MIMALLOC=1" >> $GITHUB_ENV'
       - name: "Install dependencies"
         run: |
           set -e
-          python -m pip install --upgrade pip setuptools wheel
           python -m venv test-job
           source test-job/bin/activate
-          python -m pip install -U pip setuptools wheel
+          python -m pip install -U pip
           python -m pip install -U \
             -c constraints.txt \
-            -r requirements.txt \
-            -r requirements-dev.txt \
+            --group test \
             -e .
-          pip check
       - name: "Install optionals"
         run: |
           set -e
           source test-job/bin/activate
-          pip install -r requirements-optional.txt -c constraints.txt
+          pip install --group optionals-all -c constraints.txt
           pip check
         if: ${{ inputs.install-optionals }}
       - name: "Run tests"
@@ -72,19 +75,16 @@ jobs:
           python tools/report_numpy_state.py
           export PYTHONHASHSEED=$(python -S -c "import random; print(random.randint(1, 4294967295))")
           echo "PYTHONHASHSEED=$PYTHONHASHSEED"
-          stestr run --slowest
+          stestr run --slowest --abbreviate
         env:
           QISKIT_PARALLEL: FALSE
           QISKIT_IGNORE_USER_SETTINGS: TRUE
           RUST_BACKTRACE: 1
       - name: Filter stestr history
         run: |
-          set -e
-          pushd .stestr
-          ls | grep -e '^[[:digit:]]' | xargs -n1 rm -f
-          popd
+          test-job/bin/stestr history remove all
       - name: Copy and Publish images
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: ${{ failure() }}
         with:
           name: copied-images-${{ runner.name }}-tests-Python-${{ inputs.python-version }}

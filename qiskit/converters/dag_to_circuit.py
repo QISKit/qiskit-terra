@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -24,7 +24,8 @@ def dag_to_circuit(dag, copy_operations=True):
     Args:
         dag (DAGCircuit): the input dag.
         copy_operations (bool): Deep copy the operation objects
-            in the :class:`~.DAGCircuit` for the output :class:`~.QuantumCircuit`.
+            in the :class:`~.DAGCircuit` for the output :class:`~.QuantumCircuit`,
+            and shallow copy the metadata.
             This should only be set to ``False`` if the input :class:`~.DAGCircuit`
             will not be used anymore as the operations in the output
             :class:`~.QuantumCircuit` will be shared instances and
@@ -68,7 +69,8 @@ def dag_to_circuit(dag, copy_operations=True):
         name=name,
         global_phase=dag.global_phase,
     )
-    circuit.metadata = dag.metadata or {}
+    metadata = dag.metadata or {}
+    circuit.metadata = metadata.copy() if copy_operations else metadata
     circuit._data = circuit_data
     circuit._duration = dag._duration
     circuit._unit = dag._unit

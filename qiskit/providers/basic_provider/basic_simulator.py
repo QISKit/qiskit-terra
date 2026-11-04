@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -27,6 +27,7 @@ Where the input is a :class:`.QuantumCircuit` object and the output is a
 :class:`.BasicProviderJob` object,
 which can later be queried for the Result object. The result will contain a 'memory' data
 field, which is a result of measurements for each shot.
+
 """
 
 from __future__ import annotations
@@ -36,10 +37,9 @@ import uuid
 import time
 import logging
 import warnings
-
 from collections import Counter
-import numpy as np
 
+import numpy as np
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import UnitaryGate
 from qiskit.circuit.library.standard_gates import get_standard_gate_name_mapping, GlobalPhaseGate
@@ -47,6 +47,11 @@ from qiskit.providers.backend import BackendV2
 from qiskit.providers.options import Options
 from qiskit.result import Result
 from qiskit.transpiler import Target
+
+
+from qiskit.quantum_info import Clifford, StabilizerState
+from qiskit.exceptions import QiskitError
+
 
 from .basic_provider_job import BasicProviderJob
 from .basic_provider_tools import single_gate_matrix
@@ -63,12 +68,18 @@ logger = logging.getLogger(__name__)
 
 
 class BasicSimulator(BackendV2):
-    """Python implementation of a basic (non-efficient) quantum simulator."""
+    """Python implementation of a basic (non-efficient) quantum simulator.
+
+    The simulator supports up to 24 qubits for statevector simulation and up to
+    2048 qubits for Clifford/Stabilizer simulation."""
 
     # Formerly calculated as `int(log2(local_hardware_info()["memory"]*(1024**3)/16))`.
-    # After the removal of `local_hardware_info()`, it's hardcoded to 24 qubits,
+    # After the removal of `local_hardware_info()`, Statevector simulation is limited to 24 qubits.
+    # Clifford/Stabilizer simulation can use 2048 qubits.
     # which matches the ~268 MB of required memory.
-    MAX_QUBITS_MEMORY = 24
+
+    MAX_QUBITS_STATEVECTOR = 24  # For statevector
+    MAX_QUBITS_CLIFFORD = 2048  # For Clifford/Stabilizer simulation
 
     def __init__(
         self,
@@ -110,6 +121,7 @@ class BasicSimulator(BackendV2):
         self._memory = self.options.get("memory")
         self._initial_statevector = self.options.get("initial_statevector")
         self._seed_simulator = self.options.get("seed_simulator")
+        self._use_clifford_optimization = self.options.get("use_clifford_optimization")
 
     @property
     def max_circuits(self) -> None:
@@ -214,6 +226,7 @@ class BasicSimulator(BackendV2):
             memory=True,
             initial_statevector=None,
             seed_simulator=None,
+            use_clifford_optimization=False,
         )
 
     def _add_unitary(self, gate: np.ndarray, qubits: list[int]) -> None:
@@ -240,7 +253,7 @@ class BasicSimulator(BackendV2):
         Args:
             qubit: index indicating the qubit to measure
 
-        Return:
+        Returns:
             pair (outcome, probability) where outcome is '0' or '1' and
             probability is the probability of the returned outcome.
         """
@@ -325,9 +338,9 @@ class BasicSimulator(BackendV2):
         """Apply a reset instruction to a qubit.
 
         Args:
-            qubit: the qubit being rest
+            qubit: the qubit being reset
 
-        This is done by doing a simulating a measurement
+        This is done by simulating a measurement
         outcome and projecting onto the outcome state while
         renormalizing.
         """
@@ -362,7 +375,7 @@ class BasicSimulator(BackendV2):
         self._memory = self.options.get("memory")
         self._initial_statevector = self.options.get("initial_statevector")
         self._seed_simulator = self.options.get("seed_simulator")
-
+        self._use_clifford_optimization = self.options.get("use_clifford_optimization")
         # Apply custom run options
         if run_options.get("initial_statevector", None) is not None:
             self._initial_statevector = np.array(run_options["initial_statevector"], dtype=complex)
@@ -381,6 +394,9 @@ class BasicSimulator(BackendV2):
             self._seed_simulator = np.random.randint(2147483647, dtype="int32")
         if "memory" in run_options:
             self._memory = run_options["memory"]
+
+        if "use_clifford_optimization" in run_options:
+            self._use_clifford_optimization = run_options["use_clifford_optimization"]
         # Set seed for local random number gen.
         self._local_rng = np.random.default_rng(seed=self._seed_simulator)
 
@@ -449,6 +465,9 @@ class BasicSimulator(BackendV2):
                 * "memory": bool. If True, the result will contain the results
                   of every individual shot simulation.
 
+                * "use_clifford_optimization": bool. If True, enables Clifford
+                  circuit optimization using stabilizer formalism. Default: False.
+
             Example::
 
                 backend.run(
@@ -500,6 +519,95 @@ class BasicSimulator(BackendV2):
 
         return Result.from_dict(result)
 
+    def _is_clifford_circuit(self, circuit: QuantumCircuit):
+        """Check if circuit is Clifford and return Clifford object or None."""
+        try:
+            circ_no_meas = circuit.remove_final_measurements(inplace=False)
+            return Clifford(circ_no_meas)
+        except QiskitError:
+            return None
+
+    def _run_clifford_circuit(self, circuit: QuantumCircuit, clifford_obj) -> dict:
+        """Simulate a Clifford circuit using StabilizerState.
+
+        This method provides efficient simulation for Clifford circuits
+        by using the stabilizer formalism instead of full statevector.
+
+        Args:
+            circuit: Clifford circuit to simulate
+            clifford_obj: Pre-computed Clifford object representing the circuit
+
+        Returns:
+            Result dictionary matching _run_circuit format
+        """
+
+        start = time.time()
+
+        # Find measurement operations
+        measure_ops = []
+        for operation in circuit.data:
+            if operation.name == "measure":
+                qubit = circuit.find_bit(operation.qubits[0]).index
+                clbit = circuit.find_bit(operation.clbits[0]).index
+                measure_ops.append((qubit, clbit))
+
+        # Sample measurements
+        memory = []
+        if measure_ops:
+            # Create StabilizerState once
+            stab_state = StabilizerState(clifford_obj, validate=False)
+
+            # Set seed if provided
+            if self._seed_simulator is not None:
+                stab_state.seed(self._seed_simulator)
+
+            # Sample ALL shots at once (much faster than per-shot loop!)
+            samples = stab_state.sample_memory(self._shots)
+
+            # Process each sample
+            for sample in samples:
+                # Map measured qubits to classical bits
+                classical_memory = 0
+                for qubit, clbit in measure_ops:
+                    bit_val = int(sample[-(qubit + 1)])
+                    membit = 1 << clbit
+                    classical_memory = (classical_memory & (~membit)) | (bit_val << clbit)
+
+                # Convert to hex format
+                outcome = bin(classical_memory)[2:]
+                memory.append(hex(int(outcome, 2)))
+
+        # Build result data
+        data = {"counts": dict(Counter(memory))}
+        if self._memory:
+            data["memory"] = memory
+
+        end = time.time()
+
+        # Build header
+        header = {
+            "name": circuit.name,
+            "n_qubits": circuit.num_qubits,
+            "qreg_sizes": [[qreg.name, qreg.size] for qreg in circuit.qregs],
+            "creg_sizes": [[creg.name, creg.size] for creg in circuit.cregs],
+            "qubit_labels": [[qreg.name, j] for qreg in circuit.qregs for j in range(qreg.size)],
+            "clbit_labels": [[creg.name, j] for creg in circuit.cregs for j in range(creg.size)],
+            "memory_slots": circuit.num_clbits,
+            "global_phase": circuit.global_phase,
+            "metadata": circuit.metadata if circuit.metadata is not None else {},
+        }
+
+        return {
+            "name": circuit.name,
+            "seed_simulator": self._seed_simulator,
+            "shots": self._shots,
+            "data": data,
+            "status": "DONE",
+            "success": True,
+            "header": header,
+            "time_taken": (end - start),
+        }
+
     def _run_circuit(self, circuit) -> dict:
         """Simulate a single circuit run.
 
@@ -535,6 +643,18 @@ class BasicSimulator(BackendV2):
         Raises:
             BasicProviderError: if an error occurred.
         """
+
+        # Set these BEFORE the Clifford check
+        self._number_of_qubits = circuit.num_qubits
+        self._number_of_cmembits = circuit.num_clbits
+
+        # Check if circuit is Clifford and use optimized simulation
+        # Check initial_statevector first (cheaper)
+        if self._initial_statevector is None and self._use_clifford_optimization:
+            clifford_obj = self._is_clifford_circuit(circuit)
+            if clifford_obj is not None:
+                return self._run_clifford_circuit(circuit, clifford_obj)
+
         start = time.time()
 
         self._number_of_qubits = circuit.num_qubits
@@ -581,7 +701,7 @@ class BasicSimulator(BackendV2):
                 # Check if single qubit gate
                 elif operation.name in SINGLE_QUBIT_GATES:
                     params = getattr(operation, "params", None)
-                    qubit = [circuit.find_bit(bit).index for bit in operation.qubits][0]
+                    qubit = next(circuit.find_bit(bit).index for bit in operation.qubits)
                     gate = single_gate_matrix(operation.name, params)
                     self._add_unitary(gate, [qubit])
                 elif operation.name in TWO_QUBIT_GATES_WITH_PARAMETERS:
@@ -616,8 +736,8 @@ class BasicSimulator(BackendV2):
                     pass
                 # Check if measure
                 elif operation.name == "measure":
-                    qubit = [circuit.find_bit(bit).index for bit in operation.qubits][0]
-                    cmembit = [circuit.find_bit(bit).index for bit in operation.clbits][0]
+                    qubit = next(circuit.find_bit(bit).index for bit in operation.qubits)
+                    cmembit = next(circuit.find_bit(bit).index for bit in operation.clbits)
                     if self._sample_measure:
                         # If sampling measurements record the qubit and cmembit
                         # for this measurement for later sampling
@@ -673,21 +793,18 @@ class BasicSimulator(BackendV2):
 
     def _validate(self, run_input: list[QuantumCircuit]) -> None:
         """Semantic validations of the input."""
-        max_qubits = self.MAX_QUBITS_MEMORY
-
         for circuit in run_input:
+            # Check which path: Clifford or Statevector
+            use_clifford = (
+                self._use_clifford_optimization and self._is_clifford_circuit(circuit) is not None
+            )
+            if use_clifford:
+                max_qubits = self.MAX_QUBITS_CLIFFORD
+            else:
+                max_qubits = self.MAX_QUBITS_STATEVECTOR
+
             if circuit.num_qubits > max_qubits:
                 raise BasicProviderError(
                     f"Number of qubits {circuit.num_qubits} is greater than maximum ({max_qubits}) "
                     f'for "{self.name}".'
-                )
-            name = circuit.name
-            if len(circuit.cregs) == 0:
-                logger.warning(
-                    'No classical registers in circuit "%s", counts will be empty.', name
-                )
-            elif "measure" not in [op.name for op in circuit.data]:
-                logger.warning(
-                    'No measurements in circuit "%s", classical register will remain all zeros.',
-                    name,
                 )

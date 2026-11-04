@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed :meth:`.Statevector.evolve` modifying the input statevector in-place when the
+    instruction has a global phase.
+    See `#15750 <https://github.com/Qiskit/qiskit/issues/15750>`__.

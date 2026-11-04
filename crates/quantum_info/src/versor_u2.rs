@@ -4,23 +4,16 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use std::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, FRAC_PI_8};
-
 use nalgebra::{Matrix2, Quaternion, Unit, UnitQuaternion};
 use ndarray::ArrayView2;
 use num_complex::Complex64;
 use thiserror::Error;
-
-use qiskit_circuit::operations::{Param, StandardGate};
-
-const COS_FRAC_PI_8: f64 = 0.9238795325112867;
-const SIN_FRAC_PI_8: f64 = 0.3826834323650898;
 
 #[derive(Error, Debug)]
 pub enum VersorU2Error {
@@ -75,7 +68,7 @@ impl VersorSU2 {
     /// Internally this calculates `sin` and `cos`, so discrete-angle forms will be more efficient
     /// to be written explicitly.
     #[inline]
-    fn from_rz(angle: f64) -> Self {
+    pub fn from_rz(angle: f64) -> Self {
         let (sin, cos) = (angle * 0.5).sin_cos();
         Self(Unit::new_unchecked(Quaternion::new(cos, -sin, 0., 0.)))
     }
@@ -85,7 +78,7 @@ impl VersorSU2 {
     /// Internally this calculates `sin` and `cos`, so discrete-angle forms will be more efficient
     /// to be written explicitly.
     #[inline]
-    fn from_ry(angle: f64) -> Self {
+    pub fn from_ry(angle: f64) -> Self {
         let (sin, cos) = (angle * 0.5).sin_cos();
         Self(Unit::new_unchecked(Quaternion::new(cos, 0., -sin, 0.)))
     }
@@ -95,7 +88,7 @@ impl VersorSU2 {
     /// Internally this calculates `sin` and `cos`, so discrete-angle forms will be more efficient
     /// to be written explicitly.
     #[inline]
-    fn from_rx(angle: f64) -> Self {
+    pub fn from_rx(angle: f64) -> Self {
         let (sin, cos) = (angle * 0.5).sin_cos();
         Self(Unit::new_unchecked(Quaternion::new(cos, 0., 0., -sin)))
     }
@@ -115,7 +108,7 @@ impl VersorSU2 {
 /// A versor-based (unit-quaternion) representation of a single-qubit gate.
 ///
 /// In general, a single-qubit gate is a member of the group $U(2)$, and the group $SU(2)$ is
-/// isomoprhic to the versors.  We can keep track of the complex phase separately to the rotation
+/// isomorphic to the versors.  We can keep track of the complex phase separately to the rotation
 /// action, to fully describe a member of $U(2)$.
 ///
 /// See [VersorSU2] for the underlying quaternion representation.
@@ -134,132 +127,6 @@ impl VersorU2 {
         Self {
             phase: 0.,
             su2: VersorSU2::identity(),
-        }
-    }
-
-    /// Get the versor representation of a 1q [StandardGate] without constructing a matrix.
-    ///
-    /// Returns the error state if `gate` is not 1q, or if any of the parameters are symbolic.
-    pub fn from_standard(gate: StandardGate, params: &[Param]) -> Result<Self, VersorU2Error> {
-        debug_assert_eq!(params.len(), gate.get_num_params() as usize);
-        match gate {
-            StandardGate::GlobalPhase => {
-                let &[Param::Float(phase)] = params else {
-                    return Err(VersorU2Error::Symbolic);
-                };
-                Ok(VersorSU2::identity().with_phase(phase))
-            }
-            StandardGate::H => {
-                Ok(
-                    VersorSU2::from_quaternion_unchecked(0., -FRAC_1_SQRT_2, 0., -FRAC_1_SQRT_2)
-                        .with_phase(FRAC_PI_2),
-                )
-            }
-            StandardGate::I => Ok(Self::identity()),
-            StandardGate::X => {
-                Ok(VersorSU2::from_quaternion_unchecked(0., 0., 0., -1.).with_phase(FRAC_PI_2))
-            }
-            StandardGate::Y => {
-                Ok(VersorSU2::from_quaternion_unchecked(0., 0., -1., 0.).with_phase(FRAC_PI_2))
-            }
-            StandardGate::Z => {
-                Ok(VersorSU2::from_quaternion_unchecked(0., -1., 0., 0.).with_phase(FRAC_PI_2))
-            }
-            StandardGate::Phase | StandardGate::U1 => {
-                let &[Param::Float(angle)] = params else {
-                    return Err(VersorU2Error::Symbolic);
-                };
-                Ok(VersorSU2::from_rz(angle).with_phase(angle * 0.5))
-            }
-            StandardGate::R => {
-                let &[Param::Float(angle), Param::Float(axis)] = params else {
-                    return Err(VersorU2Error::Symbolic);
-                };
-                let (sin_angle, cos_angle) = (angle * 0.5).sin_cos();
-                let (sin_axis, cos_axis) = axis.sin_cos();
-                Ok(VersorSU2::from_quaternion_unchecked(
-                    cos_angle,
-                    0.,
-                    -sin_axis * sin_angle,
-                    -cos_axis * sin_angle,
-                )
-                .into())
-            }
-            StandardGate::RX => {
-                let &[Param::Float(angle)] = params else {
-                    return Err(VersorU2Error::Symbolic);
-                };
-                Ok(VersorSU2::from_rx(angle).into())
-            }
-            StandardGate::RY => {
-                let &[Param::Float(angle)] = params else {
-                    return Err(VersorU2Error::Symbolic);
-                };
-                Ok(VersorSU2::from_ry(angle).into())
-            }
-            StandardGate::RZ => {
-                let &[Param::Float(angle)] = params else {
-                    return Err(VersorU2Error::Symbolic);
-                };
-                Ok(VersorSU2::from_rz(angle).into())
-            }
-            StandardGate::S => {
-                Ok(
-                    VersorSU2::from_quaternion_unchecked(FRAC_1_SQRT_2, -FRAC_1_SQRT_2, 0., 0.)
-                        .with_phase(FRAC_PI_4),
-                )
-            }
-            StandardGate::Sdg => {
-                Ok(
-                    VersorSU2::from_quaternion_unchecked(FRAC_1_SQRT_2, FRAC_1_SQRT_2, 0., 0.)
-                        .with_phase(-FRAC_PI_4),
-                )
-            }
-            StandardGate::SX => {
-                Ok(
-                    VersorSU2::from_quaternion_unchecked(FRAC_1_SQRT_2, 0., 0., -FRAC_1_SQRT_2)
-                        .with_phase(FRAC_PI_4),
-                )
-            }
-            StandardGate::SXdg => {
-                Ok(
-                    VersorSU2::from_quaternion_unchecked(FRAC_1_SQRT_2, 0., 0., FRAC_1_SQRT_2)
-                        .with_phase(-FRAC_PI_4),
-                )
-            }
-            StandardGate::T => {
-                Ok(
-                    VersorSU2::from_quaternion_unchecked(COS_FRAC_PI_8, -SIN_FRAC_PI_8, 0., 0.)
-                        .with_phase(FRAC_PI_8),
-                )
-            }
-            StandardGate::Tdg => {
-                Ok(
-                    VersorSU2::from_quaternion_unchecked(COS_FRAC_PI_8, SIN_FRAC_PI_8, 0., 0.)
-                        .with_phase(-FRAC_PI_8),
-                )
-            }
-            StandardGate::U | StandardGate::U3 => {
-                let &[Param::Float(theta), Param::Float(phi), Param::Float(lambda)] = params else {
-                    return Err(VersorU2Error::Symbolic);
-                };
-                Ok((VersorSU2::from_rz(phi)
-                    * VersorSU2::from_ry(theta)
-                    * VersorSU2::from_rz(lambda))
-                .with_phase((phi + lambda) * 0.5))
-            }
-            StandardGate::U2 => {
-                let &[Param::Float(phi), Param::Float(lambda)] = params else {
-                    return Err(VersorU2Error::Symbolic);
-                };
-                let (sin, cos) = (lambda * 0.5).sin_cos();
-                // The RY(pi/2).RZ(lambda) part of the decomposition, without the phase term.
-                let ry_rz = VersorSU2(Unit::new_unchecked(
-                    FRAC_1_SQRT_2 * Quaternion::new(cos, -sin, -cos, -sin),
-                ));
-                Ok((VersorSU2::from_rz(phi) * ry_rz).with_phase((phi + lambda) * 0.5))
-            }
-            _ => Err(VersorU2Error::MultiQubit),
         }
     }
 
@@ -504,9 +371,7 @@ mod test {
         for gate in all_1q_gates() {
             let params = &params[0..gate.num_params() as usize];
             let direct_matrix = gate.matrix(params).unwrap();
-            let versor_matrix = VersorU2::from_standard(gate, params)
-                .unwrap()
-                .matrix_contiguous();
+            let versor_matrix = gate.versor_u2(params).unwrap().matrix_contiguous();
             if direct_matrix.abs_diff_ne(&aview2(&versor_matrix), ATOL) {
                 fails.push((gate, direct_matrix, versor_matrix));
             }
@@ -547,8 +412,8 @@ mod test {
                 .matrix(left_params)
                 .unwrap()
                 .dot(&right.matrix(right_params).unwrap());
-            let versor_matrix = (VersorU2::from_standard(left, left_params).unwrap()
-                * VersorU2::from_standard(right, right_params).unwrap())
+            let versor_matrix = (left.versor_u2(left_params).unwrap()
+                * right.versor_u2(right_params).unwrap())
             .matrix_contiguous();
             if direct_matrix.abs_diff_ne(&aview2(&versor_matrix), ATOL) {
                 fails.push((left, right, direct_matrix, versor_matrix));

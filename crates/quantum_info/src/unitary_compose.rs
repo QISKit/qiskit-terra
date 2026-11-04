@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -13,30 +13,22 @@
 use ndarray::{Array, Array2, ArrayView, ArrayView2, IxDyn};
 use ndarray_einsum::*;
 use num_complex::{Complex, Complex64};
-use qiskit_circuit::Qubit;
 
-static LOWERCASE: [u8; 26] = [
-    b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p',
-    b'q', b'r', b's', b't', b'u', b'v', b'w', b'x', b'y', b'z',
-];
-
-static _UPPERCASE: [u8; 26] = [
-    b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O', b'P',
-    b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z',
-];
+static LOWERCASE: [u8; 26] = *b"abcdefghijklmnopqrstuvwxyz";
+static _UPPERCASE: [u8; 26] = *b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 // Compose the operators given by `gate_unitary` and `overall_unitary`, i.e. apply one to the other
 // as specified by the involved qubits given in `qubits` and the `front` parameter
 pub fn compose(
     gate_unitary: &ArrayView2<Complex64>,
     overall_unitary: &ArrayView2<Complex64>,
-    qubits: &[Qubit],
+    indices: &[usize],
     front: bool,
 ) -> Result<Array2<Complex64>, &'static str> {
     let gate_qubits = gate_unitary.shape()[0].ilog2() as usize;
 
     // Full composition of operators
-    if qubits.is_empty() {
+    if indices.is_empty() {
         if front {
             return Ok(gate_unitary.dot(overall_unitary));
         } else {
@@ -54,9 +46,9 @@ pub fn compose(
     //product, which is the last tensor wire index.
     let tensor = per_qubit_shaped(gate_unitary);
     let mat = per_qubit_shaped(overall_unitary);
-    let indices = qubits
+    let indices = indices
         .iter()
-        .map(|q| num_indices - 1 - q.index())
+        .map(|i| num_indices - 1 - i)
         .collect::<Vec<usize>>();
     let num_rows = usize::pow(2, num_indices as u32);
 
@@ -88,7 +80,7 @@ fn _einsum_matmul(
 ) -> Result<Array<Complex64, IxDyn>, &'static str> {
     let rank = tensor.ndim();
     let rank_mat = mat.ndim();
-    if rank_mat % 2 != 0 {
+    if !rank_mat.is_multiple_of(2) {
         return Err("Contracted matrix must have an even number of indices.");
     }
     // Get einsum indices for tensor
@@ -173,11 +165,11 @@ fn _ind(i: usize, reversed: bool) -> usize {
 pub fn matmul_2q(
     left: &ArrayView2<Complex64>,
     right: &ArrayView2<Complex64>,
-    qargs: &[Qubit],
+    indices: &[usize],
 ) -> Array2<Complex64> {
     let mut out = Array2::zeros((4, 4));
 
-    let rev = qargs[0].0 == 1;
+    let rev = indices[0] == 1;
     for i in 0..4usize {
         for j in 0..4usize {
             for k in 0..4usize {

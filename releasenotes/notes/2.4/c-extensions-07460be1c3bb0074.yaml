@@ -1,0 +1,24 @@
+---
+features_c:
+  - |
+    Qiskit now supports building Python extension modules that use Qiskit C API from a version of
+    Qiskit loaded by Python.  These extension modules can then be safely distributed in wheels.
+
+    To compile an extension module, you must:
+
+    * define the :c:macro:`QISKIT_PYTHON_EXTENSION` macro before ``#include <qiskit.h>``.
+    * call :c:func:`qk_import` before attempting to use any Qiskit C API functions, once per
+      compilation unit (typically a single ``.c`` file).  Typically this will be in your extension
+      module's ``PyInit_*`` function.
+
+    ..
+      TODO: before the final release of 2.4, insert links to documentation/guides about this.
+
+
+    We intend to make it possible to have multiple compilation units using the Qiskit C API in an
+    extension module in a later release of Qiskit.
+
+    Beware that Qiskit's C API is still unstable; extension modules compiled against Qiskit 2.4 are
+    not guaranteed to be able to run against Qiskit 2.5 or later.  Qiskit will commit to this
+    stability at a later date.
+

@@ -1,0 +1,8 @@
+---
+features_c:
+  - |
+    The fields :c:member:`QkObsTerm.bit_terms` and :c:member:`~QkObsTerm.indices`
+    can now be null pointers if their corresponding :c:member:`~QkObsTerm.len` is zero.
+  - |
+    The arguments ``coeffs``, ``bit_terms`` and ``indices`` to :c:func:`qk_obs_new`
+    can now be null pointers if their corresponding lengths are zero.

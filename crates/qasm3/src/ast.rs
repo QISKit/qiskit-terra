@@ -4,13 +4,15 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
 use std::fmt::{self, Debug, Display, Formatter};
+
+use qiskit_circuit::operations::DelayUnit;
 
 #[allow(dead_code)]
 pub enum Node<'a> {
@@ -119,30 +121,43 @@ pub struct BitstringLiteral {
 }
 
 #[derive(Debug, Clone)]
-pub struct DurationLiteral {
-    pub value: f64,
-    pub unit: DurationUnit,
+pub enum DurationLiteral {
+    Nanosecond(f64),
+    Microsecond(f64),
+    Millisecond(f64),
+    Second(f64),
+    Sample(u64),
 }
 
-#[derive(Debug, Clone)]
-pub enum DurationUnit {
-    Nanosecond,
-    Microsecond,
-    Millisecond,
-    Second,
-    Sample,
-}
-
-impl Display for DurationUnit {
+impl Display for DurationLiteral {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let unit_str = match self {
-            DurationUnit::Nanosecond => "ns",
-            DurationUnit::Microsecond => "us",
-            DurationUnit::Millisecond => "us",
-            DurationUnit::Second => "s",
-            DurationUnit::Sample => "dt",
-        };
-        write!(f, "{unit_str}")
+        match self {
+            DurationLiteral::Nanosecond(unit) => write!(f, "{unit}ns"),
+            DurationLiteral::Microsecond(unit) => write!(f, "{unit}us"),
+            DurationLiteral::Millisecond(unit) => write!(f, "{unit}ms"),
+            DurationLiteral::Second(unit) => write!(f, "{unit}s"),
+            DurationLiteral::Sample(unit) => write!(f, "{unit}dt"),
+        }
+    }
+}
+
+impl DurationLiteral {
+    /// Creates a [`DurationLiteral`] from a [`DelayUnit`] with a provided floating point value.
+    pub fn try_from_float(delay_unit: DelayUnit, value: f64) -> Result<Self, DelayUnit> {
+        match delay_unit {
+            DelayUnit::NS => Ok(Self::Nanosecond(value)),
+            DelayUnit::PS => Ok(Self::Nanosecond(value / 1000.0)),
+            DelayUnit::US => Ok(Self::Microsecond(value)),
+            DelayUnit::MS => Ok(Self::Millisecond(value)),
+            DelayUnit::S => Ok(Self::Second(value)),
+            _ => Err(delay_unit),
+        }
+    }
+}
+
+impl From<u64> for DurationLiteral {
+    fn from(value: u64) -> Self {
+        Self::Sample(value)
     }
 }
 

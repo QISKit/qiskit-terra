@@ -1,0 +1,6 @@
+---
+build:
+  - The C API headers are now built into the distribution location by an
+    in-repo binary ``qiskit-bindgen-c``, rather than in the build script of
+    ``qiskit-cext``.  The ``make`` recipe ``make cheader`` (and the complete ``make c``)
+    still produce the complete distribution artifact in ``dist/c``.

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -20,7 +20,7 @@ from .make_observable import make_dict_observable
 
 
 def average_data(counts: dict, observable: dict | np.ndarray | list) -> float:
-    """Compute the mean value of an diagonal observable.
+    """Compute the mean value of a diagonal observable.
 
     Takes in a diagonal observable in dictionary, list or matrix format and then
     calculates the sum_i value(i) P(i) where value(i) is the value of the
@@ -41,7 +41,7 @@ def average_data(counts: dict, observable: dict | np.ndarray | list) -> float:
         observable = make_dict_observable(observable)
     temp = 0
     tot = sum(counts.values())
-    for key in counts:
+    for key, count in counts.items():
         if key in observable:
-            temp += counts[key] * observable[key] / tot
+            temp += count * observable[key] / tot
     return temp

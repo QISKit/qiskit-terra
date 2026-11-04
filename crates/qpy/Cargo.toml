@@ -1,0 +1,43 @@
+[package]
+name = "qiskit-qpy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "qiskit_qpy"
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+qiskit-util.workspace = true
+hashbrown.workspace = true
+qiskit-circuit.workspace = true
+qiskit-quantum-info.workspace = true
+num-bigint.workspace = true
+num-complex.workspace = true
+num-traits.workspace = true
+bytemuck.workspace = true
+binrw.workspace = true
+npyz.workspace = true
+ndarray.workspace = true
+uuid = {version = "1", features = ["v4"]}
+thiserror.workspace = true
+
+[dependencies.smallvec]
+workspace = true
+features = ["union"]
+
+[dependencies.pyo3]
+workspace = true
+features = ["py-clone"]
+
+[dependencies.numpy]
+workspace = true
+features = ["nalgebra"]
+
+[features]
+cache_pygates = ["qiskit-circuit/cache_pygates"]

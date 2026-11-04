@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -257,9 +257,10 @@ static int test_non_cx_target(void) {
     QkOpCounts counts = qk_circuit_count_ops(qc);
     if (counts.len != 1) {
         result = EqualityError;
-        printf("The pass run did not result in a circuit with one unitary gate. Expected 1 gate, "
-               "got %zu.",
-               counts.len);
+        fprintf(stderr,
+                "The pass run did not result in a circuit with one unitary gate. Expected 1 gate, "
+                "got %zu.",
+                counts.len);
         goto cleanup;
     }
 
@@ -267,9 +268,11 @@ static int test_non_cx_target(void) {
     qk_circuit_get_instruction(qc, 0, &unitary);
     if (strcmp(unitary.name, "unitary") != 0) {
         result = EqualityError;
-        printf("The pass run did not result in a circuit with one unitary gate. Expected 'unitary' "
-               "gate, got '%s'.",
-               unitary.name);
+        fprintf(
+            stderr,
+            "The pass run did not result in a circuit with one unitary gate. Expected 'unitary' "
+            "gate, got '%s'.",
+            unitary.name);
         goto cleanup_inst;
     }
 cleanup_inst:

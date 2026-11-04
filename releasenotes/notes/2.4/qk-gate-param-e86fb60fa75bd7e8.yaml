@@ -1,0 +1,24 @@
+---
+features_c:
+  - |
+    Added support to add parameterized gates to circuits using the new
+    :c:func:`qk_circuit_gate_param` function, which specifies the gate parameters as
+    ``QkParam *`` objects. For example:
+
+    .. code-block:: c
+
+      QkCircuit *qc = qk_circuit_new(100, 0);
+      QkParam *theta = qk_param_new_symbol("theta");
+      uint32_t qubit[1] = {0};
+      const QkParam* params[1] = {theta};
+      qk_circuit_parameterized_gate(qc, QkGate_RX, qubit, params); // add RX(theta) to the circuit
+
+  - |
+    Added :c:func:`qk_circuit_num_param_symbols` to query the number of unbound symbols present
+    in the circuit.
+upgrade_c:
+  - |
+    :c:member:`QkInstruction.params` was changed from a pointer to ``double`` to a pointer
+    to ``const QkParam *`` objects. This change happened because gate parameters in the
+    C API are no longer restricted to fixed numeric values, but may also be parameterized
+    expressions with unbound symbols, which are represented by a ``QkParam *``.

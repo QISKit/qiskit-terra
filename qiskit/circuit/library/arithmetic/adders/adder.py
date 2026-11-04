@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -79,7 +79,11 @@ class HalfAdderGate(Gate):
 
     .. math::
 
-        |a\rangle_n |b\rangle_n \mapsto |a\rangle_n |a + b\rangle_{n + 1}.
+        |a\rangle_n |b\rangle_n |0\rangle \mapsto |a\rangle_n |a + b\rangle_{n + 1}.
+
+    The final input qubit is a clean qubit initialized to :math:`|0\rangle`.
+    It stores the carry-out bit, which is why the output sum register has
+    :math:`n + 1` qubits.
 
     The quantum register :math:`|a\rangle_n` (and analogously :math:`|b\rangle_n`)
 
@@ -99,7 +103,7 @@ class HalfAdderGate(Gate):
         """
         Args:
             num_state_qubits: The number of qubits in each of the registers.
-            name: The name of the circuit.
+            label: An optional label for identifying the instruction.
         """
         if num_state_qubits < 1:
             raise ValueError("Need at least 1 state qubit.")
@@ -154,7 +158,7 @@ class ModularAdderGate(Gate):
         """
         Args:
             num_state_qubits: The number of qubits in each of the registers.
-            name: The name of the circuit.
+            label: An optional label for identifying the instruction.
         """
         if num_state_qubits < 1:
             raise ValueError("Need at least 1 state qubit.")
@@ -210,7 +214,7 @@ class FullAdderGate(Gate):
         """
         Args:
             num_state_qubits: The number of qubits in each of the registers.
-            name: The name of the circuit.
+            label: An optional label for identifying the instruction.
         """
         if num_state_qubits < 1:
             raise ValueError("Need at least 1 state qubit.")

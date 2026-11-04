@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -12,19 +12,22 @@
 
 use crate::QiskitError;
 use pyo3::prelude::*;
-use qiskit_circuit::circuit_data::CircuitData;
+use qiskit_circuit::circuit_data::{CircuitData, CircuitDataError, PyCircuitData};
 use qiskit_circuit::circuit_instruction::OperationFromPython;
 use qiskit_circuit::operations::{Param, StandardGate};
 use qiskit_circuit::packed_instruction::PackedOperation;
-use qiskit_circuit::{Clbit, Qubit};
+use qiskit_circuit::{Clbit, NoBlocks, Qubit};
 use smallvec::{SmallVec, smallvec};
 
-type CCXChainItem = PyResult<(
-    PackedOperation,
-    SmallVec<[Param; 3]>,
-    Vec<Qubit>,
-    Vec<Clbit>,
-)>;
+type CCXChainItem = Result<
+    (
+        PackedOperation,
+        SmallVec<[Param; 3]>,
+        Vec<Qubit>,
+        Vec<Clbit>,
+    ),
+    CircuitDataError,
+>;
 
 /// A Toffoli chain, implementing a multi-control condition on all controls using
 /// ``controls.len() - 1`` auxiliary qubits.
@@ -92,11 +95,11 @@ fn ccx_chain<'a>(
 #[pyfunction]
 #[pyo3(signature = (controlled_gate, num_ctrl_qubits, num_target_qubits, control_state=None))]
 pub fn mcmt_v_chain(
-    mut controlled_gate: OperationFromPython,
+    mut controlled_gate: OperationFromPython<NoBlocks>,
     num_ctrl_qubits: usize,
     num_target_qubits: usize,
     control_state: Option<usize>,
-) -> PyResult<CircuitData> {
+) -> PyResult<PyCircuitData> {
     if num_ctrl_qubits < 1 {
         return Err(QiskitError::new_err("Need at least 1 control qubit."));
     }
@@ -142,7 +145,7 @@ pub fn mcmt_v_chain(
 
     // Finally we add the V-chain (or return in case of 1 control).
     if num_ctrl_qubits == 1 {
-        CircuitData::from_packed_operations(
+        Ok(CircuitData::from_packed_operations(
             num_qubits as u32,
             0,
             flip_control_state
@@ -150,7 +153,8 @@ pub fn mcmt_v_chain(
                 .chain(targets)
                 .chain(flip_control_state),
             Param::Float(0.0),
-        )
+        )?
+        .into())
     } else {
         // If the number of controls is larger than 1, and we need to apply the V-chain,
         // create it here and sandwich the targets in-between.
@@ -159,7 +163,7 @@ pub fn mcmt_v_chain(
         let down_chain = ccx_chain(&controls, &auxiliaries);
         let up_chain = ccx_chain(&controls, &auxiliaries).rev();
 
-        CircuitData::from_packed_operations(
+        Ok(CircuitData::from_packed_operations(
             num_qubits as u32,
             0,
             flip_control_state
@@ -169,6 +173,7 @@ pub fn mcmt_v_chain(
                 .chain(up_chain)
                 .chain(flip_control_state),
             Param::Float(0.0),
-        )
+        )?
+        .into())
     }
 }

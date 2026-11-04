@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed a panic in :class:`.RemoveIdentityEquivalent` when the global phase of the circuit contained
+    :class:`.ParameterVectorElement` objects.  The message was:
+
+        Cannot clone pointer into Python heap without the thread being attached.
+
+    See `#16053 <https://github.com/Qiskit/qiskit/issues/16053>`__.

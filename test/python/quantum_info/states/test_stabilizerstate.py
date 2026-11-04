@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -22,12 +22,12 @@ import numpy as np
 
 from qiskit import QuantumCircuit
 
-from qiskit.quantum_info.random import random_clifford, random_pauli
+from qiskit.quantum_info import random_clifford, random_pauli
 from qiskit.quantum_info.states import StabilizerState, Statevector
 from qiskit.circuit.library import IGate, XGate, HGate
 from qiskit.quantum_info.operators import Clifford, Pauli, Operator, SparsePauliOp
-from test import combine  # pylint: disable=wrong-import-order
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import combine
+from test import QiskitTestCase
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class StabilizerStateTestingTools:
     """Test tools for verifying test cases in StabilizerState"""
 
     @staticmethod
-    def _bitstring_product_dict(bitstring_length: int, skip_entries: dict = None) -> dict:
+    def _bitstring_product_dict(bitstring_length: int, skip_entries: dict | None = None) -> dict:
         """Retrieves a dict of every possible product of '0', '1' for length bitstring_length
         pass in a dict to use the keys as entries to skip adding to the dict
 
@@ -62,8 +62,8 @@ class StabilizerStateTestingTools:
         testcase: QiskitTestCase,
         target_dict: dict,
         stab: StabilizerState,
-        qargs: list = None,
-        decimals: int = None,
+        qargs: list | None = None,
+        decimals: int | None = None,
         dict_almost_equal: bool = False,
     ) -> None:
         """Helper that iterates through the target_dict and checks all probabilities by
@@ -79,12 +79,12 @@ class StabilizerStateTestingTools:
                     values. If None no rounding is done (Default: None)
             dict_almost_equal (bool): utilize assertDictAlmostEqual when true, assertDictEqual when false
         """
-        for outcome_bitstring in target_dict:
+        for outcome_bitstring, target_prob in target_dict.items():
             (testcase.assertDictAlmostEqual if (dict_almost_equal) else testcase.assertDictEqual)(
                 stab.probabilities_dict_from_bitstring(
                     outcome_bitstring=outcome_bitstring, qargs=qargs, decimals=decimals
                 ),
-                {outcome_bitstring: target_dict[outcome_bitstring]},
+                {outcome_bitstring: target_prob},
             )
 
 
@@ -551,7 +551,7 @@ class TestStabilizerState(QiskitTestCase):
         reasonable to calculate the full dict with probabilities_dict of all possible outcomes"""
 
         qc: QuantumCircuit = QuantumCircuit(num_qubits)
-        for qubit_num in range(0, num_qubits):
+        for qubit_num in range(num_qubits):
             qc.h(qubit_num)
         stab = StabilizerState(qc)
 
@@ -565,7 +565,7 @@ class TestStabilizerState(QiskitTestCase):
                 self.assertDictEqual(value, target_dict)
                 StabilizerStateTestingTools._verify_individual_bitstrings(self, target_dict, stab)
                 probs = stab.probabilities()
-                target = np.array(([expected_result] * (2**num_qubits)))
+                target = np.array([expected_result] * (2**num_qubits))
                 self.assertTrue(np.allclose(probs, target))
 
         # H gate at qubit 0, Every gate after is an X gate

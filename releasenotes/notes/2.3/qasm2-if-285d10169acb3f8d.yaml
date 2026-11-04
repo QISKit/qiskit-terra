@@ -1,0 +1,6 @@
+---
+features_qasm:
+  - |
+    The OpenQASM 2 exporter (:func:`.qasm2.dumps`) now supports outputting simple single-instruction
+    :class:`.IfElse` blocks, if the condition is a simple register–integer equality test.  This
+    corresponds to what the OpenQASM 2 language can represent.

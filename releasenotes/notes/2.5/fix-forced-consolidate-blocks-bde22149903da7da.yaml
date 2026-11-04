@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.ConsolidateBlocks` when ``force_consolidate=True``,
+    where the blocks and runs were not consolidated if the basis gates did not
+    allow selecting a decomposer.
+

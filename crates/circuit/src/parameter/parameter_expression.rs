@@ -4,19 +4,16 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use std::sync::Arc;
-
 use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
 use num_complex::Complex64;
-use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError, PyZeroDivisionError};
-use pyo3::types::{IntoPyDict, PyComplex, PyFloat, PyInt, PyNotImplemented, PySet, PyString};
+use std::sync::{Arc, atomic};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -24,14 +21,22 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use pyo3::IntoPyObjectExt;
+use pyo3::exceptions::{
+    PyDeprecationWarning, PyRuntimeError, PyTypeError, PyValueError, PyZeroDivisionError,
+};
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
+use pyo3::types::{
+    IntoPyDict, PyComplex, PyFloat, PyInt, PyIterator, PyList, PyNotImplemented, PySet, PyString,
+    PyTuple,
+};
+use pyo3::{IntoPyObjectExt, intern};
 
 use crate::circuit_data::CircuitError;
-use crate::imports::{BUILTIN_HASH, SYMPIFY_PARAMETER_EXPRESSION, UUID};
-use crate::parameter::symbol_expr;
-use crate::parameter::symbol_expr::SymbolExpr;
+use crate::imports::{BUILTIN_HASH, SYMPIFY_PARAMETER_EXPRESSION, UUID, WARNINGS_WARN};
+use crate::parameter::symbol_expr::{self, SymbolExpr, SymbolVector};
 use crate::parameter::symbol_parser::parse_expression;
+use qiskit_util::IndexSet;
 
 use super::symbol_expr::{SYMEXPR_EPSILON, Symbol, Value};
 
@@ -132,6 +137,75 @@ impl fmt::Display for ParameterExpression {
     }
 }
 
+impl ParameterExpression {
+    /// Exact structural equality of two expressions.
+    ///
+    /// See [`SymbolExpr::eq_exact`] for more detail.
+    pub fn eq_exact(&self, other: &Self) -> bool {
+        (self.name_map == other.name_map) && self.expr.eq_exact(&other.expr)
+    }
+
+    pub fn qpy_replay(&self) -> Vec<OPReplay> {
+        let mut replay = Vec::new();
+        let mut unused: IndexSet<_> = self.name_map.values().cloned().collect();
+        // The recursive inner `qpy_replay_inner` assumes it starts from a containing operation, so
+        // fails to build a complete replay in the case it starts from a single symbol or value.
+        match &self.expr {
+            SymbolExpr::Value(v) => {
+                let item = match *v {
+                    Value::Int(v) => OPReplay {
+                        op: OpCode::ADD,
+                        lhs: Some(ParameterValueType::Int(v)),
+                        rhs: Some(ParameterValueType::Int(0)),
+                    },
+                    Value::Real(v) => OPReplay {
+                        op: OpCode::ADD,
+                        lhs: Some(ParameterValueType::Float(v)),
+                        // `-0.0` is technically the identity element of floating-point addition;
+                        // `0.0 + x` is not bit-for-bit equal to `x` solely if `x` is `-0.0`.
+                        rhs: Some(ParameterValueType::Float(-0.0)),
+                    },
+                    Value::Complex(v) => OPReplay {
+                        op: OpCode::ADD,
+                        lhs: Some(ParameterValueType::Complex(v)),
+                        rhs: Some(ParameterValueType::Complex(Complex64 {
+                            re: -0.0,
+                            im: -0.0,
+                        })),
+                    },
+                };
+                replay.push(item);
+            }
+            SymbolExpr::Symbol(sym) => {
+                unused.swap_remove(sym.as_ref());
+                replay.push(OPReplay {
+                    op: OpCode::ADD,
+                    lhs: ParameterValueType::extract_from_expr(&self.expr),
+                    rhs: Some(ParameterValueType::Int(0)),
+                });
+            }
+            SymbolExpr::Unary { .. } | SymbolExpr::Binary { .. } => {
+                qpy_replay_inner(self, &self.name_map, &mut replay, &mut unused);
+            }
+        }
+        // For any unused symbols, we'll add something like `(x * 0) + expr`.  This sort of
+        // cancellation is how unused symbols appear; it doesn't matter if the _actual_ cause was
+        // `x - x` or whatever, because the end observable effect is the same.
+        for symbol in unused {
+            replay.push(OPReplay {
+                op: OpCode::MUL,
+                lhs: Some(ParameterValueType::Parameter(PyParameter(Arc::new(symbol)))),
+                rhs: Some(ParameterValueType::Int(0)),
+            });
+            replay.push(OPReplay {
+                op: OpCode::ADD,
+                lhs: None,
+                rhs: None,
+            });
+        }
+        replay
+    }
+}
 // This needs to be implemented manually, because PyO3 does not provide built-in
 // conversions for the subclasses of ParameterExpression in Python. Specifically
 // the Python classes Parameter and ParameterVector are subclasses of
@@ -178,25 +252,33 @@ impl ParameterExpression {
         }
     }
 
+    pub fn from_arc_symbol(symbol: Arc<Symbol>) -> Self {
+        Self {
+            name_map: [(symbol.repr(false), Symbol::clone(&*symbol))].into(),
+            expr: SymbolExpr::Symbol(symbol),
+        }
+    }
+
     /// Try casting to a [Symbol].
     ///
     /// This only succeeds if the underlying expression is, in fact, only a symbol.
     pub fn try_to_symbol(&self) -> Result<Symbol, ParameterError> {
-        if let SymbolExpr::Symbol(symbol) = &self.expr {
-            Ok(symbol.as_ref().clone())
-        } else {
-            Err(ParameterError::NotASymbol)
-        }
+        self.try_to_symbol_ref().cloned()
+    }
+
+    /// Simplify the expression. This, for example, attempts to cancel
+    /// variables in the expression.
+    pub fn simplify(&self) -> Self {
+        ParameterExpression::from_symbol_expr(self.expr.optimize())
     }
 
     /// Try casting to a [Symbol], returning a reference.
     ///
     /// This only succeeds if the underlying expression is, in fact, only a symbol.
     pub fn try_to_symbol_ref(&self) -> Result<&Symbol, ParameterError> {
-        if let SymbolExpr::Symbol(symbol) = &self.expr {
-            Ok(symbol.as_ref())
-        } else {
-            Err(ParameterError::NotASymbol)
+        match &self.expr {
+            SymbolExpr::Symbol(sym) if self.name_map.len() == 1 => Ok(sym.as_ref()),
+            _ => Err(ParameterError::NotASymbol),
         }
     }
 
@@ -219,11 +301,10 @@ impl ParameterExpression {
         match self.expr.eval(true) {
             Some(value) => {
                 // we try to restrict complex to real, if possible
-                if let Value::Complex(c) = value {
-                    if (-symbol_expr::SYMEXPR_EPSILON..symbol_expr::SYMEXPR_EPSILON).contains(&c.im)
-                    {
-                        return Ok(Value::Real(c.re));
-                    }
+                if let Value::Complex(c) = value
+                    && (-symbol_expr::SYMEXPR_EPSILON..symbol_expr::SYMEXPR_EPSILON).contains(&c.im)
+                {
+                    return Ok(Value::Real(c.re));
                 }
                 Ok(value)
             }
@@ -244,20 +325,14 @@ impl ParameterExpression {
 
     /// Initialize from an f64.
     pub fn from_f64(value: f64) -> Self {
-        Self {
-            expr: SymbolExpr::Value(Value::Real(value)),
-            name_map: HashMap::new(),
-        }
+        Value::from(value).into()
     }
 
     /// Load from a sequence of [OPReplay]s. Used in serialization.
     pub fn from_qpy(replay: &[OPReplay]) -> Result<Self, ParameterError> {
         // the stack contains the latest lhs and rhs values
         let mut stack: Vec<ParameterExpression> = Vec::new();
-
-        for inst in replay.iter() {
-            let OPReplay { op, lhs, rhs } = inst;
-
+        for OPReplay { op, lhs, rhs } in replay {
             // put the values on the stack, if they exist
             if let Some(value) = lhs {
                 stack.push(value.clone().into());
@@ -502,7 +577,7 @@ impl ParameterExpression {
     /// # Returns
     ///
     /// * `Ok(Self)` - A parameter expression with the substituted expressions.
-    /// * `Err(ParameterError)` - An error if the subtitution failed.
+    /// * `Err(ParameterError)` - An error if the substitution failed.
     pub fn subs(
         &self,
         map: &HashMap<Symbol, Self>,
@@ -678,6 +753,15 @@ impl ParameterExpression {
     }
 }
 
+impl From<Value> for ParameterExpression {
+    fn from(value: Value) -> Self {
+        Self {
+            expr: SymbolExpr::Value(value),
+            name_map: HashMap::new(),
+        }
+    }
+}
+
 /// A parameter expression.
 ///
 /// This is backed by Qiskit's symbolic expression engine and a cache
@@ -685,7 +769,8 @@ impl ParameterExpression {
 #[pyclass(
     subclass,
     module = "qiskit._accelerate.circuit",
-    name = "ParameterExpression"
+    name = "ParameterExpression",
+    from_py_object
 )]
 #[derive(Clone, Debug)]
 pub struct PyParameterExpression {
@@ -746,10 +831,8 @@ impl PyParameterExpression {
                 return Err(ParameterError::InvalidValue.into());
             }
             Ok(ParameterExpression::new(SymbolExpr::Value(Value::from(c)), HashMap::new()).into())
-        } else if let Ok(element) = ob.cast::<PyParameterVectorElement>() {
-            Ok(ParameterExpression::from_symbol(element.borrow().symbol.clone()).into())
         } else if let Ok(parameter) = ob.cast::<PyParameter>() {
-            Ok(ParameterExpression::from_symbol(parameter.borrow().symbol.clone()).into())
+            Ok(ParameterExpression::from_symbol(Symbol::clone(&parameter.borrow().0)).into())
         } else {
             ob.extract::<PyParameterExpression>().map_err(Into::into)
         }
@@ -763,11 +846,7 @@ impl PyParameterExpression {
                 Value::Complex(c) => Ok(PyComplex::from_complex_bound(py, c).unbind().into_any()),
             }
         } else if let Ok(symbol) = self.inner.try_to_symbol() {
-            if symbol.index.is_some() {
-                Ok(Py::new(py, PyParameterVectorElement::from_symbol(symbol))?.into_any())
-            } else {
-                Ok(Py::new(py, PyParameter::from_symbol(symbol))?.into_any())
-            }
+            PyParameter(Arc::new(symbol)).into_py_any(py)
         } else {
             self.clone().into_py_any(py)
         }
@@ -776,41 +855,27 @@ impl PyParameterExpression {
 
 #[pymethods]
 impl PyParameterExpression {
+    /// Simplify the expression. This, for example, attempts to cancel
+    /// variables in the expression.
+    pub fn simplify(&self) -> Self {
+        self.inner.simplify().into()
+    }
+
     /// This is a **strictly internal** constructor and **should not be used**.
     /// It is subject to arbitrary change in between Qiskit versions and cannot be relied on.
     /// Parameter expressions should always be constructed from applying operations on
     /// parameters, or by loading via QPY.
-    ///
-    /// The input values are allowed to be None for pickling purposes.
     #[new]
-    #[pyo3(signature = (name_map=None, expr=None))]
-    pub fn py_new(
-        name_map: Option<HashMap<String, PyParameter>>,
-        expr: Option<String>,
-    ) -> PyResult<Self> {
-        match (name_map, expr) {
-            (None, None) => Ok(Self::default()),
-            (Some(name_map), Some(expr)) => {
-                // We first parse the expression and then update the symbols with the ones
-                // the user provided. The replacement relies on the names to match.
-                // This is hacky and we likely want a more reliably conversion from a SymPy object,
-                // if we decide we want to continue supporting this.
-                let expr = parse_expression(&expr)
-                    .map_err(|_| PyRuntimeError::new_err("Failed parsing input expression"))?;
-                let symbol_map: HashMap<String, Symbol> = name_map
-                    .iter()
-                    .map(|(string, param)| (string.clone(), param.symbol.clone()))
-                    .collect();
-
-                let replaced_expr = symbol_expr::replace_symbol(&expr, &symbol_map);
-
-                let inner = ParameterExpression::new(replaced_expr, symbol_map);
-                Ok(Self { inner })
-            }
-            _ => Err(PyValueError::new_err(
-                "Pass either both a name_map and expr, or neither",
-            )),
-        }
+    #[pyo3(signature = (name_map, expr))]
+    pub fn py_new(name_map: HashMap<String, PyParameter>, expr: String) -> PyResult<Self> {
+        let symbol_map: HashMap<String, Symbol> = name_map
+            .iter()
+            .map(|(string, param)| (string.clone(), Symbol::clone(&param.0)))
+            .collect();
+        let expr = parse_expression(&expr, &|name| symbol_map.get(name).cloned())
+            .map_err(|_| PyRuntimeError::new_err("Failed parsing input expression"))?;
+        let inner = ParameterExpression::new(expr, symbol_map);
+        Ok(Self { inner })
     }
 
     #[allow(non_snake_case)]
@@ -845,6 +910,19 @@ impl PyParameterExpression {
 
     /// Return a SymPy equivalent of this expression.
     ///
+    /// .. note::
+    ///
+    ///   This is for interoperability only. Qiskit will not accept or work with raw Sympy or
+    ///   Symengine expressions in its parameters, because they do not contain the tracking
+    ///   information used in circuit-parameter binding and assignment.
+    ///
+    /// .. warning::
+    ///
+    ///   This method will pass strings from the expression to SymPy which is
+    ///   inherently unsafe as SymPy heavily relies on Python's :func:`.eval`
+    ///   function for the processing of strings. This method is not safe to
+    ///   use with untrusted input.
+    ///
     /// Returns:
     ///     A SymPy equivalent of this expression.
     pub fn sympify(&self, py: Python) -> PyResult<Py<PyAny>> {
@@ -873,20 +951,8 @@ impl PyParameterExpression {
     pub fn parameters<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PySet>> {
         let py_parameters: Vec<Py<PyAny>> = self
             .inner
-            .name_map
-            .values()
-            .map(|symbol| {
-                match (&symbol.index, &symbol.vector) {
-                    // if index and vector is set, it is an element
-                    (Some(_index), Some(_vector)) => Ok(Py::new(
-                        py,
-                        PyParameterVectorElement::from_symbol(symbol.clone()),
-                    )?
-                    .into_any()),
-                    // else, a normal parameter
-                    _ => Ok(Py::new(py, PyParameter::from_symbol(symbol.clone()))?.into_any()),
-                }
-            })
+            .iter_symbols()
+            .map(|symbol| PyParameter(Arc::new(symbol.clone())).into_py_any(py))
             .collect::<PyResult<_>>()?;
         PySet::new(py, py_parameters)
     }
@@ -983,18 +1049,17 @@ impl PyParameterExpression {
     /// Returns:
     ///     The derivative as either a constant numeric value or a symbolic
     ///     :class:`.ParameterExpression`.
-    pub fn gradient(&self, param: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        let symbol = symbol_from_py_parameter(param)?;
-        let d_expr = self.inner.derivative(&symbol)?;
+    pub fn gradient(&self, py: Python, param: &PyParameter) -> PyResult<Py<PyAny>> {
+        let d_expr = self.inner.derivative(&param.0)?;
 
         // try converting to value and return as built-in numeric type
         match d_expr.try_to_value(false) {
             Ok(val) => match val {
-                Value::Real(r) => r.into_py_any(param.py()),
-                Value::Int(i) => i.into_py_any(param.py()),
-                Value::Complex(c) => c.into_py_any(param.py()),
+                Value::Real(r) => r.into_py_any(py),
+                Value::Int(i) => i.into_py_any(py),
+                Value::Complex(c) => c.into_py_any(py),
             },
-            Err(_) => PyParameterExpression::from(d_expr).into_py_any(param.py()),
+            Err(_) => PyParameterExpression::from(d_expr).into_py_any(py),
         }
     }
 
@@ -1039,7 +1104,7 @@ impl PyParameterExpression {
         // reduce the map to a HashMap<Symbol, ParameterExpression>
         let map = parameter_map
             .into_iter()
-            .map(|(param, expr)| Ok((param.symbol, expr.inner)))
+            .map(|(param, expr)| Ok((Arc::unwrap_or_clone(param.0), expr.inner)))
             .collect::<PyResult<_>>()?;
 
         // apply to the inner expression
@@ -1080,7 +1145,7 @@ impl PyParameterExpression {
             .iter()
             .map(|(param, value)| {
                 let value = value.extract()?;
-                Ok((param.symbol(), value))
+                Ok((param.0.as_ref(), value))
             })
             .collect::<PyResult<_>>()?;
 
@@ -1173,6 +1238,48 @@ impl PyParameterExpression {
         } else {
             Ok(false)
         }
+    }
+
+    /// Are these two expressions exactly structurally equal?
+    ///
+    /// This is a faster and stricter form of the standard ``==`` relationship, but does not take
+    /// simplifications into account.  Almost all expressions that are :meth:`structurally_equal`
+    /// are all ``==`` to each other, but the reverse is not true.  (In the presence of ``nan``
+    /// values, :meth:`structurally_equal` can sometimes return ``True`` when ``==`` compares
+    /// ``False``.)
+    ///
+    /// This function is most useful in internal tests of the :class:`ParameterExpression` logic.
+    ///
+    /// .. note::
+    ///
+    ///     Many operations on :class:`ParameterExpression` do on-the-fly simplification as they are
+    ///     constructed, so two expressions that appear to have been constructed in different orders
+    ///     can still be internally structurally equal.
+    ///
+    /// Args:
+    ///     rhs: the other object to compare.
+    ///
+    /// Returns:
+    ///     Whether the two objects are structurally equal expressions.
+    ///
+    /// Examples:
+    ///
+    ///     Two expressions can simplify to each other when checking for equality, but not use the
+    ///     same internal structure::
+    ///
+    ///         from qiskit.circuit import Parameter
+    ///
+    ///         x, y = Parameter("x"), Parameter("y")
+    ///         left = x + y + 1
+    ///         right = 1 + y + x
+    ///         assert left == right
+    ///         assert not left.structurally_equal(right)
+    pub fn structurally_equal(&self, rhs: &Bound<PyAny>) -> bool {
+        let Ok(rhs) = rhs.cast::<Self>() else {
+            return false;
+        };
+        let rhs = rhs.borrow();
+        self.inner.eq_exact(&rhs.inner)
     }
 
     #[inline]
@@ -1353,49 +1460,21 @@ impl PyParameterExpression {
         }
     }
 
-    fn __getstate__(&self) -> PyResult<(Vec<OPReplay>, Option<ParameterValueType>)> {
-        // We distinguish in two cases:
-        //  (a) This is indeed an expression which can be rebuild from the QPY replay. This means
-        //      the replay is *not empty* and it contains all symbols.
-        //  (b) This expression is in fact only a Value or a Symbol. In this case, the QPY replay
-        //      will be empty and we instead pass a `ParameterValueType` for reconstruction.
-        let qpy = self._qpy_replay()?;
-        if !qpy.is_empty() {
-            Ok((qpy, None))
-        } else {
-            let value = ParameterValueType::extract_from_expr(&self.inner.expr);
-            if value.is_none() {
-                Err(PyValueError::new_err(format!(
-                    "Failed to serialize the parameter expression: {self:?}"
-                )))
-            } else {
-                Ok((qpy, value))
-            }
-        }
+    #[staticmethod]
+    fn _reconstruct(replay: Vec<OPReplay>) -> PyResult<Self> {
+        Ok(Self {
+            inner: ParameterExpression::from_qpy(&replay)?,
+        })
     }
-
-    fn __setstate__(&mut self, state: (Vec<OPReplay>, Option<ParameterValueType>)) -> PyResult<()> {
-        // if there a replay, load from the replay
-        if !state.0.is_empty() {
-            let from_qpy = ParameterExpression::from_qpy(&state.0)?;
-            self.inner = from_qpy;
-        // otherwise, load from the ParameterValueType
-        } else if let Some(value) = state.1 {
-            let expr = ParameterExpression::from(value);
-            self.inner = expr;
-        } else {
-            return Err(PyValueError::new_err(
-                "Failed to read QPY replay or extract value.",
-            ));
-        }
-        Ok(())
+    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        py.get_type::<Self>()
+            .getattr("_reconstruct")
+            .and_then(|meth| (meth, (self.inner.qpy_replay(),)).into_pyobject(py))
     }
 
     #[getter]
-    fn _qpy_replay(&self) -> PyResult<Vec<OPReplay>> {
-        let mut replay = Vec::new();
-        qpy_replay(&self.inner, &self.inner.name_map, &mut replay);
-        Ok(replay)
+    fn _qpy_replay(&self) -> Vec<OPReplay> {
+        self.inner.qpy_replay()
     }
 }
 
@@ -1432,49 +1511,41 @@ impl PyParameterExpression {
 ///         bc = qc.assign_parameters({phi: 3.14})
 ///         bc.measure_all()
 ///         bc.draw("mpl")
-#[pyclass(sequence, subclass, module="qiskit._accelerate.circuit", extends=PyParameterExpression, name="Parameter")]
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd)]
-pub struct PyParameter {
-    symbol: Symbol,
-}
-
-impl Hash for PyParameter {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.symbol.hash(state);
+#[pyclass(
+    sequence,
+    subclass,
+    module="qiskit._accelerate.circuit",
+    extends=PyParameterExpression,
+    name="Parameter",
+    from_py_object,
+    frozen,
+)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Hash)]
+pub struct PyParameter(pub Arc<Symbol>);
+impl From<Symbol> for PyParameter {
+    fn from(val: Symbol) -> Self {
+        Self(Arc::new(val))
     }
 }
 
 // This needs to be implemented manually, since PyO3 does not provide this conversion
 // for subclasses.
 impl<'py> IntoPyObject<'py> for PyParameter {
-    type Target = PyParameter;
+    type Target = PyAny;
     type Output = Bound<'py, Self::Target>;
     type Error = PyErr;
 
+    /// `PyParameter`'s implementation of this is responsible for sorting out the vector-element
+    /// logic as well.
     fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        let symbol = &self.symbol;
-        let symbol_expr = SymbolExpr::Symbol(Arc::new(symbol.clone()));
-        let expr = ParameterExpression::from_symbol_expr(symbol_expr);
-        let py_expr = PyParameterExpression::from(expr);
-
-        Ok(Py::new(py, (self, py_expr))?.into_bound(py))
-    }
-}
-
-impl PyParameter {
-    /// Get a Python class initialization from a symbol.
-    pub fn from_symbol(symbol: Symbol) -> PyClassInitializer<Self> {
-        let expr = SymbolExpr::Symbol(Arc::new(symbol.clone()));
-
-        let py_parameter = Self { symbol };
-        let py_expr: PyParameterExpression = ParameterExpression::from_symbol_expr(expr).into();
-
-        PyClassInitializer::from(py_expr).add_subclass(py_parameter)
-    }
-
-    /// Get a reference to the underlying symbol.
-    pub fn symbol(&self) -> &Symbol {
-        &self.symbol
+        let is_element = matches!(&*self.0, Symbol::Element { .. });
+        let inner = ParameterExpression::from_symbol_expr(SymbolExpr::Symbol(self.0.clone()));
+        let init = PyClassInitializer::from(PyParameterExpression { inner }).add_subclass(self);
+        if is_element {
+            Bound::new(py, init.add_subclass(PyParameterVectorElement)).map(|ob| ob.into_any())
+        } else {
+            Bound::new(py, init).map(|ob| ob.into_any())
+        }
     }
 }
 
@@ -1491,25 +1562,17 @@ impl PyParameter {
     ///         allows them to be equal.  This is useful during serialization and deserialization.
     #[new]
     #[pyo3(signature = (name, uuid=None))]
-    fn py_new(
-        py: Python<'_>,
-        name: String,
-        uuid: Option<Py<PyAny>>,
-    ) -> PyResult<PyClassInitializer<Self>> {
-        let uuid = uuid_from_py(py, uuid)?;
-        let symbol = Symbol::new(name.as_str(), uuid, None);
-        let expr = SymbolExpr::Symbol(Arc::new(symbol.clone()));
-
-        let py_parameter = Self { symbol };
-        let py_expr: PyParameterExpression = ParameterExpression::from_symbol_expr(expr).into();
-
-        Ok(PyClassInitializer::from(py_expr).add_subclass(py_parameter))
+    fn py_new(name: String, uuid: Option<Bound<PyAny>>) -> PyResult<PyClassInitializer<Self>> {
+        let uuid = uuid.map(uuid_from_py).transpose()?;
+        let symbol = Arc::new(Symbol::standalone(name, uuid));
+        let inner = ParameterExpression::from_symbol_expr(SymbolExpr::Symbol(symbol.clone()));
+        Ok(PyClassInitializer::from(PyParameterExpression { inner }).add_subclass(Self(symbol)))
     }
 
     /// Returns the name of the :class:`.Parameter`.
     #[getter]
     fn name<'py>(&self, py: Python<'py>) -> Bound<'py, PyString> {
-        PyString::new(py, &self.symbol.repr(false))
+        PyString::new(py, &self.0.repr(false))
     }
 
     /// Returns the :class:`~uuid.UUID` of the :class:`Parameter`.
@@ -1518,28 +1581,29 @@ impl PyParameter {
     /// :class:`.Parameter` constructor to produce an instance that compares
     /// equal to another instance.
     #[getter]
-    fn uuid(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        uuid_to_py(py, self.symbol.uuid)
+    fn uuid<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        uuid_to_py(py, self.0.uuid())
     }
 
     pub fn __repr__<'py>(&self, py: Python<'py>) -> Bound<'py, PyString> {
-        let str = format!("Parameter({})", self.symbol.repr(false),);
+        let str = format!("Parameter({})", self.0.repr(false),);
         PyString::new(py, str.as_str())
     }
 
     pub fn __getnewargs__(&self) -> (String, u128) {
-        (self.symbol.repr(false), self.symbol.uuid.as_u128())
+        (self.0.repr(false), self.0.uuid().as_u128())
     }
 
-    pub fn __getstate__(&self) -> (String, u128) {
-        (self.symbol.repr(false), self.symbol.uuid.as_u128())
-    }
-
-    pub fn __setstate__(&mut self, state: (String, u128)) {
-        let name = state.0.as_str();
-        let uuid = Uuid::from_u128(state.1);
-        let symbol = Symbol::new(name, Some(uuid), None);
-        self.symbol = symbol;
+    // In Python space we inherit from `PyParameterExpression`, but we don't want its `__reduce__`
+    // to take effect.  This statement is the same as the Python statement:
+    //
+    // class Parameter:
+    //     __reduce__ = object.__reduce__
+    //
+    // which is a standard way of overriding with the default.
+    #[classattr]
+    fn __reduce__(py: Python) -> PyResult<Bound<PyAny>> {
+        py.get_type::<PyAny>().getattr("__reduce__")
     }
 
     fn __copy__(slf: PyRef<Self>) -> PyRef<Self> {
@@ -1659,125 +1723,78 @@ impl PyParameter {
 /// .. note::
 ///     There is very little reason to ever construct this class directly.  Objects of this type are
 ///     automatically constructed efficiently as part of creating a :class:`.ParameterVector`.
-#[pyclass(sequence, subclass, module="qiskit._accelerate.circuit", extends=PyParameter, name="ParameterVectorElement")]
+#[pyclass(
+    sequence,
+    subclass,
+    module="qiskit._accelerate.circuit",
+    extends=PyParameter,
+    name="ParameterVectorElement",
+)]
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
-pub struct PyParameterVectorElement {
-    symbol: Symbol,
-}
-
-impl<'py> IntoPyObject<'py> for PyParameterVectorElement {
-    type Target = PyParameterVectorElement;
-    type Output = Bound<'py, Self::Target>;
-    type Error = PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        let symbol = &self.symbol;
-        let py_param = PyParameter::from_symbol(symbol.clone());
-        let py_element = py_param.add_subclass(self);
-
-        Ok(Py::new(py, py_element)?.into_bound(py))
-    }
-}
-
-impl PyParameterVectorElement {
-    pub fn symbol(&self) -> &Symbol {
-        &self.symbol
-    }
-
-    pub fn from_symbol(symbol: Symbol) -> PyClassInitializer<Self> {
-        let py_element = Self {
-            symbol: symbol.clone(),
-        };
-        let py_parameter = PyParameter::from_symbol(symbol);
-
-        py_parameter.add_subclass(py_element)
-    }
-}
+// This carries no data in Rust space; `PyParameter`/`Symbol` already has it all.  It's just a
+// Python type-level marker.  Nothing in Rust space should actually use this.
+pub(crate) struct PyParameterVectorElement;
 
 #[pymethods]
 impl PyParameterVectorElement {
     #[new]
     #[pyo3(signature = (vector, index, uuid=None))]
-    pub fn py_new(
-        py: Python<'_>,
-        vector: Py<PyAny>,
-        index: u32,
-        uuid: Option<Py<PyAny>>,
-    ) -> PyResult<PyClassInitializer<Self>> {
-        let vector_name = vector.getattr(py, "name")?.extract::<String>(py)?;
-        let uuid = uuid_from_py(py, uuid)?.unwrap_or(Uuid::new_v4());
-
-        let symbol = Symbol::py_new(
-            &vector_name,
-            Some(uuid.as_u128()),
-            Some(index),
-            Some(vector.clone_ref(py)),
-        )?;
-
-        let py_parameter = PyParameter::from_symbol(symbol.clone());
-        let py_element = Self { symbol };
-
-        Ok(py_parameter.add_subclass(py_element))
+    pub fn py_new<'py>(
+        py: Python<'py>,
+        vector: &PyParameterVector,
+        index: usize,
+        uuid: Option<Bound<'py, PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        if uuid.is_some() {
+            let msg = intern!(
+                py,
+                "constructing a `ParameterVectorElement` with an explicit UUID is no longer \
+                supported; UUIDs are always derived from the base vector."
+            );
+            WARNINGS_WARN
+                .get_bound(py)
+                .call1((msg, py.get_type::<PyDeprecationWarning>()))?;
+        }
+        let symbol = Symbol::Element {
+            index,
+            base: vector.base.clone(),
+        };
+        PyParameter(Arc::new(symbol)).into_py_any(py)
     }
 
-    pub fn __getnewargs__(&self, py: Python) -> PyResult<(Py<PyAny>, u32, Option<Py<PyAny>>)> {
-        let vector = self
-            .symbol
-            .vector
-            .clone()
-            .expect("vector element should have a vector");
-        let index = self
-            .symbol
-            .index
-            .expect("vector element should have an index");
-        let uuid = uuid_to_py(py, self.symbol.uuid)?;
-        Ok((vector, index, Some(uuid)))
+    pub fn __getnewargs__(self_: PyRef<Self>) -> (PyParameterVector, usize) {
+        match &*self_.as_super().0 {
+            Symbol::Standalone { .. } => {
+                panic!("internal logic error: standalone symbols cannot become vector elements")
+            }
+            Symbol::Element { base, index } => (PyParameterVector::new(base.clone()), *index),
+        }
     }
 
-    pub fn __repr__<'py>(&self, py: Python<'py>) -> Bound<'py, PyString> {
-        let str = format!("ParameterVectorElement({})", self.symbol.repr(false),);
-        PyString::new(py, str.as_str())
-    }
-
-    pub fn __getstate__(&self, py: Python) -> PyResult<(Py<PyAny>, u32, Option<Py<PyAny>>)> {
-        self.__getnewargs__(py)
-    }
-
-    pub fn __setstate__(
-        &mut self,
-        py: Python,
-        state: (Py<PyAny>, u32, Option<Py<PyAny>>),
-    ) -> PyResult<()> {
-        let vector = state.0;
-        let index = state.1;
-        let vector_name = vector.getattr(py, "name")?.extract::<String>(py)?;
-        let uuid = uuid_from_py(py, state.2)?.map(|id| id.as_u128());
-        self.symbol = Symbol::py_new(&vector_name, uuid, Some(index), Some(vector))?;
-        Ok(())
+    pub fn __repr__(self_: PyRef<Self>) -> String {
+        format!("ParameterVectorElement({})", self_.as_super().0.repr(false))
     }
 
     /// Get the index of this element in the parent vector.
     #[getter]
-    pub fn index(&self) -> u32 {
-        self.symbol
-            .index
-            .expect("A vector element should have an index")
+    pub fn index(self_: PyRef<Self>) -> usize {
+        match &*self_.as_super().0 {
+            Symbol::Standalone { .. } => {
+                panic!("internal logic error: standalone symbols cannot become vector elements")
+            }
+            Symbol::Element { index, base: _ } => *index,
+        }
     }
 
     /// Get the parent vector instance.
     #[getter]
-    pub fn vector(&self) -> Py<PyAny> {
-        self.symbol
-            .clone()
-            .vector
-            .expect("A vector element should have a vector")
-    }
-
-    /// For backward compatibility only. This should not be used and we ought to update those
-    /// usages!
-    #[getter]
-    pub fn _vector(&self) -> Py<PyAny> {
-        self.vector()
+    pub fn vector(self_: PyRef<Self>) -> PyParameterVector {
+        match &*self_.as_super().0 {
+            Symbol::Standalone { .. } => {
+                panic!("internal logic error: standalone symbols cannot become vector elements")
+            }
+            Symbol::Element { base, index: _ } => PyParameterVector::new(base.clone()),
+        }
     }
 
     fn __copy__(slf: PyRef<Self>) -> PyRef<Self> {
@@ -1791,42 +1808,183 @@ impl PyParameterVectorElement {
     }
 }
 
-/// Try to extract a Uuid from a Python object, which could be a Python UUID or int.
-fn uuid_from_py(py: Python<'_>, uuid: Option<Py<PyAny>>) -> PyResult<Option<Uuid>> {
-    if let Some(val) = uuid {
-        // construct from u128
-        let as_u128 = if let Ok(as_u128) = val.extract::<u128>(py) {
-            as_u128
-        // construct from Python UUID type
-        } else if val.bind(py).is_exact_instance(UUID.get_bound(py)) {
-            val.getattr(py, "int")?.extract::<u128>(py)?
-        // invalid format
-        } else {
-            return Err(PyTypeError::new_err("not a UUID!"));
-        };
-        Ok(Some(Uuid::from_u128(as_u128)))
-    } else {
-        Ok(None)
+/// A container of many related :class:`Parameter` objects.
+///
+/// This class is faster to construct than constructing many :class:`.Parameter` objects
+/// individually, and the individual names of the parameters will all share a common stem (the name
+/// of the vector).  For a vector called ``v`` with length 3, the individual elements will have
+/// names ``v[0]``, ``v[1]`` and ``v[2]``.
+///
+/// The elements of a vector are sorted by the name of the vector, then the numeric value of their
+/// index.
+///
+/// This class fulfills the :class:`collections.abc.Sequence` interface.
+#[pyclass(
+    sequence,
+    module = "qiskit._accelerate.circuit",
+    name = "ParameterVector"
+)]
+pub struct PyParameterVector {
+    base: Arc<SymbolVector>,
+    /// Cache of the name list.
+    name: PyOnceLock<Py<PyString>>,
+    /// Cache of the parameter list.
+    params: PyOnceLock<Py<PyList>>,
+}
+impl PyParameterVector {
+    pub fn new(base: Arc<SymbolVector>) -> Self {
+        Self {
+            base,
+            name: PyOnceLock::new(),
+            params: PyOnceLock::new(),
+        }
     }
+}
+#[pymethods]
+impl PyParameterVector {
+    #[new]
+    #[pyo3(signature = (name, length=0, uuid=None))]
+    fn py_new(name: Bound<PyString>, length: usize, uuid: Option<Bound<PyAny>>) -> PyResult<Self> {
+        let base = Arc::new(SymbolVector {
+            name: name.to_str()?.to_owned(),
+            uuid: uuid
+                .map(uuid_from_py)
+                .transpose()?
+                .unwrap_or_else(Uuid::new_v4),
+            len: length.into(),
+        });
+        // Annoyingly, PyO3 doesn't have the same `impl From<T> for OnceLock<T>`.
+        let name_cell = PyOnceLock::new();
+        name_cell
+            .set(name.py(), name.unbind())
+            .expect("the line above is the only reference, so we cannot be racing a thread");
+        Ok(Self {
+            base,
+            name: name_cell,
+            params: PyOnceLock::new(),
+        })
+    }
+
+    /// The base name of the vector.
+    #[getter]
+    fn name<'py>(&self, py: Python<'py>) -> Bound<'py, PyString> {
+        self.name
+            .get_or_init(py, || PyString::new(py, &self.base.name).unbind())
+            .bind(py)
+            .clone()
+    }
+
+    /// A sequence of the contained :class:`.ParameterVectorElement` instances.
+    ///
+    /// Mutations to this object are not tracked.
+    #[getter]
+    fn params<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        self.params
+            .get_or_try_init(py, || {
+                PyList::new(py, self.base.iter().map(PyParameter::from)).map(|x| x.unbind())
+            })
+            .map(|ob| ob.bind(py).clone())
+    }
+
+    /// Get the root UUID of this vector.
+    #[getter]
+    fn uuid<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        uuid_to_py(py, self.base.uuid)
+    }
+
+    // Historically, `ParameterVector` _did not_ implement `__eq__` and `__hash__`, or more
+    // precisely, it inherited the `object` ones, which are based on pointer identity.  We can't
+    // have the natural definitions of `__eq__` and `__hash__` while the mutable `resize` exists, so
+    // instead we reinvent pointer-identity equality and hashing in a way that works with the
+    // on-the-fly Python-object creation from raw `Arc<SymbolVector>` instances.
+    fn __eq__(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.base, &other.base)
+    }
+    fn __hash__(&self) -> usize {
+        Arc::as_ptr(&self.base).addr()
+    }
+
+    /// Find the index of a :class:`.ParameterVectorElement` within the sequence.
+    ///
+    /// This is an inefficient way of accessing the :attr:`~.ParameterVectorElement.index` field on
+    /// the given value, which you should use instead.
+    fn index(&self, val: &Bound<PyAny>) -> PyResult<usize> {
+        self.params(val.py())?.index(val)
+    }
+    fn __getitem__<'py>(&self, val: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        self.params(val.py())?.as_any().get_item(val)
+    }
+    fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyIterator>> {
+        self.params(py)?.as_any().try_iter()
+    }
+    fn __len__(&self) -> usize {
+        self.base.len.load(atomic::Ordering::Relaxed)
+    }
+
+    fn __str__(&self) -> String {
+        // Yeah, I don't know why we do this either, but it's been like this ever since
+        // `ParameterVector` was first introduced.
+        format!(
+            "{}, [{}]",
+            self.base.name,
+            self.base
+                .iter()
+                .map(|s| format!("'{}'", s.fullname()))
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
+    fn __repr__(&self) -> String {
+        format!(
+            "ParameterVector(name='{}', length={})",
+            self.base.name,
+            self.base.len.load(atomic::Ordering::Relaxed)
+        )
+    }
+
+    fn __getnewargs__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        (
+            self.name(py),
+            self.base.len.load(atomic::Ordering::Relaxed),
+            uuid_to_py(py, self.base.uuid)?,
+        )
+            .into_pyobject(py)
+    }
+
+    /// Change the length of this vector.
+    ///
+    /// Any references to :class:`.ParameterVectorElement` instances with lengths greater than
+    /// ``length`` are invalidated by calling this.
+    ///
+    /// The UUIDs of :class:`.ParameterVectorElement` instances that are deleted or created by this
+    /// method are stable; the UUIDs are always derived as index offsets from the vector's UUID.
+    fn resize(&mut self, length: usize) {
+        // This can actually allow existing Rust-space `Symbol` objects derived from the prior
+        // `SymbolVector` to become out of sync with Python space, because we replace the internal
+        // vector here rather than propagating it through everywhere.
+        //
+        // This whole method is not ideal, but it has very limited uses remaining in
+        // `BlueprintCircuit`, which is deprecated pending removal in Qiskit 3.0.
+        _ = self.params.take();
+        self.base.len.store(length, atomic::Ordering::Relaxed)
+    }
+}
+
+/// Try to extract a Uuid from a Python object, which could be a Python UUID or int.
+fn uuid_from_py(uuid: Bound<PyAny>) -> PyResult<Uuid> {
+    let int = if uuid.is_exact_instance(UUID.get_bound(uuid.py())) {
+        uuid.getattr("int")?
+    } else {
+        uuid
+    };
+    Ok(Uuid::from_u128(int.extract::<u128>()?))
 }
 
 /// Convert a Rust Uuid object to a Python UUID object.
-fn uuid_to_py(py: Python<'_>, uuid: Uuid) -> PyResult<Py<PyAny>> {
+fn uuid_to_py(py: Python<'_>, uuid: Uuid) -> PyResult<Bound<'_, PyAny>> {
     let uuid = uuid.as_u128();
     let kwargs = [("int", uuid)].into_py_dict(py)?;
-    Ok(UUID.get_bound(py).call((), Some(&kwargs))?.unbind())
-}
-
-/// Extract a [Symbol] for a Python object, which could either be a Parameter or a
-/// ParameterVectorElement.
-fn symbol_from_py_parameter(param: &Bound<'_, PyAny>) -> PyResult<Symbol> {
-    if let Ok(element) = param.extract::<PyParameterVectorElement>() {
-        Ok(element.symbol.clone())
-    } else if let Ok(parameter) = param.extract::<PyParameter>() {
-        Ok(parameter.symbol.clone())
-    } else {
-        Err(PyValueError::new_err("Could not extract parameter"))
-    }
+    UUID.get_bound(py).call((), Some(&kwargs))
 }
 
 /// A singular parameter value used for QPY serialization. This covers anything
@@ -1837,7 +1995,6 @@ pub enum ParameterValueType {
     Float(f64),
     Complex(Complex64),
     Parameter(PyParameter),
-    VectorElement(PyParameterVectorElement),
 }
 
 impl ParameterValueType {
@@ -1849,20 +2006,7 @@ impl ParameterValueType {
                 Value::Complex(c) => Some(ParameterValueType::Complex(c)),
             }
         } else if let SymbolExpr::Symbol(symbol) = expr {
-            match symbol.index {
-                None => {
-                    let param = PyParameter {
-                        symbol: symbol.as_ref().clone(),
-                    };
-                    Some(ParameterValueType::Parameter(param))
-                }
-                Some(_) => {
-                    let param = PyParameterVectorElement {
-                        symbol: symbol.as_ref().clone(),
-                    };
-                    Some(ParameterValueType::VectorElement(param))
-                }
-            }
+            Some(Self::Parameter(PyParameter(symbol.clone())))
         } else {
             // ParameterExpressions have the value None, as they must be constructed
             None
@@ -1873,12 +2017,8 @@ impl ParameterValueType {
 impl From<ParameterValueType> for ParameterExpression {
     fn from(value: ParameterValueType) -> Self {
         match value {
-            ParameterValueType::Parameter(param) => {
-                let expr = SymbolExpr::Symbol(Arc::new(param.symbol));
-                Self::from_symbol_expr(expr)
-            }
-            ParameterValueType::VectorElement(param) => {
-                let expr = SymbolExpr::Symbol(Arc::new(param.symbol));
+            ParameterValueType::Parameter(PyParameter(symbol)) => {
+                let expr = SymbolExpr::Symbol(symbol);
                 Self::from_symbol_expr(expr)
             }
             ParameterValueType::Int(i) => {
@@ -1897,7 +2037,7 @@ impl From<ParameterValueType> for ParameterExpression {
     }
 }
 
-#[pyclass(module = "qiskit._accelerate.circuit")]
+#[pyclass(module = "qiskit._accelerate.circuit", from_py_object)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum OpCode {
@@ -1941,6 +2081,12 @@ unsafe impl ::bytemuck::CheckedBitPattern for OpCode {
 
 unsafe impl ::bytemuck::NoUninit for OpCode {}
 
+impl OpCode {
+    pub fn try_from_u8(value: u8) -> Result<OpCode, bytemuck::checked::CheckedCastError> {
+        bytemuck::checked::try_cast::<u8, OpCode>(value)
+    }
+}
+
 #[pymethods]
 impl OpCode {
     #[new]
@@ -1968,7 +2114,7 @@ impl OpCode {
 }
 
 // enum for QPY replay
-#[pyclass(sequence, module = "qiskit._accelerate.circuit")]
+#[pyclass(sequence, module = "qiskit._accelerate.circuit", from_py_object)]
 #[derive(Clone, Debug)]
 pub struct OPReplay {
     pub op: OpCode,
@@ -2038,14 +2184,18 @@ fn filter_name_map(
     }
 }
 
-pub fn qpy_replay(
+fn qpy_replay_inner(
     expr: &ParameterExpression,
     name_map: &HashMap<String, Symbol>,
     replay: &mut Vec<OPReplay>,
+    unused: &mut IndexSet<Symbol>,
 ) {
     match &expr.expr {
-        SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => {
-            // nothing to do here, we only need to traverse instructions
+        // This function is written under the assumption that the top-level expression involves an
+        // operation, since `OPReplay` items correspond to operations that own their operands.
+        SymbolExpr::Value(_) => (),
+        SymbolExpr::Symbol(sym) => {
+            unused.swap_remove(sym.as_ref());
         }
         SymbolExpr::Unary { op, expr } => {
             let op = match op {
@@ -2066,7 +2216,7 @@ pub fn qpy_replay(
             let lhs = filter_name_map(expr, name_map);
 
             // recurse on the instruction
-            qpy_replay(&lhs, name_map, replay);
+            qpy_replay_inner(&lhs, name_map, replay, unused);
 
             let lhs_value = ParameterValueType::extract_from_expr(expr);
 
@@ -2092,14 +2242,66 @@ pub fn qpy_replay(
             // recurse on the parameter expressions
             let lhs = filter_name_map(lhs, name_map);
             let rhs = filter_name_map(rhs, name_map);
-            qpy_replay(&lhs, name_map, replay);
-            qpy_replay(&rhs, name_map, replay);
+            // If the extracted value resolved into a concrete value, we don't need to recurse
+            // into it, since its computed value will be stored along
+            // with the operation in the replay.
+            if matches!(lhs_value, Some(ParameterValueType::Parameter(_)) | None) {
+                qpy_replay_inner(&lhs, name_map, replay, unused);
+            }
+            if matches!(rhs_value, Some(ParameterValueType::Parameter(_)) | None) {
+                qpy_replay_inner(&rhs, name_map, replay, unused);
+            }
 
             // add the expression to the replay
             match lhs_value {
-                None
-                | Some(ParameterValueType::Parameter(_))
-                | Some(ParameterValueType::VectorElement(_)) => {
+                Some(ParameterValueType::Parameter(_)) => {
+                    // For non-commutative operations (SUB, DIV, POW): if LHS is a Parameter and RHS is
+                    // an expression (None), we need to use reverse operations (RSUB, RDIV, RPOW)
+                    let op = match op {
+                        symbol_expr::BinaryOp::Add => OpCode::ADD,
+                        symbol_expr::BinaryOp::Sub => {
+                            // If RHS is None (an expression), use RSUB
+                            if rhs_value.is_none() {
+                                OpCode::RSUB
+                            } else {
+                                OpCode::SUB
+                            }
+                        }
+                        symbol_expr::BinaryOp::Mul => OpCode::MUL,
+                        symbol_expr::BinaryOp::Div => {
+                            // If RHS is None (an expression), use RDIV
+                            if rhs_value.is_none() {
+                                OpCode::RDIV
+                            } else {
+                                OpCode::DIV
+                            }
+                        }
+                        symbol_expr::BinaryOp::Pow => {
+                            // If RHS is None (an expression), use RPOW
+                            if rhs_value.is_none() {
+                                OpCode::RPOW
+                            } else {
+                                OpCode::POW
+                            }
+                        }
+                    };
+                    if op == OpCode::RPOW || op == OpCode::RDIV || op == OpCode::RSUB {
+                        // For reverse operations, swap lhs and rhs (Python's sympify will swap again to get correct order)
+                        replay.push(OPReplay {
+                            op,
+                            lhs: rhs_value,
+                            rhs: lhs_value,
+                        });
+                    } else {
+                        replay.push(OPReplay {
+                            op,
+                            lhs: lhs_value,
+                            rhs: rhs_value,
+                        });
+                    }
+                }
+                None => {
+                    // When LHS is an expression (None), use normal operations
                     let op = match op {
                         symbol_expr::BinaryOp::Add => OpCode::ADD,
                         symbol_expr::BinaryOp::Sub => OpCode::SUB,
@@ -2138,5 +2340,15 @@ pub fn qpy_replay(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_op_code_from_u8_invalid_input() {
+        assert!(OpCode::try_from_u8(123).is_err())
     }
 }

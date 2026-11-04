@@ -23,11 +23,12 @@ jobs:
       - name: Copy metadata
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -e
           # Split Mergify's ref name (e.g. 'mergify/bp/stable/0.25/pr-10828') on the final '-' to
           # get the number of the PR that triggered Mergify.
-          IFS='-' read -ra split <<< "${{ github.event.pull_request.head.ref }}"
+          IFS='-' read -ra split <<< "$BRANCH_REF"
           base_pr=${split[-1]}
 
           gh pr --repo "${{ github.repository }}" view "$base_pr" --json labels,milestone > base_pr.json

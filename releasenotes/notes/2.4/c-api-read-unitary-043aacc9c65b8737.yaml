@@ -1,0 +1,10 @@
+---
+features_c:
+  - |
+    Added the C API function :c:func:`qk_circuit_instruction_kind` for querying the kind of a specific
+    instruction in a quantum circuit. This function returns a :c:enum:`QkOperationKind` enum value to identify
+    the type of operation at a given index within the circuit.
+    Added the C API function :c:func:`qk_circuit_inst_unitary` to extract the unitary matrix associated with a
+    specific unitary instruction in a quantum circuit. This function populates a provided output array
+    with the unitary matrix, enabling C callers to access the unitary transformations defined
+    within the circuit.

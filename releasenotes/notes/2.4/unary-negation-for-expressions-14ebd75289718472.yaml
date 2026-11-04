@@ -1,0 +1,19 @@
+features_circuits:
+  - |
+    Introduced a new unary negation operation :func:`~.expr.negate`, allowing users to negate 
+    float and duration expressions. In-case a scalar is passed, it is automatically lifted to 
+    the correct type.
+
+    Example usage::
+    
+        from qiskit.circuit import ClassicalRegister
+        from qiskit.circuit.classical import expr, types
+
+        qc = QuantumCircuit(2, 2)
+        in_var1 = qc.add_input("in1", types.Float())
+        
+        with qc.if_test(expr.greater(in_var1, 0.2)) as else_:
+            qc.rz(0.3, 0)
+        with else_:
+            with qc.if_test(expr.greater(expr.negate(in_var1), 0.2)): 
+                qc.rz(-0.3, 0)

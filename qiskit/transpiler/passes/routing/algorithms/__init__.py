@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#     https://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,10 +24,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The permutation modules contains some functions for permuting on architectures given a mapping.
+"""The permutation module contains some functions for permuting on architectures given a mapping.
 
 A permutation function takes in a graph and a permutation of graph nodes,
 and returns a sequence of SWAPs that implements that permutation on the graph.
 """
 
 from .token_swapper import ApproximateTokenSwapper
+
+__all__ = ["ApproximateTokenSwapper"]

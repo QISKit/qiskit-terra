@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,6 @@ This module contains utility functions for circuits.
 import math
 import numpy
 
-from qiskit import _numpy_compat
 from qiskit.exceptions import QiskitError
 from qiskit.circuit.exceptions import CircuitError
 
@@ -82,7 +81,8 @@ def _ctrl_state_to_int(ctrl_state, num_ctrl_qubits):
     ctrl_state_std = None
     if isinstance(ctrl_state, str):
         try:
-            assert len(ctrl_state) == num_ctrl_qubits
+            if len(ctrl_state) != num_ctrl_qubits:
+                CircuitError("Invalid number of ctrl qubits for given ctrl state")
             ctrl_state = int(ctrl_state, 2)
         except ValueError as ex:
             raise CircuitError("invalid control bit string: " + ctrl_state) from ex
@@ -96,7 +96,7 @@ def _ctrl_state_to_int(ctrl_state, num_ctrl_qubits):
     elif ctrl_state is None:
         ctrl_state_std = 2**num_ctrl_qubits - 1
     else:
-        raise CircuitError(f"invalid control state specification: {repr(ctrl_state)}")
+        raise CircuitError(f"invalid control state specification: {ctrl_state!r}")
     return ctrl_state_std
 
 
@@ -106,7 +106,7 @@ def with_gate_array(base_array):
     nonwritable = numpy.array(base_array, dtype=numpy.complex128)
     nonwritable.setflags(write=False)
 
-    def __array__(_self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+    def __array__(_self, dtype=None, copy=None):
         dtype = nonwritable.dtype if dtype is None else dtype
         return numpy.array(nonwritable, dtype=dtype, copy=copy)
 
@@ -139,7 +139,7 @@ def with_controlled_gate_array(base_array, num_ctrl_qubits, cached_states=None):
     if cached_states is None:
         nonwritables = [matrix_for_control_state(state) for state in range(2**num_ctrl_qubits)]
 
-        def __array__(self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+        def __array__(self, dtype=None, copy=None):
             arr = nonwritables[self.ctrl_state]
             dtype = arr.dtype if dtype is None else dtype
             return numpy.array(arr, dtype=dtype, copy=copy)
@@ -147,12 +147,12 @@ def with_controlled_gate_array(base_array, num_ctrl_qubits, cached_states=None):
     else:
         nonwritables = {state: matrix_for_control_state(state) for state in cached_states}
 
-        def __array__(self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+        def __array__(self, dtype=None, copy=None):
             if (arr := nonwritables.get(self.ctrl_state)) is not None:
                 dtype = arr.dtype if dtype is None else dtype
                 return numpy.array(arr, dtype=dtype, copy=copy)
 
-            if copy is False and copy is not _numpy_compat.COPY_ONLY_IF_NEEDED:
+            if copy is False:
                 raise ValueError("could not produce matrix without calculation")
             return numpy.asarray(
                 _compute_control_matrix(base, num_ctrl_qubits, self.ctrl_state), dtype=dtype

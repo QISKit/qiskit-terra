@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,9 +15,10 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Iterable, Tuple, Set, Union, TypeVar, TYPE_CHECKING
+from typing import TypeVar, TYPE_CHECKING
+from collections.abc import Iterable
 
-from qiskit.circuit import (  # pylint: disable=cyclic-import
+from qiskit.circuit import (
     ClassicalRegister,
     Clbit,
     QuantumRegister,
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
     from qiskit.circuit import QuantumCircuit, Register
 
 _ConditionT = TypeVar(
-    "_ConditionT", bound=Union[Tuple[ClassicalRegister, int], Tuple[Clbit, int], expr.Expr]
+    "_ConditionT", bound=tuple[ClassicalRegister, int] | tuple[Clbit, int] | expr.Expr
 )
 
 
@@ -105,7 +106,7 @@ def condition_resources(
 
 def partition_registers(
     registers: Iterable[Register],
-) -> Tuple[Set[QuantumRegister], Set[ClassicalRegister]]:
+) -> tuple[set[QuantumRegister], set[ClassicalRegister]]:
     """Partition a sequence of registers into its quantum and classical registers."""
     qregs = set()
     cregs = set()
@@ -153,9 +154,9 @@ def unify_circuit_resources(circuits: Iterable[QuantumCircuit]) -> Iterable[Quan
     return _unify_circuit_registers(circuits)
 
 
-def _unify_circuit_resources_rebuild(  # pylint: disable=invalid-name  # (it's too long?!)
-    circuits: Tuple[QuantumCircuit, ...],
-) -> Tuple[QuantumCircuit, QuantumCircuit]:
+def _unify_circuit_resources_rebuild(  # (it's too long?!)
+    circuits: tuple[QuantumCircuit, ...],
+) -> tuple[QuantumCircuit, QuantumCircuit]:
     """
     Ensure that all the given circuits have all the same qubits and clbits, and that they
     are defined in the same order.  The order is important for binding when the bodies are used in
@@ -163,7 +164,7 @@ def _unify_circuit_resources_rebuild(  # pylint: disable=invalid-name  # (it's t
 
     This function will always rebuild the objects into new :class:`.QuantumCircuit` instances.
     """
-    # pylint: disable=cyclic-import
+
     from qiskit.circuit import QuantumCircuit
 
     qubits, clbits = set(), set()

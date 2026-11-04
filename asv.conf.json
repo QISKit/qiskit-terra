@@ -11,13 +11,13 @@
     ],
     "build_command": [
         "python -m pip install -U build",
-        "python -m build --outdir {build_cache_dir} --wheel {build_dir}"
+        "QISKIT_BUILD_WITH_MIMALLOC=1 python -m build --outdir {build_cache_dir} --wheel {build_dir}"
     ],
     "branches": ["main"],
     "dvcs": "git",
     "environment_type": "virtualenv",
-    "show_commit_url": "http://github.com/Qiskit/qiskit/commit/",
-    "pythons": ["3.10", "3.11", "3.12", "3.13"],
+    "show_commit_url": "https://github.com/Qiskit/qiskit/commit/",
+    "pythons": ["3.11", "3.12", "3.13", "3.14"],
     "benchmark_dir": "test/benchmarks",
     "env_dir": ".asv/env",
     "results_dir": ".asv/results"

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -39,20 +39,21 @@ if optionals.HAS_PIL:
 @unittest.skipUnless(optionals.HAS_PIL, "PIL not available")
 @unittest.skipUnless(optionals.HAS_SEABORN, "seaborn not available")
 class TestGateMap(QiskitVisualizationTestCase):
-    # pylint: disable=possibly-used-before-assignment
     """visual tests for plot_gate_map"""
 
-    backends = [
-        GenericBackendV2(num_qubits=5, coupling_map=YORKTOWN_CMAP, seed=0),
-        GenericBackendV2(num_qubits=20, coupling_map=ALMADEN_CMAP, seed=0),
-        GenericBackendV2(num_qubits=7, coupling_map=LAGOS_CMAP, seed=0),
-    ]
+    backend_configs = {
+        "yorktown": (5, YORKTOWN_CMAP),
+        "almaden": (20, ALMADEN_CMAP),
+        "lagos": (7, LAGOS_CMAP),
+    }
 
-    @data(*backends)
+    @data(*backend_configs)
     @unittest.skipIf(not optionals.HAS_MATPLOTLIB, "matplotlib not available.")
     @unittest.skipUnless(optionals.HAS_GRAPHVIZ, "Graphviz not installed")
-    def test_plot_gate_map(self, backend):
+    def test_plot_gate_map(self, backend_name):
         """tests plotting of gate map of a device (20 qubit, 7 qubit, and 5 qubit)"""
+        n, coupling_map = self.backend_configs[backend_name]
+        backend = GenericBackendV2(num_qubits=n, coupling_map=coupling_map, seed=0)
         n = backend.num_qubits
         img_ref = path_to_diagram_reference(str(n) + "bit_quantum_computer.png")
         fig = plot_gate_map(backend)
@@ -62,11 +63,13 @@ class TestGateMap(QiskitVisualizationTestCase):
             self.assertImagesAreEqual(Image.open(img_buffer), img_ref, 0.1)
         plt.close(fig)
 
-    @data(*backends)
+    @data(*backend_configs)
     @unittest.skipIf(not optionals.HAS_MATPLOTLIB, "matplotlib not available.")
     @unittest.skipUnless(optionals.HAS_GRAPHVIZ, "Graphviz not installed")
-    def test_plot_circuit_layout(self, backend):
+    def test_plot_circuit_layout(self, backend_name):
         """tests plot_circuit_layout for each device"""
+        n, coupling_map = self.backend_configs[backend_name]
+        backend = GenericBackendV2(num_qubits=n, coupling_map=coupling_map, seed=0)
         layout_length = int(backend.num_qubits / 2)
         qr = QuantumRegister(layout_length, "qr")
         circuit = QuantumCircuit(qr)

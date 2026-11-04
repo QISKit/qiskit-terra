@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -18,14 +18,16 @@ use pyo3::types::PyString;
 use qiskit_circuit::packed_instruction::PackedOperation;
 use smallvec::{SmallVec, smallvec};
 
-use qiskit_circuit::circuit_data::CircuitData;
+use qiskit_circuit::circuit_data::{CircuitData, CircuitDataError, PyCircuitData};
 use qiskit_circuit::operations::{Param, StandardInstruction};
 use qiskit_circuit::{Clbit, Qubit};
 
 use itertools::izip;
 
+use crate::parameter_ledger::ParameterLedger;
+
 use super::blocks::{Block, Entanglement, LayerEntanglement};
-use super::parameter_ledger::{LayerParameters, LayerType, ParameterLedger};
+use super::parameter_ledger::{LayerParameters, LayerType};
 
 type Instruction = (
     PackedOperation,
@@ -51,12 +53,11 @@ type Instruction = (
 ///
 /// An iterator for the rotation instructions.
 fn rotation_layer<'a>(
-    py: Python<'a>,
     num_qubits: u32,
     rotation_blocks: &'a [&'a Block],
     parameters: Vec<Vec<Vec<&'a Param>>>,
     skipped_qubits: &'a HashSet<u32>,
-) -> impl Iterator<Item = PyResult<Instruction>> + 'a {
+) -> impl Iterator<Item = Result<Instruction, CircuitDataError>> + 'a {
     rotation_blocks
         .iter()
         .zip(parameters)
@@ -72,7 +73,7 @@ fn rotation_layer<'a>(
                 .map(move |(start_idx, params)| {
                     let (bound_op, bound_params) = block
                         .operation
-                        .assign_parameters(py, &params)
+                        .assign_parameters(&params)
                         .expect("Failed to rebind");
                     Ok((
                         bound_op,
@@ -104,11 +105,10 @@ fn rotation_layer<'a>(
 ///
 /// An iterator for the entanglement instructions.
 fn entanglement_layer<'a>(
-    py: Python<'a>,
     entanglement: &'a LayerEntanglement,
     entanglement_blocks: &'a [&'a Block],
     parameters: LayerParameters<'a>,
-) -> impl Iterator<Item = PyResult<Instruction>> + 'a {
+) -> impl Iterator<Item = Result<Instruction, CircuitDataError>> + 'a {
     let zipped = izip!(entanglement_blocks, parameters, entanglement);
     zipped.flat_map(move |(block, block_params, block_entanglement)| {
         block_entanglement
@@ -117,7 +117,7 @@ fn entanglement_layer<'a>(
             .map(move |(indices, params)| {
                 let (bound_op, bound_params) = block
                     .operation
-                    .assign_parameters(py, &params)
+                    .assign_parameters(&params)
                     .expect("Failed to rebind");
                 Ok((
                     bound_op,
@@ -157,29 +157,27 @@ fn entanglement_layer<'a>(
 /// An N-local circuit.
 #[allow(clippy::too_many_arguments)]
 pub fn n_local(
-    py: Python,
     num_qubits: u32,
     rotation_blocks: &[&Block],
     entanglement_blocks: &[&Block],
     entanglement: &Entanglement,
     reps: usize,
     insert_barriers: bool,
-    parameter_prefix: &String,
+    parameter_prefix: &str,
     skip_final_rotation_layer: bool,
     skip_unentangled_qubits: bool,
 ) -> PyResult<CircuitData> {
     // Construct the parameter ledger, which will define all free parameters and provide
     // access to them, given an index for a layer and the current gate to implement.
     let ledger = ParameterLedger::from_nlocal(
-        py,
         num_qubits,
         reps,
         entanglement,
         rotation_blocks,
         entanglement_blocks,
         skip_final_rotation_layer,
-        parameter_prefix,
-    )?;
+        &parameter_prefix.to_string(),
+    );
 
     // Compute the qubits that are skipped in the rotation layer. If this is set,
     // we skip qubits that do not appear in any of the entanglement layers.
@@ -197,7 +195,6 @@ pub fn n_local(
 
     let packed_insts = (0..reps).flat_map(|layer| {
         rotation_layer(
-            py,
             num_qubits,
             rotation_blocks,
             ledger.get_parameters(LayerType::Rotation, layer),
@@ -205,7 +202,6 @@ pub fn n_local(
         )
         .chain(maybe_barrier.get())
         .chain(entanglement_layer(
-            py,
             entanglement.get_layer(layer),
             entanglement_blocks,
             ledger.get_parameters(LayerType::Entangle, layer),
@@ -214,15 +210,24 @@ pub fn n_local(
     });
     if !skip_final_rotation_layer {
         let packed_insts = packed_insts.chain(rotation_layer(
-            py,
             num_qubits,
             rotation_blocks,
             ledger.get_parameters(LayerType::Rotation, reps),
             &skipped_qubits,
         ));
-        CircuitData::from_packed_operations(num_qubits, 0, packed_insts, Param::Float(0.0))
+        Ok(CircuitData::from_packed_operations(
+            num_qubits,
+            0,
+            packed_insts,
+            Param::Float(0.0),
+        )?)
     } else {
-        CircuitData::from_packed_operations(num_qubits, 0, packed_insts, Param::Float(0.0))
+        Ok(CircuitData::from_packed_operations(
+            num_qubits,
+            0,
+            packed_insts,
+            Param::Float(0.0),
+        )?)
     }
 }
 
@@ -230,7 +235,6 @@ pub fn n_local(
 #[pyo3(signature = (num_qubits, rotation_blocks, entanglement_blocks, entanglement, reps, insert_barriers, parameter_prefix, skip_final_rotation_layer, skip_unentangled_qubits))]
 #[allow(clippy::too_many_arguments)]
 pub fn py_n_local(
-    py: Python,
     num_qubits: u32,
     rotation_blocks: Vec<PyRef<Block>>,
     entanglement_blocks: Vec<PyRef<Block>>,
@@ -240,7 +244,7 @@ pub fn py_n_local(
     parameter_prefix: &Bound<PyString>,
     skip_final_rotation_layer: bool,
     skip_unentangled_qubits: bool,
-) -> PyResult<CircuitData> {
+) -> PyResult<PyCircuitData> {
     // Normalize the Python data.
     let parameter_prefix = parameter_prefix.to_string();
     let rotation_blocks: Vec<&Block> = rotation_blocks
@@ -256,8 +260,7 @@ pub fn py_n_local(
     // circuit layer.
     let entanglement = Entanglement::from_py(num_qubits, reps, entanglement, &entanglement_blocks)?;
 
-    n_local(
-        py,
+    Ok(n_local(
         num_qubits,
         &rotation_blocks,
         &entanglement_blocks,
@@ -267,7 +270,8 @@ pub fn py_n_local(
         &parameter_prefix,
         skip_final_rotation_layer,
         skip_unentangled_qubits,
-    )
+    )?
+    .into())
 }
 
 /// A convenient struct to optionally yield barriers to inject in-between circuit layers.
@@ -299,7 +303,7 @@ impl MaybeBarrier {
         }
     }
 
-    fn get(&self) -> Box<dyn Iterator<Item = PyResult<Instruction>>> {
+    fn get(&self) -> Box<dyn Iterator<Item = Result<Instruction, CircuitDataError>>> {
         match &self.barrier {
             None => Box::new(std::iter::empty()),
             Some(inst) => Box::new(std::iter::once(Ok(inst.clone()))),

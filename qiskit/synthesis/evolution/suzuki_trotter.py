@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,8 +19,7 @@ from collections.abc import Callable
 from itertools import chain
 import numpy as np
 
-from qiskit.circuit.parameterexpression import ParameterExpression
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+from qiskit.circuit import ParameterExpression, QuantumCircuit
 from qiskit.quantum_info import SparsePauliOp
 import qiskit.quantum_info
 
@@ -28,7 +27,7 @@ from .product_formula import ProductFormula, reorder_paulis
 
 if typing.TYPE_CHECKING:
     from qiskit.circuit.quantumcircuit import ParameterValueType
-    from qiskit.circuit.library.pauli_evolution import PauliEvolutionGate
+    from qiskit.circuit.library import PauliEvolutionGate
 
 
 class SuzukiTrotter(ProductFormula):
@@ -132,7 +131,7 @@ class SuzukiTrotter(ProductFormula):
 
             ("X", [0], t), ("ZZ", [0, 1], 2t), ("X", [0], t)
 
-        Note that the rotation angle contains a factor of 2, such that that evolution
+        Note that the rotation angle contains a factor of 2, such that the evolution
         of a Pauli :math:`P` over time :math:`t`, which is :math:`e^{itP}`, is represented
         by ``(P, indices, 2 * t)``.
 
@@ -149,11 +148,7 @@ class SuzukiTrotter(ProductFormula):
         time = evolution.time
 
         def to_sparse_list(operator):
-            sparse_list = (
-                operator.to_sparse_list()
-                if isinstance(operator, SparsePauliOp)
-                else operator.to_sparse_list()
-            )
+            sparse_list = operator.to_sparse_list()
             paulis = [
                 (pauli, indices, real_or_fail(coeff) * time * 2 / self.reps)
                 for pauli, indices, coeff in sparse_list

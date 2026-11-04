@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    :meth:`.QuantumCircuit.remove_final_measurements` will no longer emit a spurious warning about
+    trying to add registers when called on a circuit with a set layout.

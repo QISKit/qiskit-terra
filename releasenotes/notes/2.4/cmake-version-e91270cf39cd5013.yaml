@@ -1,0 +1,6 @@
+---
+build:
+  - The minimum version of CMake required to build and run the C-API test suite has been lowered to
+    3.20 from 3.27.  Qiskit does not commit to any particular policy around the version of CMake
+    required, but will make a best-effort attempt to match the repositories of common and
+    still-supported Linux distributions.

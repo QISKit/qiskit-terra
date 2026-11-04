@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -27,7 +27,7 @@ from ..standard_gates import get_standard_gate_name_mapping
 class MCMT(QuantumCircuit):
     """The multi-controlled multi-target gate, for an arbitrary singly controlled target gate.
 
-    For example, the H gate controlled on 3 qubits and acting on 2 target qubit is represented as:
+    For example, the H gate controlled on 3 qubits and acting on 2 target qubits is represented as:
 
     .. code-block:: text
 
@@ -42,7 +42,7 @@ class MCMT(QuantumCircuit):
         ┤1     ├
         └──────┘
 
-    This default implementations requires no ancilla qubits, by broadcasting the target gate
+    This default implementation requires no ancilla qubits, by broadcasting the target gate
     to the number of target qubits and using Qiskit's generic control routine to control the
     broadcasted target on the control qubits. If ancilla qubits are available, a more efficient
     variant using the so-called V-chain decomposition can be used. This is implemented in
@@ -61,12 +61,12 @@ class MCMT(QuantumCircuit):
         Args:
             gate: The gate to be applied controlled on the control qubits and applied to the target
                 qubits. Can be either a Gate or a circuit method.
-                If it is a callable, it will be casted to a Gate.
+                If it is a callable, it will be cast to a Gate.
             num_ctrl_qubits: The number of control qubits.
             num_target_qubits: The number of target qubits.
 
         Raises:
-            AttributeError: If the gate cannot be casted to a controlled gate.
+            AttributeError: If the gate cannot be cast to a controlled gate.
             AttributeError: If the number of controls or targets is 0.
         """
         if num_ctrl_qubits == 0 or num_target_qubits == 0:
@@ -170,7 +170,7 @@ class MCMTVChain(MCMT):
         super().__init__(gate, num_ctrl_qubits, num_target_qubits)
 
     def _build(self):
-        # pylint: disable=cyclic-import
+
         from qiskit.synthesis.multi_controlled import synth_mcmt_vchain
 
         synthesized = synth_mcmt_vchain(self.gate, self.num_ctrl_qubits, self.num_target_qubits)
@@ -188,7 +188,7 @@ class MCMTVChain(MCMT):
 class MCMTGate(ControlledGate):
     """The multi-controlled multi-target gate, for an arbitrary singly controlled target gate.
 
-    For example, the H gate controlled on 3 qubits and acting on 2 target qubit is represented as:
+    For example, the H gate controlled on 3 qubits and acting on 2 target qubits is represented as:
 
     .. parsed-literal::
 
@@ -252,7 +252,7 @@ class MCMTGate(ControlledGate):
 
     def _define(self):
         """Default definition relying on gate.control. Control state is handled by superclass."""
-        # pylint: disable=cyclic-import
+
         from qiskit.transpiler.passes.synthesis.hls_plugins import MCMTSynthesisDefault
 
         self.definition = MCMTSynthesisDefault().run(self)
@@ -305,7 +305,7 @@ class MCMTGate(ControlledGate):
         value of ``annotated``.
 
         Args:
-            num_ctrl_qubits: Number of controls to add. Defauls to ``1``.
+            num_ctrl_qubits: Number of controls to add. Defaults to ``1``.
             label: Optional gate label. Defaults to ``None``.
             ctrl_state: The control state of the gate, specified either as an integer or a bitstring
                 (e.g. ``"110"``). If ``None``, defaults to the all-ones state ``2**num_ctrl_qubits - 1``

@@ -1,0 +1,5 @@
+features_transpiler:
+  - |
+    The :class:`.OptimizeCliffordT` transpiler optimization pass now also
+    replaces chains of consecutive Clifford+T gates when the T-count stays
+    the same but the Clifford count is reduced.

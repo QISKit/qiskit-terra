@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -19,11 +19,11 @@ from qiskit.circuit.library import UnitaryGate, CXGate
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
 from qiskit.transpiler import PassManager
 from qiskit.converters import circuit_to_dag, dag_to_circuit
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.quantum_info.operators import Operator
 from qiskit.transpiler.passes import InverseCancellation
 from qiskit.qasm2 import dumps
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 class TestUnitaryGate(QiskitTestCase):
@@ -33,7 +33,7 @@ class TestUnitaryGate(QiskitTestCase):
         """Test instantiation"""
         try:
             UnitaryGate([[0, 1], [1, 0]])
-        # pylint: disable=broad-except
+
         except Exception as err:
             self.fail(f"unexpected exception in init of Unitary: {err}")
 
@@ -41,7 +41,7 @@ class TestUnitaryGate(QiskitTestCase):
         """test non-unitary"""
         try:
             UnitaryGate([[1, 1], [1, 0]])
-        # pylint: disable=broad-except
+
         except Exception:
             pass
         else:

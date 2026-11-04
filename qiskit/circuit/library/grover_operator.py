@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,7 +13,7 @@
 """The Grover operator."""
 
 from __future__ import annotations
-from typing import List, Optional, Union
+
 import numpy
 
 from qiskit.circuit import QuantumCircuit, QuantumRegister, AncillaRegister, AncillaQubit
@@ -56,7 +56,7 @@ def grover_operator(
 
     This class allows setting a different state preparation, as in quantum amplitude
     amplification (a generalization of Grover's algorithm), :math:`\mathcal{A}` might not be
-    a layer of Hardamard gates [3].
+    a layer of Hadamard gates [3].
 
     The action of the phase oracle :math:`\mathcal{S}_f` is defined as
 
@@ -209,7 +209,7 @@ def grover_operator(
 
     [3] Brassard, G., Hoyer, P., Mosca, M., & Tapp, A. (2000).
     Quantum Amplitude Amplification and Estimation.
-    `arXiv:quant-ph/0005055 <http://arxiv.org/abs/quant-ph/0005055>`_.
+    `arXiv:quant-ph/0005055 <https://arxiv.org/abs/quant-ph/0005055>`_.
     """
     # We inherit the ancillas/qubits structure from the oracle, if it is given as circuit.
     if isinstance(oracle, QuantumCircuit):
@@ -310,7 +310,7 @@ class GroverOperator(QuantumCircuit):
 
     This class allows setting a different state preparation, as in quantum amplitude
     amplification (a generalization of Grover's algorithm), :math:`\mathcal{A}` might not be
-    a layer of Hardamard gates [3].
+    a layer of Hadamard gates [3].
 
     The action of the phase oracle :math:`\mathcal{S}_f` is defined as
 
@@ -430,7 +430,7 @@ class GroverOperator(QuantumCircuit):
 
     [3] Brassard, G., Hoyer, P., Mosca, M., & Tapp, A. (2000).
     Quantum Amplitude Amplification and Estimation.
-    `arXiv:quant-ph/0005055 <http://arxiv.org/abs/quant-ph/0005055>`_.
+    `arXiv:quant-ph/0005055 <https://arxiv.org/abs/quant-ph/0005055>`_.
     """
 
     @deprecate_func(
@@ -440,10 +440,10 @@ class GroverOperator(QuantumCircuit):
     )
     def __init__(
         self,
-        oracle: Union[QuantumCircuit, Statevector],
-        state_preparation: Optional[QuantumCircuit] = None,
-        zero_reflection: Optional[Union[QuantumCircuit, DensityMatrix, Operator]] = None,
-        reflection_qubits: Optional[List[int]] = None,
+        oracle: QuantumCircuit | Statevector,
+        state_preparation: QuantumCircuit | None = None,
+        zero_reflection: QuantumCircuit | DensityMatrix | Operator | None = None,
+        reflection_qubits: list[int] | None = None,
         insert_barriers: bool = False,
         mcx_mode: str = "noancilla",
         name: str = "Q",
@@ -460,18 +460,19 @@ class GroverOperator(QuantumCircuit):
             insert_barriers: Whether barriers should be inserted between the reflections and A.
             mcx_mode: The mode to use for building the default zero reflection.
             name: The name of the circuit.
+
         """
         super().__init__(name=name)
 
         # store inputs
         if isinstance(oracle, Statevector):
-            from qiskit.circuit.library import Diagonal  # pylint: disable=cyclic-import
+            from qiskit.circuit.library import Diagonal
 
             oracle = Diagonal((-1) ** oracle.data)
         self._oracle = oracle
 
         if isinstance(zero_reflection, (Operator, DensityMatrix)):
-            from qiskit.circuit.library import Diagonal  # pylint: disable=cyclic-import
+            from qiskit.circuit.library import Diagonal
 
             zero_reflection = Diagonal(zero_reflection.data.diagonal())
         self._zero_reflection = zero_reflection
@@ -565,7 +566,7 @@ class GroverOperator(QuantumCircuit):
 
 # TODO use the oracle compiler or the bit string oracle
 def _zero_reflection(
-    num_state_qubits: int, qubits: List[int], mcx_mode: Optional[str] = None
+    num_state_qubits: int, qubits: list[int], mcx_mode: str | None = None
 ) -> QuantumCircuit:
     qr_state = QuantumRegister(num_state_qubits, "state")
     reflection = QuantumCircuit(qr_state, name="S_0")

@@ -1,0 +1,8 @@
+---
+features_visualization:
+  - |
+    ``pi_check`` and circuit visualization now print rotation angles as π fractions
+    with higher integers, up to 100 (for example ``3π/35`` or ``17π`` instead of
+    decimal approximations).
+
+    See `#16356 <https://github.com/Qiskit/qiskit/issues/16356>`__.

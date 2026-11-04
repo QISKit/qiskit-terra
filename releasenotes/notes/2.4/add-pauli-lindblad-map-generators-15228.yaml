@@ -1,0 +1,7 @@
+---
+features_quantum_info:
+  - |
+    Added the :meth:`.PauliLindbladMap.generators` method, which provides a more
+    convenient accessor for the map's generator terms. This is an alias for the existing
+    :meth:`.PauliLindbladMap.get_qubit_sparse_pauli_list_copy` method and aligns with
+    the naming conventions used in Aer and Runtime for similar classes.

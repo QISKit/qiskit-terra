@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    :class:`~qiskit.result.Counts` objects will now correctly
+    error on construction if the keys are not all in the same format.

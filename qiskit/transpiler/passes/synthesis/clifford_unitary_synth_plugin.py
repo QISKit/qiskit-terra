@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -46,7 +46,7 @@ class CliffordUnitarySynthesis(UnitarySynthesisPlugin):
     In addition, the parameter ``plugin_config`` of :class:`.UnitarySynthesis`
     can be used to pass the following plugin-specific parameters:
 
-    * min_qubits: the minumum number of qubits to consider (the default value is 1).
+    * min_qubits: the minimum number of qubits to consider (the default value is 1).
 
     * max_qubits: the maximum number of qubits to consider (the default value is 3).
 

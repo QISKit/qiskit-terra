@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,8 @@
 import itertools
 import math
 from collections import OrderedDict, namedtuple
-from typing import Dict, List, Generator, Any
+from typing import Any
+from collections.abc import Generator
 
 import rustworkx as rx
 
@@ -96,15 +97,15 @@ class _DAGDependencyV2:
         self.cregs = OrderedDict()
 
         # List of Qubit/Clbit wires that the DAG acts on.
-        self.qubits: List[Qubit] = []
-        self.clbits: List[Clbit] = []
+        self.qubits: list[Qubit] = []
+        self.clbits: list[Clbit] = []
 
         # Dictionary mapping of Qubit and Clbit instances to a tuple comprised of
         # 0) corresponding index in dag.{qubits,clbits} and
         # 1) a list of Register-int pairs for each Register containing the Bit and
         # its index within that register.
-        self._qubit_indices: Dict[Qubit, BitLocations] = {}
-        self._clbit_indices: Dict[Clbit, BitLocations] = {}
+        self._qubit_indices: dict[Qubit, BitLocations] = {}
+        self._clbit_indices: dict[Clbit, BitLocations] = {}
 
         self._global_phase = 0
 
@@ -126,7 +127,7 @@ class _DAGDependencyV2:
         """Set the global phase of the circuit.
 
         Args:
-            angle (float, ParameterExpression)
+            angle (float, ParameterExpression): The angle to set the global phase to.
         """
         if isinstance(angle, ParameterExpression):
             self._global_phase = angle
@@ -338,7 +339,7 @@ class _DAGDependencyV2:
         """Get the set of "op" nodes with the given name."""
         named_nodes = []
         for node in self._multi_graph.nodes():
-            if node.op.name in names:
+            if node.name in names:
                 named_nodes.append(node)
         return named_nodes
 
@@ -469,6 +470,11 @@ class _DAGDependencyV2:
 
         This function needs `pydot <https://github.com/erocarrera/pydot>`, which in turn needs
         Graphviz <https://www.graphviz.org/>` to be installed.
+
+        .. warning::
+            This function will call the system Graphviz tool on a file involving user-controllable
+            strings (such as gate labels or register names).  It is recommended to only call this
+            function on trusted input.
 
         Args:
             scale (float): scaling factor

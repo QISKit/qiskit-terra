@@ -4,13 +4,15 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
 """Creating Sabre starting layouts."""
+
+from __future__ import annotations
 
 import itertools
 
@@ -24,6 +26,15 @@ from qiskit._accelerate.error_map import ErrorMap
 
 class SabrePreLayout(AnalysisPass):
     """Choose a starting layout to use for additional Sabre layout trials.
+
+    The pass works by augmenting the coupling map with more and more "extra" edges
+    until VF2 succeeds to find a perfect graph isomorphism. More precisely, the
+    augmented coupling map contains edges between nodes that are within a given
+    distance ``d`` in the original coupling map. The original edges are noise-free
+    while the additional edges have noise that scales exponentially with the distance.
+    The value of ``d`` is increased until an isomorphism is found.
+
+    Intuitively, a better VF2 layout involves fewer and of shorter-distance extra edges.
 
     Property Set Values Written
     ---------------------------
@@ -40,45 +51,44 @@ class SabrePreLayout(AnalysisPass):
 
     def __init__(
         self,
-        coupling_map,
-        max_distance=2,
-        error_rate=0.1,
-        max_trials_vf2=100,
-        call_limit_vf2=None,
-        improve_layout=True,
+        coupling_map: CouplingMap | Target,
+        max_distance: int = 2,
+        error_rate: float = 0.1,
+        max_trials_vf2: int | None = 100,
+        call_limit_vf2: None | int | tuple[int | None, int | None] = None,
+        improve_layout: bool = True,
+        min_distance: int = 1,
     ):
-        """SabrePreLayout initializer.
-
-        The pass works by augmenting the coupling map with more and more "extra" edges
-        until VF2 succeeds to find a perfect graph isomorphism. More precisely, the
-        augmented coupling map contains edges between nodes that are within a given
-        distance ``d`` in the original coupling map, and the value of ``d`` is increased
-        until an isomorphism is found.
-
-        Intuitively, a better layout involves fewer extra edges. The pass also optionally
-        minimizes the number of extra edges involved in the layout until a local minimum
-        is found. This involves removing extra edges and running VF2 to see if an
-        isomorphism still exists.
-
+        """
         Args:
-            coupling_map (Union[CouplingMap, Target]): directed graph representing the
-                original coupling map or a target modelling the backend (including its
-                connectivity).
-            max_distance (int): the maximum distance to consider for augmented coupling maps.
-            error_rate (float): the error rate to assign to the "extra" edges. A non-zero
+            coupling_map: Directed graph representing the original coupling map or a target modelling
+                the backend (including its connectivity).
+            max_distance: The maximum distance for running VF2 with the augmented coupling
+                map. In particular, this also specifies the maximum distance between the original nodes
+                that become connected in the augmented coupling map.
+            error_rate: The error rate to assign to the "extra" edges. A non-zero
                 error rate prioritizes VF2 to choose original edges over extra edges.
-            max_trials_vf2 (int): specifies the maximum number of VF2 trials. A larger number
-                allows VF2 to explore more layouts, eventually choosing the one with the smallest
-                error rate.
-            call_limit_vf2 (int): limits each call to VF2 by bounding the number of VF2 state visits.
-            improve_layout (bool): whether to improve the layout by minimizing the number of
-                extra edges involved. This might be time-consuming as this requires additional
-                VF2 calls.
+            max_trials_vf2: Specifies the maximum number of VF2 trials. This option remains primarily
+                for legacy reasons since the introduction of on-the-fly scoring in VF2, which was
+                introduced in Qiskit 2.3. To bound the time for the pass, set parameters ``max_distance``
+                and ``call_limit_vf2`` instead.
+            call_limit_vf2: The maximum number of times that the inner VF2 isomorphism search will
+                attempt to extend the mapping. If ``None``, then no limit.  If a 2-tuple, then the
+                limit starts as the first item, and swaps to the second after the first match is found,
+                without resetting the number of steps taken.  This can be used to allow a long search
+                for any mapping, but still terminate quickly with a small extension budget if one is
+                found.
+            improve_layout: Unused (the option became obsolete with the introduction of on-the-fly
+                scoring in VF2).
+            min_distance: The distance for the first VF2 run with the augmented coupling map. Setting
+                ``min_distance > 1`` skips all smaller-distance checks, and in particular skips the
+                distance-1 check which corresponds to running the ``VF2Layout`` pass.
 
         Raises:
-            TranspilerError: At runtime, if neither ``coupling_map`` or ``target`` are provided.
+            TranspilerError: At runtime, if the argument ``coupling_map`` is not provided.
         """
 
+        self.min_distance = min_distance
         self.max_distance = max_distance
         self.error_rate = error_rate
         self.max_trials_vf2 = max_trials_vf2
@@ -106,12 +116,12 @@ class SabrePreLayout(AnalysisPass):
 
         if self.coupling_map is None:
             raise TranspilerError(
-                "SabrePreLayout requires coupling_map to be used with either"
+                "SabrePreLayout requires coupling_map to be used with either "
                 "CouplingMap or a Target."
             )
 
         starting_layout = None
-        cur_distance = 1
+        cur_distance = self.min_distance
         while cur_distance <= self.max_distance:
             augmented_map, augmented_error_map = self._add_extra_edges(cur_distance)
             pass_ = VF2Layout(
@@ -130,9 +140,6 @@ class SabrePreLayout(AnalysisPass):
             cur_distance += 1
 
         if cur_distance > 1 and starting_layout is not None:
-            # optionally improve starting layout
-            if self.improve_layout:
-                starting_layout = self._minimize_extra_edges(dag, starting_layout)
             # write discovered layout into the property set
             if "sabre_starting_layouts" not in self.property_set:
                 self.property_set["sabre_starting_layouts"] = [starting_layout]
@@ -159,67 +166,3 @@ class SabrePreLayout(AnalysisPass):
                 augmented_error_map.add_error((y, x), error_rate)
 
         return augmented_coupling_map, augmented_error_map
-
-    def _get_extra_edges_used(self, dag, layout):
-        """Returns the set of extra edges involved in the layout."""
-        extra_edges_used = set()
-        virtual_bits = layout.get_virtual_bits()
-        for node in dag.two_qubit_ops():
-            p0 = virtual_bits[node.qargs[0]]
-            p1 = virtual_bits[node.qargs[1]]
-            if self.coupling_map.distance(p0, p1) > 1:
-                extra_edge = (p0, p1) if p0 < p1 else (p1, p0)
-                extra_edges_used.add(extra_edge)
-        return extra_edges_used
-
-    def _find_layout(self, dag, edges):
-        """Checks if there is a layout for a given set of edges."""
-        cm = CouplingMap(edges)
-        pass_ = VF2Layout(cm, seed=0, max_trials=1, call_limit=self.call_limit_vf2)
-        pass_.run(dag)
-        return pass_.property_set.get("layout", None)
-
-    def _minimize_extra_edges(self, dag, starting_layout):
-        """Minimizes the set of extra edges involved in the layout. This iteratively
-        removes extra edges from the coupling map and uses VF2 to check if a layout
-        still exists. This is reasonably efficiently as it only looks for a local
-        minimum.
-        """
-        # compute the set of edges in the original coupling map
-        real_edges = []
-        for x, y in itertools.combinations(self.coupling_map.graph.node_indices(), 2):
-            d = self.coupling_map.distance(x, y)
-            if d == 1:
-                real_edges.append((x, y))
-
-        best_layout = starting_layout
-
-        # keeps the set of "necessary" extra edges: without a necessary edge
-        # a layout no longer exists
-        extra_edges_necessary = []
-
-        extra_edges_unprocessed_set = self._get_extra_edges_used(dag, starting_layout)
-
-        while extra_edges_unprocessed_set:
-            # choose some unprocessed edge
-            edge_chosen = next(iter(extra_edges_unprocessed_set))
-            extra_edges_unprocessed_set.remove(edge_chosen)
-
-            # check if a layout still exists without this edge
-            layout = self._find_layout(
-                dag, real_edges + extra_edges_necessary + list(extra_edges_unprocessed_set)
-            )
-
-            if layout is None:
-                # without this edge the layout either does not exist or is too hard to find
-                extra_edges_necessary.append(edge_chosen)
-
-            else:
-                # this edge is not necessary, furthermore we can trim the set of edges to examine based
-                # in the edges involved in the layout.
-                extra_edges_unprocessed_set = self._get_extra_edges_used(dag, layout).difference(
-                    set(extra_edges_necessary)
-                )
-                best_layout = layout
-
-        return best_layout

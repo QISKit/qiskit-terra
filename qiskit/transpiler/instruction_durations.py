@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,7 +12,8 @@
 
 """Durations of instructions, one of transpiler configurations."""
 from __future__ import annotations
-from typing import Optional, List, Tuple, Union, Iterable
+
+from collections.abc import Iterable
 
 import qiskit.circuit
 from qiskit.circuit import Barrier, Delay, Instruction, ParameterExpression
@@ -36,7 +37,7 @@ class InstructionDurations:
     """
 
     def __init__(
-        self, instruction_durations: "InstructionDurationsType" | None = None, dt: float = None
+        self, instruction_durations: InstructionDurationsType | None = None, dt: float | None = None
     ):
         self.duration_by_name: dict[str, tuple[float, str]] = {}
         self.duration_by_name_qubits: dict[tuple[str, tuple[int, ...]], tuple[float, str]] = {}
@@ -81,7 +82,7 @@ class InstructionDurations:
             return backend.target.durations()
         raise TypeError("Unsupported backend type: {backend}")
 
-    def update(self, inst_durations: "InstructionDurationsType" | None, dt: float = None):
+    def update(self, inst_durations: InstructionDurationsType | None, dt: float | None = None):
         """Update self with inst_durations (inst_durations overwrite self).
 
         Args:
@@ -253,11 +254,11 @@ class InstructionDurations:
         return units_used
 
 
-InstructionDurationsType = Union[
-    List[Tuple[str, Optional[Iterable[int]], float, Optional[Iterable[float]], str]],
-    List[Tuple[str, Optional[Iterable[int]], float, Optional[Iterable[float]]]],
-    List[Tuple[str, Optional[Iterable[int]], float, str]],
-    List[Tuple[str, Optional[Iterable[int]], float]],
-    InstructionDurations,
-]
+InstructionDurationsType = (
+    list[tuple[str, Iterable[int] | None, float, Iterable[float] | None, str]]
+    | list[tuple[str, Iterable[int] | None, float, Iterable[float] | None]]
+    | list[tuple[str, Iterable[int] | None, float, str]]
+    | list[tuple[str, Iterable[int] | None, float]]
+    | InstructionDurations
+)
 """List of tuples representing (instruction name, qubits indices, parameters, duration)."""

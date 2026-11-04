@@ -1,0 +1,15 @@
+---
+deprecations_circuits:
+  - The ``cache_max_entries`` argument on the the :class:`.CommutationChecker` class's
+    constructor is deprecated and will be removed in Qiskit 3.0.0. This argument no longer has
+    any effect because the :class:`.CommutationChecker` no longer maintains an internal cache
+    of commutation relationships between gates as it is no longer necessary.
+  - The :meth:`.CommutationChecker.clear_cached_commutations` method is deprecated and will be
+    removed in Qiskit 3.0.0. This method no longer has any effect because the
+    internal cache was removed from the :class:`.CommutationChecker` class as
+    it was no longer necessary so there is nothing to clear.
+  - The :meth:`.CommutationChecker.num_cached_entries` method is deprecated
+    and will be removed in Qiskit 3.0.0. Since the removal of the internal
+    cache from the :class:`.CommutationChecker` this method always returns 0
+    because there are no internally cached entries in a :class:`.CommutationChecker`
+    instance.

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -20,8 +20,8 @@ import numpy as np
 
 import qiskit.synthesis.unitary.aqc.fast_gradient.layer as lr
 from qiskit.synthesis.unitary.aqc.fast_gradient.pmatrix import PMatrix
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
-import test.python.synthesis.aqc.fast_gradient.utils_for_testing as tut  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
+import test.python.synthesis.aqc.fast_gradient.utils_for_testing as tut
 
 
 class TestLayer2q(QiskitTestCase):

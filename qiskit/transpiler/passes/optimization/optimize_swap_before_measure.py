@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -52,10 +52,13 @@ class OptimizeSwapBeforeMeasure(TransformationPass):
                 # the node swap needs to be removed and, if a measure follows, needs to be adapted
                 swap_qargs = swap.qargs
                 measure_layer = DAGCircuit()
+                measure_layer.add_qubits(dag.qubits)
+                measure_layer.add_clbits(dag.clbits)
                 for qreg in dag.qregs.values():
                     measure_layer.add_qreg(qreg)
                 for creg in dag.cregs.values():
                     measure_layer.add_creg(creg)
+
                 for successor in list(dag.descendants(swap)):
                     if isinstance(successor, DAGOpNode) and isinstance(successor.op, Measure):
                         # replace measure node with a new one, where qargs is set with the "other"

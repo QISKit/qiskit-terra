@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -132,7 +132,7 @@ If your constructor does not have defaults for all its arguments, you must set
 
 Subclasses of :class:`SingletonInstruction` and the other associated classes can control how their
 constructor's arguments are interpreted, in order to help the singleton machinery return the
-singleton even in the case than an optional argument is explicitly set to its default.
+singleton even in the case that an optional argument is explicitly set to its default.
 
 .. automethod:: SingletonInstruction._singleton_lookup_key
 
@@ -290,7 +290,6 @@ def _impl_init_subclass(
             # Docstrings are all inherited, and we use more descriptive class methods to better
             # distinguish the `_Singleton` class (`singleton_class`) from the instruction class
             # (`instruction_class`) that it's wrapping.
-            # pylint: disable=missing-function-docstring,bad-classmethod-argument
 
             def __new__(singleton_class, *_args, **_kwargs):
                 raise TypeError(f"cannot create '{singleton_class.__name__}' instances")
@@ -359,8 +358,6 @@ def _impl_init_subclass(
 class _SingletonMeta(type(Instruction)):
     # The inheritance above is to ensure metaclass compatibility with `Instruction`, though pylint
     # doesn't understand that this is a subclass of `type`, so uses metaclass `self` conventions.
-
-    # pylint: disable=bad-classmethod-argument,no-self-argument
 
     # Beware the difference between `type.__new__` and `type.__call__`.  The former is called during
     # creation of the _type object_ (e.g. during a `class A: ...` statement), and the latter is

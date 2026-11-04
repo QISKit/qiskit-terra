@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -62,7 +62,7 @@ def excitation_preserving(
     a simpler pattern.
 
     This trial wave function consists of layers of :math:`Z` rotations with 2-qubit entanglements.
-    The entangling is creating using :math:`XX+YY` rotations and optionally a controlled-phase
+    The entanglement is created using :math:`XX+YY` rotations and optionally a controlled-phase
     gate for the mode ``"fsim"``.
 
     Examples:
@@ -164,11 +164,11 @@ class ExcitationPreserving(TwoLocal):
     a simpler pattern.
 
     This trial wave function consists of layers of :math:`Z` rotations with 2-qubit entanglements.
-    The entangling is creating using :math:`XX+YY` rotations and optionally a controlled-phase
+    The entanglement is created using :math:`XX+YY` rotations and optionally a controlled-phase
     gate for the mode ``'fsim'``.
 
     See :class:`~qiskit.circuit.library.RealAmplitudes` for more detail on the possible arguments
-    and options such as skipping unentanglement qubits, which apply here too.
+    and options such as skipping unentangled qubits, which apply here too.
 
     The rotations of the ExcitationPreserving ansatz can be written as
 
@@ -261,6 +261,7 @@ class ExcitationPreserving(TwoLocal):
                 for anything besides visualization its **strongly** recommended
                 to set this flag to ``True`` to avoid a large performance
                 overhead for parameter binding.
+            name: Name of the circuit.
 
         Raises:
             ValueError: If the selected mode is not supported.

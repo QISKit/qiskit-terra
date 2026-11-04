@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -21,7 +21,7 @@ from qiskit.circuit import Instruction
 from qiskit.circuit.library.standard_gates.h import HGate
 from qiskit.dagcircuit.exceptions import DAGDependencyError
 from qiskit.converters import circuit_to_dagdependency
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 try:
     import rustworkx as rx

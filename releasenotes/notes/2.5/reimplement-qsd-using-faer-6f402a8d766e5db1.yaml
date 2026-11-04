@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed in issue in Schur decomposition for certain matrices by reimplementing it
+    using ``faer`` instead of ``nalgebra``. The issue could occur when running
+    the quantum Shannon decomposition via :func:`.qs_decomposition`, as well as
+    via the :class:`.UnitarySynthesis` transpiler pass or via :func:`.transpile`.
+
+    See `#15870 <https://github.com/Qiskit/qiskit/issues/#15870>`__.

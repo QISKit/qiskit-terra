@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -13,8 +13,10 @@
 
 """Common preset passmanager generators."""
 
+from __future__ import annotations
+
 import collections
-from typing import Optional
+import typing
 
 from qiskit.circuit.equivalence_library import SessionEquivalenceLibrary as sel
 from qiskit.circuit.controlflow import CONTROL_FLOW_OP_NAMES
@@ -55,6 +57,11 @@ from qiskit.transpiler.optimization_metric import OptimizationMetric
 from qiskit.utils import deprecate_func
 from qiskit.quantum_info.operators.symplectic.clifford_circuits import _CLIFFORD_GATE_NAMES
 
+
+if typing.TYPE_CHECKING:
+    from qiskit.transpiler.passes.synthesis.high_level_synthesis import HLSConfig
+    from qiskit.transpiler.target import Target
+    from qiskit.transpiler.coupling import CouplingMap
 
 _ControlFlowState = collections.namedtuple("_ControlFlowState", ("working", "not_working"))
 
@@ -185,35 +192,43 @@ def if_has_control_flow_else(if_present, if_absent):
 
 
 def generate_unroll_3q(
-    target,
-    basis_gates=None,
-    approximation_degree=None,
-    unitary_synthesis_method="default",
-    unitary_synthesis_plugin_config=None,
-    hls_config=None,
-    qubits_initially_zero=True,
-    optimization_metric=OptimizationMetric.COUNT_2Q,
+    target: Target | None,
+    basis_gates: list[str] | None = None,
+    approximation_degree: float | None = None,
+    unitary_synthesis_method: str = "default",
+    unitary_synthesis_plugin_config: dict | None = None,
+    hls_config: HLSConfig | None = None,
+    qubits_initially_zero: bool = True,
+    optimization_metric: OptimizationMetric = OptimizationMetric.COUNT_2Q,
+    optimization_level: int = 2,
 ):
     """Generate an unroll >3q :class:`~qiskit.transpiler.PassManager`
 
     Args:
-        target (Target): the :class:`~.Target` object representing the backend
-        basis_gates (list): A list of str gate names that represent the basis
-            gates on the backend target
-        approximation_degree (Optional[float]): The heuristic approximation degree to
-            use. Can be between 0 and 1.
+        target: the :class:`~.Target` object representing the backend
+        basis_gates: A list of str gate names that represent the basis
+            gates on the backend target.
+        approximation_degree: Heuristic dial used for circuit approximation, where
+            ``1.0`` means no approximation (up to numerical tolerance) and ``0.0``
+            means the maximum approximation. If ``target`` is available, a value of
+            ``None`` indicates that approximation is allowed up to the reported error
+            rate for an operation in the target.
         unitary_synthesis_method (str): The unitary synthesis method to use. You can see
             a list of installed plugins with :func:`.unitary_synthesis_plugin_names`.
-        unitary_synthesis_plugin_config (dict): The optional dictionary plugin
+        unitary_synthesis_plugin_config: The optional dictionary plugin
             configuration, this is plugin specific refer to the specified plugin's
             documentation for how to use.
-        hls_config (HLSConfig): An optional configuration class to use for
+        hls_config: An optional configuration class to use for
             :class:`~qiskit.transpiler.passes.HighLevelSynthesis` pass.
             Specifies how to synthesize various high-level objects.
-        qubits_initially_zero (bool): Indicates whether the input circuit is
+        qubits_initially_zero: Indicates whether the input circuit is
             zero-initialized.
-        optimization_metric (OptimizationMetric): the :class:`~.OptimizationMetric` object
-            that the metric used when optimizing the unrolling.
+        optimization_metric: the :class:`~.OptimizationMetric` object
+            that defines the metric used when optimizing the unrolling.
+        optimization_level: The optimization level to use for unrolling, in the case
+            that multiple unrolling algorithms are available. Higher
+            levels generate potentially more optimized circuits, at the expense
+            of longer transpilation time.
 
     Returns:
         PassManager: The unroll 3q or more pass manager
@@ -240,6 +255,7 @@ def generate_unroll_3q(
             min_qubits=3,
             qubits_initially_zero=qubits_initially_zero,
             optimization_metric=optimization_metric,
+            optimization_level=optimization_level,
         )
     )
     # If there are no target instructions revert to using unroll3qormore so
@@ -258,7 +274,7 @@ def generate_embed_passmanager(coupling_map):
     that can be used to expand and apply an initial layout to a circuit
 
     Args:
-        coupling_map (Union[CouplingMap, Target): The coupling map for the backend to embed
+        coupling_map (Union[CouplingMap, Target]): The coupling map for the backend to embed
             the circuit to.
     Returns:
         PassManager: The embedding passmanager that assumes the layout property
@@ -423,39 +439,42 @@ def generate_pre_op_passmanager(target=None, coupling_map=None, remove_reset_in_
 
 
 def generate_translation_passmanager(
-    target,
-    basis_gates=None,
-    method="translator",
-    approximation_degree=None,
-    coupling_map=None,
-    unitary_synthesis_method="default",
-    unitary_synthesis_plugin_config=None,
-    hls_config=None,
-    qubits_initially_zero=True,
+    target: Target | None,
+    basis_gates: list[str] | None = None,
+    method: str = "translator",
+    approximation_degree: float | None = None,
+    coupling_map: CouplingMap | None = None,
+    unitary_synthesis_method: str = "default",
+    unitary_synthesis_plugin_config: dict | None = None,
+    hls_config: HLSConfig | None = None,
+    qubits_initially_zero: bool = True,
 ):
     """Generate a basis translation :class:`~qiskit.transpiler.PassManager`
 
     Args:
-        target (Target): the :class:`~.Target` object representing the backend
-        basis_gates (list): A list of str gate names that represent the basis
+        target: the :class:`~.Target` object representing the backend
+        basis_gates: A list of str gate names that represent the basis
             gates on the backend target
-        method (str): The basis translation method to use
-        approximation_degree (Optional[float]): The heuristic approximation degree to
-            use. Can be between 0 and 1.
-        coupling_map (CouplingMap): the coupling map of the backend
+        method: The basis translation method to use
+        approximation_degree: Heuristic dial used for circuit approximation, where
+            ``1.0`` means no approximation (up to numerical tolerance) and ``0.0``
+            means the maximum approximation. If ``target`` is available, a value of
+            ``None`` indicates that approximation is allowed up
+            to the reported error rate for an operation in the target.
+        coupling_map: the coupling map of the backend
             in case synthesis is done on a physical circuit. The
             directionality of the coupling_map will be taken into
             account if pulse_optimize is True/None and natural_direction
             is True/None.
-        unitary_synthesis_plugin_config (dict): The optional dictionary plugin
+        unitary_synthesis_method: The unitary synthesis method to use. You can
+            see a list of installed plugins with :func:`.unitary_synthesis_plugin_names`.
+        unitary_synthesis_plugin_config: The optional dictionary plugin
             configuration, this is plugin specific refer to the specified plugin's
             documentation for how to use.
-        unitary_synthesis_method (str): The unitary synthesis method to use. You can
-            see a list of installed plugins with :func:`.unitary_synthesis_plugin_names`.
-        hls_config (HLSConfig): An optional configuration class to use for
+        hls_config: An optional configuration class to use for
             :class:`~qiskit.transpiler.passes.HighLevelSynthesis` pass.
             Specifies how to synthesize various high-level objects.
-        qubits_initially_zero (bool): Indicates whether the input circuit is
+        qubits_initially_zero: Indicates whether the input circuit is
             zero-initialized.
 
     Returns:
@@ -491,77 +510,6 @@ def generate_translation_passmanager(
             ),
             translator,
         ]
-        fix_1q = [translator]
-    elif method == "clifford_t":
-        # The list of extended basis gates consists of the specified Clifford+T basis gates and
-        # additionally the 1q-gate "u".
-        # We set target=None to make sure extended_basis_gates is not overwritten by the target.
-        extended_basis_gates = list(basis_gates) + ["u"]
-
-        unroll = [
-            # Use the UnitarySynthesis pass to unroll 1-qubit and 2-qubit gates named "unitary" into
-            # extended_basis_gates.
-            UnitarySynthesis(
-                basis_gates=extended_basis_gates,
-                approximation_degree=approximation_degree,
-                coupling_map=coupling_map,
-                plugin_config=unitary_synthesis_plugin_config,
-                method=unitary_synthesis_method,
-                target=None,
-            ),
-            # Use the HighLevelSynthesis pass to unroll all the remaining 1q and 2q custom
-            # gates into extended_basis_gates + the gates in the equivalence library.
-            # We set target=None to make sure extended_basis_gates is not overwritten by the target.
-            HighLevelSynthesis(
-                hls_config=hls_config,
-                coupling_map=coupling_map,
-                target=None,
-                use_qubit_indices=True,
-                equivalence_library=sel,
-                basis_gates=extended_basis_gates,
-                qubits_initially_zero=qubits_initially_zero,
-                optimization_metric=OptimizationMetric.COUNT_T,
-            ),
-            # Use the BasisTranslator pass to translate all the gates into extended_basis_gates.
-            # In other words, this translates the gates in the equivalence library that are not
-            # in extended_basis_gates to gates in extended_basis_gates only.
-            # Note that we do not want to make any assumptions on which Clifford gates are present
-            # in basis_gates. The BasisTranslator will do the conversion if possible (and provide
-            # a helpful error message otherwise).
-            BasisTranslator(sel, extended_basis_gates, None),
-            # The next step is to resynthesize blocks of consecutive 1q-gates into Clifford+T.
-            # Use Collect1qRuns and ConsolidateBlocks passes to replace such blocks by 1q "unitary"
-            # gates.
-            Collect1qRuns(),
-            ConsolidateBlocks(
-                basis_gates=None,
-                target=None,
-                approximation_degree=approximation_degree,
-                force_consolidate=True,
-            ),
-            # We use the "clifford" unitary synthesis plugin to replace single-qubit
-            # unitary gates that can be represented as Cliffords by Clifford gates.
-            UnitarySynthesis(method="clifford", plugin_config={"max_qubits": 1}),
-            # We use the "default" unitary synthesis algorithm for the original Clifford+T
-            # basis set. Currently this run the Solovay-Kitaev synthesis. The value
-            # of "default" is hard-coded till we provide a robust mechanism to handle
-            # user-specified synthesis plugins and fallback on the default plugin.
-            UnitarySynthesis(
-                basis_gates=basis_gates,
-                approximation_degree=approximation_degree,
-                coupling_map=coupling_map,
-                plugin_config=unitary_synthesis_plugin_config,
-                method="default",
-                min_qubits=1,
-                target=None,
-            ),
-            # Finally, we use BasisTranslator to translate Clifford+T to the actually
-            # specified set of basis gates.
-            BasisTranslator(sel, basis_gates, target),
-        ]
-        # We use the BasisTranslator pass to translate any 1q-gates added by GateDirection
-        # into basis_gates.
-        translator = BasisTranslator(sel, basis_gates, target)
         fix_1q = [translator]
     elif method == "synthesis":
         unroll = [
@@ -728,14 +676,14 @@ VF2Limits = collections.namedtuple("VF2Limits", ("call_limit", "max_trials"))
 
 def get_vf2_limits(
     optimization_level: int,
-    layout_method: Optional[str] = None,
-    initial_layout: Optional[Layout] = None,
+    layout_method: str | None = None,
+    initial_layout: Layout | None = None,
     exact_match: bool = False,
 ) -> VF2Limits:
     """Get the VF2 limits for VF2-based layout passes.
 
     Returns:
-        VF2Limits: An namedtuple with optional elements
+        VF2Limits: A namedtuple with optional elements
         ``call_limit`` and ``max_trials``.
     """
     limits = VF2Limits(None, None)
@@ -762,7 +710,7 @@ def get_vf2_limits(
 
 # Clifford+T basis, consisting of Clifford+T gate names + additional instruction names
 # that are a part of every basis
-_CLIFFORD_T_BASIS = set(_CLIFFORD_GATE_NAMES).union(
+CLIFFORD_T_BASIS = set(_CLIFFORD_GATE_NAMES).union(
     {"t", "tdg", "delay", "barrier", "reset", "measure"}.union(CONTROL_FLOW_OP_NAMES)
 )
 
@@ -786,7 +734,7 @@ def is_clifford_t_basis(basis_gates=None, target=None) -> bool:
     else:
         basis = set()
 
-    if (basis_gates is None) or (("t" not in basis_gates) and ("tdg" not in basis_gates)):
+    if ("t" not in basis) and ("tdg" not in basis):
         return False
 
-    return basis.issubset(_CLIFFORD_T_BASIS)
+    return basis.issubset(CLIFFORD_T_BASIS)

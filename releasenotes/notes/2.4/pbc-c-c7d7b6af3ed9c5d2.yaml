@@ -1,0 +1,16 @@
+---
+features_c:
+  - Added support for a Pauli-based computation gate set to the C API.
+    :c:struct:`QkPauliProductRotation` represents a generic Pauli-product rotation, and
+    :c:struct:`QkPauliProductMeasurement` a generic Pauli-product measurement.
+    These instructions can be added to a :c:struct:`QkCircuit` using the new functions
+    :c:func:`qk_circuit_pauli_product_rotation` and :c:func:`qk_circuit_pauli_product_measurement`,
+    respectively.
+
+    To retrieve Pauli-product rotation data from a circuit, you can use
+    :c:func:`qk_circuit_inst_pauli_product_rotation`, provided that the instruction kind returned by
+    :c:func:`qk_circuit_instruction_kind` is ``QkOperationKind_PauliProductRotation``.
+    Analogously, Pauli-product measurements can be retrieved via
+    :c:func:`qk_circuit_inst_pauli_product_measurement` if the kind is
+    ``QkOperationKind_PauliProductMeasurement``.
+

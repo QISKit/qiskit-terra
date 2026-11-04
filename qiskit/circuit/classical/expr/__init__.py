@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -123,6 +123,7 @@ There are helper constructor functions for each of the unary operations.
 
 .. autofunction:: bit_not
 .. autofunction:: logic_not
+.. autofunction:: negate
 
 Similarly, the binary operations and relations have helper functions defined.
 
@@ -199,42 +200,43 @@ You can use :func:`is_lvalue` to determine whether an expression has an associat
 """
 
 __all__ = [
-    "Expr",
-    "Var",
-    "Value",
-    "Cast",
-    "Unary",
     "Binary",
+    "Cast",
+    "Expr",
+    "ExprVisitor",
     "Index",
     "Stretch",
-    "ExprVisitor",
-    "iter_vars",
-    "iter_identifiers",
-    "structurally_equivalent",
-    "is_lvalue",
-    "lift",
-    "cast",
-    "bit_not",
-    "logic_not",
+    "Unary",
+    "Value",
+    "Var",
+    "add",
     "bit_and",
+    "bit_not",
     "bit_or",
     "bit_xor",
-    "shift_left",
-    "shift_right",
-    "logic_and",
-    "logic_or",
+    "cast",
+    "div",
     "equal",
-    "not_equal",
-    "less",
-    "less_equal",
     "greater",
     "greater_equal",
     "index",
-    "add",
-    "sub",
-    "mul",
-    "div",
+    "is_lvalue",
+    "iter_identifiers",
+    "iter_vars",
+    "less",
+    "less_equal",
+    "lift",
     "lift_legacy_condition",
+    "logic_and",
+    "logic_not",
+    "logic_or",
+    "mul",
+    "negate",
+    "not_equal",
+    "shift_left",
+    "shift_right",
+    "structurally_equivalent",
+    "sub",
 ]
 
 from .expr import Expr, Var, Value, Cast, Unary, Binary, Index, Stretch
@@ -263,4 +265,5 @@ from .constructors import (
     mul,
     div,
     lift_legacy_condition,
+    negate,
 )

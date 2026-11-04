@@ -1,0 +1,42 @@
+---
+features_c:
+  - |
+    Added support for inspecting control flow instructions in the C API. The new API enables users to 
+    iterate through control flow instructions in a given circuit, access nested circuit blocks, and inspect 
+    the properties of the control flow instructions. A few new types have been introduced to facilitate the 
+    inspection of control flow instruction, along with these functions:
+    
+
+    * :c:func:`qk_circuit_get_control_flow_instruction`
+    * :c:func:`qk_control_flow_instruction_free`
+    * :c:func:`qk_control_flow_kind`
+    * :c:func:`qk_control_flow_num_blocks`
+    * :c:func:`qk_control_flow_block_circuit`
+    * :c:func:`qk_control_flow_qubit_map`
+    * :c:func:`qk_control_flow_clbit_map`
+    * :c:func:`qk_control_flow_condition_type`
+    * :c:func:`qk_control_flow_condition_bit_info`
+    * :c:func:`qk_control_flow_condition_reg_cond_bit_width`
+    * :c:func:`qk_control_flow_condition_reg`
+    * :c:func:`qk_control_flow_condition_reg_cond_uint`
+    * :c:func:`qk_control_flow_condition_expr`
+    * :c:func:`qk_control_flow_box_duration_kind`
+    * :c:func:`qk_control_flow_box_duration_val_info`
+    * :c:func:`qk_control_flow_box_duration_expr`
+    * :c:func:`qk_control_flow_loop_collection_type`
+    * :c:func:`qk_control_flow_loop_elements`
+    * :c:func:`qk_control_flow_loop_range`
+    * :c:func:`qk_control_flow_loop_param_kind`
+    * :c:func:`qk_control_flow_loop_symbol_info`
+    * :c:func:`qk_control_flow_loop_variable`
+    * :c:func:`qk_control_flow_switch_target_type`
+    * :c:func:`qk_control_flow_switch_target_bit`
+    * :c:func:`qk_control_flow_switch_target_register`
+    * :c:func:`qk_control_flow_switch_target_expr`
+    * :c:func:`qk_control_flow_switch_num_cases`
+    * :c:func:`qk_control_flow_switch_is_case_default`
+    * :c:func:`qk_control_flow_switch_case_labels_bit_width`
+    * :c:func:`qk_control_flow_switch_case_labels_uint`
+    * :c:func:`qk_control_flow_switch_case_labels_clear`
+    
+    Refer to the documentation of the functions for more details. 

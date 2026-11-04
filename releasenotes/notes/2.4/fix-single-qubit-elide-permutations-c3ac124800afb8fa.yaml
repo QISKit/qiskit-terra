@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Fixed a bug in the :class:`.ElidePermutations` transpiler pass that
+    caused it to crash when handling single-qubit permutations.

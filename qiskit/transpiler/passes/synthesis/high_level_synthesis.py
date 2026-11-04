@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -16,7 +16,6 @@ High-level-synthesis transpiler pass.
 
 from __future__ import annotations
 
-import typing
 from collections.abc import Callable
 
 import numpy as np
@@ -38,9 +37,6 @@ from qiskit._accelerate.high_level_synthesis import (
 )
 
 from .plugin import HighLevelSynthesisPluginManager
-
-if typing.TYPE_CHECKING:
-    from qiskit.dagcircuit import DAGOpNode
 
 
 class HLSConfig:
@@ -109,7 +105,7 @@ class HLSConfig:
                 all the specified methods will be considered, and the best synthesized circuit,
                 according to ``plugin_evaluation_fn`` will be chosen.
             plugin_evaluation_fn: a callable that evaluates the quality of the synthesized
-                quantum circuit in the case that ``plugin_selection="sequential"``;
+                quantum circuit in the case that ``plugin_selection="all"``;
                 a smaller value means a better circuit. If ``None``, the
                 quality of the circuit is its size (i.e. the number of gates that it contains).
             kwargs: a dictionary mapping higher-level-objects to lists of synthesis methods.
@@ -200,31 +196,37 @@ class HighLevelSynthesis(TransformationPass):
         min_qubits: int = 0,
         qubits_initially_zero: bool = True,
         optimization_metric: OptimizationMetric = OptimizationMetric.COUNT_2Q,
+        optimization_level: int = 2,
     ):
         r"""
         HighLevelSynthesis initializer.
 
         Args:
-            hls_config: Optional, the high-level-synthesis config that specifies synthesis methods
+            hls_config:  the high-level-synthesis config that specifies synthesis methods
                 and parameters for various high-level-objects in the circuit. If it is not specified,
                 the default synthesis methods and parameters will be used.
-            coupling_map: Optional, directed graph represented as a coupling map.
-            target: Optional, the backend target to use for this pass. If it is specified,
+            coupling_map:  directed graph represented as a coupling map.
+            target:  the backend target to use for this pass. If it is specified,
                 it will be used instead of the coupling map.
             use_qubit_indices: a flag indicating whether this synthesis pass is running before or after
                 the layout is set, that is, whether the qubit indices of higher-level-objects correspond
                 to qubit indices on the target backend.
             equivalence_library: The equivalence library used (instructions in this library will not
                 be unrolled by this pass).
-            basis_gates: Optional, target basis names to unroll to, e.g. `['u3', 'cx']`.
+            basis_gates:  target basis names to unroll to, e.g. `['u3', 'cx']`.
                 Ignored if ``target`` is also specified.
             min_qubits: The minimum number of qubits for operations in the input
                 dag to translate.
             qubits_initially_zero: Indicates whether the qubits are initially in the state
                 :math:`|0\rangle`. This allows the high-level-synthesis to use clean auxiliary qubits
                 (i.e. in the zero state) to synthesize an operation.
-            optimization_metric:  Specifies the optimization criterion used by the default synthesis
-                methods for high-level-objects (when available).
+            optimization_metric: The optimization criterion used by synthesis plugins. The plugins may
+                use this option to choose different synthesis algorithms depending on the criterion
+                being optimized.
+            optimization_level: The optimization level used by synthesis plugins. The plugins may
+                use this option to choose different synthesis algorithms depending on the optimization
+                level, generating potentially more optimized circuits at the expense of longer
+                transpilation time.
         """
         super().__init__()
 
@@ -265,6 +267,7 @@ class HighLevelSynthesis(TransformationPass):
             min_qubits=min_qubits,
             unroll_definitions=unroll_definitions,
             optimize_clifford_t=optimization_metric == OptimizationMetric.COUNT_T,
+            optimization_level=optimization_level,
         )
 
     def run(self, dag: DAGCircuit) -> DAGCircuit:
@@ -386,6 +389,7 @@ def _synthesize_op_using_plugins(
             plugin_args["optimization_metric"] = OptimizationMetric.COUNT_T
         else:
             plugin_args["optimization_metric"] = OptimizationMetric.COUNT_2Q
+        plugin_args["optimization_level"] = data.optimization_level
 
         qubits = input_qubits if data.use_physical_indices else None
 

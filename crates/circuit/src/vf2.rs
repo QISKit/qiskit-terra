@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -28,7 +28,7 @@ use std::marker;
 use std::num::NonZero;
 
 use hashbrown::{HashMap, hash_map::Entry};
-use indexmap::IndexMap;
+use qiskit_util::IndexMap;
 use smallvec::SmallVec;
 
 use rustworkx_core::petgraph::data::Create;
@@ -79,7 +79,7 @@ pub mod alias {
     }
 
     /// This is _intended_ to be a metatrait that just defines a bunch of bounds on references to
-    /// implementors of [Vf2Graph].  Unfortunately, I couldn't get a `where &'a Self` bound on
+    /// implementers of [Vf2Graph].  Unfortunately, I couldn't get a `where &'a Self` bound on
     /// [Vf2Graph] itself to work correctly with the blanket implementation, so I got stuck writing
     /// this boilerplate that duplicates the trait into a lifetime-bound one that we can then use in
     /// higher-ranked trait bounds.
@@ -896,10 +896,7 @@ where
     ES: Semantics<N::EdgeWeight, H::EdgeWeight, Score = NS::Score>,
 {
     type Item = Result<
-        (
-            IndexMap<N::NodeId, H::NodeId, ::ahash::RandomState>,
-            NS::Score,
-        ),
+        (IndexMap<N::NodeId, H::NodeId>, NS::Score),
         IsIsomorphicError<NS::Error, ES::Error>,
     >;
     type IntoIter = Vf2IntoIter<NG, HG, N::NodeId, H::NodeId, NS, ES>;
@@ -1250,7 +1247,7 @@ where
     NS: Semantics<N::NodeWeight, H::NodeWeight>,
     ES: Semantics<N::EdgeWeight, H::EdgeWeight, Score = NS::Score>,
 {
-    fn mapping(&self) -> IndexMap<NId, HId, ::ahash::RandomState> {
+    fn mapping(&self) -> IndexMap<NId, HId> {
         self.needle
             .mapping
             .iter()
@@ -1823,10 +1820,7 @@ where
     NS: Semantics<N::NodeWeight, H::NodeWeight>,
     ES: Semantics<N::EdgeWeight, H::EdgeWeight, Score = NS::Score>,
 {
-    type Item = Result<
-        (IndexMap<NId, HId, ::ahash::RandomState>, NS::Score),
-        IsIsomorphicError<NS::Error, ES::Error>,
-    >;
+    type Item = Result<(IndexMap<NId, HId>, NS::Score), IsIsomorphicError<NS::Error, ES::Error>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // The overall strategy is a nested loop, where the "outer" loop is over unmapped nodes in

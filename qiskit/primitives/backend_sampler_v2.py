@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -17,7 +17,8 @@ from __future__ import annotations
 import warnings
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Iterable, Union
+from typing import Any
+from collections.abc import Iterable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -68,11 +69,11 @@ class _MeasureInfo:
     start: int
 
 
-ResultMemory = Union[list[str], list[list[float]], list[list[list[float]]]]
+ResultMemory = list[str] | list[list[float]] | list[list[list[float]]]
 """Type alias for possible level 2 and level 1 result memory formats. For level
 2, the format is a list of bit strings. For level 1, format can be either a
 list of I/Q pairs (list with two floats) for each memory slot if using
-``meas_return=avg`` or a list of of lists of I/Q pairs if using
+``meas_return=avg`` or a list of lists of I/Q pairs if using
 ``meas_return=single`` with the outer list indexing shot number and the inner
 list indexing memory slot.
 """
@@ -133,7 +134,7 @@ class BackendSamplerV2(BaseSamplerV2):
 
     @property
     def backend(self) -> BackendV2:
-        """Returns the backend which this sampler object based on."""
+        """Returns the backend which this sampler object is based on."""
         return self._backend
 
     @property
@@ -292,7 +293,7 @@ def _analyze_circuit(circuit: QuantumCircuit) -> tuple[list[_MeasureInfo], int]:
 
 
 def _prepare_memory(results: list[Result]) -> list[ResultMemory]:
-    """Joins splitted results if exceeding max_experiments"""
+    """Joins split results if exceeding max_experiments"""
     lst = []
     for res in results:
         for exp in res.results:

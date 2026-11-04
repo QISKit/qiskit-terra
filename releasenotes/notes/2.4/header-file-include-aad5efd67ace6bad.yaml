@@ -1,0 +1,10 @@
+---
+features_c:
+  - A new Python-space module, :mod:`qiskit.capi`, provides basic access to installation details
+    about the Qiskit C API bundled with the Python package.
+  - The C API header files (``qiskit.h`` and its auxiliary files) are now bundled inside the
+    Python-space ``qiskit`` package.  You can find the location of the include directory to add to
+    your compiler's search path using :func:`qiskit.capi.get_include`.
+build:
+  - Packages depending on the Qiskit C API to build can now specify Qiskit as a Python-space build
+    dependency, then use :func:`qiskit.capi.get_include` to find the header files.

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -22,8 +22,8 @@ from qiskit.synthesis.clifford import (
     synth_clifford_greedy,
 )
 
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
-from test import combine  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
+from test import combine
 
 
 @ddt
@@ -67,7 +67,7 @@ class TestCliffordSynthesis(QiskitTestCase):
                 value = Clifford(cliff.to_circuit())
                 self.assertEqual(target, value)
 
-    @combine(num_qubits=[1, 2, 3])
+    @combine(num_qubits=[0, 1, 2, 3])
     def test_synth_bm(self, num_qubits):
         """Test B&M synthesis for set of {num_qubits}-qubit Cliffords"""
         samples = 50
@@ -77,7 +77,7 @@ class TestCliffordSynthesis(QiskitTestCase):
             value = Clifford(synth_circ)
             self.assertEqual(value, target)
 
-    @combine(num_qubits=[1, 2, 3, 4, 5])
+    @combine(num_qubits=[0, 1, 2, 3, 4, 5])
     def test_synth_ag(self, num_qubits):
         """Test A&G synthesis for set of {num_qubits}-qubit Cliffords"""
         samples = 50
@@ -87,7 +87,7 @@ class TestCliffordSynthesis(QiskitTestCase):
             value = Clifford(synth_circ)
             self.assertEqual(value, target)
 
-    @combine(num_qubits=[1, 2, 3, 4, 5])
+    @combine(num_qubits=[0, 1, 2, 3, 4, 5])
     def test_synth_greedy(self, num_qubits):
         """Test greedy synthesis for set of {num_qubits}-qubit Cliffords"""
         samples = 50
@@ -97,7 +97,7 @@ class TestCliffordSynthesis(QiskitTestCase):
             value = Clifford(synth_circ)
             self.assertEqual(value, target)
 
-    @combine(num_qubits=[1, 2, 3, 4, 5])
+    @combine(num_qubits=[0, 1, 2, 3, 4, 5])
     def test_synth_full(self, num_qubits):
         """Test synthesis for set of {num_qubits}-qubit Cliffords"""
         samples = 50

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from qiskit import _numpy_compat
 from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit.instruction import Instruction
 from qiskit.exceptions import QiskitError
@@ -132,7 +131,7 @@ class Chi(QuantumChannel):
             raise QiskitError("Input is not an n-qubit Chi matrix.")
         super().__init__(chi_mat, num_qubits=num_qubits)
 
-    def __array__(self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+    def __array__(self, dtype=None, copy=None):
         dtype = self.data.dtype
         return np.array(self.data, dtype=dtype, copy=copy)
 

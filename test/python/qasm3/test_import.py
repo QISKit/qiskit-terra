@@ -4,13 +4,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-# pylint: disable=missing-module-docstring,missing-class-docstring,missing-function-docstring
 
 # Since the import is nearly entirely delegated to an external package, most of the testing is done
 # there.  Here we need to test our wrapping behavior for base functionality and exceptions.  We
@@ -27,7 +26,7 @@ from qiskit.exceptions import ExperimentalWarning
 from qiskit.circuit import QuantumCircuit, QuantumRegister, ClassicalRegister, Qubit, Clbit
 from qiskit.circuit import library as lib, annotation
 from qiskit.utils import optionals
-from test import QiskitTestCase  # pylint: disable=wrong-import-order
+from test import QiskitTestCase
 
 
 @unittest.skipUnless(optionals.HAS_QASM3_IMPORT, "need qiskit-qasm3-import for OpenQASM 3 imports")
@@ -128,7 +127,7 @@ class TestOldQASM3Import(QiskitTestCase):
                     return MyInt(int(payload, 16))
                 return MyStr(payload)
 
-            def dump(self, annotation):  # pylint: disable=redefined-outer-name
+            def dump(self, annotation):
                 raise NotImplementedError("unused in test")
 
         skip_triggered = False
@@ -144,7 +143,7 @@ class TestOldQASM3Import(QiskitTestCase):
                     return NotImplemented
                 return Static()
 
-            def dump(self, annotation):  # pylint: disable=redefined-outer-name
+            def dump(self, annotation):
                 raise NotImplementedError("unused in test")
 
         class GlobalHandler(annotation.OpenQASM3Serializer):
@@ -155,7 +154,7 @@ class TestOldQASM3Import(QiskitTestCase):
                 assert_equal(payload, "")
                 return StaticGlobal()
 
-            def dump(self, annotation):  # pylint: disable=redefined-outer-name
+            def dump(self, annotation):
                 raise NotImplementedError("unused in test")
 
         program = """
@@ -492,16 +491,12 @@ class TestQASM3Import(QiskitTestCase):
         expected = QuantumCircuit(q0, [q1], q2)
         expected.h(q0[0])
         expected.h(q0[1])
-        #
         expected.cx(q0[0], q1)
         expected.cx(q0[1], q1)
-        #
         expected.cx(q0[0], q2[0])
         expected.cx(q0[0], q2[1])
-        #
         expected.cx(q0[0], q2[0])
         expected.cx(q0[1], q2[1])
-        #
         expected.ccx(q0[1], q1, q2[0])
         expected.ccx(q0[0], q1, q2[1])
         self.assertEqual(parsed, expected)

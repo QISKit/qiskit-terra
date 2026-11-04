@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -12,7 +12,7 @@
 
 """Identity gate."""
 
-from typing import Optional
+
 from qiskit.circuit.singleton import SingletonGate, stdlib_singleton_key
 from qiskit.circuit._utils import with_gate_array
 from qiskit._accelerate.circuit import StandardGate
@@ -22,8 +22,8 @@ from qiskit._accelerate.circuit import StandardGate
 class IGate(SingletonGate):
     r"""Identity gate.
 
-    Identity gate corresponds to a single-qubit gate wait cycle,
-    and should not be optimized or unrolled (it is an opaque gate).
+    This typically represents a single-qubit idle cycle.
+    For device-specific information, refer to the device's :class:`.Target`.
 
     Can be applied to a :class:`~qiskit.circuit.QuantumCircuit`
     with the :meth:`~qiskit.circuit.QuantumCircuit.i` and
@@ -49,7 +49,7 @@ class IGate(SingletonGate):
 
     _standard_gate = StandardGate.I
 
-    def __init__(self, label: Optional[str] = None):
+    def __init__(self, label: str | None = None):
         """
         Args:
             label: An optional label for the gate.
@@ -59,7 +59,7 @@ class IGate(SingletonGate):
     _singleton_lookup_key = stdlib_singleton_key()
 
     def inverse(self, annotated: bool = False):
-        """Returne the inverse gate (itself).
+        """Returns the inverse gate (itself).
 
         Args:
             annotated: when set to ``True``, this is typically used to return an

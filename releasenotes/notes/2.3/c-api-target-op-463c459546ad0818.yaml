@@ -1,0 +1,17 @@
+---
+features_c:
+  - |
+    ``QkTarget`` now gives its users the ability to retrieve operations directly
+    from it. The following methods have been added:
+
+      * :c:func:`qk_target_op_get`
+      * :c:func:`qk_target_op_gate`
+      * :c:func:`qk_target_op_clear`
+
+    And the following representation was added:
+
+      * :c:struct:`QkTargetOp`: To represent an operation in the ``QkTarget``.
+
+    Please refer to the documentation to better understand how these functions
+    work and see examples.
+

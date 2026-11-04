@@ -6,12 +6,12 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
-# pylint: disable=bad-builtin
+
 
 """Script to generate 'utility scale' load for profiling in a PGO context"""
 
@@ -19,7 +19,7 @@ import os
 from qiskit import qasm2
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.transpiler import CouplingMap
-from qiskit.circuit.library import QuantumVolume
+from qiskit.circuit.library import quantum_volume
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
 QASM_DIR = os.path.join(
@@ -80,11 +80,20 @@ def _main():
         strict=False,
     )
     qaoa_circ.name = "qaoa_barabasi_albert_N100_3reps"
-    qv_circ = QuantumVolume(100, seed=123456789)
+    qv_circ = quantum_volume(100, seed=123456789)
     qv_circ.measure_all()
     qv_circ.name = "QV1267650600228229401496703205376"
+    hwb_circ = qasm2.load(
+        os.path.join(QASM_DIR, "hwb12.qasm"),
+        include_path=qasm2.LEGACY_INCLUDE_PATH,
+        custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS,
+        custom_classical=qasm2.LEGACY_CUSTOM_CLASSICAL,
+        strict=False,
+    )
+    hwb_circ.name = "hwb12"
+
     for pm in [cz_pm, ecr_pm, cx_pm]:
-        for circ in [qft_circ, square_heisenberg_circ, qaoa_circ, qv_circ]:
+        for circ in [qft_circ, square_heisenberg_circ, qaoa_circ, qv_circ, hwb_circ]:
             print(f"Compiling: {circ.name}")
             pm.run(circ)
 

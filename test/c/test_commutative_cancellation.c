@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -45,13 +45,13 @@ static int test_commutative_cancellation_target(void) {
 
     result = qk_transpiler_pass_standalone_commutative_cancellation(qc, target, 1.0);
     if (result != 0) {
-        printf("Running the pass failed");
+        fprintf(stderr, "Running the pass failed");
         goto cleanup;
     }
 
     if (qk_circuit_num_instructions(qc) != 1) {
         result = EqualityError;
-        printf("The gates weren't removed by this circuit");
+        fprintf(stderr, "The gates weren't removed by this circuit");
     }
 cleanup:
     qk_circuit_free(qc);
@@ -79,13 +79,13 @@ static int test_commutative_cancellation_no_target(void) {
 
     result = qk_transpiler_pass_standalone_commutative_cancellation(qc, NULL, 1.0);
     if (result != 0) {
-        printf("Running the pass failed");
+        fprintf(stderr, "Running the pass failed");
         goto cleanup;
     }
 
     if (qk_circuit_num_instructions(qc) != 1) {
         result = EqualityError;
-        printf("The gates weren't removed by this circuit");
+        fprintf(stderr, "The gates weren't removed by this circuit");
     }
 cleanup:
     qk_circuit_free(qc);

@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Fixed :func:`.synth_clifford_depth_lnn` for single-qubit Cliffords.
+    See `#15780 <https://github.com/Qiskit/qiskit/issues/15780>`__.

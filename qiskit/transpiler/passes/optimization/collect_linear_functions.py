@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -76,7 +76,7 @@ class CollectLinearFunctions(CollectAndCollapse):
 
 def _is_linear_gate(node):
     """Specifies whether a node holds a linear gate."""
-    return node.op.name in ("cx", "swap") and getattr(node, "condition", None) is None
+    return node.name in ("cx", "swap") and getattr(node, "condition", None) is None
 
 
 def _collapse_to_linear_function(circuit):

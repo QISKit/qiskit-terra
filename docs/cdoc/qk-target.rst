@@ -1,3 +1,5 @@
+.. _capi-target:
+
 ========
 QkTarget
 ========
@@ -42,6 +44,15 @@ The Target C API currently only supports additions of ``QkGate`` instances
 with either no parameters or fixed parameters. Support for regular parameters
 will be added in the future. The functionality will keep expanding over time
 as we improve our Rust data model capabilities.
+
+Data Types
+==========
+
+.. doxygenstruct:: QkInstructionProperties
+   :members:
+
+.. doxygenstruct:: QkTargetOp
+   :members:
 
 Functions
 =========

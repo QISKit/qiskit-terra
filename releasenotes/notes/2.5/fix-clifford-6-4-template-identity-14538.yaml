@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed :func:`.clifford_6_4`, :func:`.rzx_xz`, :func:`.rzx_zz1`, :func:`.rzx_zz2`,
+    and :func:`.rzx_zz3` templates so that :class:`.TemplateOptimization` now accepts
+    and applies them.  Each of these templates implements the identity only up to a
+    global phase in their gate content but was missing the compensating ``global_phase``
+    field, causing :class:`.TemplateOptimization` to silently reject them on every run.
+    Fixes `#14538 <https://github.com/Qiskit/qiskit/issues/14538>`__.

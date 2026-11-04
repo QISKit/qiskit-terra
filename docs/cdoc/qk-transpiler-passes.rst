@@ -1,3 +1,5 @@
+.. _capi-transpiler-passes:
+
 =================
 Transpiler Passes
 =================
@@ -15,18 +17,28 @@ In Qiskit, the transpiler is built up by executing as a series of passes that ea
 to analyze or transform a quantum circuit. The Python :mod:`~qiskit.transpiler` documentation contains a
 more detailed explanation of the transpilation process.
 
-The Qiskit C API provides functions that execute transpiler passes in a standalone mode, where you
-provide the pass with a ``QkCircuit`` and then any necessary configuration for the execution of the
-pass, typically at least a ``QkTarget``. These functions return either a new ``QkCircuit`` pointer
-or the analysis results of running the pass. While this can be used to create a custom workflow, the
-functions following the naming convention ``qk_transpiler_pass_standalone_*`` will have higher overhead
-as internally they're converting from the quantum circuit to the dag circuit IR on the input, and if
-the function returns a new circuit it will convert back before returning. These standalone functions
-are intended to execute single passes in isolation rather than building a custom transpilation pipeline.
+The Qiskit C API provides transpiler pass functions in two forms: ones that operate on a :c:struct:`QkDag` 
+and another set that operate on a :c:struct:`QkCircuit`. The DAG‑based functions, which follow the naming 
+convention ``qk_transpiler_pass_*``, accept a :c:struct:`QkDag` along with a :c:struct:`QkTarget` and any 
+pass‑specific configuration parameters. These functions are the recommended choice when chaining multiple 
+passes, e.g. when creating a custom transpilation pipeline, because they operate directly on the DAG object 
+and allow it to be passed efficiently from one pass to the next within a transpilation session. By contrast, 
+the circuit‑based functions, following the ``qk_transpiler_pass_standalone_*`` naming convention, operate on a 
+:c:struct:`QkCircuit` and are intended for executing individual passes in isolation. While they can also be 
+used to build custom workflows, each call incurs additional overhead because the input circuit must be converted 
+to a DAG internally and, if a transformed circuit is returned, the resulting DAG must then be converted back to 
+a circuit.
 
-Functions
-=========
+DAG-based Functions
+===================
 
 .. doxygengroup:: QkTranspilerPasses
+    :members:
+    :content-only:
+
+Circuit-based Functions
+=======================
+
+.. doxygengroup:: QkTranspilerPassesStandalone
     :members:
     :content-only:

@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,8 @@ Bindings array class
 """
 from __future__ import annotations
 
-from typing import Mapping, Union, Tuple
+
+from collections.abc import Mapping
 from collections.abc import Iterable, Mapping as _Mapping
 from itertools import chain, islice
 
@@ -27,13 +28,13 @@ from qiskit.circuit import Parameter, QuantumCircuit
 from .shape import ShapedMixin, ShapeInput, shape_tuple
 
 # Public API classes
-__all__ = ["ParameterLike", "BindingsArrayLike"]
+__all__ = ["BindingsArrayLike", "ParameterLike"]
 
 
-ParameterLike = Union[Parameter, str]
+ParameterLike = Parameter | str
 """A parameter or parameter name."""
 
-BindingsArrayLike = Mapping[Union[ParameterLike, Tuple[ParameterLike, ...]], ArrayLike]
+BindingsArrayLike = Mapping[ParameterLike | tuple[ParameterLike, ...], ArrayLike]
 """A mapping of numeric bindings for circuit parameters.
 
 This allows array values for single or multi-dimensional sweeps over parameter values.
@@ -71,18 +72,21 @@ class BindingsArray(ShapedMixin):
        :include-source:
        :nofigs:
 
-        # 0-d array (i.e. only one binding)
-        BindingsArray({"a": 4, ("b", "c"): [5, 6]})
+       import numpy as np
+       from qiskit.primitives import BindingsArray
 
-        # single array, last index is parameters
-        parameters = tuple(f"a{idx}" for idx in range(100))
-        BindingsArray({parameters: np.ones((10, 10, 100))})
+       # 0-d array (i.e. only one binding)
+       BindingsArray({"a": 4, ("b", "c"): [5, 6]})
 
-        # multiple arrays, where each last index is parameters. notice that it's smart enough to
-        # figure out that a missing last dimension corresponds to a single parameter.
-        BindingsArray(
-            {("c", "a"): np.zeros((10, 10, 2)), "b": np.ones((10, 10))}
-        )
+       # single array, last index is parameters
+       parameters = tuple(f"a{idx}" for idx in range(100))
+       BindingsArray({parameters: np.ones((10, 10, 100))})
+
+       # multiple arrays, where each last index is parameters. notice that it's smart enough to
+       # figure out that a missing last dimension corresponds to a single parameter.
+       BindingsArray(
+           {("c", "a"): np.zeros((10, 10, 2)), "b": np.ones((10, 10))}
+       )
     """
 
     def __init__(
@@ -112,7 +116,7 @@ class BindingsArray(ShapedMixin):
             ValueError: If all inputs are ``None``.
             ValueError: If the shape cannot be automatically inferred from the arrays, or if there
                 is some inconsistency in the shape of the given arrays.
-            TypeError: If some of the vaules can't be cast to a float type.
+            TypeError: If some of the values can't be cast to a float type.
         """
         super().__init__()
 
@@ -170,7 +174,7 @@ class BindingsArray(ShapedMixin):
 
         The parameters are indexed along the last dimension of the returned array.
 
-        Parameters:
+        Args:
             parameters: Optional parameters that determine the order of the output.
 
         Returns:
@@ -216,7 +220,7 @@ class BindingsArray(ShapedMixin):
 
         Args:
             circuit: The circuit to bind.
-            loc: A tuple of indices, on for each dimension of this array.
+            loc: A tuple of indices, one for each dimension of this array.
 
         Returns:
             The bound circuit.

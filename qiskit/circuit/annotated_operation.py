@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Union, List
+
 
 from qiskit.circuit.operation import Operation
 from qiskit.circuit.parameterexpression import ParameterValueType
@@ -27,14 +27,10 @@ class Modifier:
     """The base class that all modifiers of :class:`~.AnnotatedOperation` should
     inherit from."""
 
-    pass
-
 
 @dataclasses.dataclass
 class InverseModifier(Modifier):
     """Inverse modifier: specifies that the operation is inverted."""
-
-    pass
 
 
 @dataclasses.dataclass
@@ -46,6 +42,9 @@ class ControlModifier(Modifier):
     ctrl_state: int | str | None = None
 
     def __init__(self, num_ctrl_qubits: int = 0, ctrl_state: int | str | None = None):
+        if num_ctrl_qubits < 0:
+            raise CircuitError("The number of control qubits must be non-negative.")
+
         self.num_ctrl_qubits = num_ctrl_qubits
         self.ctrl_state = _ctrl_state_to_int(ctrl_state, num_ctrl_qubits)
 
@@ -60,7 +59,7 @@ class PowerModifier(Modifier):
 class AnnotatedOperation(Operation):
     """Annotated operation."""
 
-    def __init__(self, base_op: Operation, modifiers: Union[Modifier, List[Modifier]]):
+    def __init__(self, base_op: Operation, modifiers: Modifier | list[Modifier]):
         """
         Create a new AnnotatedOperation.
 
@@ -98,18 +97,18 @@ class AnnotatedOperation(Operation):
         inverted and then controlled by 2 qubits.
         """
         self.base_op = base_op
-        """The base operation that the modifiers in this annotated operation applies to."""
-        self.modifiers = modifiers if isinstance(modifiers, List) else [modifiers]
+        """The base operation that the modifiers in this annotated operation apply to."""
+        self.modifiers = modifiers if isinstance(modifiers, list) else [modifiers]
         """Ordered sequence of the modifiers to apply to :attr:`base_op`.  The modifiers are applied
         in order from lowest index to highest index."""
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Unique string identifier for operation type."""
         return "annotated"
 
     @property
-    def num_qubits(self):
+    def num_qubits(self) -> int:
         """Number of qubits."""
         num_ctrl_qubits = 0
         for modifier in self.modifiers:
@@ -119,7 +118,7 @@ class AnnotatedOperation(Operation):
         return num_ctrl_qubits + self.base_op.num_qubits
 
     @property
-    def num_clbits(self):
+    def num_clbits(self) -> int:
         """Number of classical bits."""
         return self.base_op.num_clbits
 
@@ -131,13 +130,13 @@ class AnnotatedOperation(Operation):
             and self.base_op == other.base_op
         )
 
-    def copy(self) -> "AnnotatedOperation":
+    def copy(self) -> AnnotatedOperation:
         """Return a copy of the :class:`~.AnnotatedOperation`."""
         return AnnotatedOperation(base_op=self.base_op.copy(), modifiers=self.modifiers.copy())
 
     def to_matrix(self):
         """Return a matrix representation (allowing to construct Operator)."""
-        from qiskit.quantum_info.operators import Operator  # pylint: disable=cyclic-import
+        from qiskit.quantum_info.operators import Operator
 
         operator = Operator(self.base_op)
 
@@ -169,7 +168,7 @@ class AnnotatedOperation(Operation):
         ``annotated``.
 
         Args:
-            num_ctrl_qubits: Number of controls to add. Defauls to ``1``.
+            num_ctrl_qubits: Number of controls to add. Defaults to ``1``.
             label: Ignored.
             ctrl_state: The control state of the gate, specified either as an integer or a bitstring
                 (e.g. ``"110"``). If ``None``, defaults to the all-ones state ``2**num_ctrl_qubits - 1``.
@@ -178,7 +177,7 @@ class AnnotatedOperation(Operation):
         Returns:
             A controlled version of the given operation.
         """
-        # pylint: disable=unused-argument
+
         extended_modifiers = self.modifiers.copy()
         extended_modifiers.append(
             ControlModifier(num_ctrl_qubits=num_ctrl_qubits, ctrl_state=ctrl_state)
@@ -197,7 +196,7 @@ class AnnotatedOperation(Operation):
         Returns:
             Inverse version of the given operation.
         """
-        # pylint: disable=unused-argument
+
         extended_modifiers = self.modifiers.copy()
         extended_modifiers.append(InverseModifier())
         return AnnotatedOperation(self.base_op, extended_modifiers)
@@ -215,7 +214,7 @@ class AnnotatedOperation(Operation):
         Returns:
             An operation implementing ``gate^exponent``
         """
-        # pylint: disable=unused-argument
+
         extended_modifiers = self.modifiers.copy()
         extended_modifiers.append(PowerModifier(exponent))
         return AnnotatedOperation(self.base_op, extended_modifiers)

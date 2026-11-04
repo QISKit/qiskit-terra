@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    :func:`.synth_cz_depth_line_mr` will now raise a Python-space :exc:`ValueError` on mis-shaped
+    inputs, instead of a Rust-space panic.  Fixed `#16152
+    <https://github.com/Qiskit/qiskit/issues/16152>`__.

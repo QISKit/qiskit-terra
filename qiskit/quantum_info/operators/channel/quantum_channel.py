@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -17,7 +17,6 @@ Abstract base class for Quantum Channels.
 from __future__ import annotations
 import copy
 import math
-import sys
 from abc import abstractmethod
 from numbers import Number, Integral
 
@@ -35,10 +34,7 @@ from qiskit.quantum_info.operators.channel.transformations import _to_kraus
 from qiskit.quantum_info.operators.channel.transformations import _to_operator
 from qiskit.quantum_info.operators.scalar_op import ScalarOp
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from typing import Self
 
 
 class QuantumChannel(LinearOp):
@@ -121,7 +117,7 @@ class QuantumChannel(LinearOp):
             :class:`~qiskit.quantum_info.SuperOp` representation,
             ie. for a channel :math:`\mathcal{E}`, the SuperOp of
             the transpose channel :math:`\mathcal{{E}}^T` is
-            :math:`S_{mathcal{E}^T} = S_{\mathcal{E}}^T`.
+            :math:`S_{\mathcal{E}^T} = S_{\mathcal{E}}^T`.
         """
 
     def adjoint(self) -> Self:
@@ -320,7 +316,6 @@ class QuantumChannel(LinearOp):
             QiskitError: if the quantum channel dimension does not match the
                          specified quantum state subsystem dimensions.
         """
-        pass
 
     @classmethod
     def _init_transformer(cls, data):
@@ -339,7 +334,7 @@ class QuantumChannel(LinearOp):
         if hasattr(data, "to_channel"):
             # TODO: this 'to_channel' method is the same case as the above
             # but is used by current version of Aer. It should be removed
-            # once Aer is nupdated to use `to_quantumchannel`
+            # once Aer is updated to use `to_quantumchannel`
             # instead of `to_channel`,
             return data.to_channel()
         # Finally if the input is not a QuantumChannel and doesn't have a

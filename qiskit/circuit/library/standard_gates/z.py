@@ -4,7 +4,7 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 
 import numpy
 
@@ -76,7 +75,7 @@ class ZGate(SingletonGate):
 
     _standard_gate = StandardGate.Z
 
-    def __init__(self, label: Optional[str] = None):
+    def __init__(self, label: str | None = None):
         """
         Args:
             label: An optional label for the gate.
@@ -87,7 +86,7 @@ class ZGate(SingletonGate):
 
     def _define(self):
         """Default definition"""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit import QuantumCircuit
 
         #    ┌──────┐
@@ -109,14 +108,14 @@ class ZGate(SingletonGate):
 
         For a single control qubit, the controlled gate is implemented as a
         :class:`.CZGate`. For two control qubits, the controlled gate is implemented
-        as a :class:`.CCZGate`. In these cases, the the value of ``annotated`` is ignored.
+        as a :class:`.CCZGate`. In these cases, the value of ``annotated`` is ignored.
 
         For three or more control qubits, the controlled gate is implemented
         as either :class:`.ControlledGate` when ``annotated`` is ``False``, and
         as :class:`.AnnotatedOperation` when ``annotated`` is ``True``.
 
         Args:
-            num_ctrl_qubits: Number of controls to add. Defauls to ``1``.
+            num_ctrl_qubits: Number of controls to add. Defaults to ``1``.
             label: Optional gate label. Defaults to ``None``.
                 Ignored if the controlled gate is implemented as an annotated operation.
             ctrl_state: The control state of the gate, specified either as an integer or a bitstring
@@ -219,7 +218,7 @@ class CZGate(SingletonControlledGate):
 
     def _define(self):
         """Default definition"""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit import QuantumCircuit
 
         # q_0: ───────■───────
@@ -262,7 +261,7 @@ class CZGate(SingletonControlledGate):
         as :class:`.AnnotatedOperation` when ``annotated`` is ``True``.
 
         Args:
-            num_ctrl_qubits: Number of controls to add. Defauls to ``1``.
+            num_ctrl_qubits: Number of controls to add. Defaults to ``1``.
             label: Optional gate label. Defaults to ``None``.
                 Ignored if the controlled gate is implemented as an annotated operation.
             ctrl_state: The control state of the gate, specified either as an integer or a bitstring
@@ -355,7 +354,7 @@ class CCZGate(SingletonControlledGate):
 
     def _define(self):
         """Default definition"""
-        # pylint: disable=cyclic-import
+
         from qiskit.circuit import QuantumCircuit
 
         # q_0: ───────■───────

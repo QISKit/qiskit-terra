@@ -1,25 +1,31 @@
 # `qiskit-cext`
 
 This crate contains the bindings for Qiskit's C API.
+This crate is responsible for the C API symbols only; the header files needed to access it are
+created by `qiskit-bindgen` by parsing the source of this crate.
+
+If you add a new `pub extern "C" fn` in this crate, you will also need to give it a slot
+in `qiskit-cext-vtable`.
 
 ## Building the library
 
-The C bindings are compiled into a shared library, which can be built along with the header file
-by running
+The default build mode of `qiskit-cext` is as an `rlib` so that it can be included in `qiskit-pyext`
+and re-exposed through there.
+
+To build the library in standalone mode for distribution and direct use by other C programs, you
+need to build the crate as a `cdylib` instead.  The easiest way to do that, which will also produce
+a complete "distribution" directory in `<repo>/dist/c`, along with the header files, is to run
 ```bash
 make c
 ```
-in the root of the repository. The header file, `qiskit.h`, is generated using
-[cbindgen](https://github.com/mozilla/cbindgen) and stored in `dist/c/include`.
-Similarly, the `libqiskit` shared library is stored in `dist/c/lib`.
 
-You can ask Make to build only the header file with `make cheader`, or only the
-shared-object library with `make clib`.
-Instead of ``make clib`` the shared C library can also be compiled via
+To build only the library object (which is what this crate is actually responsible for), you can use
+the subrecipe
 ```bash
-cargo rustc --release --crate-type cdylib -p qiskit-cext
+make clib
 ```
-note that the `crate-type` should be defined explicitly to build the `cdylib` instead of the `rlib` default.
+
+## Example C usage
 
 The following example uses the header to build a 100-qubit observable:
 ```c
@@ -58,7 +64,7 @@ The above program can be compiled by including the header and linking to the `qi
 are located in the standard directory configuration whose root is `dist/c`.
 ```bash
 make c
-gcc program.c -I$/path/to/dist/c/include -lqiskit -L/path/to/dist/c/lib
+gcc program.c -I<repo>/dist/c/include -lqiskit -L<repo>/dist/c/lib
 ```
 
 The example program will then output

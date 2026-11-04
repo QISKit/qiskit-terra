@@ -1,0 +1,18 @@
+---
+features_c:
+  - |
+    The C API now has a pass manager framework for writing and executing compiler passes.
+    The new :c:struct:`QkPassManager` manages the execution; it can be populated with
+    :c:struct:`QkPass` objects via :c:func:`qk_passmanager_push_pass` and be executed using
+    :c:func:`qk_passmanager_run_simple`. The pass manager and passes can report errors
+    through :c:struct:`QkCompilationError`.
+
+    Passes are defined through a vtable, :c:struct:`QkPassVtable`, and declare their input and
+    output IR with an :c:struct:`QkIrHandle`, which can describe either a dynamically defined C
+    IR or a built-in Qiskit IR. The pass manager uses these handles to verify the pipeline,
+    enabling type-checked cross-language compiler pipelines.
+
+    The functionality included in this release is limited and we expect to expand the
+    C pass manager framework in a backward-compatible manner, for example, with additional
+    execution modes of the pass manager, callbacks, and pass context handling.
+

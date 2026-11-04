@@ -1,0 +1,8 @@
+---
+features_circuits:
+  - |
+    Conversions between :class:`.DAGCircuit` and :class:`.QuantumCircuit` now shallow-copy any
+    :attr:`~.QuantumCircuit.metadata` if the ``copy_operations=True`` argument is set in
+    :func:`.circuit_to_dag`, :func:`.dag_to_circuit`, :meth:`.QuantumCircuit.to_dag` or
+    :meth:`.DAGCircuit.to_circuit`.  This transitively affects compilation functions such as
+    :meth:`.PassManager.run` and :func:`.transpile`.

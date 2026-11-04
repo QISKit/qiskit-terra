@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -54,7 +54,8 @@ static int test_version(void) {
     if (strcmp(ref, QISKIT_VERSION) == 0)
         result = Ok;
     else {
-        printf("Qiskit version (%s) didn't match the expectation (%s)", QISKIT_VERSION, ref);
+        fprintf(stderr, "Qiskit version (%s) didn't match the expectation (%s)", QISKIT_VERSION,
+                ref);
         result = EqualityError;
     }
 
@@ -71,7 +72,19 @@ static int test_version_macros(void) {
     }
     if (QISKIT_GET_VERSION_HEX(QISKIT_VERSION_MAJOR, QISKIT_VERSION_MINOR, QISKIT_VERSION_PATCH,
                                QISKIT_RELEASE_LEVEL, QISKIT_RELEASE_SERIAL) != QISKIT_VERSION_HEX) {
-        fprintf(stderr, "QISKIT_VERSION_NUMERIC does not match QISKIT_VERSION\n");
+        fprintf(stderr, "QISKIT_VERSION_HEX does not match QISKIT_GET_VERSION_HEX\n");
+        return EqualityError;
+    }
+    return Ok;
+}
+
+/**
+ * Test the version in the header matches the version returned from the library.
+ */
+static int test_header_vs_lib(void) {
+    if (qk_api_version() != QISKIT_VERSION_HEX) {
+        fprintf(stderr, "%s: QISKIT_VERSION_HEX (%x) does not match qk_api_version() (%x)\n",
+                __func__, QISKIT_VERSION_HEX, qk_api_version());
         return EqualityError;
     }
     return Ok;
@@ -81,6 +94,7 @@ int test_version_info(void) {
     int num_failed = 0;
     num_failed += RUN_TEST(test_version);
     num_failed += RUN_TEST(test_version_macros);
+    num_failed += RUN_TEST(test_header_vs_lib);
 
     fprintf(stderr, "=== Number of failed subtests: %i\n", num_failed);
     fflush(stderr);

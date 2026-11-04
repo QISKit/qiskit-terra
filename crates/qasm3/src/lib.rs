@@ -4,7 +4,7 @@
 //
 // This code is licensed under the Apache License, Version 2.0. You may
 // obtain a copy of this license in the LICENSE.txt file in the root directory
-// of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+// of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 //
 // Any modifications or derivative works of this code must retain this
 // copyright notice, and modified files need to carry a notice indicating
@@ -29,7 +29,7 @@ use pyo3::types::{PyAny, PyDict, PyModule};
 
 use oq3_semantics::syntax_to_semantics::parse_source_string;
 use pyo3::pybacked::PyBackedStr;
-use qiskit_circuit::circuit_data::CircuitData;
+use qiskit_circuit::circuit_data::PyCircuitData;
 
 use crate::error::QASM3ImporterError;
 
@@ -150,7 +150,7 @@ pub fn load(
                 .call1((pathlike_or_filelike,))?
                 .extract::<OsString>()?;
             ::std::fs::read_to_string(&path).map_err(|err| {
-                QASM3ImporterError::new_err(format!("failed to read file '{:?}': {:?}", &path, err))
+                QASM3ImporterError::new_err(format!("failed to read file '{:?}': {:?}", path, err))
             })?
         };
     loads(py, source, custom_gates, include_path)
@@ -203,7 +203,7 @@ pub fn dumps(
             options.indent = val.extract::<String>()?;
         }
     }
-    let circuit_data = circuit.getattr("_data")?.cast::<CircuitData>()?.borrow();
+    let circuit_data = circuit.getattr("_data")?.cast::<PyCircuitData>()?.borrow();
 
     let islayout = !circuit.getattr("layout")?.is_none();
 
@@ -251,7 +251,7 @@ pub fn dump(
             options.indent = val.extract::<String>()?;
         }
     }
-    let circuit_data = circuit.getattr("_data")?.cast::<CircuitData>()?.borrow();
+    let circuit_data = circuit.getattr("_data")?.cast::<PyCircuitData>()?.borrow();
 
     let islayout = !circuit.getattr("layout")?.is_none();
 

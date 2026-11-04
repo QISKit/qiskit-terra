@@ -1,3 +1,5 @@
+.. _capi-circuit:
+
 =========
 QkCircuit
 =========
@@ -57,6 +59,12 @@ Data Types
    :members:
 
 .. doxygenstruct:: QkCircuitInstruction
+   :members:
+
+.. doxygenstruct:: QkCircuitInstructionView
+   :members:
+
+.. doxygenstruct:: QkCircuitDrawerConfig
    :members:
 
 Functions

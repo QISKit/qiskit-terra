@@ -5,16 +5,16 @@
 #
 # This code is licensed under the Apache License, Version 2.0. You may
 # obtain a copy of this license in the LICENSE.txt file in the root directory
-# of this source tree or at http://www.apache.org/licenses/LICENSE-2.0.
+# of this source tree or at https://www.apache.org/licenses/LICENSE-2.0.
 #
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
-# pylint: disable=bad-builtin
+
 
 """List deprecated decorators."""
 from __future__ import annotations
-from typing import cast, Optional
+from typing import cast
 from re import findall
 from pathlib import Path
 from collections import OrderedDict, defaultdict
@@ -25,7 +25,7 @@ import argparse
 import requests
 
 
-def short_path(path: Path) -> Optional[Path]:
+def short_path(path: Path) -> Path | None:
     """shorten the full path, when possible"""
     original_path = path
     while path is not None:
@@ -211,7 +211,7 @@ class DecoratorVisitor(ast.NodeVisitor):
             and node.func.func.id.startswith("deprecate_")
         )
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # pylint: disable=invalid-name
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Visitor for function declarations"""
         for d_node in node.decorator_list:
             if DecoratorVisitor.is_deprecation_decorator(d_node):
@@ -223,7 +223,7 @@ class DecoratorVisitor(ast.NodeVisitor):
                 self.deprecations.append(DeprecationWarn(self.filename, stmt, node))
         ast.NodeVisitor.generic_visit(self, node)
 
-    def visit_Call(self, node: ast.Call) -> None:  # pylint: disable=invalid-name
+    def visit_Call(self, node: ast.Call) -> None:
         """Visitor for function call"""
         if DecoratorVisitor.is_deprecation_call(node):
             self.deprecations.append(DeprecationCall(self.filename, node))
@@ -276,7 +276,6 @@ class DeprecationCollection:
 
 
 def print_main(directory: str, pending: str, format_: str) -> None:
-    # pylint: disable=invalid-name
     """Prints output"""
     collection = DeprecationCollection(Path(directory))
     collection.group_by("since")
@@ -318,10 +317,10 @@ def print_main(directory: str, pending: str, format_: str) -> None:
             if format_ == "md":
                 lines.append(f" - `{deprecation.location_str}` (`{deprecation.target}`)")
         if format_ == "md":
-            since_version = f"**{since_version or 'n/a'}**"
+            formatted_since_version = f"**{since_version or 'n/a'}**"
             DETAILS = ""
         if lines:
-            print(f"\n{since_version}: {DETAILS}")
+            print(f"\n{formatted_since_version}: {DETAILS}")
             print("\n".join(lines))
 
 

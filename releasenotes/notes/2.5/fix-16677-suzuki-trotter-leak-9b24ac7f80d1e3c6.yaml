@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a minor memory leak in the Suzuki-Trotter synthesis methods, which would 
+    keep allocations of all sparse Pauli strings during the program lifetime.
+    Fixes `#16677 <https://github.com/Qiskit/qiskit/issues/16677>`__.

@@ -1,47 +1,34 @@
+---
 name: Miri
 on:
-  push:
-  pull_request:
-concurrency:
-  group: ${{ github.repository }}-${{ github.ref }}-${{ github.head_ref }}-${{ github.workflow }}
-  # Only cancel in PR mode.  In push mode, don't cancel so we don't see spurious test "failures",
-  # and we get coverage reports on Coveralls for every push.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  workflow_call:
+    inputs:
+      runner:
+        description: Runner image to use.
+        type: string
+        required: true
 
 jobs:
   miri:
-    if: github.repository_owner == 'Qiskit'
     name: Miri
-    runs-on: ubuntu-latest
-    env:
-      RUSTUP_TOOLCHAIN: nightly-2025-08-11
+    runs-on: ${{ inputs.runner }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain:  nightly-2025-08-11
-          components: miri
+      - name: Select Rust version
+        run: echo "RUSTUP_TOOLCHAIN=$(tools/miri.bash -t)" >> "$GITHUB_ENV"
+
+      - name: Install Rust
+        run:
+          rustup toolchain install ${{ env.RUSTUP_TOOLCHAIN }}
+            --override
+            --profile minimal
+            --component miri
+            --no-self-update
 
       - name: Prepare Miri
-        run: |
-          set -e
-          # Some of our dependencies aren't Miri-safe with their current release versions.  These
-          # need overriding with known-good versions to run against until the Miri-safe versions are
-          # released and updated in our Cargo.lock.
-          cat >>Cargo.toml <<EOF
-
-          [patch.crates-io]
-          crossbeam-epoch = { git = "https://github.com/crossbeam-rs/crossbeam", rev = "9e859610" }
-          EOF
-          cargo miri setup
+        run: tools/miri.bash -p
 
       - name: Run Miri
-        run: cargo miri test
-        env:
-          # - `tree-borrows` is required for crossbeam components.
-          # - `symbolic-alignment-check` is extra checking.
-          # - `strict-provenance` is extra checking.
-          MIRIFLAGS: '-Zmiri-tree-borrows -Zmiri-symbolic-alignment-check -Zmiri-strict-provenance'
+        run: tools/miri.bash

@@ -1,8 +1,0 @@
----
-features_c:
-  - |
-    Added the :c:func:`qk_dag_successors` and :c:func:`qk_dag_predecessors` functions to retrieve
-    the successors and predecessors of a DAG node, respectively. The neighbors information is returned
-    by these functions through a newly added :c:struct:`QkDagNeighbors` struct. 
-    The :c:func:`qk_dag_neighbors_clear` function was also added to free memory and reset the fields 
-    of :c:struct:`QkDagNeighbors`.
