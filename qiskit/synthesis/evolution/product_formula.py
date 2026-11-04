@@ -65,8 +65,8 @@ class ProductFormula(EvolutionSynthesis):
             insert_barriers: Whether to insert barriers between the atomic evolutions.
             cx_structure: How to arrange the CX gates for the Pauli evolutions, can be
                 ``"chain"``, where next neighbor connections are used, or ``"fountain"``,
-                where all qubits are connected to one. This only takes effect when
-                ``atomic_evolution is None``.
+                where all qubits are connected to one, or ``cascade``, where log-depth
+                implementation is used.. This only takes effect when ``atomic_evolution is None``.
             atomic_evolution: A function to apply the evolution of a single
                 :class:`~.quantum_info.Pauli`, or :class:`.SparsePauliOp` of only commuting terms,
                 to a circuit. The function takes in three arguments: the circuit to append the
@@ -94,7 +94,7 @@ class ProductFormula(EvolutionSynthesis):
         # user-provided atomic evolution, stored for serialization
         self._atomic_evolution = atomic_evolution
 
-        if cx_structure not in ["chain", "fountain"]:
+        if cx_structure not in ["chain", "fountain", "cascade"]:
             raise ValueError(f"Unsupported CX structure: {cx_structure}")
 
         self._cx_structure = cx_structure
@@ -145,7 +145,10 @@ class ProductFormula(EvolutionSynthesis):
         else:
             # this is the fast path, where the whole evolution is constructed Rust-side
             cx_fountain = self._cx_structure == "fountain"
-            data = pauli_evolution(num_qubits, pauli_rotations, self.insert_barriers, cx_fountain)
+            cx_cascade = self._cx_structure == "cascade"
+            data = pauli_evolution(
+                num_qubits, pauli_rotations, self.insert_barriers, cx_fountain, cx_cascade
+            )
             circuit = QuantumCircuit._from_circuit_data(data, legacy_qubits=True)
 
         return circuit
@@ -182,6 +185,7 @@ class ProductFormula(EvolutionSynthesis):
         """
         circuit = QuantumCircuit(num_qubits)
         cx_fountain = self._cx_structure == "fountain"
+        cx_cascade = self._cx_structure == "cascade"
 
         num_paulis = len(pauli_rotations)
         for i, pauli_rotation in enumerate(pauli_rotations):
@@ -202,6 +206,7 @@ class ProductFormula(EvolutionSynthesis):
                     [local_pauli],
                     False,
                     cx_fountain,
+                    cx_cascade,
                 )
                 evo = QuantumCircuit._from_circuit_data(data)
 

@@ -30,6 +30,25 @@ pub type Instruction = (
     Vec<Clbit>,
 );
 
+/// The shape of the CX network used to propagate the parity of the active qubits onto the
+/// qubit carrying the rotation.
+///
+/// All variants implement the same parity computation and differ only in the resulting
+/// circuit's depth and connectivity requirements.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum CXStructure {
+    /// A chain of CX gates in between neighboring qubits. Uses a linear number of CX gates in
+    /// linear depth.
+    #[default]
+    Chain,
+    /// A "fountain" of CX gates all targeting the top qubit. Uses a linear number of CX gates in
+    /// linear depth.
+    Fountain,
+    /// A balanced binary tree ("cascade") of CX gates. Uses a linear number of CX gates in
+    /// logarithmic depth.
+    Cascade,
+}
+
 /// Return instructions to implement evolution of Pauli terms and projectors.
 ///
 /// Args:
@@ -41,9 +60,8 @@ pub type Instruction = (
 ///         that this function can remain Rust-only).
 ///     phase_gate_for_paulis: If ``true``, use the [StandardGate::Phase] instead of
 ///         [StandardGate::RZ] single-qubit Pauli rotations.
-///     do_fountain: If ``true``, implement the CX propagation as "fountain" shape, where each
-///         CX uses the top qubit as target. If ``false``, uses a "chain" shape, where CX in between
-///         neighboring qubits are used.
+///     cx_structure: The shape of the CX network propagating the parity of the active qubits,
+///         see [CXStructure].
 ///
 /// Returns:
 ///     A pointer to an iterator over standard instructions.
@@ -52,7 +70,7 @@ pub fn sparse_term_evolution(
     indices: Vec<u32>,
     time: Param,
     phase_gate_for_paulis: bool,
-    do_fountain: bool,
+    cx_structure: CXStructure,
 ) -> Box<dyn Iterator<Item = Instruction>> {
     // ensure the Pauli has no identity terms
     let binding = pauli.to_lowercase(); // lowercase for convenience
@@ -72,7 +90,7 @@ pub fn sparse_term_evolution(
             &indices,
             time,
             phase_gate_for_paulis,
-            do_fountain,
+            cx_structure,
         )),
     }
 }
@@ -113,7 +131,7 @@ fn single_qubit_evolution(
             &[index],
             time,
             false,
-            false,
+            CXStructure::default(),
         )),
     }
 }
@@ -166,9 +184,15 @@ fn two_qubit_evolution<'a>(
             qubits,
             vec![],
         ))),
-        // Note: the CX modes (do_fountain=true/false) give the same circuit for a 2-qubit
-        // Pauli, so we just set it to false here
-        _ => Box::new(multi_qubit_evolution(pauli, indices, time, false, false)),
+        // Note:all CX structures give the same circuit for a 2-qubit Pauli, so we just
+        // use the default here.
+        _ => Box::new(multi_qubit_evolution(
+            pauli,
+            indices,
+            time,
+            false,
+            CXStructure::default(),
+        )),
     }
 }
 
@@ -178,7 +202,7 @@ fn multi_qubit_evolution(
     indices: &[u32],
     time: Param,
     phase_gate_for_paulis: bool,
-    do_fountain: bool,
+    cx_structure: CXStructure,
 ) -> impl Iterator<Item = Instruction> + use<> {
     let mut control_qubits: Vec<Qubit> = Vec::new(); // indices of projectors
     let mut control_states: Vec<bool> = Vec::new(); // +1 projector (true) or -1 projector (false)
@@ -239,16 +263,15 @@ fn multi_qubit_evolution(
         .collect();
 
     // for the Pauli evolution get the CX propagation up to the first qubit, and down
-    let (chain_up, chain_down) = match do_fountain {
-        true => (
-            cx_fountain(pauli_qubits.clone()),
-            cx_fountain(pauli_qubits.clone()).rev(),
-        ),
-        false => (
-            cx_chain(pauli_qubits.clone()),
-            cx_chain(pauli_qubits.clone()).rev(),
-        ),
+    let cx_network = match cx_structure {
+        CXStructure::Chain => cx_chain,
+        CXStructure::Fountain => cx_fountain,
+        CXStructure::Cascade => cx_cascade,
     };
+    let (chain_up, chain_down) = (
+        cx_network(pauli_qubits.clone()),
+        cx_network(pauli_qubits.clone()).rev(),
+    );
 
     // Get the Z/phase rotation. If we have more than a single rotation qubit, each projector
     // is implemented as open/closed control of the rotation.
@@ -376,6 +399,59 @@ fn cx_fountain(qubits: Vec<Qubit>) -> Box<dyn DoubleEndedIterator<Item = Instruc
             vec![],
         )
     }))
+}
+
+/// Build a CX cascade over the active qubits: a balanced binary tree reducing the parity of all
+/// active qubits onto the first one in logarithmic depth. E.g. for 8 active qubits, the parity is
+/// accumulated on the top qubit using three layers
+///
+///          ┌───┐          ┌───┐     ┌───┐
+///    q_0: ─┤ X ├──────────┤ X ├─────┤ X ├
+///          └─┬─┘          └─┬─┘     └─┬─┘
+///    q_1: ───■──────────────┼─────────┼──
+///               ┌───┐       │         │
+///    q_2: ──────┤ X ├───────■─────────┼──
+///               └─┬─┘                 │
+///    q_3: ────────■───────────────────┼──
+///                    ┌───┐     ┌───┐  │
+///    q_4: ───────────┤ X ├─────┤ X ├──■──
+///                    └─┬─┘     └─┬─┘
+///    q_5: ─────────────■─────────┼───────
+///                         ┌───┐  │
+///    q_6: ────────────────┤ X ├──■───────
+///                         └─┬─┘
+///    q_7: ──────────────────■────────────
+///
+fn cx_cascade(qubits: Vec<Qubit>) -> Box<dyn DoubleEndedIterator<Item = Instruction>> {
+    let num_terms = qubits.len();
+    if num_terms < 2 {
+        return Box::new(std::iter::empty());
+    }
+
+    // Reduce the parity onto qubits[0] in ceil(log2(num_terms)) layers. In the layer with a given
+    // `stride`, the qubit at index `i + stride` is accumulated into the one at index `i`, for
+    // every index `i` that is still "alive", i.e. a multiple of `2 * stride`.
+    let mut layers: Vec<Vec<Instruction>> = Vec::new();
+    let mut stride = 1;
+    while stride < num_terms {
+        layers.push(
+            (0..num_terms - stride)
+                .step_by(2 * stride)
+                .map(|i| {
+                    (
+                        StandardGate::CX.into(),
+                        smallvec![],
+                        vec![qubits[i + stride], qubits[i]],
+                        vec![],
+                    )
+                })
+                .collect(),
+        );
+        stride *= 2;
+    }
+
+    let gates: Vec<Instruction> = layers.into_iter().rev().flatten().collect();
+    Box::new(gates.into_iter())
 }
 
 /// Add controls to a standard gate with a specified control state.

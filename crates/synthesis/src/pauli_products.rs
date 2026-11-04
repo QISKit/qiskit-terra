@@ -24,7 +24,7 @@ use qiskit_circuit::operations::StandardInstruction;
 use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::{Clbit, NoBlocks, Qubit};
 
-use crate::pauli_evolution::sparse_term_evolution;
+use crate::pauli_evolution::{CXStructure, sparse_term_evolution};
 
 /// Synthesizes a PauliProductMeasurement instruction.
 /// This function is used in HighLevelSynthesis and is exposed to Python's class definition method.
@@ -131,7 +131,13 @@ pub fn synthesize_ppr(ppr: &PauliProductRotation) -> Result<CircuitData, Circuit
         .collect();
     let indices = (0..ppr.num_qubits()).collect();
     let time = ppr.angle.clone();
-    let instructions = sparse_term_evolution(pauli_string.as_str(), indices, time, false, false);
+    let instructions = sparse_term_evolution(
+        pauli_string.as_str(),
+        indices,
+        time,
+        false,
+        CXStructure::default(),
+    );
     let global_phase = Param::Float(0.0);
     CircuitData::from_packed_operations(ppr.num_qubits(), 0, instructions.map(Ok), global_phase)
 }

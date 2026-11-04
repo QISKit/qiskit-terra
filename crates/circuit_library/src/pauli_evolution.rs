@@ -17,8 +17,10 @@ use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::operations;
 use qiskit_circuit::operations::{Param, multiply_param, radd_param};
 use qiskit_circuit::packed_instruction::PackedOperation;
-use qiskit_synthesis::pauli_evolution::sparse_term_evolution;
+use qiskit_synthesis::pauli_evolution::{CXStructure, sparse_term_evolution};
 use smallvec::smallvec;
+
+use crate::QiskitError;
 
 /// Implement a Pauli evolution circuit.
 ///
@@ -45,18 +47,24 @@ use smallvec::smallvec;
 ///     insert_barriers: If ``true``, insert a barrier in between the evolution of individual
 ///         Pauli terms.
 ///     do_fountain: If ``true``, implement the CX propagation as "fountain" shape, where each
-///         CX uses the top qubit as target. If ``false``, uses a "chain" shape, where CX in between
-///         neighboring qubits are used.
+///         CX uses the top qubit as target.
+///     do_cascade: If ``true``, implement the CX propagation as a balanced binary tree, resulting
+///         in log-depth CX-circuits.
+///
+/// By default, both ``do_fountain`` and ``do_cascade`` are ``false`` and CX propagation uses the
+/// "chain" shape, with CX gates between between neighboring qubits. It is an error for both
+/// ``do_fountain`` and ``do_cascade`` to be true simultaneously.
 ///
 /// Returns:
 ///     Circuit data for to implement the evolution.
 #[pyfunction]
-#[pyo3(name = "pauli_evolution", signature = (num_qubits, sparse_paulis, insert_barriers=false, do_fountain=false))]
+#[pyo3(name = "pauli_evolution", signature = (num_qubits, sparse_paulis, insert_barriers=false, do_fountain=false, do_cascade=false))]
 pub fn py_pauli_evolution(
     num_qubits: i64,
     sparse_paulis: &Bound<PyList>,
     insert_barriers: bool,
     do_fountain: bool,
+    do_cascade: bool,
 ) -> PyResult<PyCircuitData> {
     let num_paulis = sparse_paulis.len();
     let mut paulis: Vec<String> = Vec::with_capacity(num_paulis);
@@ -90,9 +98,20 @@ pub fn py_pauli_evolution(
         vec![],
     );
 
+    let cx_structure = match (do_fountain, do_cascade) {
+        (false, false) => CXStructure::Chain,
+        (true, false) => CXStructure::Fountain,
+        (false, true) => CXStructure::Cascade,
+        (true, true) => {
+            return Err(QiskitError::new_err(
+                "Cannot set both do_fountain and do_cascade to true.".to_string(),
+            ));
+        }
+    };
+
     let evos = paulis.iter().enumerate().zip(indices).zip(times).flat_map(
         |(((i, pauli), qubits), time)| {
-            let as_packed = sparse_term_evolution(pauli, qubits, time, false, do_fountain).map(Ok);
+            let as_packed = sparse_term_evolution(pauli, qubits, time, false, cx_structure).map(Ok);
             // this creates an iterator containing a barrier only if required, otherwise it is empty
             let maybe_barrier = (insert_barriers && i < (num_paulis - 1))
                 .then_some(Ok(barrier.clone()))

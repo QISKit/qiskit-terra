@@ -16,7 +16,7 @@ use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::{Clbit, Qubit};
 use qiskit_quantum_info::sparse_observable::SparseObservable;
 use qiskit_synthesis::evolution::suzuki_trotter::{evolution, reorder_terms};
-use qiskit_synthesis::pauli_evolution::sparse_term_evolution;
+use qiskit_synthesis::pauli_evolution::{CXStructure, sparse_term_evolution};
 use smallvec::{SmallVec, smallvec};
 use thiserror::Error;
 
@@ -79,7 +79,7 @@ pub fn suzuki_trotter_evolution(
             view.indices.into(),
             (view.coeff.re * coeff).into(),
             false,
-            false,
+            CXStructure::default(),
         )
         .map(Ok::<Instruction, _>);
 

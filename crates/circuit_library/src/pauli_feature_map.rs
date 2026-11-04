@@ -19,7 +19,7 @@ use qiskit_circuit::operations::{
 };
 use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::{Clbit, Qubit};
-use qiskit_synthesis::pauli_evolution::sparse_term_evolution;
+use qiskit_synthesis::pauli_evolution::{CXStructure, sparse_term_evolution};
 use smallvec::{SmallVec, smallvec};
 use std::f64::consts::PI;
 
@@ -181,7 +181,7 @@ fn _get_evolution_layer<'a>(
                 indices.into_iter().rev().collect(),
                 multiply_param(&angle, alpha),
                 true,
-                false,
+                CXStructure::default(),
             );
             insts.extend(evo);
         }
