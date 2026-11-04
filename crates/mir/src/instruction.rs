@@ -16,8 +16,9 @@ use crate::line_graph;
 use crate::ops::{
     MirOp,
     MirOp::{PauliMeasure, PauliRotation},
+    pbc::PauliString,
 };
-use crate::qid::{Qid, QidList, table::ResourceTable};
+use crate::qid::{BitLayout, Qid, QidList, table::ResourceTable};
 use crate::symbol_table::SymbolIdList;
 use std::fmt;
 use thiserror::Error;
@@ -73,51 +74,63 @@ impl MirInstruction {
     /// are described specifically below.
     ///
     /// # [`PauliRotation`] Operation
-    ///   1. The number of [`Qid`]s for the instruction match the number of [Pauli](crate::ops::pbc::Pauli)s on the [`PauliRotation`] Operation.
-    ///   2. The [`Qid`]s must in the [`ResourceTable`].
-    ///   3. The [`Qid`]s must have known width (i.e., they cannot be abstract).
-    ///   4. The [`Qid`]s must not be aliased.
     pub fn verify(
         &self,
         resource_table: &ResourceTable,
     ) -> Result<(), InstructionVerificationError> {
         match &self.op {
             PauliRotation(pauli_rotation) => {
-                // Number of Qids on the instruction must match the number of
-                // paulis on the PauliRotation operation. If a Qid "contains"
-                // other Qids, then its width provides an accurate summary of
-                // the total number of Qids and thus is used here for this
-                // check.
-                //
-                // This will also detect Qids that are not in the resource table
-                // as well as Qids that have unknown width (i.e., abstract Qids)
-                // which cannot be used in a PauliRotation.
-                let mut qid_width = 0;
-                for q in self.qids().inner().iter() {
-                    qid_width += resource_table
-                        .info(*q)
-                        .ok_or(InstructionVerificationError::QidNotFound { qid: *q })?
-                        .width()
-                        .ok_or(InstructionVerificationError::AbstractQidNotAllowed { qid: *q })?;
-                }
-                if qid_width != pauli_rotation.paulis().len() as u32 {
-                    return Err(InstructionVerificationError::QidWidthMismatch {
-                        len1: qid_width,
-                        len2: pauli_rotation.paulis().len() as u32,
-                    });
-                }
-
-                // Confirm that none of the Qids are aliased to each other.
-                // Overlap is safe to use here because the previous check
-                // confirms that all Qids are found in the table. If this gets
-                // reordered wrt the previous check, this should be changed to
-                // `try_overlap` to prevent a possible panic.
-                if resource_table.overlap(self.qids().inner().iter().copied()) {
-                    // TODO: It would be good if we could include the aliased Qids in the error.
-                    return Err(InstructionVerificationError::AliasedQids);
-                }
+                self.verify_quantum_op(pauli_rotation.paulis(), resource_table)?;
             }
-            PauliMeasure(_) => todo!(),
+            PauliMeasure(pauli_measure) => {
+                self.verify_quantum_op(pauli_measure.paulis(), resource_table)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Perform common verifications on a Quantum operation.
+    ///
+    /// Performs several verfications that are common across all quantum
+    /// operations. These include:
+    ///   1. The number of [`Qid`]s for the instruction match the number of
+    ///      [Pauli](crate::ops::pbc::Pauli)s in the provided [`PauliString`].
+    ///   2. The [`Qid`]s must in the [`ResourceTable`].
+    ///   3. The [`Qid`]s cannot be [`BitLayou::Abstract`] (they must have a
+    ///      known width).
+    ///   4. The [`Qid`]s must not be aliased.
+    fn verify_quantum_op(
+        &self,
+        paulis: &PauliString,
+        resource_table: &ResourceTable,
+    ) -> Result<(), InstructionVerificationError> {
+        // Walk the QidList and check all Qids exist in the ResourceTable, are
+        // not Abstract, and collect the total number.
+        let mut total_qids = 0;
+        for q in self.qids().inner().iter() {
+            let qid_info = resource_table
+                .info(*q)
+                .ok_or(InstructionVerificationError::QidNotFound { qid: *q })?;
+            if *qid_info.layout() == BitLayout::Abstract {
+                return Err(InstructionVerificationError::AbstractQidNotAllowed { qid: *q })?;
+            }
+            total_qids += qid_info
+                .width()
+                .expect("All Qids used in a quantum operation should have a valid width");
+        }
+
+        // Ensure total Qids match the number of Paulis
+        if total_qids != paulis.len() as u32 {
+            return Err(InstructionVerificationError::QidWidthMismatch {
+                len1: total_qids,
+                len2: paulis.len() as u32,
+            });
+        }
+
+        // Ensure none of the Qids are aliased with each other
+        if resource_table.overlap(self.qids().inner().iter().copied()) {
+            // TODO: It would be good if we could include the aliased Qids in the error.
+            return Err(InstructionVerificationError::AliasedQids);
         }
         Ok(())
     }
