@@ -187,6 +187,13 @@ class Operator(LinearOp):
 
         **latex_source**: Raw, uncompiled ASCII source to generate array using LaTeX.
 
+        .. warning::
+
+           Using this method with ``"latex"`` or ``"latex_source"`` output modes
+           relies on SymPy internally which is inherently unsafe as SymPy heavily
+           relies on Python's :func:`.eval` function. This method is not safe to
+           use with untrusted input.
+
         Args:
             output (str): Select the output method to use for drawing the
                 state. Valid choices are `repr`, `text`, `latex`, `latex_source`,

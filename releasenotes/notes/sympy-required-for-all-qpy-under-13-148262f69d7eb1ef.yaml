@@ -1,0 +1,13 @@
+---
+upgrade_qpy:
+  - Using :func:`qpy.load` to deserialize QPY payload formats < 10 and QPY formats 10 through
+    12 with ``sympy`` expression encoding no longer requires ``sympy`` to be installed. Previously
+    ``sympy`` was required to recreate any :class:`.ParameterExpression`
+    objects in the payload, but starting in this release they are directly created from the payload.
+
+security:
+  - Fixed a security vulnerability in :func:`.qpy.load` when loading payloads
+    that used ``sympy`` to serialize :class:`.ParameterExpression` objects
+    and other symbolic expressions. This potentially includes any QPY payload
+    using QPY version < 10, and optionally 10, 11, and 12 depending on the
+    symbolic encoding specified in the QPY payload.
