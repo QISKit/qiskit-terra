@@ -11,9 +11,10 @@
 # that they have been altered from the originals.
 
 import unittest
+from typing import Any
 
 from qiskit import QuantumCircuit
-from qiskit._accelerate import mir
+from qiskit._accelerate import mir, mir_passes
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.passmanager import Pass, LoweringPassManager
 from qiskit.transpiler import generate_preset_pbc_pass_manager
@@ -57,11 +58,13 @@ class TestBellCircuitMIR(unittest.TestCase):
         pm = LoweringPassManager(
             [CircuitToDag()]
             + [LegacyDagPass(pass_) for pass_ in generate_preset_pbc_pass_manager().to_flow_controller().tasks]
-            + [mir.DagToMirPass()]
+            + [mir_passes.DagToMirPass()]
         )
-        mir_instance = pm.run(qc)
+        mir_instance: Any = pm.run(qc)
         print(mir_instance)
-        self.assertIsInstance(mir_instance, mir.Mir)
+        assert isinstance(mir_instance, mir.Mir)
+        self.assertEqual(mir_instance.num_instructions(), 7)
+        self.assertEqual(mir_instance.num_qubits(), 2)        
 
     def test_bell_circuit_with_litinski(self):
         print("\n--- Running with Litinski Transformation ---")
@@ -70,11 +73,13 @@ class TestBellCircuitMIR(unittest.TestCase):
             [CircuitToDag()]
             + [LegacyDagPass(pass_) for pass_ in generate_preset_pbc_pass_manager().to_flow_controller().tasks]
             + [LegacyDagPass(LitinskiTransformation(fix_clifford=False))]
-            + [mir.DagToMirPass()]
+            + [mir_passes.DagToMirPass()]
         )
-        mir_instance = pm.run(qc)
+        mir_instance: Any = pm.run(qc)
         print(mir_instance)
-        self.assertIsInstance(mir_instance, mir.Mir)
+        assert isinstance(mir_instance, mir.Mir)
+        self.assertEqual(mir_instance.num_instructions(), 2)
+        self.assertEqual(mir_instance.num_qubits(), 2)        
 
 
 if __name__ == "__main__":

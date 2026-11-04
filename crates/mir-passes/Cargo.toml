@@ -16,5 +16,9 @@ workspace = true
 anyhow.workspace = true
 hashbrown.workspace = true
 qiskit-circuit = {workspace = true, features = ["passmanager"]}
+pyo3 = { workspace = true, optional = true }
 qiskit-mir.workspace = true
 qiskit-passmanager.workspace = true
+
+[features]
+py = ["dep:pyo3", "qiskit-mir/py"]

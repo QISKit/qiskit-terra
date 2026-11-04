@@ -11,11 +11,9 @@
 // that they have been altered from the originals.
 
 use crate::mir::Mir;
-use crate::passes::lowering::lower;
 use pyo3::prelude::*;
 
-use pyo3::types::{PyNone, PyType};
-use qiskit_circuit::dag_circuit::PyDAGCircuit;
+use pyo3::types::PyNone;
 
 /// Python-facing wrapper around the Rust Mir type.
 #[pyclass(name = "Mir", module = "qiskit._accelerate.mir")]
@@ -42,49 +40,17 @@ impl PyMir {
     fn __repr__(&self) -> String {
         format!("Mir:\n{}", self.0)
     }
+
+    fn num_instructions(&self) -> usize {
+        self.0.instructions().node_count()
+    }
+
+    fn num_qubits(&self) -> usize {
+        self.0.resource_table().iter_qids().len()
+    }
 }
 
 impl Default for PyMir {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// PyO3 wrapper that exposes DagToMirLowering as a Python pass.
-#[pyclass(name = "DagToMirPass", module = "qiskit._accelerate.mir")]
-pub struct PyDagToMirPass;
-
-#[pymethods]
-impl PyDagToMirPass {
-    #[new]
-    pub fn new() -> Self {
-        PyDagToMirPass
-    }
-
-    // Pass protocol attributes consumed by the pass-manager system.
-    #[classattr]
-    fn _qiskit_pass_name_() -> &'static str {
-        "DagToMirPass"
-    }
-
-    #[classattr]
-    fn _qiskit_pass_ir_in_(py: Python) -> Bound<PyType> {
-        py.get_type::<PyDAGCircuit>()
-    }
-
-    #[classattr]
-    fn _qiskit_pass_ir_out_(py: Python) -> Bound<PyType> {
-        py.get_type::<PyMir>()
-    }
-
-    fn _qiskit_pass_run_(&self, ir: &PyDAGCircuit, _context: &Bound<PyAny>) -> PyResult<PyMir> {
-        // Acquire a read lock on the DAG before lowering.
-        let dag_ref = ir.try_read()?;
-        Ok(PyMir(lower(dag_ref)))
-    }
-}
-
-impl Default for PyDagToMirPass {
     fn default() -> Self {
         Self::new()
     }
@@ -94,6 +60,5 @@ impl Default for PyDagToMirPass {
 #[pymodule(name = "mir")]
 pub fn mir_mod(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMir>()?;
-    m.add_class::<PyDagToMirPass>()?;
     Ok(())
 }

@@ -13,3 +13,9 @@
 //! Passes that transform Qiskit IR to MIR.
 
 pub mod dag_to_mir;
+
+#[cfg(feature = "py")]
+pub mod py;
+
+#[cfg(feature = "py")]
+pub use py::mir_passes_mod;
