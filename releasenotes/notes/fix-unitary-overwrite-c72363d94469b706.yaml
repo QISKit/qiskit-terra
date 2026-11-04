@@ -1,0 +1,7 @@
+---
+security:
+  - |
+    Fixed a potential buffer overwrite in :c:func:`qk_circuit_inst_unitary` when the internal
+    circuit data structures had become corrupted.
+
+    See `GHSA-5835-q8qp-whcc <https://github.com/Qiskit/qiskit/security/advisories/GHSA-5835-q8qp-whcc>`__.
