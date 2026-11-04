@@ -416,7 +416,7 @@ impl From<&Duration> for CDurationInfo {
 }
 
 #[derive(Debug, Error)]
-#[error("duration is unknown")]
+#[error("duration unit is unknown")]
 pub struct TryFromCDurationError;
 
 impl TryFrom<CDurationInfo> for Duration {
