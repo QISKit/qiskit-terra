@@ -40,6 +40,7 @@ from qiskit.circuit.library import (
     QAOAAnsatz,
     PauliEvolutionGate,
     DCXGate,
+    CUGate,
     MCU1Gate,
     MCXGate,
     MCXGrayCode,
@@ -77,7 +78,7 @@ from qiskit.qpy import (
     QPY_VERSION,
     QpyError,
 )
-from qiskit.quantum_info import Pauli, SparsePauliOp, Clifford
+from qiskit.quantum_info import Pauli, SparsePauliOp, Clifford, Operator
 from qiskit.quantum_info import random_unitary
 from qiskit.circuit.controlledgate import ControlledGate
 from qiskit.utils import optionals
@@ -1425,6 +1426,18 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file.seek(0)
         new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
+        self.assertDeprecatedBitProperties(qc, new_circuit)
+
+    def test_controlled_cu_gate(self):
+        """Test a controlled CU gate round-trips through QPY."""
+        qc = QuantumCircuit(3)
+        qc.append(CUGate(0.1, 0.2, 0.3, 0.4).control(annotated=False), [0, 1, 2])
+
+        qpy_file = io.BytesIO()
+        dump(qc, qpy_file)
+        qpy_file.seek(0)
+        new_circuit = load(qpy_file)[0]
+        self.assertEqual(Operator(qc), Operator(new_circuit))
         self.assertDeprecatedBitProperties(qc, new_circuit)
 
     def test_nested_controlled_gate(self):

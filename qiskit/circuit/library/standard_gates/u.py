@@ -337,6 +337,36 @@ class U4Gate(Gate):
         return False
 
 
+class _UGateWithGlobalPhase(Gate):
+    """A one-qubit U gate with an explicit global phase parameter."""
+
+    def __init__(self, theta, phi, lam, gamma, label=None):
+        super().__init__("u_global_phase", 1, [theta, phi, lam, gamma], label=label)
+
+    @Gate.params.setter
+    def params(self, parameters):
+        self._definition = None
+        Gate.params.fset(self, parameters)
+
+    def _define(self):
+        from qiskit.circuit import QuantumCircuit
+
+        theta, phi, lam, gamma = self.params
+        definition = QuantumCircuit(1, name=self.name)
+        definition.global_phase = gamma
+        definition.append(UGate(theta, phi, lam), [0])
+        self.definition = definition
+
+    def inverse(self, annotated: bool = False):
+        if annotated:
+            return super().inverse(annotated=annotated)
+        theta, phi, lam, gamma = self.params
+        return _UGateWithGlobalPhase(-theta, -lam, -phi, -gamma)
+
+    def __eq__(self, other):
+        return isinstance(other, _UGateWithGlobalPhase) and self._compare_parameters(other)
+
+
 class CUGate(ControlledGate):
     r"""Controlled-U gate (4-parameter two-qubit gate).
 
@@ -464,6 +494,24 @@ class CUGate(ControlledGate):
             -self.params[3],
             ctrl_state=self.ctrl_state,
         )
+
+    def control(
+        self,
+        num_ctrl_qubits: int = 1,
+        label: str | None = None,
+        ctrl_state: str | int | None = None,
+        annotated: bool | None = None,
+    ):
+        """Return a controlled version of the CU gate."""
+        gate = super().control(
+            num_ctrl_qubits=num_ctrl_qubits,
+            label=label,
+            ctrl_state=ctrl_state,
+            annotated=annotated,
+        )
+        if isinstance(gate, ControlledGate):
+            gate.base_gate = _UGateWithGlobalPhase(*self.params, label=gate.base_gate.label)
+        return gate
 
     def __array__(self, dtype=None, copy=None):
         """Return a numpy.array for the CU gate."""

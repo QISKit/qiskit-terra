@@ -1449,6 +1449,15 @@ class TestControlledGate(QiskitTestCase):
         self.assertEqual(inverse.base_gate.params, [-0.3, -0.5, -0.4, -0.6])
         self.assertEqual(Operator(inverse), Operator(ccu).adjoint())
 
+    def test_controlled_cugate_base_gate_includes_global_phase(self):
+        """Test that controlling a CU gate has a valid one-qubit base gate."""
+        theta, phi, lam, gamma = 0.1, 0.2, 0.3, 0.4
+        controlled = CUGate(theta, phi, lam, gamma).control(annotated=False)
+
+        expected_base = np.exp(1j * gamma) * Operator(UGate(theta, phi, lam)).data
+        np.testing.assert_allclose(Operator(controlled.base_gate).data, expected_base)
+        self.assertEqual(controlled.base_gate.params, [theta, phi, lam, gamma])
+
     def test_assign_nested_controlled_cu(self):
         """Test assignment of an arbitrary controlled parametrized gate that appears through the
         `Gate.control()` method on an already-controlled gate."""

@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed QPY serialization of circuits containing controlled :class:`.CUGate`
+    instances, such as those created by ``CUGate(...).control()``, which could
+    previously fail during :func:`.qpy.load`.
+    See `#11686 <https://github.com/Qiskit/qiskit/issues/11686>`__.
