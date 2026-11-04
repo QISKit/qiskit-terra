@@ -1,9 +1,0 @@
----
-fixes:
-  - |
-    The `HoareOptimizer` no longer raises `ValueError: DAGOpNode(...) is not in list`
-    when running with the default cache size on circuits that trigger multi-gate
-    optimization. The pass now ignores stale cache entries during recursive
-    optimization, ensuring circuits such as the one reported in
-    `#14969 <https://github.com/Qiskit/qiskit/issues/14969>`__ transpile without
-    error.

@@ -372,6 +372,8 @@ class HoareOptimizer(TransformationPass):
                 try:
                     idx = self.gatecache[qbt].index(node)
                 except ValueError:
+                    # This gate has already been evicted from this qubit's cache.
+                    # Leave the qubit unvisited: later gates may still need to recurse on it.
                     continue
                 else:
                     valid_qb.append((qbt, idx))
