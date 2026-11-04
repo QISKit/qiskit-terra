@@ -1,0 +1,5 @@
+---
+deprecations_transpiler:
+  - The pass :class:`HoareOptimizer` is now deprecated without a direct replacement; use the other optimization passes in "
+    :mod:`qiskit.transpiler.passes.optimization` instead.  The pass has several known correctness bugs that cause it to remove gates that are 
+    not actually redundant.
