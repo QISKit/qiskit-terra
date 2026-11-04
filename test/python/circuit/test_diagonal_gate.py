@@ -88,6 +88,13 @@ class TestDiagonalGate(QiskitTestCase):
                 operator = Operator(gate)
                 self.assertTrue(np.allclose(Operator(gate.repeat(2)), operator @ operator))
 
+    def test_synth_diagonal_rejects_mismatched_length(self):
+        """synth_diagonal should raise, not panic, on a num_qubits/phases-length mismatch."""
+        from qiskit._accelerate.synthesis.diagonal import synth_diagonal
+
+        with self.assertRaises(ValueError):
+            synth_diagonal([0.1, 0.2, 0.3, 0.4], 1)  # 4 phases needs num_qubits=2, not 1
+
 
 def _get_diag_gate_matrix(diag):
     return np.diagflat(diag)

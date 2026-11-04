@@ -23,8 +23,7 @@ from qiskit.circuit.quantumcircuit import QuantumRegister, QuantumCircuit
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.exceptions import QiskitError
 from qiskit.quantum_info.operators.predicates import is_isometry
-
-from .uc import UCGate
+from qiskit._accelerate.synthesis.mcg_up_to_diagonal import mcg_up_to_diagonal_synth
 
 _EPS = 1e-10  # global variable used to chop very small numbers to zero
 
@@ -65,11 +64,12 @@ class MCGupDiag(Gate):
         super().__init__("MCGupDiag", num_qubits, [gate])
 
     def _define(self):
-        mcg_up_diag_circuit, _ = self._dec_mcg_up_diag()
+        unitary = np.asarray(self.params[0], dtype=complex, order="f")
+        mcg_up_diag_circuit, _ = mcg_up_to_diagonal_synth(unitary, self.num_controls)
         gate = mcg_up_diag_circuit.to_instruction()
         q = QuantumRegister(self.num_qubits, "q")
         mcg_up_diag_circuit = QuantumCircuit(q, name="mcg_up_to_diagonal")
-        mcg_up_diag_circuit.append(gate, q[:])
+        mcg_up_diag_circuit.append(gate, q[: self.num_controls + 1])
         self.definition = mcg_up_diag_circuit
 
     def inverse(self, annotated: bool = False) -> Gate:
@@ -97,42 +97,9 @@ class MCGupDiag(Gate):
         # Important: for a control list q_controls = [q[0],...,q_[k-1]] the diagonal gate is
         # provided in the computational basis of the qubits q[k-1],...,q[0],q_target, decreasingly
         # ordered with respect to the significance of the qubit in the computational basis
-        _, diag = self._dec_mcg_up_diag()
+        gate = np.asarray(self.params[0], dtype=complex, order="f")
+        _, diag = mcg_up_to_diagonal_synth(gate, self.num_controls)
         return diag
-
-    def _dec_mcg_up_diag(self):
-        """
-        Call to create a circuit with gates that implement the MCG up to a diagonal gate.
-        Remark: The qubits the gate acts on are ordered in the following way:
-            q=[q_target,q_controls,q_ancilla_zero,q_ancilla_dirty]
-        """
-        diag = np.ones(2 ** (self.num_controls + 1)).tolist()
-        q = QuantumRegister(self.num_qubits, "q")
-        circuit = QuantumCircuit(q, name="mcg_up_to_diagonal")
-        (q_target, q_controls, _q_ancillas_zero, _q_ancillas_dirty) = self._define_qubit_role(q)
-        # ToDo: Keep this threshold updated such that the lowest gate count is achieved:
-        # ToDo: we implement the MCG with a UCGate up to diagonal if the number of controls is
-        # ToDo: smaller than the threshold.
-        threshold = float("inf")
-        if self.num_controls < threshold:
-            # Implement the MCG as a UCGate (up to diagonal)
-            gate_list = [np.eye(2, 2) for i in range(2**self.num_controls)]
-            gate_list[-1] = self.params[0]
-            ucg = UCGate(gate_list, up_to_diagonal=True)
-            circuit.append(ucg, [q_target] + q_controls)
-            diag = ucg._get_diagonal()
-            # else:
-            # ToDo: Use the best decomposition for MCGs up to diagonal gates here
-            # ToDo: (with all available ancillas)
-        return circuit, diag
-
-    def _define_qubit_role(self, q):
-        # Define the role of the qubits
-        q_target = q[0]
-        q_controls = q[1 : self.num_controls + 1]
-        q_ancillas_zero = q[self.num_controls + 1 : self.num_controls + 1 + self.num_ancillas_zero]
-        q_ancillas_dirty = q[self.num_controls + 1 + self.num_ancillas_zero :]
-        return q_target, q_controls, q_ancillas_zero, q_ancillas_dirty
 
     def validate_parameter(self, parameter):
         """Multi controlled single-qubit unitary gate parameter has to be an ndarray."""

@@ -1,0 +1,11 @@
+---
+performance:
+  - |
+    Improved the runtime performance of :class:`.MCGupDiag` by migrating its
+    decomposition to Rust, reusing the same :class:`.UCGate` kernel ported in
+    `#16908 <https://github.com/Qiskit/qiskit/pull/16908>`__ instead of building
+    an intermediate Python :class:`.UCGate` object. Benchmarks of
+    ``MCGupDiag._get_diagonal()`` show an average speedup of **~55x**, growing
+    from **~5x** with a single control qubit to **~90x** at seven control
+    qubits. There are no API or circuit-equivalence changes.
+    See `#17086 <https://github.com/Qiskit/qiskit/pull/17086>`__ for more details.

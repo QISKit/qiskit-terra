@@ -11,6 +11,7 @@
 // that they have been altered from the originals.
 
 pub mod clifford;
+mod diagonal;
 pub mod discrete_basis;
 pub mod euler_one_qubit_decomposer;
 pub mod evolution;
@@ -18,6 +19,7 @@ pub mod linalg;
 pub mod linear;
 pub mod linear_phase;
 pub mod matrix;
+mod mcg_up_to_diagonal;
 mod multi_controlled;
 pub mod pauli_evolution;
 pub mod pauli_products;
@@ -26,6 +28,8 @@ mod qft;
 pub mod qsd;
 pub mod ross_selinger;
 pub mod two_qubit_decompose;
+mod uc_gate;
+mod ucrz;
 
 use pyo3::import_exception;
 use pyo3::prelude::*;
@@ -68,6 +72,18 @@ pub fn synthesis(m: &Bound<PyModule>) -> PyResult<()> {
     let qft_mod = PyModule::new(m.py(), "qft")?;
     qft::qft(&qft_mod)?;
     m.add_submodule(&qft_mod)?;
+
+    let diagonal_mod = PyModule::new(m.py(), "diagonal")?;
+    diagonal::diagonal(&diagonal_mod)?;
+    m.add_submodule(&diagonal_mod)?;
+
+    let uc_gate_mod = PyModule::new(m.py(), "uc_gate")?;
+    uc_gate::uc_gate(&uc_gate_mod)?;
+    m.add_submodule(&uc_gate_mod)?;
+
+    let mcg_mod = PyModule::new(m.py(), "mcg_up_to_diagonal")?;
+    mcg_up_to_diagonal::mcg_up_to_diagonal(&mcg_mod)?;
+    m.add_submodule(&mcg_mod)?;
 
     Ok(())
 }

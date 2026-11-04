@@ -133,6 +133,18 @@ class TestUCGate(QiskitTestCase):
         uc = UCGate(gates, up_to_diagonal=False)
         self.assertTrue(np.allclose(Operator(uc.repeat(2)), Operator(uc) @ Operator(uc)))
 
+    def test_dec_ucg_rejects_non_2x2_matrix(self):
+        """Test the Rust UCG decomposition rejects non-2x2 matrices."""
+        from qiskit._accelerate.synthesis import uc_gate
+
+        with self.assertRaisesRegex(ValueError, "expected a 2x2 unitary matrix"):
+            uc_gate.dec_ucg(
+                [np.eye(3, dtype=complex, order="F")],
+                num_qubits=1,
+                up_to_diagonal=False,
+                mux_simp=True,
+            )
+
 
 def _get_ucg_matrix(squs):
     return block_diag(*squs)
