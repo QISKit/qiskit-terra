@@ -109,6 +109,8 @@ class SabreLayout(TransformationPass):
         swap_trials=None,
         layout_trials=None,
         skip_routing=False,
+        *,
+        heuristic=None,
     ):
         """SabreLayout initializer.
 
@@ -118,9 +120,9 @@ class SabreLayout(TransformationPass):
                 If specified this pass operates as an :class:`~.AnalysisPass` and
                 will only populate the ``layout`` field in the property set and
                 the input dag is returned unmodified. This argument is mutually
-                exclusive with the ``swap_trials`` and the ``layout_trials``
-                arguments and if this is specified at the same time as either
-                argument an error will be raised.
+                exclusive with the ``swap_trials``, ``layout_trials`` and ``heuristic``
+                arguments. If any of these are also specified,
+                an error will be raised.
             seed (int): seed for setting a random first trial layout.
             max_iterations (int): number of forward-backward iterations.
             swap_trials (int): The number of trials to run of
@@ -147,10 +149,17 @@ class SabreLayout(TransformationPass):
                 will be set in the property set. This is a tradeoff to run custom
                 routing with multiple layout trials, as using this option will cause
                 SabreLayout to run the routing stage internally but not use that result.
+            heuristic (Heuristic): An optional ``qiskit._accelerate.sabre.Heuristic`` used for
+                both layout search and integrated routing, including layout search when
+                ``skip_routing`` is ``True``. If ``None``, use the existing decay heuristic
+                with wait-time scoring disabled. A supplied heuristic replaces the complete
+                default configuration; its weights, scaling and attempt limit are used as given.
+                This option is mutually exclusive with ``routing_pass``.
 
         Raises:
-            TranspilerError: If both ``routing_pass`` and ``swap_trials`` or
-            both ``routing_pass`` and ``layout_trials`` are specified
+            TranspilerError: If ``routing_pass`` is specified with ``swap_trials``,
+                ``layout_trials`` or ``heuristic``, or if ``heuristic`` is not a
+                ``Heuristic`` instance or ``None``.
         """
         super().__init__()
         if isinstance(coupling_map, Target) and not isinstance(coupling_map, _FakeTarget):
@@ -174,6 +183,16 @@ class SabreLayout(TransformationPass):
             raise TranspilerError(
                 "The 'routing_pass' argument cannot be set alongside 'swap_trials' or 'layout_trials'."
             )
+        if heuristic is not None:
+            if routing_pass is not None:
+                raise TranspilerError(
+                    "The 'routing_pass' argument cannot be set alongside 'heuristic'."
+                )
+            if not isinstance(heuristic, Heuristic):
+                raise TranspilerError(
+                    "The 'heuristic' argument must be a Heuristic instance or None."
+                )
+        self.heuristic = heuristic
         self.routing_pass = routing_pass
         self.seed = seed
         self.max_iterations = max_iterations
@@ -265,12 +284,14 @@ class SabreLayout(TransformationPass):
             to_partial_layout(layout)
             for layout in self.property_set.get("sabre_starting_layouts", [])
         ]
-        heuristic = (
-            Heuristic(attempt_limit=10 * self.target.num_qubits)
-            .with_basic(1.0, SetScaling.Constant)
-            .with_lookahead([0.5 / self.target.num_qubits], SetScaling.Constant)
-            .with_decay(0.001, 5)
-        )
+        heuristic = self.heuristic
+        if heuristic is None:
+            heuristic = (
+                Heuristic(attempt_limit=10 * self.target.num_qubits)
+                .with_basic(1.0, SetScaling.Constant)
+                .with_lookahead([0.5 / self.target.num_qubits], SetScaling.Constant)
+                .with_decay(0.001, 5)
+            )
         sabre_start = time.perf_counter()
         # If `skip_routing`, then `out_dag` and `final` are meaningless but well-typed.
         out_dag, initial, final = sabre_layout_and_routing(
