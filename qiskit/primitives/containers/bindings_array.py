@@ -169,6 +169,14 @@ class BindingsArray(ShapedMixin):
             self._num_parameters = sum(val.shape[-1] for val in self._data.values())
         return self._num_parameters
 
+    @property
+    def parameters(self) -> list[ParameterLike]:
+        param_list = []
+        for key in self.data.keys():
+            for i in key:
+                param_list.append(i)
+        return param_list
+
     def as_array(self, parameters: Iterable[ParameterLike] | None = None) -> np.ndarray:
         """Return the contents of this bindings array as a single NumPy array.
 
