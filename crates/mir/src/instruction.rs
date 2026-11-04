@@ -70,10 +70,7 @@ impl MirInstruction {
     /// Run verification on an Mir instruction.
     ///
     /// This verification ensures that assumptions for each instruction, and its
-    /// containing operation, hold. Requirements for each operation differ, and
-    /// are described specifically below.
-    ///
-    /// # [`PauliRotation`] Operation
+    /// containing operation, hold.
     pub fn verify(
         &self,
         resource_table: &ResourceTable,
@@ -91,8 +88,8 @@ impl MirInstruction {
 
     /// Perform common verifications on a Quantum operation.
     ///
-    /// Performs several verfications that are common across all quantum
-    /// operations. These include:
+    /// There are several verfications that are common across all quantum
+    /// operations (defined by the [`QuantumOp`] trait). These include:
     ///   1. The number of [`Qid`]s for the instruction match the number of
     ///      [Pauli](crate::ops::pbc::Pauli)s in the provided [`PauliString`].
     ///   2. The [`Qid`]s must in the [`ResourceTable`].

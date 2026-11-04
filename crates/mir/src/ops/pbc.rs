@@ -187,7 +187,9 @@ impl fmt::Display for PauliMeasure {
     }
 }
 
+/// A trait used to identify a Quantum Operation
 pub trait QuantumOp {
+    /// Return the PauliString used by this quantum operation.
     fn paulis(&self) -> &PauliString;
 }
 
