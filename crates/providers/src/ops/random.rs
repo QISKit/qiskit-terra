@@ -521,6 +521,122 @@ impl ProgramOp for RandomBits {
     }
 }
 
+/// Draw uniformly distributed reals from the half-open interval `[0, 1)` using a key.
+///
+/// Each value is built from the same stream bits as [`RandomBits`]: an `F64` takes the top 53 bits
+/// of a `u64` and an `F32` the top 24 bits of a `u32`, scaled by `2^-53` and `2^-24` respectively.
+/// Values are therefore multiples of those scales, so `0.0` can be drawn and `1.0` never is.
+#[derive(Clone)]
+pub struct RandomReal {
+    dtype: DType,
+    shape: Vec<usize>,
+}
+
+impl RandomReal {
+    /// Construct a `RandomReal` op producing `shape` values of `dtype` per key.
+    ///
+    /// Returns [`RandomOpError::NotReal`] unless `dtype` is [`DType::F64`] or [`DType::F32`].
+    pub fn new(dtype: DType, shape: Vec<usize>) -> Result<Self, RandomOpError> {
+        if real_bits(dtype).is_none() {
+            return Err(RandomOpError::NotReal { dtype });
+        }
+        Ok(Self { dtype, shape })
+    }
+
+    /// Return the dtype of the values drawn.
+    pub fn dtype(&self) -> DType {
+        self.dtype
+    }
+}
+
+/// Return how many stream bits one value of `dtype` consumes, or `None` if it is not a drawable
+/// real, i.e. neither [`DType::F32`] nor [`DType::F64`].
+fn real_bits(dtype: DType) -> Option<usize> {
+    match dtype {
+        DType::F32 => Some(32),
+        DType::F64 => Some(64),
+        _ => None,
+    }
+}
+
+impl ProgramOp for RandomReal {
+    type Error = RandomOpError;
+
+    fn name(&self) -> &str {
+        "random_real"
+    }
+    fn namespace(&self) -> &str {
+        QISKIT
+    }
+    fn arity(&self) -> usize {
+        1
+    }
+    fn has_builtin_eval(&self) -> bool {
+        true
+    }
+    fn infer_output_types(&self, inputs: &[TensorType]) -> Result<Vec<TensorType>, Self::Error> {
+        crate::unpack_operands!(self, inputs, [x]);
+        let (kind, batch) = key_type(x)?;
+        let bits = real_bits(self.dtype).expect("the constructor checked the dtype");
+        check_blocks(kind, &self.shape, bits)?;
+        Ok(vec![TensorType {
+            dtype: self.dtype,
+            shape: output_shape(batch, &self.shape)?,
+        }])
+    }
+    fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
+        crate::unpack_operands!(self, args, [x]);
+        let keys = key_operand(x)?;
+        let layout = Layout::new(keys, &self.shape)?;
+        let bits = real_bits(self.dtype).expect("the constructor checked the dtype");
+        Ok(vec![match self.dtype {
+            // The top 53 bits of a u64, times 2^-53.
+            DType::F64 => Tensor::F64(draw_values(keys, &layout, bits, |b, i| {
+                let word = (b[2 * i] as u64) | ((b[2 * i + 1] as u64) << 32);
+                (word >> 11) as f64 * (1.0 / (1u64 << 53) as f64)
+            })),
+            // The top 24 bits of a u32, times 2^-24.
+            DType::F32 => Tensor::F32(draw_values(keys, &layout, bits, |b, i| {
+                (b[i] >> 8) as f32 * (1.0 / (1u32 << 24) as f32)
+            })),
+            dtype => unreachable!("the constructor refuses {dtype}"),
+        }])
+    }
+}
+
+/// Draw each key's values and gather them in output order.
+///
+/// `value` reads value `i` out of the block of words a key drew, where a value takes `bits` bits
+/// and `bits` divides a block, so that no value straddles two blocks.
+fn draw_values<T: Clone>(
+    keys: &KeyTensor,
+    layout: &Layout,
+    bits: usize,
+    value: impl Fn(&[u32], usize) -> T,
+) -> ArcArrayD<T> {
+    let kind = keys.kind();
+    let width = kind.key_words();
+    let source = flat_key_words(keys);
+    let per_block = (32 * kind.block_words()) / bits;
+    let mut block = vec![0u32; kind.block_words()];
+    let mut cached: Option<(usize, usize)> = None;
+    let values: Vec<T> = layout
+        .sources()
+        .map(|(key, payload)| {
+            let wanted = (key, payload / per_block);
+            if cached != Some(wanted) {
+                let words = &source[key * width..][..width];
+                Stream::at_block(kind, words, wanted.1).fill(&mut block);
+                cached = Some(wanted);
+            }
+            value(&block, payload % per_block)
+        })
+        .collect();
+    ndarray::ArrayD::from_shape_vec(IxDyn(&layout.shape), values)
+        .expect("one value per output position")
+        .into_shared()
+}
+
 /// How many blocks [`UniformInt`] reserves for each value it draws.
 ///
 /// See [`Stream::at_substream`] for how a stride is chosen. At four words per block this holds
@@ -623,6 +739,9 @@ pub enum RandomOpError {
     /// The dtype does not hold raw bits.
     #[error("{dtype} does not hold raw bits: expected Bit or an unsigned integer")]
     NotBits { dtype: DType },
+    /// The dtype is not a real that can be drawn.
+    #[error("{dtype} cannot hold uniform reals: expected F64 or F32")]
+    NotReal { dtype: DType },
     /// The range holds no values.
     #[error("the range {low}..={high} is empty")]
     EmptyRange { low: i64, high: i64 },
@@ -1621,5 +1740,259 @@ mod test {
         let drawn = function.add_op(draw, &[entropy[0]]).unwrap();
         function.add_result(drawn[0]).unwrap();
         assert_eq!(function.eval(&[]).unwrap()[0].dtype(), DType::U32);
+    }
+
+    /// Return the `F64` values a tensor holds.
+    fn reals_of(tensor: &Tensor) -> Vec<f64> {
+        let Tensor::F64(array) = tensor else {
+            panic!("expected F64, got {}", tensor.dtype())
+        };
+        array.iter().copied().collect()
+    }
+    #[test]
+    fn test_random_real_refuses_a_dtype_that_is_not_a_drawable_real() {
+        for dtype in [
+            DType::Bit,
+            DType::U32,
+            DType::I64,
+            DType::C64,
+            DType::Key(PrngKind::Philox4x32),
+        ] {
+            assert!(matches!(
+                RandomReal::new(dtype, vec![2]),
+                Err(RandomOpError::NotReal { dtype: d }) if d == dtype
+            ));
+        }
+        assert!(RandomReal::new(DType::F64, vec![2]).is_ok());
+        assert!(RandomReal::new(DType::F32, vec![2]).is_ok());
+    }
+
+    #[test]
+    fn test_random_real_infers_dtype_and_broadcast_shape() {
+        let key = TensorType {
+            dtype: DType::Key(PrngKind::Philox4x32),
+            shape: fixed(&[3, 1]),
+        };
+        for dtype in [DType::F64, DType::F32] {
+            let op = RandomReal::new(dtype, vec![1, 5]).unwrap();
+            assert_eq!(
+                op.infer_output_types(std::slice::from_ref(&key)).unwrap(),
+                vec![TensorType {
+                    dtype,
+                    shape: fixed(&[3, 5])
+                }]
+            );
+        }
+        let not_a_key = TensorType {
+            dtype: DType::U32,
+            shape: fixed(&[3]),
+        };
+        assert!(matches!(
+            RandomReal::new(DType::F64, vec![2])
+                .unwrap()
+                .infer_output_types(&[not_a_key]),
+            Err(RandomOpError::KeyType { .. })
+        ));
+    }
+
+    #[test]
+    fn test_random_real_is_in_the_half_open_unit_interval() {
+        let key = key_from(1);
+        let out = RandomReal::new(DType::F64, vec![20_000])
+            .unwrap()
+            .eval(std::slice::from_ref(&key))
+            .unwrap();
+        let values = reals_of(&out[0]);
+        assert!(values.iter().all(|v| (0.0..1.0).contains(v)));
+        let mean = values.iter().sum::<f64>() / values.len() as f64;
+        assert!((mean - 0.5).abs() < 0.01, "mean {mean}");
+
+        let out = RandomReal::new(DType::F32, vec![20_000])
+            .unwrap()
+            .eval(&[key])
+            .unwrap();
+        let Tensor::F32(array) = &out[0] else {
+            panic!("expected F32")
+        };
+        assert!(array.iter().all(|v| (0.0..1.0).contains(v)));
+    }
+
+    #[test]
+    fn test_random_real_is_the_scaled_high_bits_of_random_bits() {
+        let key = key_from(9);
+        let reals = reals_of(
+            &RandomReal::new(DType::F64, vec![7])
+                .unwrap()
+                .eval(std::slice::from_ref(&key))
+                .unwrap()[0],
+        );
+        let Tensor::U64(raw) = &RandomBits::new(DType::U64, vec![7])
+            .unwrap()
+            .eval(std::slice::from_ref(&key))
+            .unwrap()[0]
+        else {
+            panic!("expected U64")
+        };
+        let expected: Vec<f64> = raw
+            .iter()
+            .map(|w| (w >> 11) as f64 / (1u64 << 53) as f64)
+            .collect();
+        assert_eq!(reals, expected);
+
+        let Tensor::F32(reals) = &RandomReal::new(DType::F32, vec![7])
+            .unwrap()
+            .eval(std::slice::from_ref(&key))
+            .unwrap()[0]
+        else {
+            panic!("expected F32")
+        };
+        let raw = words_of(
+            &RandomBits::new(DType::U32, vec![7])
+                .unwrap()
+                .eval(&[key])
+                .unwrap()[0],
+        );
+        let expected: Vec<f32> = raw
+            .iter()
+            .map(|w| (w >> 8) as f32 / (1u32 << 24) as f32)
+            .collect();
+        assert_eq!(reals.iter().copied().collect::<Vec<_>>(), expected);
+    }
+
+    #[test]
+    fn test_random_real_broadcasts_like_random_bits() {
+        // Key batch `[3, 1]` against payload `[1, 4]` gives `[3, 4]`, where row `i` is key `i`'s
+        // first four values. `RandomBits(U64)` is the reference: a real is its high 53 bits scaled.
+        let scale = |bits: &Tensor| -> Vec<f64> {
+            let Tensor::U64(raw) = bits else {
+                panic!("expected U64")
+            };
+            raw.iter()
+                .map(|w| (w >> 11) as f64 / (1u64 << 53) as f64)
+                .collect()
+        };
+
+        let keys = numbered_keys(&[3, 1], 10);
+        let reals = RandomReal::new(DType::F64, vec![1, 4])
+            .unwrap()
+            .eval(std::slice::from_ref(&keys))
+            .unwrap();
+        assert_eq!(reals[0].shape(), &[3, 4]);
+        let bits = RandomBits::new(DType::U64, vec![1, 4])
+            .unwrap()
+            .eval(std::slice::from_ref(&keys))
+            .unwrap();
+        assert_eq!(reals_of(&reals[0]), scale(&bits[0]));
+
+        // One shared key and payload `[3, 4]`: twelve consecutive positions of a single stream.
+        let key = key_from(2);
+        let reals = RandomReal::new(DType::F64, vec![3, 4])
+            .unwrap()
+            .eval(std::slice::from_ref(&key))
+            .unwrap();
+        let bits = RandomBits::new(DType::U64, vec![3, 4])
+            .unwrap()
+            .eval(std::slice::from_ref(&key))
+            .unwrap();
+        assert_eq!(reals_of(&reals[0]), scale(&bits[0]));
+    }
+
+    #[test]
+    fn test_random_real_changes_block_when_only_the_key_changes() {
+        // Payload `[1, 2]` is one block of two F64 values per key, so every row starts and ends in
+        // block 0. A cache that remembered only the block index would reuse the previous row.
+        let keys = numbered_keys(&[3, 1], 10);
+        let reals = RandomReal::new(DType::F64, vec![1, 2])
+            .unwrap()
+            .eval(std::slice::from_ref(&keys))
+            .unwrap();
+        let bits = RandomBits::new(DType::U64, vec![1, 2])
+            .unwrap()
+            .eval(std::slice::from_ref(&keys))
+            .unwrap();
+        let Tensor::U64(raw) = &bits[0] else {
+            panic!("expected U64")
+        };
+        let expected: Vec<f64> = raw
+            .iter()
+            .map(|w| (w >> 11) as f64 / (1u64 << 53) as f64)
+            .collect();
+        assert_eq!(reals_of(&reals[0]), expected);
+        let v = reals_of(&reals[0]);
+        assert_ne!(v[0..2], v[2..4], "rows come from different keys");
+    }
+
+    #[test]
+    fn test_random_real_is_deterministic_and_single_use() {
+        let op = RandomReal::new(DType::F64, vec![5]).unwrap();
+        let a = op.eval(&[key_from(3)]).unwrap();
+        let b = op.eval(&[key_from(3)]).unwrap();
+        assert_eq!(a, b);
+        assert_ne!(a, op.eval(&[key_from(4)]).unwrap());
+    }
+
+    #[test]
+    fn test_random_real_runs_inside_a_program() {
+        // A seeded key enters as a program input; RandomReal feeds the arithmetic ops like any value.
+        use crate::DataTree;
+        use crate::ops::{Add, Constant, Mean, Multiply};
+        use crate::program::{ProgramFunction, QuantumProgram};
+
+        let mut function = ProgramFunction::new();
+        let key = function.add_parameter(TensorType {
+            dtype: DType::Key(PrngKind::Philox4x32),
+            shape: vec![],
+        });
+        let u = function
+            .add_op(RandomReal::new(DType::F64, vec![1000]).unwrap(), &[key])
+            .unwrap()[0];
+        let two = function
+            .add_op(Constant::new(Tensor::from([2.0_f64])), &[])
+            .unwrap()[0];
+        let minus_one = function
+            .add_op(Constant::new(Tensor::from([-1.0_f64])), &[])
+            .unwrap()[0];
+        let scaled = function.add_op(Multiply, &[u, two]).unwrap()[0];
+        let centred = function.add_op(Add, &[scaled, minus_one]).unwrap()[0];
+        let mean = function.add_op(Mean::new(0), &[centred]).unwrap()[0];
+        function.add_result(centred).unwrap();
+        function.add_result(mean).unwrap();
+        assert_eq!(
+            function.type_of(centred),
+            Some(&TensorType {
+                dtype: DType::F64,
+                shape: fixed(&[1000]),
+            })
+        );
+
+        let program = QuantumProgram::new(
+            vec![function],
+            DataTree::mapping([("key", DataTree::Leaf(()))]).unwrap(),
+            DataTree::mapping([("values", DataTree::Leaf(())), ("mean", DataTree::Leaf(()))])
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(program.has_builtin_eval(), "every op here runs in process");
+
+        let run = |label| {
+            program
+                .eval(DataTree::mapping([("key", DataTree::Leaf(key_from(label)))]).unwrap())
+                .unwrap()
+        };
+        let outputs = run(5);
+        assert_eq!(outputs, run(5), "the same key reproduces the run");
+        assert_ne!(outputs, run(6));
+
+        let Some(DataTree::Leaf(values)) = outputs.get_by_str_key("values") else {
+            panic!("values is a leaf")
+        };
+        assert!(reals_of(values).iter().all(|v| (-1.0..1.0).contains(v)));
+        let Some(DataTree::Leaf(Tensor::F64(mean))) = outputs.get_by_str_key("mean") else {
+            panic!("mean is an F64 leaf")
+        };
+        assert!(
+            mean.iter().all(|m| m.abs() < 0.1),
+            "mean of 2u - 1 is near zero"
+        );
     }
 }
