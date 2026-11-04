@@ -4,9 +4,14 @@ on:
   push:
     tags:
       - '*'
+
+permissions: {}
+
 jobs:
   build-core:
     name: Build core
+    permissions:
+      contents: read
     uses: $/.github/workflows/wheels-build.yml
     with:
       artifact-prefix: "deploy-core-"
@@ -32,6 +37,8 @@ jobs:
 
   build-others:
     name: Build others
+    permissions:
+      contents: read
     uses: $/.github/workflows/wheels-build.yml
     with:
       artifact-prefix: "deploy-others-"

@@ -70,6 +70,9 @@ on:
         required: false
 
 
+permissions:
+  contents: read
+
 jobs:
   config_pre:
     name: "Configure"

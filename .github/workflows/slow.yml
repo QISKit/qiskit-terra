@@ -3,11 +3,19 @@ on:
   schedule:
     - cron:  '42 3 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   slow-tests:
     if: github.repository_owner == 'Qiskit'
     name: Full-test-run-with-slow
     runs-on: ubuntu-latest
+    # The final step comments on an issue when the test run fails.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
         with:
