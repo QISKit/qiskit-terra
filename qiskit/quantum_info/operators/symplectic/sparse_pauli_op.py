@@ -1170,6 +1170,15 @@ class SparsePauliOp(LinearOp):
     def group_commuting(self, qubit_wise: bool = False) -> list[SparsePauliOp]:
         """Partition a SparsePauliOp into sets of commuting Pauli strings.
 
+        .. note::
+
+            The grouping is determined using a greedy graph coloring heuristic
+            (:func:`rustworkx.graph_greedy_color`) on the :meth:`.noncommutation_graph`.
+            Because this heuristic does not guarantee an optimal coloring,
+            ``qubit_wise=False`` is not guaranteed to produce fewer or equal groups
+            than ``qubit_wise=True``. For custom grouping algorithms, use
+            :meth:`.noncommutation_graph` directly.
+
         Args:
             qubit_wise (bool): whether the commutation rule is applied to the whole operator,
                 or on a per-qubit basis.  For example:
