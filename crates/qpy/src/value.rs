@@ -738,7 +738,7 @@ pub(crate) fn load_value(
             let (parameter_expression_pack, _) =
                 deserialize_with_args::<formats::ParameterExpressionPack, _>(
                     bytes,
-                    (qpy_data.version, 0, NATIVE_QPY_RECURSION_DEPTH),
+                    (qpy_data.version, 0, qpy_data.remaining_depth),
                 )?;
             let exp = unpack_parameter_expression(&parameter_expression_pack, qpy_data)?;
             Ok(GenericValue::ParameterExpression(Arc::new(exp)))
