@@ -71,6 +71,9 @@ from ..utils import matplotlib_close_if_inline
 # Default gate width, height and line height
 WID = 0.65
 HIG = 0.65
+
+# Height of one line of text in data units at the default fontsize/subfontsize
+# (FS = 1.2 × 13 pt, SFS = 1.2 × 8 pt).
 LINE_HEIGHT_FS = 0.337
 LINE_HEIGHT_SFS = 0.207
 
@@ -114,7 +117,7 @@ class MatplotlibDrawer:
         expr_len=30,
         measure_arrows=None,
         barrier_label_len=16,
-        vertical_labels=None,
+        vertical_labels=False,
     ):
         self._circuit = circuit
         self._qubits = qubits
@@ -488,8 +491,7 @@ class MatplotlibDrawer:
                             param_text, raw_param_width, HIG + span
                         )
                         node_data[node].param_text = text
-                        # calculation of param_width driven by the number of lines in the vertical param text
-                        param_width = (lines_count - 1) * LINE_HEIGHT_SFS
+                        param_width = lines_count * LINE_HEIGHT_SFS
                     else:
                         param_width = raw_param_width + 0.08
                 else:
@@ -686,11 +688,8 @@ class MatplotlibDrawer:
                             gate_text, raw_gate_width, HIG + span
                         )
                         gate_text = text
-                        # _get_text_width makes the gate box width inconsistent with the number of lines in the vertical gate text
                         gate_width = WID + (lines_count - 1) * LINE_HEIGHT_FS
                         if node_data[node].param_text:
-                            # needed increase due to the width calculation of the gate box,
-                            # when param text exists the box should be wider
                             gate_width += param_width
                     else:
                         gate_width = raw_gate_width + 0.10
@@ -715,9 +714,14 @@ class MatplotlibDrawer:
         return layer_widths
 
     def _is_vertical_label(self, node, gate_text, wire_map):
-        """Return whether the label belongs to a multiqubit gate and should have vertical text.
-        Also return the span of the multiqubit gate."""
+        """Return whether the label belongs to a multiqubit gate and should have vertical text."""
         num_ctrl_qubits = getattr(node.op, "num_ctrl_qubits", 0)
+        if getattr(node.op, "modifiers", None):
+            num_ctrl_qubits = sum(
+                modifier.num_ctrl_qubits
+                for modifier in node.op.modifiers
+                if isinstance(modifier, ControlModifier)
+            )
         wire_indices = [
             wire_map[qarg]
             for qarg in node.qargs[num_ctrl_qubits:]
@@ -736,8 +740,8 @@ class MatplotlibDrawer:
         )
 
     def _vertical_label_lines(self, gate_text_original, full_text_width, available_height):
-        """Calculate and return how many lines the vertical label will break into, the lines that
-        it will break into and the average character height of the label."""
+        """Calculate and return how many lines the vertical label will break into and
+        the lines that it will break into."""
         avg_char_width = full_text_width / len(gate_text_original)
         max_chars_for_height = max(1, int(available_height / avg_char_width))
 

@@ -2084,6 +2084,9 @@ class TestCircuitMatplotlibDrawer(QiskitTestCase):
         qc.append(Gate("psi_gate", 2, [], label="Ψ_unicode_label"), [0, 1])
         qc.append(QuantumCircuit(1, name="my_long_custom_gate").to_gate().control(1), [2, 3])
         qc.append(QuantumCircuit(2, name="my_long_custom_gate").to_gate().control(1), [0, 1, 2])
+        gate = QuantumCircuit(2, name="my_long_custom_gate").to_gate()
+        qc.append(QuantumCircuit(2, name="my_long_custom_gate").to_gate().control(1), [1, 2, 3])
+        qc.append(AnnotatedOperation(gate, ControlModifier(1)), [1, 2, 3])
 
         fname = "vertical_multi_qubit_gate_labels.png"
         self.circuit_drawer(qc, output="mpl", filename=fname, vertical_labels=True)
