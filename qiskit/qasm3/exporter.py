@@ -1389,7 +1389,7 @@ class QASM3Builder:
         if ident is None:
             ident = self.define_gate(operation)
         qubits = [self._lookup_bit(qubit) for qubit in instruction.qubits]
-        parameters = self._build_quantum_call_parameters(instruction.params)
+        parameters = self._build_quantum_call_parameters(operation.params)
         return ast.QuantumGateCall(ident, qubits, parameters=parameters)
 
 
