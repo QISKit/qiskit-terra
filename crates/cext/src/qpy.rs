@@ -252,7 +252,7 @@ pub struct QpyLoadedCircuits {
 ///
 /// Certain aspects of QPY payload deserialization are recursive, and this function will return
 /// an Error if anything requires excessive depth to evaluate. The recusion limit is hard coded
-/// to a depth of 100.
+/// to a depth of 100 (30 on Windows).
 ///
 /// # Safety
 /// ``filename`` must point to a valid nul-terminated string; ``circuits`` must be valid non-null,
@@ -387,7 +387,7 @@ pub unsafe extern "C" fn qk_qpy_dump_buffer_with_version(
 ///
 /// Certain aspects of QPY payload deserialization are recursive, and this function will return
 /// an Error if anything requires excessive depth to evaluate. The recusion limit is hard coded
-/// to a depth of 100.
+/// to a depth of 100 (30 on Windows).
 ///
 /// # Safety
 /// ``buffer`` must be valid for reads of ``size`` bytes; ``circuits`` must be valid non-null,
