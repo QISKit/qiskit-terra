@@ -240,6 +240,10 @@ class SparsePauliOp(LinearOp):
             atol = self.atol
         return np.allclose((self - other).simplify(atol=atol).coeffs, 0.0, atol=atol)
 
+    def copy(self):
+        """Return a copy of the SparsePauliOp."""
+        return SparsePauliOp(self, copy=True)
+
     @property
     def settings(self) -> dict:
         """Return settings."""
