@@ -1,0 +1,7 @@
+---
+features_c:
+  - |
+    Introduced a new feature in the C API circuit library to synthesize qDRIFT
+    circuits. The function ``qk_circuit_library_qdrift`` allows users to create
+    quantum circuits that approximate the time evolution under a given sparse
+    observable using the qDRIFT protocol.
