@@ -555,7 +555,7 @@ mod tests {
         .unwrap();
 
         let extra = native_extra_data(&circuit, "v19_parameter_circuit", version);
-        let payload = dump_qpy([circuit].iter(), vec![extra], version, None, None).unwrap();
+        let payload = dump_qpy([Ok((&circuit, extra))].into_iter(), version, None, None).unwrap();
         let loaded = load_qpy(&payload, None, None).unwrap();
         let instruction = &loaded[0].circuit_data.data()[0];
 
@@ -592,7 +592,7 @@ mod tests {
             .unwrap();
 
         let extra = native_extra_data(&circuit, "v19_control_flow", version);
-        let payload = dump_qpy([circuit].iter(), vec![extra], version, None, None).unwrap();
+        let payload = dump_qpy([Ok((&circuit, extra))].into_iter(), version, None, None).unwrap();
         let loaded = load_qpy(&payload, None, None).unwrap();
         let loaded_circuit = &loaded[0].circuit_data;
         let instruction = &loaded_circuit.data()[0];
@@ -654,7 +654,7 @@ mod tests {
         .unwrap();
 
         let extra = native_extra_data(&circuit, "v19_pauli_products", version);
-        let payload = dump_qpy([circuit].iter(), vec![extra], version, None, None).unwrap();
+        let payload = dump_qpy([Ok((&circuit, extra))].into_iter(), version, None, None).unwrap();
         let loaded = load_qpy(&payload, None, None).unwrap();
         let instructions = loaded[0].circuit_data.data();
 
@@ -705,7 +705,7 @@ mod tests {
             .unwrap();
 
         let extra = native_extra_data(&circuit, "v19_store", version);
-        let payload = dump_qpy([circuit].iter(), vec![extra], version, None, None).unwrap();
+        let payload = dump_qpy([Ok((&circuit, extra))].into_iter(), version, None, None).unwrap();
         let loaded = load_qpy(&payload, None, None).unwrap();
         let instruction = &loaded[0].circuit_data.data()[0];
         let OperationRef::Store(store) = instruction.op.view() else {
