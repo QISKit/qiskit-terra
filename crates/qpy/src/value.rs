@@ -32,7 +32,6 @@ use qiskit_circuit::parameter::parameter_expression::ParameterExpression;
 use qiskit_circuit::parameter::symbol_expr::{Symbol, SymbolVector};
 use qiskit_circuit::{Clbit, imports};
 
-use crate::NATIVE_QPY_RECURSION_DEPTH;
 use crate::annotations::AnnotationHandler;
 use crate::bytes::Bytes;
 use crate::circuit_reader::unpack_circuit;
