@@ -1,0 +1,11 @@
+---
+performance:
+  - |
+    Improved the runtime performance of :class:`.Isometry` by migrating its orchestration
+    loop (previously ``Isometry._gates_to_uncompute()``, ``_decompose_column()`` and
+    ``_disentangle()`` in Python) to Rust, reusing the already-ported :class:`.UCGate` and
+    :class:`.MCGupDiag` kernels directly per primitive call for every qubit of every column.
+    Benchmarks show an average speedup of **~18x**, ranging from **~2x** for small,
+    single-qubit isometries up to **~35x** for larger 4- to 6-qubit isometries, where the
+    eliminated PyO3 crossings matter most. There are no API or circuit-equivalence changes.
+    See `#17151 <https://github.com/Qiskit/qiskit/pull/17151>`__ for more details.

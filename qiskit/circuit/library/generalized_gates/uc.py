@@ -23,15 +23,11 @@ import math
 import numpy as np
 
 from qiskit.circuit.gate import Gate
-from qiskit.circuit.library.standard_gates.h import HGate
 from qiskit.quantum_info.operators.predicates import is_unitary_matrix
-from qiskit.circuit import QuantumRegister
 from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.exceptions import QiskitError
-from qiskit._accelerate import uc_gate
-
-from .diagonal import DiagonalGate
+from qiskit._accelerate.synthesis import uc_gate
 
 _EPS = 1e-10  # global variable used to chop very small numbers to zero
 
@@ -108,66 +104,10 @@ class UCGate(Gate):
             if not is_unitary_matrix(gate, _EPS):
                 raise QiskitError("A controlled gate is not unitary.")
 
-        new_controls = set()
-        if mux_simp:
-            new_controls, gate_list = self._simplify(gate_list, num_contr)
-        self.simp_contr = (mux_simp, new_controls)
-
         # Create new gate.
         super().__init__("multiplexer", int(num_contr) + 1, gate_list)
         self.up_to_diagonal = up_to_diagonal
-
-    def _simplify(self, gate_list, num_contr):
-        """https://arxiv.org/abs/2409.05618"""
-
-        c = set()
-        nc = set()
-        mux_copy = gate_list.copy()
-
-        for i in range(int(num_contr)):
-            c.add(i + 1)
-
-        if len(gate_list) > 1:
-            nc, mux_copy = self._repetition_search(gate_list, num_contr, mux_copy)
-
-        new_controls = {x for x in c if x not in nc}
-        new_mux = [gate for gate in mux_copy if gate is not None]
-        return new_controls, new_mux
-
-    def _repetition_search(self, mux, level, mux_copy):
-        nc = set()
-        d = 1
-        while d <= len(mux) / 2:
-            disentanglement = False
-            if np.allclose(mux[d], mux[0]):
-                mux_org = mux_copy.copy()
-                repetitions = len(mux) / (2 * d)
-                p = 0
-                while repetitions > 0:
-                    repetitions -= 1
-                    valid, mux_copy = self._repetition_verify(p, d, mux, mux_copy)
-                    p = p + 2 * d
-                    if not valid:
-                        mux_copy = mux_org
-                        break
-                    if repetitions == 0:
-                        disentanglement = True
-
-            if disentanglement:
-                removed_contr = level - math.log2(d)
-                nc.add(removed_contr)
-            d = 2 * d
-        return nc, mux_copy
-
-    def _repetition_verify(self, base, d, mux, mux_copy):
-        i = 0
-        next_base = base + d
-        while i < d:
-            if not np.allclose(mux[base], mux[next_base]):
-                return False, mux_copy
-            mux_copy[next_base] = None
-            base, next_base, i = base + 1, next_base + 1, i + 1
-        return True, mux_copy
+        self.mux_simp = mux_simp
 
     def inverse(self, annotated: bool = False) -> Gate:
         """Return the inverse.
@@ -180,7 +120,7 @@ class UCGate(Gate):
                 name=self.name + "_dg", num_qubits=self.num_qubits, params=[]
             )  # removing the params because arrays are deprecated
 
-            definition = QuantumCircuit(*self.definition.qregs)
+            definition = QuantumCircuit(list(self.definition.qubits))
             for inst in reversed(self._definition):
                 definition._append(
                     inst.replace(operation=inst.operation.inverse(annotated=annotated))
@@ -199,19 +139,6 @@ class UCGate(Gate):
         # q[k-1],...,q[0],q_target, decreasingly ordered with respect to the
         # significance of the qubit in the computational basis
         _, diag = self._dec_ucg()
-        if self.simp_contr[1]:
-            q_controls = [self.num_qubits - i for i in self.simp_contr[1]]
-            q_controls.reverse()
-            for i in range(self.num_qubits):
-                if i not in [0] + q_controls:
-                    d = 2**i
-                    new_diag = []
-                    n = len(diag)
-                    for j in range(n):
-                        new_diag.append(diag[j])
-                        if (j + 1) % d == 0:
-                            new_diag.extend(diag[j + 1 - d : j + 1])
-                    diag = np.array(new_diag)
         return diag
 
     def _define(self):
@@ -220,77 +147,13 @@ class UCGate(Gate):
 
     def _dec_ucg(self):
         """
-        Call to create a circuit that implements the uniformly controlled gate. If
-        up_to_diagonal=True, the circuit implements the gate up to a diagonal gate and
-        the diagonal gate is also returned.
-        """
-        diag = np.ones(2**self.num_qubits).tolist()
-        q = QuantumRegister(self.num_qubits, "q")
-        q_target = q[0]
-        mux_simplify = self.simp_contr[0]
-
-        if mux_simplify:
-            q_controls = [q[self.num_qubits - i] for i in self.simp_contr[1]]
-            q_controls.reverse()
-        else:
-            q_controls = q[1:]
-
-        circuit = QuantumCircuit(q, name="uc")
-        # If there is no control, we use the ZYZ decomposition
-        if not q_controls:
-            circuit.unitary(self.params[0], q[0])
-            return circuit, diag
-        # If there is at least one control, first,
-        # we find the single qubit gates of the decomposition.
-        (single_qubit_gates, diag) = self._dec_ucg_help()
-        # Now, it is easy to place the C-NOT gates and some Hadamards and Rz(pi/2) gates
-        # (which are absorbed into the single-qubit unitaries) to get back the full decomposition.
-        for i, gate in enumerate(single_qubit_gates):
-            # Absorb Hadamards and Rz(pi/2) gates
-            if i == 0:
-                squ = HGate().to_matrix().dot(gate)
-            elif i == len(single_qubit_gates) - 1:
-                squ = gate.dot(UCGate._rz(np.pi / 2)).dot(HGate().to_matrix())
-            else:
-                squ = (
-                    HGate()
-                    .to_matrix()
-                    .dot(gate.dot(UCGate._rz(np.pi / 2)))
-                    .dot(HGate().to_matrix())
-                )
-            # Add single-qubit gate
-            circuit.unitary(squ, [q_target])
-            # The number of the control qubit is given by the number of zeros at the end
-            # of the binary representation of (i+1)
-            binary_rep = np.binary_repr(i + 1)
-            num_trailing_zeros = len(binary_rep) - len(binary_rep.rstrip("0"))
-            q_contr_index = num_trailing_zeros
-            # Add C-NOT gate
-            if not i == len(single_qubit_gates) - 1:
-                circuit.cx(q_controls[q_contr_index], q_target)
-                circuit.global_phase -= 0.25 * np.pi
-        if not self.up_to_diagonal:
-            # Important: the diagonal gate is given in the computational basis of the qubits
-            # q[k-1],...,q[0],q_target (ordered with decreasing significance),
-            # where q[i] are the control qubits and t denotes the target qubit.
-            diagonal = DiagonalGate(diag)
-
-            circuit.append(diagonal, [q_target] + q_controls)
-        return circuit, diag
-
-    def _dec_ucg_help(self):
-        """
         This method finds the single qubit gate arising in the decomposition of UCGates given in
         https://arxiv.org/pdf/quant-ph/0410066.pdf.
         """
         single_qubit_gates = [np.asarray(gate, dtype=complex, order="f") for gate in self.params]
-        if self.simp_contr[0]:
-            return uc_gate.dec_ucg_help(single_qubit_gates, len(self.simp_contr[1]) + 1)
-        return uc_gate.dec_ucg_help(single_qubit_gates, self.num_qubits)
-
-    @staticmethod
-    def _rz(alpha):
-        return np.array([[np.exp(1j * alpha / 2), 0], [0, np.exp(-1j * alpha / 2)]])
+        return uc_gate.dec_ucg(
+            single_qubit_gates, self.num_qubits, self.up_to_diagonal, self.mux_simp
+        )
 
     def validate_parameter(self, parameter):
         """Uniformly controlled gate parameter has to be an ndarray."""

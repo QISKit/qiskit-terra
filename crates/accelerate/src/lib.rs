@@ -13,13 +13,11 @@
 use pyo3::import_exception;
 
 pub mod circuit_duration;
-pub mod isometry;
 pub mod optimize_1q_gates;
 pub mod pauli_exp_val;
 pub mod results;
 pub mod sampled_exp_val;
 pub mod twirling;
-pub mod uc_gate;
 
 import_exception!(qiskit.exceptions, QiskitError);
 import_exception!(qiskit.circuit.exceptions, CircuitError);

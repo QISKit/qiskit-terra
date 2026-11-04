@@ -69,7 +69,7 @@ sys.modules["qiskit._accelerate.equivalence"] = _accelerate.equivalence
 sys.modules["qiskit._accelerate.error_map"] = _accelerate.error_map
 sys.modules["qiskit._accelerate.gates_in_basis"] = _accelerate.gates_in_basis
 sys.modules["qiskit._accelerate.isometry"] = _accelerate.isometry
-sys.modules["qiskit._accelerate.uc_gate"] = _accelerate.uc_gate
+sys.modules["qiskit._accelerate.uc_gate"] = _accelerate.synthesis.uc_gate  # backward compat
 sys.modules["qiskit._accelerate.euler_one_qubit_decomposer"] = (
     _accelerate.euler_one_qubit_decomposer
 )
@@ -98,6 +98,7 @@ sys.modules["qiskit._accelerate.target"] = _accelerate.target
 sys.modules["qiskit._accelerate.two_qubit_decompose"] = _accelerate.two_qubit_decompose
 sys.modules["qiskit._accelerate.unitary_synthesis"] = _accelerate.unitary_synthesis
 sys.modules["qiskit._accelerate.vf2_layout"] = _accelerate.vf2_layout
+sys.modules["qiskit._accelerate.synthesis"] = _accelerate.synthesis
 sys.modules["qiskit._accelerate.synthesis.permutation"] = _accelerate.synthesis.permutation
 sys.modules["qiskit._accelerate.synthesis.linear"] = _accelerate.synthesis.linear
 sys.modules["qiskit._accelerate.synthesis.clifford"] = _accelerate.synthesis.clifford
@@ -118,6 +119,11 @@ sys.modules["qiskit._accelerate.synthesis.multi_controlled"] = (
 )
 sys.modules["qiskit._accelerate.synthesis.pauli_products"] = _accelerate.synthesis.pauli_products
 sys.modules["qiskit._accelerate.synthesis.qft"] = _accelerate.synthesis.qft
+sys.modules["qiskit._accelerate.synthesis.uc_gate"] = _accelerate.synthesis.uc_gate
+sys.modules["qiskit._accelerate.synthesis.mcg_up_to_diagonal"] = (
+    _accelerate.synthesis.mcg_up_to_diagonal
+)
+sys.modules["qiskit._accelerate.synthesis.diagonal"] = _accelerate.synthesis.diagonal
 sys.modules["qiskit._accelerate.split_2q_unitaries"] = _accelerate.split_2q_unitaries
 sys.modules["qiskit._accelerate.gate_direction"] = _accelerate.gate_direction
 sys.modules["qiskit._accelerate.instruction_duration_check"] = (

@@ -1,0 +1,9 @@
+---
+performance:
+  - |
+    Improved the runtime performance of :class:`.UCGate` and :class:`.DiagonalGate` by
+    migrating their decomposition to Rust. Benchmarks show average speedups of **~15.9x**
+    for :class:`.UCGate` (up-to-diagonal path), **~11.3x** for :class:`.UCGate`'s full
+    decomposition, and **~2.5x** for :class:`.DiagonalGate`. There are no API or
+    circuit-equivalence changes.
+    See `#16908 <https://github.com/Qiskit/qiskit/pull/16908>`__ for more details.

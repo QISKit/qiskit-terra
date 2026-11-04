@@ -69,7 +69,7 @@ fn _accelerate(m: &Bound<PyModule>) -> PyResult<()> {
     add_submodule(m, ::qiskit_transpiler::passes::gates_in_basis_mod, "gates_in_basis")?;
     add_submodule(m, ::qiskit_transpiler::passes::instruction_duration_check_mod, "instruction_duration_check")?;
     add_submodule(m, ::qiskit_transpiler::passes::inverse_cancellation_mod, "inverse_cancellation")?;
-    add_submodule(m, ::qiskit_accelerate::isometry::isometry, "isometry")?;
+    add_submodule(m, ::qiskit_synthesis::isometry::isometry, "isometry")?;
     add_submodule(m, ::qiskit_circuit::nlayout::nlayout, "nlayout")?;
     add_submodule(m, ::qiskit_circuit::standard_gate::standard_generators::standard_generators, "standard_generators")?;
     add_submodule(m, ::qiskit_accelerate::optimize_1q_gates::optimize_1q_gates, "optimize_1q_gates")?;
@@ -98,7 +98,6 @@ fn _accelerate(m: &Bound<PyModule>) -> PyResult<()> {
     add_submodule(m, ::qiskit_synthesis::two_qubit_decompose::two_qubit_decompose, "two_qubit_decompose")?;
     add_submodule(m, ::qiskit_synthesis::pauli_products::pauli_products_mod, "pauli_products")?;
     add_submodule(m, ::qiskit_transpiler::passes::unitary_synthesis_mod, "unitary_synthesis")?;
-    add_submodule(m, ::qiskit_accelerate::uc_gate::uc_gate, "uc_gate")?;
     add_submodule(m, ::qiskit_transpiler::passes::unroll_3q_or_more_mod, "unroll_3q_or_more")?;
     add_submodule(m, ::qiskit_transpiler::passes::vf2_layout_mod, "vf2_layout")?;
     add_submodule(m, ::qiskit_circuit::circuit, "circuit")?;
