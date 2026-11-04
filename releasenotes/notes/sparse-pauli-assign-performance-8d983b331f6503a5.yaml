@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Improved the performance of :meth:`.SparsePauliOp.assign_parameters` by tracking
+    unbound coefficients during binding, avoiding a second pass over the
+    coefficients and casting to ``complex`` only when all parameters are bound.

@@ -1243,17 +1243,19 @@ class SparsePauliOp(LinearOp):
                 )
             parameters = dict(zip(free_parameters, parameters))
 
+        # Track remaining parameterized coefficients during binding to avoid a second pass
+        num_unbound = 0
         for i, coeff in enumerate(bound.coeffs):
             if isinstance(coeff, ParameterExpression):
                 for key in coeff.parameters & parameters.keys():
                     coeff = coeff.assign(key, parameters[key])
                 if len(coeff.parameters) == 0:
                     coeff = complex(coeff)
+                else:
+                    num_unbound += 1
                 bound.coeffs[i] = coeff
 
-        if bound.coeffs.dtype == object and not any(
-            isinstance(c, ParameterExpression) for c in bound.coeffs
-        ):
+        if bound.coeffs.dtype == object and num_unbound == 0:
             bound._coeffs = bound.coeffs.astype(complex)
 
         return None if inplace else bound
