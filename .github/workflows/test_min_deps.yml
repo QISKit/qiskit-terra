@@ -1,0 +1,32 @@
+name: Test Minimum Dependencies
+
+on:
+  pull_request:
+
+jobs:
+  test-min-deps:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+
+          #installs minimum requiered versions of all dependencies from requirements.txt
+          pip install -r <(sed 's/[>~]=/==/g' requirements.txt)
+
+          #needed to ensure dependency versions aren't updated when qiskit is installed
+          pip install --no-deps -e .
+
+          pip install --group test --no-deps
+
+      - run: |
+          source venv/bin/activate
+          stestr run
