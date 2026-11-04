@@ -6,6 +6,7 @@ cmake_minimum_required (VERSION 3.20)
 # Since we only use CMake to scaffold `ctest`, we just have the whole
 # configuration here.
 project (qiskit-test)
+include(CTest)
 # These variables need to be fed into the file during the build.
 # "Setting" them empty here is for documentation purposes.
 set (
