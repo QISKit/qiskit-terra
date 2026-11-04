@@ -76,23 +76,21 @@ def matrix_equal(mat1, mat2, ignore_phase=False, rtol=RTOL_DEFAULT, atol=ATOL_DE
     if ignore_phase:
         phase_difference = 0
 
-        # Get phase of first non-zero entry of mat1 and mat2
-        # and multiply all entries by the conjugate
-        for elt in mat1.flat:
-            if abs(elt) > atol:
-                angle = np.angle(elt)
-                phase_difference -= angle
-                mat1 = np.exp(-1j * angle) * mat1
-                break
-        for elt in mat2.flat:
-            if abs(elt) > atol:
-                angle = np.angle(elt)
-                phase_difference += angle
-                mat2 = np.exp(-1j * np.angle(elt)) * mat2
-                break
-        if props is not None:
-            props["phase_difference"] = phase_difference
-
+        # iterates over the flattened matrices and see if there is a common factor
+        flat_1 = mat1.flat
+        flat_2 = mat2.flat
+        global_phase = None
+        for x in range(len(flat_1)):
+           if np.isclose(0, flat_2[x], rtol=1e-8, atol=1e-8) or np.isclose(0, flat_1[x], rtol=1e-8, atol=1e-8):
+                if not np.isclose(flat_1[x], flat_2[x], rtol=1e-8, atol=1e-8):
+                    return True
+                continue
+           else:
+                if global_phase != None and np.isclose(global_phase, flat_2[x]/flat_1[x], rtol=1e-8, atol=1e-8):
+                    return True
+                if global_phase == None:
+                    global_phase = flat_2[x]/flat_1[x]
+        return False
     return np.allclose(mat1, mat2, rtol=rtol, atol=atol)
 
 
