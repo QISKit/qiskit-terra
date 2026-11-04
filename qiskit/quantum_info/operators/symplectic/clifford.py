@@ -376,6 +376,7 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
         # Clifford array.
         return Clifford._is_symplectic(self.symplectic_matrix)
 
+
     # ---------------------------------------------------------------------
     # BaseOperator Abstract Methods
     # ---------------------------------------------------------------------
@@ -1034,6 +1035,12 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
         tableau = np.vstack([stab, destab])
         return tableau
 
+def is_clifford(circuit: QuantumCircuit | Instruction) -> bool:
+        try:
+            Clifford.from_circuit(circuit)
+        except QiskitError:
+            return False
+        return True
 
 # Update docstrings for API docs
 generate_apidocs(Clifford)
