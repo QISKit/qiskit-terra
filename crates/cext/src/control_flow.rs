@@ -94,7 +94,7 @@ impl CControlFlowInstruction {
         let inst = self.instruction();
         inst.op
             .try_control_flow()
-            .expect("constructed with control flow instruction")
+            .expect("inst should be a control flow instruction")
     }
 }
 
@@ -139,8 +139,6 @@ impl From<&ControlFlowInstruction> for CControlFlowKind {
 /// register, or a classical expression.
 #[repr(u8)]
 pub enum CConditionType {
-    /// Condition is unknown
-    Unknown = 3,
     /// Condition based on a classical bit
     ClBit = 0,
     /// Condition based on a classical register
@@ -238,8 +236,6 @@ pub enum CLoopParamKind {
 /// inside a parameter vector accessed by an index.
 #[repr(u8)]
 pub enum CSymbolType {
-    /// Symbol type is unknown
-    Unknown = 2,
     /// A standalone symbol with a simple name
     Standalone = 0,
     /// An element symbol with a base name and index
@@ -266,8 +262,6 @@ pub struct CSymbolInfo {
 /// The type of collection used in a ForLoop control flow instruction.
 #[repr(u8)]
 pub enum CLoopCollectionType {
-    /// Unknown collection type
-    Unknown = 2,
     /// The loop iterates over an explicit list of elements
     List = 0,
     /// The loop iterates over a Python-style range (start, stop, step)
@@ -494,8 +488,8 @@ pub unsafe extern "C" fn qk_control_flow_clbit_map(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction.
 ///
-/// @return The condition type if `cf_inst` is the expected instruction, otherwise
-///         `QkConditionType_Unknown`.
+/// @return A `QkConditionType` enum value indicating the condition type. The returned value is
+///    invalid if `cf_inst` isn't an IfElse or While instruction.
 ///
 /// # Example
 /// ```c
@@ -527,7 +521,7 @@ pub unsafe extern "C" fn qk_control_flow_condition_type(
     if let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) {
         CConditionType::from(condition)
     } else {
-        CConditionType::Unknown
+        CConditionType::ClBit
     }
 }
 
@@ -540,8 +534,8 @@ pub unsafe extern "C" fn qk_control_flow_condition_type(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction with a classical bit condition.
 ///
-/// @return The classical bit index and condition if `cf_inst` is an if-else block or while loop with a
-///         bit condition, otherwise the returned values are invalid and `clbit` is `UINT32_MAX`.
+/// @return A `QkConditionBitInfo` struct containing the classical bit index and expected value.
+///     The returned values are invalid if `cf_inst` isn't an IfElse or While instruction.
 ///
 /// # Example
 /// ```c
@@ -560,21 +554,21 @@ pub unsafe extern "C" fn qk_control_flow_condition_bit_info(
     // SAFETY: Per documentation, cf_inst is a valid pointer to a CControlFlowInstruction.
     let cf_inst = unsafe { &*cf_inst };
 
-    const UNEXPECTED: CConditionBitInfo = CConditionBitInfo {
-        clbit: u32::MAX,
+    const INVALID: CConditionBitInfo = CConditionBitInfo {
+        clbit: 0,
         condition: false,
     };
 
     let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
-        return UNEXPECTED;
+        return INVALID;
     };
 
     let Condition::Bit(clbit, condition) = condition else {
-        return UNEXPECTED;
+        return INVALID;
     };
 
     let Some(clbit) = cf_inst.circuit().clbit_index(clbit) else {
-        return UNEXPECTED;
+        return INVALID;
     };
 
     CConditionBitInfo {
@@ -592,8 +586,8 @@ pub unsafe extern "C" fn qk_control_flow_condition_bit_info(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction with a classical register condition.
 ///
-/// @return The bit width if `cf_inst` if an if-else block or while loop with a register condition,
-///         otherwise `UINT64_MAX`.
+/// @return The bit width of the condition over the classical register. The returned value is
+///    invalid if `cf_inst` isn't an IfElse or While register condition.
 ///
 /// # Example
 /// ```c
@@ -613,11 +607,11 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_bit_width(
     let cf_inst = unsafe { &*cf_inst };
 
     let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
-        return u64::MAX;
+        return 0;
     };
 
     let Condition::Register(_, condition) = condition else {
-        return u64::MAX;
+        return 0;
     };
 
     condition.bits()
@@ -632,9 +626,9 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_bit_width(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction with a classical register condition.
 ///
-/// @return The register if `cf_inst` is an if-else block or while loop with a register condition,
-///         otherwise `NULL`. The pointer is valid as long as the parent circuit remains
-///         valid.
+/// @return A borrowed pointer to the ``QkClassicalRegister``. The pointer remains valid as long as
+///     the parent circuit remains valid. Returns `NULL` if `cf_inst` isn't an IfElse or While
+///     instruction with a register condition.
 ///
 /// # Example
 /// ```c
@@ -673,8 +667,9 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction with a classical register condition.
 ///
-/// @return The condition value if `cf_inst` is an if-else block or while loop with a register
-///         condition, otherwise `UINT64_MAX`.
+/// @return The bit width of the condition over the classical register. Returns `UINT64_MAX` if the
+///     width would exceed it. The returned value is invalid if `cf_inst` isn't an IfElse or While
+///     instruction with a register condition.
 ///
 /// # Example
 /// ```c
@@ -694,11 +689,11 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_uint(
     let cf_inst = unsafe { &*cf_inst };
 
     let Some(condition) = extract_if_while_condition(cf_inst.control_flow_inst()) else {
-        return u64::MAX;
+        return 0;
     };
 
     let Condition::Register(_, value) = condition else {
-        return u64::MAX;
+        return 0;
     };
 
     value.to_u64().unwrap_or(u64::MAX)
@@ -713,8 +708,8 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_uint(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction with a classical register condition.
 ///
-/// @return The condition value if `cf_inst` is an if-else block or while loop with a
-///         register condition, otherwise zero.
+/// @return The condition value. The returned value is invalid if `cf_inst` isn't an IfElse or
+///     While instruction with a register condition.
 ///
 /// # Example
 /// ```c
@@ -754,8 +749,9 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg_cond_biguint(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction with an expression condition.
 ///
-/// @return The expression node if `cf_inst` has an expression condition, otherwise `NULL`. The
-///         pointer remains valid as long as the parent circuit remains valid.
+/// @return A borrowed pointer to the ``QkExprNode`` representing the classical expression. The
+///     pointer remains valid as long as the parent circuit remains valid. Returns `NULL` if
+///     `cf_inst` isn't an IfElse or While instruction with an expression condition.
 ///
 /// # Example Usage
 /// ```c
@@ -797,7 +793,8 @@ pub unsafe extern "C" fn qk_control_flow_condition_expr(
 /// @param cf_inst A pointer to the control flow instruction.
 ///     The control flow instruction must be of a Box kind.
 ///
-/// @return The duration kind if `cf_inst` is a box, otherwise `QkBoxDurationKind_NoDuration`.
+/// @return The kind of duration as `QkBoxDurationKind`. The returned value is invalid if `cf_inst`
+///     isn't a Box instruction.
 ///
 /// # Example
 /// ```c
@@ -842,8 +839,8 @@ pub unsafe extern "C" fn qk_control_flow_box_duration_kind(
 /// @param cf_inst A pointer to the control flow instruction.
 ///     The control flow instruction must be of a Box kind with a concrete duration.
 ///
-/// @return The duration type and value if `cf_inst` is a box with set duration, otherwise the
-///         returned values are invalid.
+/// @return A `QkDurationInfo` struct containing the duration value and unit. The returned values
+///     are invalid if `cf_inst` isn't a Box instruction with a duration.
 ///
 /// # Example
 /// ```c
@@ -874,8 +871,8 @@ pub unsafe extern "C" fn qk_control_flow_box_duration_val_info(
         CDurationInfo::from(duration)
     } else {
         CDurationInfo {
-            ty: CDurationType::Unknown,
-            value: CDurationValue { time: 0.0 },
+            ty: CDurationType::Dt,
+            value: CDurationValue { dt: 0 },
         }
     }
 }
@@ -889,9 +886,10 @@ pub unsafe extern "C" fn qk_control_flow_box_duration_val_info(
 /// @param cf_inst A pointer to the control flow instruction.
 ///     The control flow instruction must be of a Box kind with an expression duration.
 ///
-/// @return The duration expression if `cf_inst` is a box with set duration, otherwise `NULL`.
-///         The expression is valid as long as the control flow instruction exists. The expression
-///         is owned by the control flow instruction and must not be freed by the caller.
+/// @return A pointer to the ``QkExpr`` representing the duration expression.
+///     The expression is valid as long as the control flow instruction exists.
+///     The expression is owned by the control flow instruction and must not be freed by the caller.
+///     Returns `NULL` if `cf_inst` isn't a Box instruction with a duration.
 ///
 /// # Example
 /// ```c
@@ -915,7 +913,7 @@ pub unsafe extern "C" fn qk_control_flow_box_duration_expr(
         ..
     } = &cf_inst.control_flow_inst().control_flow
     {
-        ptr::from_ref(expr)
+        expr
     } else {
         ptr::null()
     }
@@ -929,8 +927,8 @@ pub unsafe extern "C" fn qk_control_flow_box_duration_expr(
 ///
 /// @param cf_inst A pointer to a control flow instruction that must be a ForLoop.
 ///
-/// @return The collection type if `cf_inst` is a for loop, otherwise
-///         `QkLoopCollectionType_Unknown`.
+/// @return A ``CLoopCollectionType`` enum value indicating the collection type. The returned value
+///     is invalid if `cf_inst` isn't a ForLoop instruction.
 ///
 /// # Example
 /// ```c
@@ -959,7 +957,7 @@ pub unsafe extern "C" fn qk_control_flow_loop_collection_type(
             ForCollection::PyRange(_) => CLoopCollectionType::Range,
         }
     } else {
-        CLoopCollectionType::Unknown
+        CLoopCollectionType::List
     }
 }
 
@@ -971,12 +969,12 @@ pub unsafe extern "C" fn qk_control_flow_loop_collection_type(
 /// to determine the collection type before calling this function.
 ///
 /// @param cf_inst A pointer to a control flow instruction that must be a ForLoop with a List
-///                collection.
+///     collection.
 ///
-/// @return A pointer to the array of loop elements and the size if `cf_inst` is a for loop,
-///         otherwise the returned values are invalid and `elements` is `NULL`. The pointer is
-///         borrowed for the duration of the control flow instruction and must not be freed by
-///         the caller.
+/// @return A `QkLoopElements` struct containing a pointer to the array of loop elements and the
+///     number of elements. The pointer is borrowed for the duration of the control flow
+///     instruction and must not be freed by the caller. The returned values are invalid if
+///     `cf_inst` isn't a ForLoop instruction with a list.
 ///
 /// # Example
 /// ```c
@@ -1022,13 +1020,13 @@ pub unsafe extern "C" fn qk_control_flow_loop_elements(
 /// to determine the collection type before calling this function.
 ///
 /// @param cf_inst A pointer to a control flow instruction that must be a ForLoop with a Range
-///                collection.
+///     collection.
 ///
-/// @param out_start Pointer to the range start destination.
-/// @param out_stop Pointer to the range stop destination.
-/// @param out_step Pointer to the range step destination.
+/// @param out_start An output parameter that will be set to the range start value.
+/// @param out_stop An output parameter that will be set to the range stop value.
+/// @param out_step An output parameter that will be set to the range step value.
 ///
-/// The start, stop, and step are `-1` if `cf_inst` is not a for loop with a range.
+/// The output values are invalid if `cf_inst` isn't a ForLoop instruction with a range.
 ///
 /// # Example
 /// ```c
@@ -1081,8 +1079,8 @@ pub unsafe extern "C" fn qk_control_flow_loop_range(
 ///
 /// @param cf_inst A pointer to a control flow instruction that must be a ForLoop.
 ///
-/// @return The loop parameter kind if `cf_inst` is a for loop, otherwise
-///         `QkLookParamKind_Unknown`.
+/// @return A `QkLoopParamKind` enum value indicating the loop parameter kind. The returned value
+///     is invalid if `cf_inst` isn't a ForLoop instruction.
 ///
 /// # Example
 /// ```c
@@ -1126,9 +1124,9 @@ pub unsafe extern "C" fn qk_control_flow_loop_param_kind(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent a ForLoop
 ///     with a Parameter loop parameter.
 ///
-/// @return The symbol information if `cf_inst` is a for loop with a parameter, otherwise the
-///         returned values are invalid and `ty` is `CSymbolType_Unknown`. The caller must free the
-///         returned string in the ``name`` field using `qk_str_free`.
+/// @return A `QkSymbolInfo` struct containing the symbol information. The caller must free the
+///     returned string in the ``name`` field using `qk_str_free`. The returned value is invalid if
+///     `cf_inst` isn't a ForLoop instruction with a parameter.
 ///
 /// # Example
 /// ```c
@@ -1158,7 +1156,7 @@ pub unsafe extern "C" fn qk_control_flow_loop_symbol_info(
     } = &cf_inst.control_flow_inst().control_flow
     else {
         return CSymbolInfo {
-            ty: CSymbolType::Unknown,
+            ty: CSymbolType::Standalone,
             name: ptr::null_mut(),
             index: 0,
         };
@@ -1190,8 +1188,9 @@ pub unsafe extern "C" fn qk_control_flow_loop_symbol_info(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent a ForLoop
 ///     with a Variable loop parameter.
 ///
-/// @return The loop variable if `cf_inst` is a foor loop with a variable, otherwise `NULL`. The
-///         returned pointer is valid for the lifetime of the control flow instruction.
+/// @return A pointer to the ``QkVar`` representing the loop variable. The pointer is valid
+///     for the lifetime of the control flow instruction. Returns `NULL` if `cf_inst` isn't a
+///     ForLoop instruction with a variable.
 ///
 /// # Example
 /// ```c
@@ -1215,7 +1214,7 @@ pub unsafe extern "C" fn qk_control_flow_loop_variable(
         ..
     } = &cf_inst.control_flow_inst().control_flow
     {
-        ptr::from_ref(var)
+        var
     } else {
         ptr::null()
     }
@@ -1231,7 +1230,8 @@ pub unsafe extern "C" fn qk_control_flow_loop_variable(
 /// @param cf_inst A pointer to the control flow instruction.
 ///     The control flow instruction must be of a Switch kind.
 ///
-/// @return The condition type if `cf_inst` is a switch, otherwise `QkConditionType_Unknown`.
+/// @return The condition type of the Switch target as `QkConditionType`. The returned value is
+///     invalid if `cf_inst` isn't a Switch instruction.
 ///
 /// # Example
 /// ```c
@@ -1263,7 +1263,7 @@ pub unsafe extern "C" fn qk_control_flow_switch_target_type(
     if let ControlFlow::Switch { target, .. } = &cf_inst.control_flow_inst().control_flow {
         CConditionType::from(target)
     } else {
-        CConditionType::Unknown
+        CConditionType::ClBit
     }
 }
 
@@ -1276,8 +1276,8 @@ pub unsafe extern "C" fn qk_control_flow_switch_target_type(
 /// @param cf_inst A pointer to the control flow instruction.
 ///     The control flow instruction must be of a Switch kind with a classical bit target.
 ///
-/// @return The index of the classical bit in the circuit if `cf_inst` is a switch with a
-///         classical bit target, otherwise `UINT32_MAX`.
+/// @return The index of the classical bit in the circuit. The returned value is invalid if
+///     `cf_inst` isn't a Switch instruction with a bit target in the circuit.
 ///
 /// # Example
 /// ```c
@@ -1297,15 +1297,15 @@ pub unsafe extern "C" fn qk_control_flow_switch_target_bit(
     let cf_inst = unsafe { &*cf_inst };
 
     let ControlFlow::Switch { target, .. } = &cf_inst.control_flow_inst().control_flow else {
-        return u32::MAX;
+        return 0;
     };
 
     let SwitchTarget::Bit(clbit) = target else {
-        return u32::MAX;
+        return 0;
     };
 
     let Some(clbit) = cf_inst.circuit().clbit_index(clbit) else {
-        return u32::MAX;
+        return 0;
     };
 
     clbit
@@ -1320,9 +1320,10 @@ pub unsafe extern "C" fn qk_control_flow_switch_target_bit(
 /// @param cf_inst A pointer to the control flow instruction.
 ///     The control flow instruction must be of a Switch kind with a register target.
 ///
-/// @return The classical register if `cf_inst` is a switch with a register, otherwise `NULL`.
-///         The register is valid as long as the control flow instruction exists. The register is
-///         owned by the control flow instruction and must not be freed by the caller.
+/// @return A pointer to the ``QkClassicalRegister`` that the Switch operates on.
+///     The register is valid as long as the control flow instruction exists.
+///     The register is owned by the control flow instruction and must not be freed by the caller.
+///     Returns `NULL` if `cf_inst` isn't a Switch instruction with a register target.
 ///
 /// # Example
 /// ```c
@@ -1361,9 +1362,10 @@ pub unsafe extern "C" fn qk_control_flow_switch_target_register(
 /// @param cf_inst A pointer to the control flow instruction.
 ///     The control flow instruction must be of a Switch kind with an expression target.
 ///
-/// @return The switch target expression if `cf_inst` is a switch with an expression, otherwise
-///         `NULL`. The expression is valid as long as the control flow instruction exists. The
-///         expression is owned by the control flow instruction and must not be freed by the caller.
+/// @return A pointer to the ``QkExpr`` representing the Switch target expression.
+///     The expression is valid as long as the control flow instruction exists.
+///     The expression is owned by the control flow instruction and must not be freed by the caller.
+///     Returns `NULL` if `cf_inst` isn't a Switch instruction with an expression target.
 ///
 /// # Example
 /// ```c
@@ -1402,7 +1404,8 @@ pub unsafe extern "C" fn qk_control_flow_switch_target_expr(
 /// @param cf_inst A pointer to the control flow instruction.
 ///     The control flow instruction must be of a Switch kind.
 ///
-/// @return The number of cases if `cf_inst` is a switch statement, otherwise `SIZE_MAX`.
+/// @return The number of cases in the Switch statement. The returned value is invalid if `cf_inst`
+///     isn't a Switch instruction.
 ///
 /// # Example
 /// ```c
@@ -1426,7 +1429,7 @@ pub unsafe extern "C" fn qk_control_flow_switch_num_cases(
     if let ControlFlow::Switch { label_spec, .. } = &cf_inst.control_flow_inst().control_flow {
         label_spec.len()
     } else {
-        usize::MAX
+        0
     }
 }
 
@@ -1443,8 +1446,8 @@ pub unsafe extern "C" fn qk_control_flow_switch_num_cases(
 /// @param case_idx The index of the case to check. Must be less than the value
 ///     returned by `qk_control_flow_switch_num_cases`.
 ///
-/// @return ``true`` if the case at ``case_idx`` is the default case, otherwise `false`. If
-///         `cf_inst` is not a switch, the returned value `false` is invalid.
+/// @return ``true`` if the case at ``case_idx`` is the default case, ``false`` otherwise. The
+///     returned value is invalid if `cf_inst` isn't a Switch instruction.
 ///
 /// # Example
 /// ```c
@@ -1486,11 +1489,9 @@ pub unsafe extern "C" fn qk_control_flow_switch_is_case_default(
 /// @param case_idx The index of the case whose label bit width to retrieve. Must be less than
 ///     the value returned by `qk_control_flow_switch_num_cases`.
 ///
-/// @return The maximum bit width if unsigned integer labels are present and `cf_inst` is a switch,
-///         otherwise `UINT64_MAX`.
-///
-/// The maximum bit width of the labels in the case, or 0 if the case has no
-///     unsigned integer labels (e.g., only a DEFAULT specifier).
+/// @return The maximum bit width of the labels in the case, or 0 if the case has no unsigned
+///     integer labels (e.g., only a DEFAULT specifier). The returned value is invalid if `cf_inst`
+///     isn't a Switch instruction.
 ///
 /// # Example
 /// ```c
@@ -1511,7 +1512,7 @@ pub unsafe extern "C" fn qk_control_flow_switch_case_labels_bit_width(
     let cf_inst = unsafe { &*cf_inst };
 
     let ControlFlow::Switch { label_spec, .. } = &cf_inst.control_flow_inst().control_flow else {
-        return u64::MAX;
+        return 0;
     };
 
     label_spec[case_idx]
@@ -1543,11 +1544,11 @@ pub unsafe extern "C" fn qk_control_flow_switch_case_labels_bit_width(
 /// @param case_idx The index of the case whose labels to retrieve. Must be less than
 ///     the value returned by `qk_control_flow_switch_num_cases`.
 ///
-/// @return The label information if `cf_inst` is a switch, otherwise the returned values are
-///         invalid and `labels` is `NULL`. `num_labels` is `UINT64_MAX` if the underlying value
-///         exceeds it. The struct will contain a pointer to an array of labels and the number of
-///         labels. If `num_labels > 0`, you should call `qk_control_flow_switch_case_labels_clear`
-///         to free the memory allocated by this function.
+/// @return A `QkSwitchCaseLabels` struct with the label information for the given case.
+///     The struct will contain a pointer to an array of labels and the number of labels.
+///     If ``num_labels > 0``, you should call `qk_control_flow_switch_case_labels_clear`
+///     to free the memory allocated by this function. The returned values are invalid if `cf_inst`
+///     isn't a Switch instruction.
 ///
 /// # Example
 /// ```c

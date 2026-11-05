@@ -24,7 +24,6 @@ use qiskit_circuit::{
     duration::Duration,
 };
 use std::ffi::c_char;
-use thiserror::Error;
 use uuid::Uuid;
 
 /// The different types of expression nodes that can appear in a classical expression tree.
@@ -326,8 +325,6 @@ pub struct CIndexExprInfo {
 #[repr(u8)]
 #[derive(Copy, Clone)]
 pub enum CDurationType {
-    /// Duration type is unknown.
-    Unknown = 6,
     /// System time units
     Dt = 0,
     /// Picoseconds
@@ -415,15 +412,9 @@ impl From<&Duration> for CDurationInfo {
     }
 }
 
-#[derive(Debug, Error)]
-#[error("duration unit is unknown")]
-pub struct TryFromCDurationError;
-
-impl TryFrom<CDurationInfo> for Duration {
-    type Error = TryFromCDurationError;
-
-    fn try_from(value: CDurationInfo) -> Result<Self, Self::Error> {
-        let duration = match value.ty {
+impl From<CDurationInfo> for Duration {
+    fn from(value: CDurationInfo) -> Self {
+        match value.ty {
             // SAFETY: Per documentation, ty must correctly discriminate the union.
             CDurationType::Dt => Duration::dt(unsafe { value.value.dt }),
             CDurationType::Ps => Duration::ps(unsafe { value.value.time }),
@@ -431,10 +422,7 @@ impl TryFrom<CDurationInfo> for Duration {
             CDurationType::Us => Duration::us(unsafe { value.value.time }),
             CDurationType::Ms => Duration::ms(unsafe { value.value.time }),
             CDurationType::S => Duration::s(unsafe { value.value.time }),
-            CDurationType::Unknown => return Err(TryFromCDurationError),
-        };
-
-        Ok(duration)
+        }
     }
 }
 
@@ -1250,10 +1238,7 @@ pub unsafe extern "C" fn inner_test_value(
             raw: BigUint::from(if b { 1u32 } else { 0u32 }),
             ty: Type::Bool,
         },
-        CExprType::Duration => {
-            let duration = duration.try_into().expect("duration should not be unknown");
-            Value::Duration(duration)
-        }
+        CExprType::Duration => Value::Duration(duration.into()),
         CExprType::Float => Value::Float {
             raw: f_val,
             ty: Type::Float,
