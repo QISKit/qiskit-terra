@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    :class:`.CouplingMap` no longer stores parallel edges.  A coupling given more than once,
+    whether to the constructor or to :meth:`~.CouplingMap.add_edge`, now collapses onto the
+    existing edge instead of being stored twice.
+    Fixed `#16987 <https://github.com/Qiskit/qiskit/issues/16987>`__.
+  - |
+    Fixed a bug :meth:`.CouplingMap.is_symmetric` could falsely report ``True`` when an edge was duplicated.

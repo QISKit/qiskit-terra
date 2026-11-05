@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed non-deterministic :class:`.VF2Layout` output at ``optimization_level=2`` on a
+    :class:`.Target` a symmetric coupling map. The pass previously
+    could tie-break differently between runs due to non-deterministic float summation.
+    Fixed `#16490 <https://github.com/Qiskit/qiskit/issues/16490>`__.

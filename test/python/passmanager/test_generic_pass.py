@@ -13,7 +13,7 @@
 
 """Pass manager test cases."""
 
-from test.python.passmanager import PassManagerTestCase
+from test.python.passmanager import BasePassManagerTestCase
 
 from logging import getLogger
 
@@ -22,7 +22,7 @@ from qiskit.passmanager import PassManagerState, WorkflowStatus, PropertySet
 from qiskit.passmanager.compilation_status import RunState
 
 
-class TestGenericPass(PassManagerTestCase):
+class TestGenericPass(BasePassManagerTestCase):
     """Tests for the GenericPass subclass."""
 
     def setUp(self):

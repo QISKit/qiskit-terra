@@ -818,7 +818,7 @@ class PauliList(BasePauli, LinearMixin, GroupMixin):
         return PauliList(super()._multiply(other))
 
     def conjugate(self):
-        """Return the conjugate of each Pauli in the list."""
+        """Return the complex conjugate of each Pauli in the list with respect to the Z basis."""
         return PauliList(super().conjugate())
 
     def transpose(self):

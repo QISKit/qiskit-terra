@@ -17,7 +17,7 @@ from collections.abc import Iterable
 
 from .compilation_status import WorkflowStatus, PropertySet
 from .base_tasks import Task, IR, IR_OUT, PassManagerState, Callback
-from .passmanager import BasePassManager
+from .base_passmanager import BasePassManager
 from .flow_controllers import FlowControllerLinear
 
 

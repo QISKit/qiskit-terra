@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed :meth:`.Stinespring.is_cptp` so caller-supplied ``atol`` and ``rtol``
+    values are honored by the final identity check. See
+    `#17096 <https://github.com/Qiskit/qiskit/issues/17096>`__.

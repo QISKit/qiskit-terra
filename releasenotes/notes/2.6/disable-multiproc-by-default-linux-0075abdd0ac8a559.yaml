@@ -1,0 +1,26 @@
+---
+upgrade_misc:
+  - The use of :mod:`multiprocessing` with :func:`.parallel_map` to run Python
+    code in parallel on Linux has been disabled by default. This also changes
+    the default multiprocessing behavior for functions that internally use
+    :func:`.parallel_map` such as :func:`.transpile` and :meth:`.PassManager.run`.
+    In previous releases on Linux systems it would default to running in parallel
+    however this has proven to be unreliable especially when mixing threading
+    with multiprocessing. This could result in deadlocks when downstream provider
+    packages, such as ``qiskit-ibm-runtime``, would use async Python. In general
+    the importance of leveraging multiprocessing for performance has significantly
+    diminished since Qiskit 1.0 as more of the library has enabled parallelism
+    via Rust and multithreading which was already mutually exclusive with
+    Python multiprocessing.
+
+    If you would like to continue to use multiprocessing with :func:`.parallel_map`
+    or other Qiskit functions using it internally you can explicitly opt-in to
+    enable multiprocessing. To explicitly enable multiprocessing on Linux (or any
+    platform) you can either set an explicit start method to ``"fork"`` or
+    ``"forkserver"`` using :func:`multiprocessing.set_start_method` (explicitly
+    setting ``"spawn"`` still disables multiprocessing by default because of the
+    extra overhead and complexities associated with it and you'll need to enable
+    multiprocessing with spawn using the other two options), set the environment
+    variable ``QISKIT_PARALLEL=TRUE``, or set ``parallel`` to ``True`` in
+    your `user configuration file <https://quantum.cloud.ibm.com/docs/guides/configure-qiskit-local#user-configuration-file>`__.
+

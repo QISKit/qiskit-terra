@@ -26,6 +26,15 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
+
+      - name: Install Rust
+        run:
+          rustup toolchain install
+            --profile minimal
+            --component rustfmt
+            --component clippy
+            --no-self-update
+
       - name: Install dependencies
         run: python -m pip install --upgrade tox
       - name: Run lint
@@ -35,4 +44,5 @@ jobs:
           # package. The exact command isn't important, it should just be cheap and update the lock.
           cargo metadata --format-version=1 --locked >/dev/null
           make cformat
+          make ctidy
           tox -e lint

@@ -63,6 +63,13 @@ def sympify(expression):
         This is for interoperability only.  Qiskit will not accept or work with raw Sympy or
         Symengine expressions in its parameters, because they do not contain the tracking
         information used in circuit-parameter binding and assignment.
+
+    .. warning::
+
+        This method will pass strings from the expression to sympy which is
+        inherently unsafe as sympy heavily relies on Python's :func:`.eval`
+        function for the processing of strings. This method is not safe to
+        use with untrusted input.
     """
     import sympy
 

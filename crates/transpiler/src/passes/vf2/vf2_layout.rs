@@ -25,7 +25,7 @@ use rustworkx_core::petgraph::prelude::*;
 use pyo3::prelude::*;
 use pyo3::{IntoPyObjectExt, create_exception, wrap_pyfunction};
 
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::interner::{Interned, Interner};
 use qiskit_circuit::operations::{ControlFlowView, Operation};
 use qiskit_circuit::packed_instruction::PackedInstruction;
@@ -36,7 +36,7 @@ use crate::target::{Qargs, QargsRef, Target, TargetOperation};
 
 create_exception!(qiskit, MultiQEncountered, pyo3::exceptions::PyException);
 
-#[pyclass(name = "VF2PassConfiguration", skip_from_py_object)]
+#[pyclass(name = "VF2PassConfiguration")]
 #[derive(Clone, Debug)]
 pub struct Vf2PassConfiguration {
     /// The maximum numbers of times VF2 is allowed to extend the mapping (before, after) the first
@@ -230,10 +230,17 @@ fn build_average_error_map(target: &Target) -> Option<ErrorMap> {
         };
         let mut qarg_error: f64 = 0.;
         let mut count: usize = 0;
-        for op in target
+        // `operation_names_for_qargs` returns a `HashSet`, whose iteration order is randomised
+        // per call.  Summing the per-operation errors in that order makes `qarg_error` depend on a
+        // non-deterministic floating-point summation order, which can produce tie-break differences
+        // between otherwise-symmetric layouts.  Sort the names so the sum is reproducible.
+        let mut op_names: Vec<&str> = target
             .operation_names_for_qargs(QargsRef::Concrete(qargs))
             .expect("these qargs came from `target.qargs()`")
-        {
+            .into_iter()
+            .collect();
+        op_names.sort_unstable();
+        for op in op_names {
             count += 1;
             // If the `target` has no error recorded for an operation, we treat it as errorless.
             qarg_error += target
@@ -739,8 +746,24 @@ where
     Some(score)
 }
 
-#[pyfunction]
+#[pyfunction(name = "vf2_layout_pass_average")]
 #[pyo3(signature = (dag, target, config, *, strict_direction=false, avg_error_map=None))]
+pub fn py_vf2_layout_pass_average(
+    dag: &PyDAGCircuit,
+    target: &Target,
+    config: &Vf2PassConfiguration,
+    strict_direction: bool,
+    avg_error_map: Option<&ErrorMap>,
+) -> PyResult<Vf2PassReturn> {
+    vf2_layout_pass_average(
+        dag.try_read()?,
+        target,
+        config,
+        strict_direction,
+        avg_error_map,
+    )
+}
+
 pub fn vf2_layout_pass_average(
     dag: &DAGCircuit,
     target: &Target,
@@ -807,8 +830,16 @@ pub fn vf2_layout_pass_average(
     }
 }
 
-#[pyfunction]
+#[pyfunction(name = "vf2_layout_pass_exact")]
 #[pyo3(signature = (dag, target, config))]
+pub fn py_vf2_layout_pass_exact(
+    dag: &PyDAGCircuit,
+    target: &Target,
+    config: &Vf2PassConfiguration,
+) -> PyResult<Vf2PassReturn> {
+    vf2_layout_pass_exact(dag.try_read()?, target, config)
+}
+
 pub fn vf2_layout_pass_exact(
     dag: &DAGCircuit,
     target: &Target,
@@ -902,8 +933,8 @@ pub fn vf2_layout_pass_exact(
 }
 
 pub fn vf2_layout_mod(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(vf2_layout_pass_average))?;
-    m.add_wrapped(wrap_pyfunction!(vf2_layout_pass_exact))?;
+    m.add_wrapped(wrap_pyfunction!(py_vf2_layout_pass_average))?;
+    m.add_wrapped(wrap_pyfunction!(py_vf2_layout_pass_exact))?;
     m.add("MultiQEncountered", m.py().get_type::<MultiQEncountered>())?;
     m.add(
         "VF2PassConfiguration",
@@ -911,4 +942,62 @@ pub fn vf2_layout_mod(m: &Bound<PyModule>) -> PyResult<()> {
     )?;
     m.add("VF2PassReturn", m.py().get_type::<VF2PassReturn>())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use qiskit_circuit::PhysicalQubit;
+    use qiskit_circuit::operations::StandardGate;
+    use qiskit_util::IndexMap;
+    use smallvec::smallvec;
+
+    use crate::target::{InstructionProperties, Qargs, Target};
+
+    use super::build_average_error_map;
+
+    /// The average error of a qarg is a floating-point sum over the operations defined on it.
+    /// Floating-point addition is not associative, and a `Target` makes no ordering guarantee about
+    /// the operations it reports for a qarg, so the average is only reproducible if the summation
+    /// order is canonicalised.
+    ///
+    /// Regression test for https://github.com/Qiskit/qiskit/issues/16490
+    #[test]
+    fn average_error_is_summed_in_a_canonical_order() {
+        // The four small errors together are more than half an ulp of the large one, but each is
+        // less than half an ulp on its own, so the total depends on the order of the summation.
+        let mut target = Target::default();
+        for (gate, error) in [
+            (StandardGate::H, 5e-17),
+            (StandardGate::S, 5e-17),
+            (StandardGate::SX, 5e-17),
+            (StandardGate::T, 5e-17),
+            (StandardGate::X, 0.5),
+        ] {
+            target
+                .add_instruction(
+                    gate.into(),
+                    None,
+                    None,
+                    Some(IndexMap::from_iter([(
+                        Qargs::Concrete(smallvec![PhysicalQubit(0)]),
+                        Some(InstructionProperties::new(None, Some(error))),
+                    )])),
+                )
+                .expect("gate is valid on this qubit");
+        }
+
+        // Sorted name order is `h`, `s`, `sx`, `t`, `x`, so the large error is added last.
+        let expected = (5e-17 + 5e-17 + 5e-17 + 5e-17 + 0.5) / 5.0;
+        assert_ne!(expected, (0.5 + 5e-17 + 5e-17 + 5e-17 + 5e-17) / 5.0);
+
+        // Check with multiple hash seeds.
+        for _ in 0..100 {
+            let error_map = build_average_error_map(&target).expect("the target has 1q errors");
+            assert_eq!(error_map.error_map.len(), 1);
+            assert_eq!(
+                error_map.error_map[&[PhysicalQubit(0), PhysicalQubit(0)]],
+                expected
+            );
+        }
+    }
 }

@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed :meth:`.QuantumCircuit.to_instruction` failing to apply ``parameter_map`` to any
+    :attr:`~.QuantumCircuit.global_phase`.  See `#16181
+    <https://github.com/Qiskit/qiskit/issues/16181>`__.

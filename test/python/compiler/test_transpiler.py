@@ -1273,8 +1273,9 @@ class TestTranspile(QiskitTestCase):
         self.assertTrue(Operator(out).equiv(qc))
         self.assertTrue(set(out.count_ops()).issubset(basis_gates))
 
-    @data(0, 1, 2, 3)
-    def test_circuit_with_delay(self, optimization_level):
+    @idata(itertools.product([0, 1, 2, 3], [1, 16]))
+    @unpack
+    def test_circuit_with_delay(self, optimization_level, pulse_alignment):
         """Verify a circuit with delay can transpile to a scheduled circuit."""
 
         qc = QuantumCircuit(2)
@@ -1282,7 +1283,7 @@ class TestTranspile(QiskitTestCase):
         qc.delay(500, 1)
         qc.cx(0, 1)
 
-        target = Target(num_qubits=2, dt=1e-9)
+        target = Target(num_qubits=2, dt=1e-9, pulse_alignment=pulse_alignment)
         target.add_instruction(
             HGate(), {(i,): InstructionProperties(duration=200 * 1e-9) for i in range(2)}
         )

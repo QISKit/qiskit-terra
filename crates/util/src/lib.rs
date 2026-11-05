@@ -12,6 +12,7 @@
 
 use std::env;
 
+pub mod dyn_types;
 #[cfg(feature = "py")]
 pub mod py;
 

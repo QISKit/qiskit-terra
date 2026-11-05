@@ -1,0 +1,6 @@
+features_quantum_info:
+  - |
+    The :class:`.SparseObservable` has a new method :meth:`~.SparseObservable.to_matrix`. This
+    method returns the dense matrix representation of the observable. Its reduced time complexity
+    is :math:`O(4^n)` where :math:`n` is the number of qubits. See the Python API docs for
+    details.

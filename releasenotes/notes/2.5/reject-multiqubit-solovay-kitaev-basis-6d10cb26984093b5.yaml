@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    :class:`.SolovayKitaevDecomposition` now raises a clear ``ValueError`` when
+    its ``basis_gates`` contain a multi-qubit gate. Previously, such gates could
+    cause an internal Rust panic during synthesis. 
+    Fixes `#16691 <https://github.com/Qiskit/qiskit/issues/16691>`__.

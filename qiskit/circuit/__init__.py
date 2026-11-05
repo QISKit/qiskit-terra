@@ -340,6 +340,17 @@ real-time variables, and other tracking information about the data it acts on an
 parametrized.  It then contains a sequence of :class:`CircuitInstruction`\ s, which contain
 the particular operation (gate, measurement, etc) and its operands (the qubits and classical bits).
 
+Interoperation with C
+---------------------
+
+:class:`QuantumCircuit` in Python space is not precisely the same type that native Rust code or
+C-API code uses. The C-API type :c:type:`QkCircuit` is backed by the internal
+:attr:`.QuantumCircuit._data` object, which has type :class:`CircuitData`.  Very little about is
+public from Python space.
+
+.. autoclass:: CircuitData(<no public constructor>)
+    :class-doc-from: class
+    :no-members:
 
 Bits and registers
 ------------------
@@ -1387,7 +1398,7 @@ from qiskit._accelerate.circuit import (
 )
 
 from .exceptions import CircuitError
-from .quantumcircuit import QuantumCircuit
+from .quantumcircuit import QuantumCircuit, CircuitData
 from .gate import Gate
 
 
@@ -1424,6 +1435,7 @@ __all__ = [
     "Annotation",
     "Barrier",
     "Bit",
+    "CircuitData",
     "CircuitError",
     "CircuitInstruction",
     "ClassicalRegister",

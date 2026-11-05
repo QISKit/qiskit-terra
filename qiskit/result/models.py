@@ -13,12 +13,12 @@
 """Schema and helper models for schema-conformant Results."""
 
 import copy
-from enum import Enum, IntEnum
+from enum import IntEnum, StrEnum
 
 from qiskit.exceptions import QiskitError
 
 
-class MeasReturnType(str, Enum):
+class MeasReturnType(StrEnum):
     """meas_return allowed values defined by legacy PulseQobjConfig object but still used by Result."""
 
     AVERAGE = "avg"

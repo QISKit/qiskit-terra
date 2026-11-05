@@ -1,0 +1,6 @@
+---
+upgrade_circuits:
+  - The metadata attributes of :attr:`.DAGCircuit.metadata` and :attr:`.DAGCircuit.name` are
+    no longer tracked for any nested instance of :class:`.ControlFlowOp` when they contain circuit
+    blocks of type :class:`.DAGCircuit`. This behavior was never supported/documented and
+    therefore was never meant to be used in this context.

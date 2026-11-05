@@ -1,0 +1,11 @@
+---
+upgrade_qpy:
+  - |
+    QPY version 18 now stores each :class:`.ParameterVector` once per circuit payload, in a new
+    ``PARAMETER_VECTOR_TABLE``, and has each of its elements refer to it by index.  Up to version 17
+    every element repeated its vector's name and size, along with a UUID that is derivable from the
+    vector's own, so a vector of :math:`n` elements stored its identity :math:`n` times.  An element
+    now occupies 10 bytes instead of 34 plus the length of the vector's name: a circuit using a
+    100-element vector is around 29% smaller.  A circuit that uses no parameter vectors grows by the
+    two bytes of the table's count.  Payloads of version 17 and earlier are unaffected, and are read
+    exactly as before.  See :mod:`qiskit.qpy` for the format description.

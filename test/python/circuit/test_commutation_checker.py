@@ -79,6 +79,7 @@ from qiskit.circuit.library import (
     get_standard_gate_name_mapping,
 )
 from qiskit.dagcircuit import DAGOpNode
+from qiskit.exceptions import QiskitError
 
 from qiskit.quantum_info import SparseObservable, SparsePauliOp, Pauli
 from qiskit._accelerate.standard_generators import _standard_gate_exponent
@@ -645,6 +646,29 @@ class TestCommutationChecker(QiskitTestCase):
         x = PauliEvolutionGate(Pauli("X"))
         with self.subTest(left=x, right=swap):
             self.assertFalse(scc.commute(x, [1], [], swap, [1, 0], []))
+
+    @data(
+        (
+            PauliEvolutionGate(SparsePauliOp(["XXI", "IXI", "IIZ"]), time=42.2),
+            [0, 2, 2],
+            PauliProductRotationGate(Pauli("XX"), 0.1),
+            [1, 2],
+            "qargs1",
+        ),
+        (
+            PauliProductRotationGate(Pauli("XX"), 0.1),
+            [1, 2],
+            PauliEvolutionGate(SparsePauliOp(["XXI", "IXI", "IIZ"]), time=42.2),
+            [0, 2, 2],
+            "qargs2",
+        ),
+    )
+    @unpack
+    def test_reject_duplicate_qubits(self, op1, qargs1, op2, qargs2, duplicate_arg):
+        """Test that duplicate qubit arguments are rejected without panicking."""
+        checker = CommutationChecker()
+        with self.assertRaisesRegex(QiskitError, rf"{duplicate_arg} contains duplicate qubits"):
+            checker.commute(op1, qargs1, [], op2, qargs2, [])
 
     def test_pauli_evolution_parameterized(self):
         """Test PauliEvolutionGate commutations for parameterized times."""

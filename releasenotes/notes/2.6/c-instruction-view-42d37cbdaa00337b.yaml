@@ -1,0 +1,14 @@
+---
+features_c:
+  - |
+    Two new functions, :c:func:`qk_circuit_view_instruction` and :c:func:`qk_dag_view_instruction`,
+    were added as mirrors to :c:func:`qk_circuit_get_instruction` and
+    :c:func:`qk_dag_get_instruction`, respectively, writing out a new
+    :c:struct:`QkCircuitInstructionView` object.
+
+    These ``view`` functions produce direct views into the internal data without any allocations,
+    which is more performant, but requires some special handling to use the non-idiomatic data
+    formats from C; see the documentation of :c:struct:`QkCircuitInstructionView`.
+  - |
+    Added :c:func:`qk_param_stride`, which returns the runtime size in bytes needed to offset
+    ``QkParam *`` pointers that point to contiguous arrays.

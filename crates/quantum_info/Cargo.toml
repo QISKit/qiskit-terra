@@ -16,7 +16,6 @@ num-complex.workspace = true
 num-traits.workspace = true
 nalgebra.workspace = true
 itertools.workspace = true
-rustworkx-core.workspace = true
 thiserror.workspace = true
 rayon.workspace = true
 bytemuck.workspace = true

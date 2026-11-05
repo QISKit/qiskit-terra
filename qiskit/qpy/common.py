@@ -23,7 +23,7 @@ from qiskit.utils.optionals import HAS_SYMENGINE
 
 from qiskit.qpy import formats, exceptions
 
-QPY_VERSION = 17
+QPY_VERSION = 18
 QPY_COMPATIBILITY_VERSION = 13
 QPY_RUST_READ_MIN_VERSION = 13
 QPY_RUST_WRITE_MIN_VERSION = 17

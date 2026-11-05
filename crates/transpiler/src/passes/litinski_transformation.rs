@@ -12,7 +12,7 @@
 
 use pyo3::prelude::*;
 
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::imports::PAULI_EVOLUTION_GATE;
 use qiskit_circuit::instruction::Parameters;
 use qiskit_circuit::operations::{
@@ -79,8 +79,28 @@ static HANDLED_INSTRUCTION_NAMES: [&str; 10] = [
     "pauli_product_measurement",
 ];
 
-#[pyfunction]
+#[pyfunction(name = "run_litinski_transformation")]
 #[pyo3(signature = (dag, fix_clifford=true, insert_barrier=false, use_ppr=false, approximation_degree=1.0))]
+pub fn py_run_litinski_transformation(
+    dag: &PyDAGCircuit,
+    fix_clifford: bool,
+    insert_barrier: bool,
+    use_ppr: bool,
+    approximation_degree: f64,
+) -> PyResult<Option<PyDAGCircuit>> {
+    Ok(run_litinski_transformation(
+        dag.try_read()?,
+        fix_clifford,
+        insert_barrier,
+        use_ppr,
+        approximation_degree,
+    )?
+    .map(|out_dag| {
+        // Preserve metadata
+        PyDAGCircuit::from_dagcircuit_with_cloned_metadata(out_dag, dag)
+    }))
+}
+
 pub fn run_litinski_transformation(
     dag: &DAGCircuit,
     fix_clifford: bool,
@@ -439,7 +459,11 @@ pub fn run_litinski_transformation(
                         .collect();
 
                     let (sign, z, x, indices) = clifford.evolve_pauli(in_z, in_x, &indices_in);
-                    let ppm = PauliProductMeasurement { z, x, neg: sign };
+                    let ppm = PauliProductMeasurement {
+                        z,
+                        x,
+                        neg: pp_meas.neg ^ sign,
+                    };
                     qargs.clear();
                     qargs.extend(bytemuck::cast_slice(&indices));
 
@@ -541,7 +565,7 @@ fn is_ppr_angle_close_to_multiple_of_pi2(
 
     // direct calculation of dim and tr_over_dim
     let num_qubits = z.iter().zip(x.iter()).filter(|(z, x)| **z || **x).count();
-    let dim = 2u32.pow(num_qubits as u32);
+    let dim = (num_qubits as f64).exp2();
     let tr_over_dim = if num_qubits == 0 {
         // This is an identity Pauli rotation.
         (Complex64::new(0.0, -theta / 2.)).exp()
@@ -549,7 +573,7 @@ fn is_ppr_angle_close_to_multiple_of_pi2(
         Complex64::new((theta / 2.).cos(), 0.)
     };
 
-    if average_gate_fidelity_below_tol(tr_over_dim, dim.into(), tol).is_some() {
+    if average_gate_fidelity_below_tol(tr_over_dim, dim, tol).is_some() {
         Some((closest_integer as i64).rem_euclid(4) as usize)
     } else {
         None
@@ -557,6 +581,6 @@ fn is_ppr_angle_close_to_multiple_of_pi2(
 }
 
 pub fn litinski_transformation_mod(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(run_litinski_transformation))?;
+    m.add_wrapped(wrap_pyfunction!(py_run_litinski_transformation))?;
     Ok(())
 }

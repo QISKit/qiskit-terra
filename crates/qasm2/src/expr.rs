@@ -17,21 +17,20 @@
 use core::f64;
 
 use hashbrown::HashMap;
-use pyo3::prelude::*;
-use pyo3::types::PyTuple;
 use std::ops::ControlFlow;
 
 use crate::error::{
-    Position, QASM2ParseError, message_bad_eof, message_generic, message_incorrect_requirement,
+    ParseError, Position, message_bad_eof, message_generic, message_incorrect_requirement,
 };
 use crate::lex::{Token, TokenContext, TokenStream, TokenType};
 use crate::parse::{GateSymbol, GlobalSymbol, ParamId};
-use crate::{ClassicalCallableExt, bytecode};
+use crate::{ClassicalCallableExt, ClassicalEvaluator};
 
 /// Enum representation of the builtin OpenQASM 2 functions.  The built-in Qiskit parser adds the
 /// inverse trigonometric functions, but these are an extension to the version as given in the
 /// arXiv paper describing OpenQASM 2.  This enum is essentially just a subset of the [TokenType]
 /// enum, to allow for better pattern-match checking in the Rust compiler.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Function {
     Cos,
     Exp,
@@ -55,23 +54,11 @@ impl From<TokenType> for Function {
     }
 }
 
-impl From<Function> for bytecode::UnaryOpCode {
-    fn from(value: Function) -> Self {
-        match value {
-            Function::Cos => Self::Cos,
-            Function::Exp => Self::Exp,
-            Function::Ln => Self::Ln,
-            Function::Sin => Self::Sin,
-            Function::Sqrt => Self::Sqrt,
-            Function::Tan => Self::Tan,
-        }
-    }
-}
-
-/// An operator symbol used in the expression parsing.  This is essentially just a subset of the
-/// [TokenType] enum (albeit with resolved names) to allow for better pattern-match semantics in
-/// the Rust compiler.
-#[derive(Clone, Copy)]
+/// An operator symbol.  This is essentially just a subset of the [TokenType] enum (albeit with
+/// resolved names) to allow for better pattern-match semantics in the Rust compiler.  It is shared
+/// between the parser, which uses it to resolve precedence and to fold constants, and [evaluate],
+/// which uses it to record the pending binary operation on its work stack.
+#[derive(Clone, Copy, Debug)]
 enum Op {
     Plus,
     Minus,
@@ -134,6 +121,7 @@ enum Atom {
 /// floating-point numbers, so these will simply be evaluated into a `Constant` variant rather than
 /// represented in full tree form.  For references to the gate parameters, we just store the index
 /// of which parameter it is.
+#[derive(Clone, Debug)]
 pub enum Expr {
     Constant(f64),
     Parameter(ParamId),
@@ -147,74 +135,145 @@ pub enum Expr {
     CustomFunction(ClassicalCallableExt, Vec<Expr>),
 }
 
-impl<'py> IntoPyObject<'py> for Expr {
-    type Target = PyAny; // the Python type
-    type Output = Bound<'py, Self::Target>; // in most cases this will be `Bound`
-    type Error = PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        Ok(match self {
-            Expr::Constant(value) => bytecode::ExprConstant { value }
-                .into_pyobject(py)?
-                .into_any(),
-            Expr::Parameter(index) => bytecode::ExprArgument { index }
-                .into_pyobject(py)?
-                .into_any(),
-            Expr::Negate(expr) => bytecode::ExprUnary {
-                opcode: bytecode::UnaryOpCode::Negate,
-                argument: expr.into_pyobject(py)?.unbind(),
-            }
-            .into_pyobject(py)?
-            .into_any(),
-            Expr::Add(left, right) => bytecode::ExprBinary {
-                opcode: bytecode::BinaryOpCode::Add,
-                left: left.into_pyobject(py)?.unbind(),
-                right: right.into_pyobject(py)?.unbind(),
-            }
-            .into_pyobject(py)?
-            .into_any(),
-            Expr::Subtract(left, right) => bytecode::ExprBinary {
-                opcode: bytecode::BinaryOpCode::Subtract,
-                left: left.into_pyobject(py)?.unbind(),
-                right: right.into_pyobject(py)?.unbind(),
-            }
-            .into_pyobject(py)?
-            .into_any(),
-            Expr::Multiply(left, right) => bytecode::ExprBinary {
-                opcode: bytecode::BinaryOpCode::Multiply,
-                left: left.into_pyobject(py)?.unbind(),
-                right: right.into_pyobject(py)?.unbind(),
-            }
-            .into_pyobject(py)?
-            .into_any(),
-            Expr::Divide(left, right) => bytecode::ExprBinary {
-                opcode: bytecode::BinaryOpCode::Divide,
-                left: left.into_pyobject(py)?.unbind(),
-                right: right.into_pyobject(py)?.unbind(),
-            }
-            .into_pyobject(py)?
-            .into_any(),
-            Expr::Power(left, right) => bytecode::ExprBinary {
-                opcode: bytecode::BinaryOpCode::Power,
-                left: left.into_pyobject(py)?.unbind(),
-                right: right.into_pyobject(py)?.unbind(),
-            }
-            .into_pyobject(py)?
-            .into_any(),
-            Expr::Function(func, expr) => bytecode::ExprUnary {
-                opcode: func.into(),
-                argument: expr.into_pyobject(py)?.unbind(),
-            }
-            .into_pyobject(py)?
-            .into_any(),
-            Expr::CustomFunction(callable, exprs) => bytecode::ExprCustom {
-                callable,
-                arguments: PyTuple::new(py, exprs)?.unbind(),
-            }
-            .into_pyobject(py)?
-            .into_any(),
-        })
+impl PartialEq for Expr {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Expr::Constant(a), Expr::Constant(b)) => a == b,
+            (Expr::Parameter(a), Expr::Parameter(b)) => a == b,
+            (Expr::Negate(a), Expr::Negate(b)) => a == b,
+            (Expr::Add(a, b), Expr::Add(c, d)) => a == c && b == d,
+            (Expr::Subtract(a, b), Expr::Subtract(c, d)) => a == c && b == d,
+            (Expr::Multiply(a, b), Expr::Multiply(c, d)) => a == c && b == d,
+            (Expr::Divide(a, b), Expr::Divide(c, d)) => a == c && b == d,
+            (Expr::Power(a, b), Expr::Power(c, d)) => a == c && b == d,
+            (Expr::Function(f, a), Expr::Function(g, b)) => f == g && a == b,
+            // CustomFunction contains Py<PyAny> which doesn't implement PartialEq
+            // so we treat them as not equal.
+            _ => false,
+        }
     }
+}
+
+/// A single pending step of the iterative evaluator
+enum Step<'a> {
+    /// Evaluate this (sub)expression, pushing its value onto the value stack.
+    Eval(&'a Expr),
+    /// Pop one value, negate it, and push the result.
+    Negate,
+    /// Pop one value, apply the builtin function, and push the result.
+    Function(&'a Function),
+    /// Pop two values apply the operation, and push the result.
+    Binary(Op),
+    /// Pop the given number of values, call the classical function with them, and push the result.
+    Custom(&'a ClassicalCallableExt, usize),
+}
+
+pub fn evaluate(
+    expr: &Expr,
+    params: &[f64],
+    evaluator: ClassicalEvaluator<'_>,
+) -> Result<f64, ParseError> {
+    let mut work = vec![Step::Eval(expr)];
+    let mut values = Vec::<f64>::new();
+
+    while let Some(step) = work.pop() {
+        match step {
+            Step::Eval(expr) => match expr {
+                Expr::Constant(value) => values.push(*value),
+                Expr::Parameter(index) => {
+                    let value = params.get(index.index()).copied().ok_or_else(|| {
+                        ParseError::new("gate parameter index out of range".to_owned())
+                    })?;
+                    values.push(value);
+                }
+                Expr::Negate(inner) => {
+                    work.push(Step::Negate);
+                    work.push(Step::Eval(inner));
+                }
+                Expr::Add(lhs, rhs) => push_binary(&mut work, Op::Plus, lhs, rhs),
+                Expr::Subtract(lhs, rhs) => push_binary(&mut work, Op::Minus, lhs, rhs),
+                Expr::Multiply(lhs, rhs) => push_binary(&mut work, Op::Multiply, lhs, rhs),
+                Expr::Divide(lhs, rhs) => push_binary(&mut work, Op::Divide, lhs, rhs),
+                Expr::Power(lhs, rhs) => push_binary(&mut work, Op::Power, lhs, rhs),
+                Expr::Function(func, inner) => {
+                    work.push(Step::Function(func));
+                    work.push(Step::Eval(inner));
+                }
+                Expr::CustomFunction(callable, exprs) => {
+                    work.push(Step::Custom(callable, exprs.len()));
+                    // Pushed in reverse so that they pop (and so evaluate) left-to-right, leaving
+                    // the values on the stack in argument order.
+                    work.extend(exprs.iter().rev().map(Step::Eval));
+                }
+            },
+            Step::Negate => {
+                let value = values.pop().expect("negation has one operand");
+                values.push(-value);
+            }
+            Step::Function(func) => {
+                let value = values.pop().expect("a function has one operand");
+                values.push(match func {
+                    Function::Cos => value.cos(),
+                    Function::Exp => value.exp(),
+                    Function::Ln => {
+                        if value <= 0.0 {
+                            return Err(ParseError::new(format!(
+                                "'ln' is undefined for non-positive {value}"
+                            )));
+                        }
+                        value.ln()
+                    }
+                    Function::Sin => value.sin(),
+                    Function::Sqrt => {
+                        if value < 0.0 {
+                            return Err(ParseError::new(format!(
+                                "'sqrt' is undefined for negative {value}"
+                            )));
+                        }
+                        value.sqrt()
+                    }
+                    Function::Tan => value.tan(),
+                });
+            }
+            Step::Binary(op) => {
+                let rhs = values.pop().expect("a binary op has two operands");
+                let lhs = values.pop().expect("a binary op has two operands");
+                values.push(match op {
+                    Op::Plus => lhs + rhs,
+                    Op::Minus => lhs - rhs,
+                    Op::Multiply => lhs * rhs,
+                    Op::Divide => {
+                        if rhs == 0.0 {
+                            return Err(ParseError::new("cannot divide by zero".to_owned()));
+                        }
+                        lhs / rhs
+                    }
+                    Op::Power => {
+                        if lhs < 0.0 && rhs.fract() != 0.0 {
+                            return Err(ParseError::new(format!(
+                                "'^': negative base {lhs} with non-integer power {rhs}"
+                            )));
+                        }
+                        lhs.powf(rhs)
+                    }
+                });
+            }
+            Step::Custom(callable, num_args) => {
+                let args = values.split_off(values.len() - num_args);
+                values.push(evaluator.eval(callable, &args)?);
+            }
+        }
+    }
+
+    let value = values.pop().expect("the expression evaluates to one value");
+    debug_assert!(values.is_empty());
+    Ok(value)
+}
+
+fn push_binary<'a>(work: &mut Vec<Step<'a>>, op: Op, lhs: &'a Expr, rhs: &'a Expr) {
+    work.push(Step::Binary(op));
+    work.push(Step::Eval(rhs));
+    work.push(Step::Eval(lhs));
 }
 
 /// Calculate the binding power of an [Op] when used in a prefix position.  Returns [None] if the
@@ -266,6 +325,11 @@ struct EvalState {
     token: Token,
 }
 
+/// Either a fully-resolved expression component (`Continue`) or the stack frame to push while
+/// we wait for the rest of a sub-expression (`Break`), from one step of the iterative
+/// operator-precedence parser.
+type ExprStep<T> = Result<ControlFlow<(EvalState, u8), T>, ParseError>;
+
 /// A subparser used to do the operator-precedence part of the parsing for individual parameter
 /// expressions.  The main parser creates a new instance of this struct for each expression it
 /// expects, and the instance lives only as long as is required to parse that expression, because
@@ -276,13 +340,14 @@ pub struct ExprParser<'a> {
     pub gate_symbols: &'a HashMap<String, GateSymbol>,
     pub global_symbols: &'a HashMap<String, GlobalSymbol>,
     pub strict: bool,
+    pub evaluator: ClassicalEvaluator<'a>,
 }
 
 impl ExprParser<'_> {
     /// Get the next token available in the stack of token streams, popping and removing any
     /// complete streams, except the base case.  Will only return `None` once all streams are
     /// exhausted.
-    fn next_token(&mut self) -> PyResult<Option<Token>> {
+    fn next_token(&mut self) -> Result<Option<Token>, ParseError> {
         let mut pointer = self.tokens.len() - 1;
         while pointer > 1 {
             let out = self.tokens[pointer].next(self.context)?;
@@ -297,7 +362,7 @@ impl ExprParser<'_> {
 
     /// Peek the next token in the stack of token streams.  This does not remove any complete
     /// streams yet.  Will only return `None` once all streams are exhausted.
-    fn peek_token(&mut self) -> PyResult<Option<&Token>> {
+    fn peek_token(&mut self) -> Result<Option<&Token>, ParseError> {
         let mut pointer = self.tokens.len() - 1;
         while pointer > 1 && self.tokens[pointer].peek(self.context)?.is_none() {
             pointer -= 1;
@@ -313,10 +378,15 @@ impl ExprParser<'_> {
     /// Expect a token of the correct [TokenType].  This is a direct analogue of
     /// [parse::State::expect].  The error variant of the result contains a suitable error message
     /// if the expectation is violated.
-    fn expect(&mut self, expected: TokenType, required: &str, cause: &Token) -> PyResult<Token> {
+    fn expect(
+        &mut self,
+        expected: TokenType,
+        required: &str,
+        cause: &Token,
+    ) -> Result<Token, ParseError> {
         let token = match self.next_token()? {
             None => {
-                return Err(QASM2ParseError::new_err(message_bad_eof(
+                return Err(ParseError::new(message_bad_eof(
                     Some(&Position::new(
                         self.current_filename(),
                         cause.line,
@@ -330,7 +400,7 @@ impl ExprParser<'_> {
         if token.ttype == expected {
             Ok(token)
         } else {
-            Err(QASM2ParseError::new_err(message_incorrect_requirement(
+            Err(ParseError::new(message_incorrect_requirement(
                 required,
                 &token,
                 self.current_filename(),
@@ -340,7 +410,7 @@ impl ExprParser<'_> {
 
     /// Peek the next token from the stream, and consume and return it only if it has the correct
     /// type.
-    fn accept(&mut self, acceptable: TokenType) -> PyResult<Option<Token>> {
+    fn accept(&mut self, acceptable: TokenType) -> Result<Option<Token>, ParseError> {
         match self.peek_token()? {
             Some(Token { ttype, .. }) if *ttype == acceptable => self.next_token(),
             _ => Ok(None),
@@ -350,7 +420,7 @@ impl ExprParser<'_> {
     /// Apply a prefix [Op] to the current [expression][Expr].  If the current expression is a
     /// constant floating-point value the application will be eagerly constant-folded, otherwise
     /// the resulting [Expr] will have a tree structure.
-    fn apply_prefix(&mut self, prefix: Op, expr: Expr) -> PyResult<Expr> {
+    fn apply_prefix(&mut self, prefix: Op, expr: Expr) -> Result<Expr, ParseError> {
         match prefix {
             Op::Plus => Ok(expr),
             Op::Minus => match expr {
@@ -364,11 +434,17 @@ impl ExprParser<'_> {
     /// Apply a binary infix [Op] to the current [expression][Expr].  If both operands have
     /// constant floating-point values the application will be eagerly constant-folded, otherwise
     /// the resulting [Expr] will have a tree structure.
-    fn apply_infix(&mut self, infix: Op, lhs: Expr, rhs: Expr, op_token: &Token) -> PyResult<Expr> {
+    fn apply_infix(
+        &mut self,
+        infix: Op,
+        lhs: Expr,
+        rhs: Expr,
+        op_token: &Token,
+    ) -> Result<Expr, ParseError> {
         if let (Expr::Constant(val), Op::Divide) = (&rhs, infix)
             && *val == 0.0
         {
-            return Err(QASM2ParseError::new_err(message_generic(
+            return Err(ParseError::new(message_generic(
                 Some(&Position::new(
                     self.current_filename(),
                     op_token.line,
@@ -403,7 +479,12 @@ impl ExprParser<'_> {
     /// Apply a "scientific calculator" built-in function to an [expression][Expr].  If the operand
     /// is a constant, the function will be constant-folded to produce a new constant expression,
     /// otherwise a tree-form [Expr] is returned.
-    fn apply_function(&mut self, func: Function, expr: Expr, token: &Token) -> PyResult<Expr> {
+    fn apply_function(
+        &mut self,
+        func: Function,
+        expr: Expr,
+        token: &Token,
+    ) -> Result<Expr, ParseError> {
         match expr {
             Expr::Constant(val) => match func {
                 Function::Cos => Ok(Expr::Constant(val.cos())),
@@ -412,7 +493,7 @@ impl ExprParser<'_> {
                     if val > 0.0 {
                         Ok(Expr::Constant(val.ln()))
                     } else {
-                        Err(QASM2ParseError::new_err(message_generic(
+                        Err(ParseError::new(message_generic(
                             Some(&Position::new(
                                 self.current_filename(),
                                 token.line,
@@ -429,7 +510,7 @@ impl ExprParser<'_> {
                     if val >= 0.0 {
                         Ok(Expr::Constant(val.sqrt()))
                     } else {
-                        Err(QASM2ParseError::new_err(message_generic(
+                        Err(ParseError::new(message_generic(
                             Some(&Position::new(
                                 self.current_filename(),
                                 token.line,
@@ -452,9 +533,9 @@ impl ExprParser<'_> {
         callable: &ClassicalCallableExt,
         exprs: Vec<Expr>,
         token: &Token,
-    ) -> PyResult<Expr> {
+    ) -> Result<Expr, ParseError> {
         if exprs.len() != callable.num_params() {
-            return Err(QASM2ParseError::new_err(message_generic(
+            return Err(ParseError::new(message_generic(
                 Some(&self.cur_position_of(token)),
                 &format!(
                     "custom function argument-count mismatch: expected {}, saw {}",
@@ -473,43 +554,17 @@ impl ExprParser<'_> {
         let Some(floats) = as_f64 else {
             return Ok(Expr::CustomFunction(callable.clone(), exprs));
         };
-        match callable {
-            ClassicalCallableExt::Builtin(builtin) => {
-                Ok(Expr::Constant(builtin.call(&floats).expect(
-                    "caller of apply_custom_function should validate the number of parameters",
-                )))
-            }
-            ClassicalCallableExt::Py { ob, num_params: _ } => Python::attach(|py| {
-                let chain_exception = |msg, base| {
-                    let pos = Position::new(self.current_filename(), token.line, token.col);
-                    let err = QASM2ParseError::new_err(message_generic(Some(&pos), msg));
-                    err.set_cause(py, Some(base));
-                    err
-                };
-                ob.bind(py)
-                    .call1(PyTuple::new(py, floats)?)
-                    .map_err(|inner| {
-                        chain_exception(
-                            "caught exception when constant folding with user-defined function",
-                            inner,
-                        )
-                    })?
-                    .extract::<f64>()
-                    .map_err(|inner| {
-                        chain_exception(
-                            "user-defined function returned non-float during constant folding",
-                            inner,
-                        )
-                    })
-                    .map(Expr::Constant)
-            }),
-        }
+        let folded = self.evaluator.eval(callable, &floats);
+        folded.map(Expr::Constant).map_err(|err| {
+            let message = message_generic(Some(&self.cur_position_of(token)), &err.message);
+            err.with_message(message)
+        })
     }
 
     /// If in `strict` mode, and we have a trailing comma, emit a suitable error message.
-    fn check_trailing_comma(&self, comma: Option<&Token>) -> PyResult<()> {
+    fn check_trailing_comma(&self, comma: Option<&Token>) -> Result<(), ParseError> {
         match (self.strict, comma) {
-            (true, Some(token)) => Err(QASM2ParseError::new_err(message_generic(
+            (true, Some(token)) => Err(ParseError::new(message_generic(
                 Some(&Position::new(
                     self.current_filename(),
                     token.line,
@@ -525,7 +580,7 @@ impl ExprParser<'_> {
     /// Not all [Token]s have a corresponding [Atom]; if this is the case, the return value is
     /// `Ok(None)`.  The error variant is returned if the next token is grammatically valid, but
     /// not semantically, such as an identifier for a value of an incorrect type.
-    fn try_atom_from_token(&self, token: &Token) -> PyResult<Option<Atom>> {
+    fn try_atom_from_token(&self, token: &Token) -> Result<Option<Atom>, ParseError> {
         match token.ttype {
             TokenType::LParen => Ok(Some(Atom::LParen)),
             TokenType::RParen => Ok(Some(Atom::RParen)),
@@ -552,21 +607,19 @@ impl ExprParser<'_> {
                 let id = token.text(self.context);
                 match self.gate_symbols.get(id) {
                     Some(GateSymbol::Parameter { index }) => Ok(Some(Atom::Parameter(*index))),
-                    Some(GateSymbol::Qubit { .. }) => {
-                        Err(QASM2ParseError::new_err(message_generic(
-                            Some(&Position::new(
-                                self.current_filename(),
-                                token.line,
-                                token.col,
-                            )),
-                            &format!("'{id}' is a gate qubit, not a parameter"),
-                        )))
-                    }
+                    Some(GateSymbol::Qubit { .. }) => Err(ParseError::new(message_generic(
+                        Some(&Position::new(
+                            self.current_filename(),
+                            token.line,
+                            token.col,
+                        )),
+                        &format!("'{id}' is a gate qubit, not a parameter"),
+                    ))),
                     None => match self.global_symbols.get(id) {
                         Some(GlobalSymbol::Classical(callable)) => {
                             Ok(Some(Atom::CustomFunction(callable.clone())))
                         }
-                        _ => Err(QASM2ParseError::new_err(message_generic(
+                        _ => Err(ParseError::new(message_generic(
                             Some(&Position::new(
                                 self.current_filename(),
                                 token.line,
@@ -586,7 +639,7 @@ impl ExprParser<'_> {
     /// Peek at the next [Atom] (and backing [Token]) if the next token exists and can be converted
     /// into a valid [Atom].  If it can't, or if we are at the end of the input, the `None` variant
     /// is returned.
-    fn peek_atom(&mut self) -> PyResult<Option<(Atom, Token)>> {
+    fn peek_atom(&mut self) -> Result<Option<(Atom, Token)>, ParseError> {
         if let Some(&token) = self.peek_token()? {
             if let Ok(Some(atom)) = self.try_atom_from_token(&token) {
                 Ok(Some((atom, token)))
@@ -598,20 +651,20 @@ impl ExprParser<'_> {
         }
     }
 
-    fn next_atom(&mut self, power_min: u8, cause: &Token) -> PyResult<(Token, Atom)> {
+    fn next_atom(&mut self, power_min: u8, cause: &Token) -> Result<(Token, Atom), ParseError> {
         let description = if power_min == 0 {
             "an expression"
         } else {
             "a missing operand"
         };
         let token = self.next_token()?.ok_or_else(|| {
-            QASM2ParseError::new_err(message_bad_eof(
+            ParseError::new(message_bad_eof(
                 Some(&self.cur_position_of(cause)),
                 description,
             ))
         })?;
         let atom = self.try_atom_from_token(&token)?.ok_or_else(|| {
-            QASM2ParseError::new_err(message_incorrect_requirement(
+            ParseError::new(message_incorrect_requirement(
                 description,
                 &token,
                 self.current_filename(),
@@ -630,11 +683,7 @@ impl ExprParser<'_> {
     /// If we need to break and look for a new subexpression component, return `Break` with the
     /// stack update instead.
     #[inline]
-    fn expect_expression_initial(
-        &mut self,
-        power_min: u8,
-        cause: &Token,
-    ) -> PyResult<ControlFlow<(EvalState, u8), Expr>> {
+    fn expect_expression_initial(&mut self, power_min: u8, cause: &Token) -> ExprStep<Expr> {
         let (token, atom) = self.next_atom(power_min, cause)?;
         let break_at = |state: State, new_power: u8| {
             let state = EvalState {
@@ -653,7 +702,7 @@ impl ExprParser<'_> {
                     "the parenthesis closed, but there was a missing operand"
                 };
                 let pos = self.cur_position_of(&token);
-                Err(QASM2ParseError::new_err(message_generic(Some(&pos), msg)))
+                Err(ParseError::new(message_generic(Some(&pos), msg)))
             }
             Atom::Function(func) => {
                 self.expect(TokenType::LParen, "an opening parenthesis", &token)?;
@@ -676,7 +725,7 @@ impl ExprParser<'_> {
             }
             Atom::Op(op) => {
                 let Some(power) = prefix_power(op) else {
-                    return Err(QASM2ParseError::new_err(message_generic(
+                    return Err(ParseError::new(message_generic(
                         Some(&self.cur_position_of(&token)),
                         &format!("'{}' is not a valid unary operator", op.text()),
                     )));
@@ -697,7 +746,7 @@ impl ExprParser<'_> {
         &mut self,
         expr: Expr,
         eval_state: EvalState,
-    ) -> PyResult<ControlFlow<(EvalState, u8), (Expr, u8)>> {
+    ) -> ExprStep<(Expr, u8)> {
         let EvalState {
             state,
             token,
@@ -751,7 +800,7 @@ impl ExprParser<'_> {
     ///
     ///     This evaluates in a floating-point context, including evaluating integer tokens, since
     ///     the only places that expressions are valid in OpenQASM 2 is during gate applications.
-    pub fn parse_expression(&mut self, cause: &Token) -> PyResult<Expr> {
+    pub fn parse_expression(&mut self, cause: &Token) -> Result<Expr, ParseError> {
         // We don't store the "root" case of expression parsing as a stack entry so that in the
         // happy (and _massively_ most common) case of a floating-point literal, there's no heap
         // allocation at all to manage the state.

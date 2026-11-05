@@ -26,6 +26,7 @@ use numpy::{IntoPyArray, ToPyArray};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use thiserror::Error;
 
 use super::common::{DEFAULT_FIDELITY, HGATE, IPZ, TraceToFidelity, rx_matrix, rz_matrix};
 use super::gate_sequence::{TwoQubitGateSequence, TwoQubitSequenceVec};
@@ -42,13 +43,43 @@ use crate::matrix::two_qubit;
 use qiskit_circuit::bit::ShareableQubit;
 use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::circuit_instruction::OperationFromPython;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::gate_matrix::{CX_GATE, ONE_QUBIT_IDENTITY};
 use qiskit_circuit::instruction::{Instruction, Parameters};
 use qiskit_circuit::operations::{Operation, OperationRef, Param, StandardGate};
 use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::{NoBlocks, Qubit};
-use qiskit_util::complex::{C_M_ONE, C_ONE, IM, M_IM, c64};
+use qiskit_util::complex::{C_M_ONE, C_ONE, C_ZERO, IM, M_IM, c64};
+
+/// Errors that can occur during two-qubit basis decomposition.
+#[derive(Error, Debug)]
+pub enum TwoQubitBasisError {
+    #[error("'{basis}' is not a ZSX/SZXX basis; 'pulse_optimize' requires ZSX or ZSXX")]
+    PulseOptimizeWrongBasis { basis: String },
+
+    #[error("'pulse_optimize' requires a CNOT entangling gate")]
+    PulseOptimizeNotCNOT,
+
+    #[error("failed to compute requested pulse optimal decomposition")]
+    PulseOptimizeFailed,
+
+    #[error("control flow operations are not supported by the two-qubit decomposer")]
+    UnsupportedControlFlow,
+
+    #[error("KAK gate must be unparameterized")]
+    ParameterizedKAKGate,
+}
+
+impl From<TwoQubitBasisError> for PyErr {
+    fn from(error: TwoQubitBasisError) -> Self {
+        let msg = error.to_string();
+        match error {
+            TwoQubitBasisError::UnsupportedControlFlow
+            | TwoQubitBasisError::ParameterizedKAKGate => PyValueError::new_err(msg),
+            _ => QiskitError::new_err(msg),
+        }
+    }
+}
 
 // Worst case length is 5x 1q gates for each 1q decomposition + 1x 2q gate
 // We might overallocate a bit if the euler basis is different but
@@ -92,11 +123,7 @@ static K22R: Matrix2<Complex64> = Matrix2::new(Complex64::ZERO, C_ONE, C_M_ONE, 
 
 #[derive(Clone, Debug)]
 #[allow(non_snake_case)]
-#[pyclass(
-    module = "qiskit._accelerate.two_qubit_decompose",
-    subclass,
-    skip_from_py_object
-)]
+#[pyclass(module = "qiskit._accelerate.two_qubit_decompose", subclass)]
 pub struct TwoQubitBasisDecomposer {
     gate: PackedOperation,
     gate_params: SmallVec<[f64; 3]>,
@@ -322,11 +349,11 @@ impl TwoQubitBasisDecomposer {
 
         let x12 = euler_q0[1][2] + euler_q0[2][0];
         let x12_is_non_zero = !abs_diff_eq!(x12, 0., epsilon = atol);
-        let mut x12_is_old_mult = None;
+        let mut x12_is_odd_mult = None;
         let mut x12_phase = 0.;
         let x12_is_pi_mult = abs_diff_eq!(x12.sin(), 0., epsilon = atol);
         if x12_is_pi_mult {
-            x12_is_old_mult = Some(abs_diff_eq!(x12.cos(), -1., epsilon = atol));
+            x12_is_odd_mult = Some(abs_diff_eq!(x12.cos(), -1., epsilon = atol));
             x12_phase = PI * x12.cos();
         }
         let x02_add = x12 - euler_q0[1][0];
@@ -356,7 +383,7 @@ impl TwoQubitBasisDecomposer {
             if x12_is_non_zero {
                 global_phase += x12_phase;
             }
-            if x12_is_non_zero && x12_is_old_mult.unwrap() {
+            if x12_is_non_zero && x12_is_odd_mult.unwrap() {
                 gates.push((
                     StandardGate::RZ.into(),
                     smallvec![-euler_q0[1][1]],
@@ -375,6 +402,11 @@ impl TwoQubitBasisDecomposer {
             gates.push((StandardGate::SX.into(), smallvec![], smallvec![0]));
             global_phase -= FRAC_PI_4;
         } else if x12_is_non_zero && !x12_is_pi_mult {
+            gates.push((
+                StandardGate::RZ.into(),
+                smallvec![euler_q0[1][1]],
+                smallvec![0],
+            ));
             if self.pulse_optimize.is_none() {
                 self.append_1q_sequence(&mut gates, &mut global_phase, rx_matrix(x12).as_view(), 0);
             } else {
@@ -431,11 +463,14 @@ impl TwoQubitBasisDecomposer {
 
         let out_unitary = compute_unitary(&gates, global_phase);
         // TODO: fix the sign problem to avoid correction here
-        if abs_diff_eq!(
-            target_decomposed.unitary_matrix[(0, 0)],
-            -out_unitary[[0, 0]],
-            epsilon = atol
-        ) {
+        // Compare the first non-zero element in 0-th row, which must exist as the matrix is unitary
+        let row = target_decomposed.unitary_matrix.row(0);
+        if row
+            .iter()
+            .zip(out_unitary.row(0).iter())
+            .find(|(val, _)| !abs_diff_eq!(**val, C_ZERO, epsilon = atol))
+            .is_some_and(|(val, out)| abs_diff_eq!(*val, -*out, epsilon = atol))
+        {
             global_phase += PI;
         }
         Some(TwoQubitGateSequence {
@@ -474,7 +509,7 @@ impl TwoQubitBasisDecomposer {
         best_nbasis: u8,
         decomposition: &SmallVec<[Matrix2<Complex64>; 8]>,
         target_decomposed: &TwoQubitWeylDecomposition,
-    ) -> PyResult<Option<TwoQubitGateSequence>> {
+    ) -> Result<Option<TwoQubitGateSequence>, TwoQubitBasisError> {
         if self.pulse_optimize.is_some()
             && (best_nbasis == 0 || best_nbasis == 1 || best_nbasis > 3)
         {
@@ -488,10 +523,9 @@ impl TwoQubitBasisDecomposer {
             }
             _ => {
                 if self.pulse_optimize.is_some() {
-                    return Err(QiskitError::new_err(format!(
-                        "'pulse_optimize' currently only works with ZSX basis ({} used)",
-                        self.euler_basis.as_str()
-                    )));
+                    return Err(TwoQubitBasisError::PulseOptimizeWrongBasis {
+                        basis: self.euler_basis.as_str().to_owned(),
+                    });
                 } else {
                     return Ok(None);
                 }
@@ -502,9 +536,7 @@ impl TwoQubitBasisDecomposer {
             OperationRef::StandardGate(StandardGate::CX)
         ) {
             if self.pulse_optimize.is_some() {
-                return Err(QiskitError::new_err(
-                    "pulse_optimizer currently only works with CNOT entangling gate",
-                ));
+                return Err(TwoQubitBasisError::PulseOptimizeNotCNOT);
             } else {
                 return Ok(None);
             }
@@ -517,9 +549,7 @@ impl TwoQubitBasisDecomposer {
             None
         };
         if self.pulse_optimize.is_some() && res.is_none() {
-            return Err(QiskitError::new_err(
-                "Failed to compute requested pulse optimal decomposition",
-            ));
+            return Err(TwoQubitBasisError::PulseOptimizeFailed);
         }
         Ok(res)
     }
@@ -773,18 +803,14 @@ impl TwoQubitBasisDecomposer {
         pulse_optimize: Option<bool>,
     ) -> PyResult<Self> {
         if gate.operation.try_control_flow().is_some() {
-            return Err(PyValueError::new_err(
-                "Only gates are supported by two qubit decomposer",
-            ));
+            return Err(TwoQubitBasisError::UnsupportedControlFlow.into());
         }
-        let gate_params: PyResult<SmallVec<[f64; 3]>> = gate
+        let gate_params: Result<SmallVec<[f64; 3]>, TwoQubitBasisError> = gate
             .params_view()
             .iter()
             .map(|x| match x {
                 Param::Float(val) => Ok(*val),
-                _ => Err(PyValueError::new_err(
-                    "Only unparameterized gates are supported as KAK gate",
-                )),
+                _ => Err(TwoQubitBasisError::ParameterizedKAKGate),
             })
             .collect();
         TwoQubitBasisDecomposer::new_inner(
@@ -792,7 +818,9 @@ impl TwoQubitBasisDecomposer {
             gate_params?,
             gate_matrix.as_array(),
             basis_fidelity,
-            EulerBasis::from_str(euler_basis).map_err(PyValueError::new_err)?,
+            EulerBasis::from_str(euler_basis).map_err(|_| {
+                PyValueError::new_err(format!("unknown euler basis: {euler_basis}"))
+            })?,
             pulse_optimize,
         )
     }
@@ -909,7 +937,7 @@ impl TwoQubitBasisDecomposer {
         basis_fidelity: Option<f64>,
         approximate: bool,
         _num_basis_uses: Option<u8>,
-    ) -> PyResult<DAGCircuit> {
+    ) -> PyResult<PyDAGCircuit> {
         let array = unitary.as_array();
         let sequence = self.call_inner(array, basis_fidelity, approximate, _num_basis_uses)?;
         let mut dag = DAGCircuit::with_capacity(2, 0, None, Some(sequence.gates.len()), None, None);
@@ -930,7 +958,7 @@ impl TwoQubitBasisDecomposer {
                 None,
             )?;
         }
-        Ok(builder.build())
+        Ok(builder.build().into())
     }
 
     /// Synthesizes a two qubit unitary matrix into a :class:`.CircuitData` object

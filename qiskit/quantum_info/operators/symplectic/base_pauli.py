@@ -295,13 +295,40 @@ class BasePauli(BaseOperator, AdjointMixin, MultiplyMixin):
         return self.copy()._append_circuit(other.inverse(), qargs=qargs)
 
     def _evolve_clifford(self, other, qargs=None, frame="h"):
-        """Heisenberg picture evolution of a Pauli by a Clifford."""
+        """Evolve a Pauli by a Clifford (default is Heisenberg frame)."""
 
-        if frame == "s":
-            adj = other
-        else:
-            adj = other.adjoint()
+        if frame == "h":
+            # Heisenberg evolution C^dg.P.C.
 
+            # Pinning signs (phases) is expensive. We can pin the 2N signs of `C^dg`'s rows, or
+            # just the L signs of the result `(C^dg.P.C)`; pin whichever set is smaller. This
+            # simple threshold (2N vs L) was near-optimal for benchmarks up to 250 qubits.
+            if 2 * other.num_qubits <= self._x.shape[0]:
+                # Few qubits, many Paulis: Compute C^dg (pins signs) and evolve by it
+                other = other.adjoint()  # O(N^3)
+                return self._evolve_clifford(other, qargs=qargs, frame="s")
+
+            # Many qubits, few Paulis: Get result's signs by enforcing round-trip signs are +1,
+            # never paying for C^dg's signs. Build `inv` with ZX tableau of C^dg but wrong signs
+            # via the cheap part of `Clifford._conjugate_transpose` (at time of writing):
+            inv = other.copy()
+            tmp = inv.destab_x.copy()
+            inv.destab_x = inv.stab_z.T
+            inv.destab_z = inv.destab_z.T
+            inv.stab_x = inv.stab_x.T
+            inv.stab_z = tmp.T
+            # Evolving by `inv` gives the correct ZX content of C^dg.P.C but wrong signs:
+            ret = self._evolve_clifford(inv, qargs=qargs, frame="s")
+            # Recover the signs by evolving back: C.(C^dg.P.C).C^dg = P. Since `ret`
+            # already has the right ZX content, evolving it forward reproduces P's ZX content
+            # exactly; only the signs can differ.
+            fwd = ret._evolve_clifford(other, qargs=qargs, frame="s")
+            # Evolution merely adds to the phase (is linear), so `ret`'s phase error passes
+            # unchanged into `fwd`; read it off as `fwd.phase - self.phase` and subtract it:
+            ret.phase -= fwd.phase - self.phase
+            return ret
+
+        # Schrodinger evolution C.P.C^dg.
         if qargs is None:
             qargs_ = slice(None)
         else:
@@ -316,17 +343,21 @@ class BasePauli(BaseOperator, AdjointMixin, MultiplyMixin):
         ret._z[:, qargs_] = False
 
         idx = np.concatenate((self._x[:, qargs_], self._z[:, qargs_]), axis=1)
+        # Only iterate rows of `other` selected by at least one Pauli in `self`:
+        keep = np.nonzero(idx.any(axis=0))[0]
         for idx_, row in zip(
-            idx.T,
-            PauliList.from_symplectic(z=adj.z, x=adj.x, phase=2 * adj.phase),
+            idx[:, keep].T,
+            PauliList.from_symplectic(
+                z=other.z[keep], x=other.x[keep], phase=2 * other.phase[keep]
+            ),
+            strict=True,
         ):
             # most of the logic below is to properly index if self is a PauliList (2D),
             # while not trying to index if the object is just a Pauli (1D).
-            if idx_.any():
-                if np.sum(idx_) == num_paulis:
-                    ret.compose(row, qargs=qargs, inplace=True)
-                else:
-                    ret[idx_] = ret[idx_].compose(row, qargs=qargs)
+            if np.sum(idx_) == num_paulis:
+                ret.compose(row, qargs=qargs, inplace=True)
+            else:
+                ret[idx_] = ret[idx_].compose(row, qargs=qargs)
 
         return ret
 

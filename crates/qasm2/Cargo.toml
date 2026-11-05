@@ -12,10 +12,18 @@ doctest = false
 [lints]
 workspace = true
 
+[features]
+default = ["py"]
+py = ["dep:pyo3"]
+
 [dependencies]
 num-bigint.workspace = true
 hashbrown.workspace = true
 
 [dependencies.pyo3]
 workspace = true
+optional = true
 features = ["py-clone", "num-bigint"]
+
+[dependencies.qiskit-circuit]
+workspace = true

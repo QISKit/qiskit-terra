@@ -59,7 +59,6 @@ import functools
 import multiprocessing
 import os
 import platform
-import sys
 import warnings
 from concurrent.futures import ProcessPoolExecutor
 
@@ -86,12 +85,8 @@ def _physical_cpus_assuming_twofold_smt():
 
 
 def _parallel_default():
-    # We default to False on `spawn`-based multiprocessing implementations, True on everything else.
-    if (set_start_method := multiprocessing.get_start_method(allow_none=True)) is None:
-        # The method hasn't been explicitly set, but it would be badly behaved of us to set it for
-        # the user, so handle platform defaults.
-        return sys.platform not in ("darwin", "win32")
-    return set_start_method in ("fork", "forkserver")
+    # We default to False on all platforms, unless parallelism is explicitly requested of fork-based implementations.
+    return multiprocessing.get_start_method(allow_none=True) in ("fork", "forkserver")
 
 
 @functools.cache
@@ -173,11 +168,10 @@ def should_run_in_parallel(num_processes: int | None = None) -> bool:
     """Decide whether a multiprocessing function should spawn subprocesses for parallelization.
 
     In particular, this is how :func:`parallel_map` decides whether to use multiprocessing or not.
-    The ``num_processes`` argument alone does not enforce parallelism; by default, Qiskit will only
-    use process-based parallelism when a ``fork``-like process spawning start method is in effect.
-    You can override this decision either by setting the :mod:`multiprocessing` start method you
-    use, setting the ``QISKIT_PARALLEL`` environment variable to ``"TRUE"``, or setting
-    ``parallel = true`` in your user settings file.
+    The ``num_processes`` argument alone does not enforce parallelism; by default, Qiskit disables
+    process-based parallelism by default. It can enabled by explicitly setting a ``fork``-like
+    :mod:`multiprocessing` start method, setting the ``QISKIT_PARALLEL`` environment variable to
+    ``"TRUE"``, or setting ``parallel = true`` in your user settings file.
 
     This function includes two context managers that can be used to temporarily modify the return
     value of this function:
@@ -274,6 +268,15 @@ def parallel_map(task, values, task_args=(), task_kwargs=None, num_processes=Non
 
     This will parallelise the results if the number of ``values`` is greater than one and
     :func:`should_run_in_parallel` returns ``True``.  If not, it will run in serial.
+
+    By default multiprocessing will be disabled on all supported platforms when calling this
+    function due to issues mixing it with threading. You have to explicitly opt-in to use
+    multiprocessing with this function by either explicitly calling
+    :func:`multiprocessing.set_start_method` to either ``"fork"`` or ``"forkserver"``,
+    setting the environment variable ``QISKIT_PARALLEL=TRUE``, or setting
+    ``parallel`` in your user configuration file. You can find more details
+    on these configuration options here:
+    https://quantum.cloud.ibm.com/docs/guides/configure-qiskit-local
 
     Args:
         task (func): Function that is to be called for each value in ``values``.

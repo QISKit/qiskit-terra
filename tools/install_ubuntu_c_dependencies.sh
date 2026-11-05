@@ -12,4 +12,4 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-sudo apt-get install -y clang-format
+sudo apt-get install -y clang-format clang-tidy

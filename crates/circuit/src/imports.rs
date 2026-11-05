@@ -138,6 +138,7 @@ pub static SYMPIFY_PARAMETER_EXPRESSION: ImportOnceCell =
     ImportOnceCell::new("qiskit.circuit.parameterexpression", "sympify");
 pub static TRANSPILE_LAYOUT: ImportOnceCell =
     ImportOnceCell::new("qiskit.transpiler.layout", "TranspileLayout");
+pub static STORE: ImportOnceCell = ImportOnceCell::new("qiskit.circuit.store", "Store");
 
 /// A mapping from the enum variant in crate::operations::StandardGate to the python
 /// module path and class name to import it. This is used to populate the conversion table

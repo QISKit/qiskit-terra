@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::mut_ptr_as_ref;
 use qiskit_circuit::operations::Param;
 
 /// A representation of Pauli product rotation data.
@@ -70,7 +69,7 @@ pub struct CPauliProductRotation {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_pauli_product_rotation_clear(inst: *mut CPauliProductRotation) {
     // SAFETY: The user guarantees `inst` is a valid, non-null pointer to a [CPauliProductRotation].
-    let inst = unsafe { mut_ptr_as_ref(inst) };
+    let inst = unsafe { &mut *inst };
 
     // SAFETY: The user guarantees the instruction is coherent, i.e. the Z and X arrays are
     // readable for the correct length and `angle` is a valid, non-null Param pointer.
@@ -149,7 +148,7 @@ pub struct CPauliProductMeasurement {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_pauli_product_measurement_clear(inst: *mut CPauliProductMeasurement) {
     // SAFETY: The user guarantees `inst` is a valid, non-null pointer to a [CPauliProductMeasurement].
-    let inst = unsafe { mut_ptr_as_ref(inst) };
+    let inst = unsafe { &mut *inst };
 
     // SAFETY: The user guarantees the instruction is coherent, i.e. the Z and X arrays are
     // readable for the correct length and `angle` is a valid, non-null Param pointer.

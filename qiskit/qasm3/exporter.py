@@ -174,6 +174,20 @@ _RESERVED_KEYWORDS = frozenset(
         "while",
     }
 )
+# Built-in constants defined in the OpenQASM 3 global scope. These are valid identifiers,
+# but declaring a new symbol with one of these names collides with the predefined constant.
+# The Unicode Euler constant ``ℇ`` (U+2107) is intentionally omitted: it is not a valid
+# OpenQASM 3 identifier under the language's identifier grammar (only letters, digits and
+# underscores are allowed), so it cannot appear as a declared symbol name in exported output.
+_BUILTIN_CONSTANTS = frozenset(
+    {
+        "pi",
+        "π",
+        "tau",
+        "τ",
+        "euler",
+    }
+)
 
 # This is deliberately more restrictive than the OQ3 spec - the builtin `re` module has weak Unicode
 # support, and this need here doesn't rise to the level of adding the third-party `regex` as a
@@ -419,6 +433,7 @@ class SymbolTable:
         """Whether this identifier has a defined meaning already."""
         return (
             name in _RESERVED_KEYWORDS
+            or name in _BUILTIN_CONSTANTS
             or name in self.gates
             or name in itertools.chain.from_iterable(reversed(self.variables))
         )
@@ -430,6 +445,7 @@ class SymbolTable:
             name not in self.variables[-1]
             and name not in self.gates
             and name not in _RESERVED_KEYWORDS
+            and name not in _BUILTIN_CONSTANTS
         )
 
     def escaped_declarable_name(self, name: str, *, allow_rename: bool, unique: bool = False):
@@ -452,6 +468,10 @@ class SymbolTable:
             raise QASM3ExporterError(f"cannot use '{name}' as a name; it is not a valid identifier")
         if name in _RESERVED_KEYWORDS:
             raise QASM3ExporterError(f"cannot use the keyword '{name}' as a variable name")
+        if name in _BUILTIN_CONSTANTS:
+            raise QASM3ExporterError(
+                f"cannot use '{name}' as a variable name; it shadows a built-in OpenQASM 3 constant"
+            )
         if not name_allowed(name):
             if self.gates.get(name) is not None:
                 raise QASM3ExporterError(
@@ -1369,7 +1389,7 @@ class QASM3Builder:
         if ident is None:
             ident = self.define_gate(operation)
         qubits = [self._lookup_bit(qubit) for qubit in instruction.qubits]
-        parameters = self._build_quantum_call_parameters(instruction.params)
+        parameters = self._build_quantum_call_parameters(operation.params)
         return ast.QuantumGateCall(ident, qubits, parameters=parameters)
 
 

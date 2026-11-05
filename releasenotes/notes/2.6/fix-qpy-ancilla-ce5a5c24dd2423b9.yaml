@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a bug with the QPY serialization and deserialization of ancilla
+    registers that made them load as non-ancilla registers.
+    Fixed `#11619 <https://github.com/Qiskit/qiskit/issues/11619>`__.

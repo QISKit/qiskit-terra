@@ -21,7 +21,7 @@ use rand_pcg::Pcg64Mcg;
 use rayon_cond::CondIterator;
 use rustworkx_core::petgraph::graph::NodeIndex;
 
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::nlayout::NLayout;
 use qiskit_circuit::{BlocksMode, PhysicalQubit, VirtualQubit};
 use qiskit_util::getenv_use_multiple_threads;
@@ -39,8 +39,41 @@ use super::heuristic::Heuristic;
 use super::route::{RoutingProblem, RoutingResult, RoutingTarget, swap_map, swap_map_trial};
 
 #[allow(clippy::too_many_arguments)]
-#[pyfunction]
+#[pyfunction(name = "sabre_layout_and_routing")]
 #[pyo3(signature = (dag, target, heuristic, max_iterations, num_swap_trials, num_random_trials, seed=None, partial_layouts=vec![], skip_routing=false))]
+pub fn py_sabre_layout_and_routing(
+    dag: &mut PyDAGCircuit,
+    target: &Target,
+    heuristic: &Heuristic,
+    max_iterations: usize,
+    num_swap_trials: usize,
+    num_random_trials: usize,
+    seed: Option<u64>,
+    partial_layouts: Vec<Vec<Option<PhysicalQubit>>>,
+    skip_routing: bool,
+) -> PyResult<(PyDAGCircuit, NLayout, NLayout)> {
+    sabre_layout_and_routing(
+        dag.try_write()?,
+        target,
+        heuristic,
+        max_iterations,
+        num_swap_trials,
+        num_random_trials,
+        seed,
+        partial_layouts,
+        skip_routing,
+    )
+    .map(|(out_dag, init, out)| {
+        // Preserve metadata
+        (
+            PyDAGCircuit::from_dagcircuit_with_cloned_metadata(out_dag, dag),
+            init,
+            out,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn sabre_layout_and_routing(
     dag: &mut DAGCircuit,
     target: &Target,

@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    The ``qargs`` parameter is now correctly marked as ``const``
+    (``const uint32_t *``) in both ``qk_target_entry_add_property``
+    and ``qk_target_update_property``.

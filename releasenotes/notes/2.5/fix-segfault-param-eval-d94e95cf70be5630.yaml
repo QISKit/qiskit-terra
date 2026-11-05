@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a potential segfault during the evaluation of large
+    :class:`.ParameterExpression` objects.
+    Fixed `#16676 <https://github.com/Qiskit/qiskit/issues/16676>`__.

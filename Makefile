@@ -37,12 +37,18 @@ lint:
 	tools/find_optional_imports.py
 	tools/find_stray_release_notes.py
 	tools/verify_images.py
+	cargo fmt --check
+	cargo clippy --all-targets -- -D warnings
 
 style:
 	black --check qiskit test tools setup.py docs/conf.py
 
 black:
 	black qiskit test tools setup.py docs/conf.py
+
+.PHONY: miri
+miri:
+	tools/miri.bash
 
 # Use the -s (starting directory) flag for "unittest discover" is necessary,
 # otherwise the QuantumCircuit header will be modified during the discovery.
@@ -112,13 +118,20 @@ C_LIBQISKIT_OUT=$(C_DIR_OUT_LIB)/$(subst _cext,,$(C_LIB_CARGO_FILENAME))
 # Recipes for the C components.
 # ==============================================================================
 
-.PHONY: cformat fix_cformat
+.PHONY: cformat fix_cformat ctidy
 # Run clang-format (does not apply any changes)
 cformat:
 	bash tools/run_clang_format.sh
 # Apply clang-format changes
 fix_cformat:
 	bash tools/run_clang_format.sh apply
+
+# Run clang tidy, which currently only checks for `printf` occurences
+# This currently only checks for files in test/c/*.c. We could turn this into
+# a bash script, like for clang-format, which globs for .c files, but we only really care to
+# run this print check on the test files at the moment.
+ctidy: cheader
+	clang-tidy $(C_DIR_TEST)/*.c -- -std=c11 -I$(C_DIR_OUT_INCLUDE)
 
 # Abstraction over calling Cargo to build the C extension in "standalone" C
 # mode.  This _also_ builds the C header file as a side-effect into
@@ -161,7 +174,11 @@ ctest: cheader build-clib-dev
 # `-S` specifies the source (including the `CMakeLists.txt` file, `-B` is where
 # to put the build files, including the generated CMake stuff.  See the
 # `CMakeLists.txt` file for the build variables.
+#
+# The `CMAKE_FLAGS` argument is to allow user insertion of additional flags, such
+# as to override the `CMAKE_C_STANDARD` line.
 	cmake -S$(C_DIR_TEST) -B$(C_DIR_TEST_BUILD) \
+		$(CMAKE_FLAGS) \
 		-DCARGO_LIB_DIR=$(abspath $(C_DIR_CARGO_TARGET))/debug \
 		-DQISKIT_INCLUDE_PATH=$(abspath $(C_DIR_OUT_INCLUDE))
 # Actually build the test.

@@ -299,7 +299,7 @@ fn generate_twirled_circuit(
         }
     }
     if let Some(optimizer_target) = optimizer_target {
-        let mut dag = DAGCircuit::from_circuit_data(&out_circ, false, None, None, None, None)?;
+        let mut dag = DAGCircuit::from_circuit_data(&out_circ, false, None, None)?;
         let state = Optimize1qGatesDecompositionState::new(
             optimizer_target.num_qubits.unwrap_or(0) as usize,
         );

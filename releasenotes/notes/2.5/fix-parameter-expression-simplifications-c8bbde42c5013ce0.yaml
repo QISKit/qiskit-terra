@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed several bugs in the simplifcation of :class:`.ParameterExpression` that resulted in incorrect expressions.
+
+    Fixes `#16259 <https://github.com/Qiskit/qiskit/issues/16259>`__.
+    Fixes `#16260 <https://github.com/Qiskit/qiskit/issues/16260>`__.
+    Fixes `#16262 <https://github.com/Qiskit/qiskit/issues/16262>`__.
+    Fixes `#16263 <https://github.com/Qiskit/qiskit/issues/16263>`__.

@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed an issue with :meth:`.DAGCircuit.depth` method which would potentially
+    panic when calling it after deleting the first :class:`.Qubit` (or :class:`.Clbit`
+    if there are no :class:`.Qubit` objects in the DAG) in the :class:`.DAGCircuit`.

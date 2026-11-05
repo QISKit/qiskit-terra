@@ -134,8 +134,8 @@ def circuit_to_instruction(circuit, parameter_map=None, equivalence_library=None
     for reg in regs:
         qc.add_register(reg)
 
-    if circuit.global_phase:
-        qc.global_phase = circuit.global_phase
+    if target.global_phase:
+        qc.global_phase = target.global_phase
 
     out_instruction.definition = qc
 

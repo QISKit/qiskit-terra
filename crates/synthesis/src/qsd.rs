@@ -19,7 +19,6 @@ use nalgebra::{Matrix4, U4};
 use ndarray::prelude::*;
 use num_complex::Complex64;
 use numpy::PyReadonlyArray2;
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use smallvec::smallvec;
 use thiserror::Error;
@@ -58,6 +57,10 @@ pub enum QSDError {
     // wraps PyErr, e.g. produced by 2q decomposer
     #[error(transparent)]
     ErrorFromPython(#[from] PyErr),
+
+    // unknown one-qubit decomposer basis name
+    #[error("unknown basis name {0}")]
+    UnknownBasis(String),
 }
 
 impl From<QSDError> for PyErr {
@@ -68,6 +71,8 @@ impl From<QSDError> for PyErr {
             QSDError::ErrorFromCircuitData(err) => err.into(),
 
             QSDError::ErrorFromPython(err) => err,
+
+            QSDError::UnknownBasis(_) => pyo3::exceptions::PyValueError::new_err(error.to_string()),
         }
     }
 }
@@ -142,6 +147,11 @@ fn qsd_inner(
     let dim = mat.shape().0;
     let num_qubits = dim.ilog2() as usize;
     let opt_a1_val = opt_a1.unwrap_or(true);
+    if dim == 1 {
+        // A 1x1 "unitary" is just a global phase acting on zero qubits.
+        let global_phase = mat[(0, 0)].arg();
+        return Ok(CircuitData::new(None, None, Param::Float(global_phase))?);
+    }
     if dim == 2 {
         let array = faer_to_ndarray(mat);
         let sequence =
@@ -884,7 +894,7 @@ pub fn qs_decomposition(
     let one_qubit_decomposer = if let Some(basis_string) = one_qubit_decomposer_basis_string {
         let basis = basis_string
             .parse::<EulerBasis>()
-            .map_err(|_| PyValueError::new_err(format!("Unknown basis name {}", basis_string)))?;
+            .map_err(|_| QSDError::UnknownBasis(basis_string))?;
         one_qubit_decomposer_basis_set.add_basis(basis);
         Some(&one_qubit_decomposer_basis_set)
     } else {

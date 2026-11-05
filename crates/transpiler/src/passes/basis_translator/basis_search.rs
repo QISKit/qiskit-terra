@@ -168,7 +168,7 @@ pub(crate) fn basis_search(
     };
 
     let basis_transforms =
-        match dijkstra_search(&equiv_lib.graph(), [dummy], edge_weight, event_matcher) {
+        match dijkstra_search(equiv_lib.graph(), [dummy], edge_weight, event_matcher) {
             Ok(Control::Break(_)) => Some(basis_transforms),
             _ => None,
         };

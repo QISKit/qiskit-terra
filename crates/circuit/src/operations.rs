@@ -11,15 +11,16 @@
 // that they have been altered from the originals.
 
 use approx::relative_eq;
-use qiskit_quantum_info::sparse_pauli_op::MatrixCompressedPaulis;
+use qiskit_quantum_info::matrix_compressed_pauli::MatrixCompressedPaulis;
 use std::any::Any;
 use std::fmt::Debug;
 use std::num::NonZero;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{fmt, vec};
+use std::{error, fmt, vec};
 
+use crate::annotation::{Annotation, create_py_annotation};
 use crate::bit::{ClassicalRegister, ShareableClbit};
 use crate::circuit_data::{CircuitData, PyCircuitData};
 use crate::classical::expr;
@@ -41,19 +42,44 @@ use num_complex::{Complex64, c64};
 use smallvec::SmallVec;
 
 use numpy::{PyArray1, PyReadonlyArray2, ToPyArray};
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyFloat, PyTuple, PyType};
+use pyo3::types::{IntoPyDict, PyDict, PyFloat, PyInt, PyTuple, PyType};
 use pyo3::{IntoPyObjectExt, Python, intern};
 
 // This is a convenience re-export, since basically everywhere in Qiskit expects all the
 // `StandardGate` definitions to be in this file.
 pub use crate::standard_gate::*;
 
+/// Represent all possible parameters that can be used on an operation
+/// for Qiskit.
+///
+/// This enumeration has 3(+1) variants:
+/// - [`Param::ParameterExpression`]: Representing an unbound parameter.
+/// - [`Param::Float`]: Represents a bound parameter with a real value
+///   associated with it.
+/// - [`Param::Int`]: Used exclusively to represent a duration in terms of
+///   `Dt` for a [`StandardInstruction::Delay`].
+/// - [`Param::Obj`]: (only used when python is involved). Represents
+///   parameters that are historically not representable in Rust.
 #[derive(Clone, Debug)]
 pub enum Param {
+    /// Represents an unbound parameter as either a symbol or an expression
+    /// comprised of a mix of symbols and numbers. This is used for when a
+    /// certain value is shared between operations in a circuit, and will
+    /// accept a value right before the circuit runs.
     ParameterExpression(Arc<ParameterExpression>),
+    /// Used for parameters that must only be integers.  For example, the
+    /// `Delay::DT` unit requires this, but gate angles must use `Float`.
+    Int(i64),
+    /// Represents a bound parameter with a real value associated with it.
+    /// This, alongside [`Param::ParameterExpression`], is the most common
+    /// way a parameter is associated with a [`StandardGate`] in Qiskit,
+    /// since it usually represents a rotation in terms of radians and as
+    /// these are irrational numbers they are best represented by a
+    /// floating point number.
     Float(f64),
+    /// Represents Python parameters with no special Rust handling.
     Obj(Py<PyAny>),
 }
 
@@ -70,6 +96,7 @@ impl<'py> IntoPyObject<'py> for &Param {
                 let py_expr = PyParameterExpression::from(expr.as_ref().clone());
                 py_expr.coerce_into_py(py)?.into_bound_py_any(py)
             }
+            Param::Int(value) => value.into_bound_py_any(py),
         }
     }
 }
@@ -91,9 +118,9 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Param {
         Ok(if let Ok(py_expr) = b.extract::<PyParameterExpression>() {
             Param::ParameterExpression(Arc::new(py_expr.inner))
         } else if b.is_instance_of::<PyArray1<i32>>() {
+            // TODO: remove this branch when we raise the NumPy version to 2.4.
             Param::Obj(b.to_owned().unbind())
         } else if let Ok(val) = b.extract::<f64>() {
-            // TODO: remove this branch when we raise the NumPy version to 2.4.
             Param::Float(val)
         } else {
             Param::Obj(b.to_owned().unbind())
@@ -124,6 +151,18 @@ impl Param {
             [Self::Float(_), Self::Obj(_)] => Ok(false),
             [Self::Obj(_a), Self::ParameterExpression(_b)] => Ok(false),
             [Self::ParameterExpression(_a), Self::Obj(_b)] => Ok(false),
+            [Self::Int(int), Self::Int(other_int)] => Ok(int == other_int),
+            [Self::Int(int), Self::Float(float)] | [Self::Float(float), Self::Int(int)] => {
+                Ok(float == &(*int as f64))
+            }
+            [Self::Int(int), Self::ParameterExpression(expr)]
+            | [Self::ParameterExpression(expr), Self::Int(int)] => {
+                let int_as_val: Value = (*int).into();
+                Ok(ParameterExpression::from(int_as_val) == **expr)
+            }
+            [Self::Int(int), Self::Obj(obj)] | [Self::Obj(obj), Self::Int(int)] => {
+                Python::attach(|py| obj.bind(py).eq(int))
+            }
         }
     }
 
@@ -139,7 +178,7 @@ impl Param {
     /// Get an iterator over any `Symbol` instances tracked within this `Param`.
     pub fn iter_parameters(&self) -> PyResult<Box<dyn Iterator<Item = Symbol> + '_>> {
         match self {
-            Param::Float(_) => Ok(Box::new(::std::iter::empty())),
+            Param::Float(_) | Param::Int(_) => Ok(Box::new(::std::iter::empty())),
             Param::ParameterExpression(expr) => Ok(Box::new(expr.iter_symbols().cloned())),
             Param::Obj(obj) => {
                 Python::attach(|py| -> PyResult<Box<dyn Iterator<Item = Symbol>>> {
@@ -182,9 +221,7 @@ impl Param {
                     if coerce_to_float {
                         Ok(Self::Float(i as f64)) // coerce integer to float
                     } else {
-                        // Int is not a param type and only comes from Python so dump it in
-                        // there until we support DT unit delay from C
-                        Python::attach(|py| Ok(Self::Obj(i.into_py_any(py)?)))
+                        Ok(Self::Int(i))
                     }
                 }
                 Value::Real(f) => Ok(Self::Float(f)),
@@ -209,10 +246,25 @@ impl Param {
     pub fn extract_no_coerce(ob: Borrowed<PyAny>) -> PyResult<Self> {
         Ok(if ob.is_instance_of::<PyFloat>() {
             Param::Float(ob.extract()?)
+        } else if ob.is_instance_of::<PyInt>() {
+            if let Ok(int) = ob.extract() {
+                Param::Int(int)
+            } else {
+                // This catch leaves bigints as Python objects, rather than coercing them. We may
+                // decide to change this, and have tighter limits once we have specialized uses of
+                // `extract_no_coerce` so we can be more sure of the context.
+                Param::Obj(ob.to_owned().unbind())
+            }
         } else if let Ok(py_expr) = PyParameterExpression::extract_coerce(ob) {
+            if Some(true) == py_expr.inner.is_int() {
+                let Value::Int(int) = py_expr.inner.try_to_value(true)? else {
+                    return Ok(Param::Obj(ob.to_owned().unbind()));
+                };
+                Param::Int(int)
+            }
             // don't get confused by the `coerce` name here -- we promise to not coerce to
-            // Param::Float. But if it's an int or complex we need to store it as an Obj.
-            if Some(true) == py_expr.inner.is_int() || Some(true) == py_expr.inner.is_complex() {
+            // Param::Float. But if it's complex we need to store it as an Obj.
+            else if Some(true) == py_expr.inner.is_complex() {
                 Param::Obj(ob.to_owned().unbind())
             } else {
                 Param::ParameterExpression(Arc::new(py_expr.inner))
@@ -222,12 +274,40 @@ impl Param {
         })
     }
 
+    /// Extracts a duration value based on its unit.
+    pub fn extract_duration(ob: Borrowed<PyAny>, unit: &DelayUnit) -> PyResult<Self> {
+        if let Ok(par_expr) = PyParameterExpression::extract(ob) {
+            if matches!(unit, DelayUnit::EXPR) {
+                return Err(PyTypeError::new_err(format!(
+                    "Expected an 'Expr' for '{}' duration unit, got {}",
+                    unit,
+                    ob.get_type().repr()?
+                )));
+            }
+            if par_expr.inner.is_int() == Some(true) && matches!(unit, DelayUnit::DT) {
+                return Err(PyTypeError::new_err(format!(
+                    "Expected an 'Int' for '{}' duration unit, got {}",
+                    unit,
+                    ob.get_type().repr()?
+                )));
+            }
+            Ok(Param::ParameterExpression(Arc::new(par_expr.inner)))
+        } else {
+            match unit {
+                DelayUnit::DT => Ok(Param::Int(ob.extract()?)),
+                DelayUnit::EXPR => Ok(Param::Obj(ob.as_any().clone().unbind())),
+                _ => Ok(Param::Float(ob.extract()?)),
+            }
+        }
+    }
+
     /// Clones the [Param] object safely by reference count or copying.
     pub fn clone_ref(&self, py: Python) -> Self {
         match self {
             Param::ParameterExpression(exp) => Param::ParameterExpression(exp.clone()),
             Param::Float(float) => Param::Float(*float),
             Param::Obj(obj) => Param::Obj(obj.clone_ref(py)),
+            Param::Int(int) => Param::Int(*int),
         }
     }
 
@@ -288,6 +368,7 @@ pub enum OperationRef<'a> {
     PauliProductMeasurement(&'a PauliProductMeasurement),
     PauliProductRotation(&'a PauliProductRotation),
     CustomOperation(&'a dyn CustomOperation),
+    Store(&'a Store),
 }
 
 impl Operation for OperationRef<'_> {
@@ -302,6 +383,7 @@ impl Operation for OperationRef<'_> {
             Self::PauliProductMeasurement(ppm) => ppm.name(),
             Self::PauliProductRotation(rotation) => rotation.name(),
             Self::CustomOperation(operation) => operation.name(),
+            Self::Store(store) => store.name(),
         }
     }
     #[inline]
@@ -315,6 +397,7 @@ impl Operation for OperationRef<'_> {
             Self::PauliProductMeasurement(ppm) => ppm.num_qubits(),
             Self::PauliProductRotation(rotation) => rotation.num_qubits(),
             Self::CustomOperation(operation) => operation.num_qubits(),
+            Self::Store(store) => store.num_qubits(),
         }
     }
     #[inline]
@@ -328,6 +411,7 @@ impl Operation for OperationRef<'_> {
             Self::PauliProductMeasurement(ppm) => ppm.num_clbits(),
             Self::PauliProductRotation(rotation) => rotation.num_clbits(),
             Self::CustomOperation(operation) => operation.num_clbits(),
+            Self::Store(store) => store.num_clbits(),
         }
     }
     #[inline]
@@ -341,6 +425,7 @@ impl Operation for OperationRef<'_> {
             Self::PauliProductMeasurement(ppm) => ppm.num_params(),
             Self::PauliProductRotation(rotation) => rotation.num_params(),
             Self::CustomOperation(operation) => operation.num_params(),
+            Self::Store(store) => store.num_params(),
         }
     }
     #[inline]
@@ -354,6 +439,7 @@ impl Operation for OperationRef<'_> {
             Self::PauliProductMeasurement(ppm) => ppm.directive(),
             Self::PauliProductRotation(rotation) => rotation.directive(),
             Self::CustomOperation(operation) => operation.directive(),
+            Self::Store(store) => store.directive(),
         }
     }
 }
@@ -540,7 +626,7 @@ impl<'py> IntoPyObject<'py> for LoopParam {
 pub enum ControlFlow {
     Box {
         duration: Option<BoxDuration>,
-        annotations: Vec<Py<PyAny>>,
+        annotations: Vec<Arc<dyn Annotation>>,
     },
     BreakLoop,
     ContinueLoop,
@@ -562,88 +648,6 @@ pub enum ControlFlow {
 }
 
 impl ControlFlowInstruction {
-    /// Check if another control flow operations is equivalent to this one.
-    ///
-    /// This can be removed and [ControlFlowInstruction] can be made to implement [PartialEq]
-    /// instead once `annotations` gets moved to the instruction.
-    pub fn py_eq(&self, py: Python, other: &ControlFlowInstruction) -> PyResult<bool> {
-        if self.num_qubits != other.num_qubits || self.num_clbits != other.num_clbits {
-            return Ok(false);
-        }
-        match &self.control_flow {
-            ControlFlow::Box {
-                duration: self_duration,
-                annotations: self_annotations,
-            } => match &other.control_flow {
-                ControlFlow::Box {
-                    duration: other_duration,
-                    annotations: other_annotations,
-                } => {
-                    if self_duration != other_duration
-                        || self_annotations.len() != other_annotations.len()
-                    {
-                        return Ok(false);
-                    }
-                    for (a, b) in self_annotations.iter().zip(other_annotations) {
-                        if !a.bind(py).eq(b)? {
-                            return Ok(false);
-                        }
-                    }
-                    Ok(true)
-                }
-                _ => Ok(false),
-            },
-            ControlFlow::BreakLoop => match &other.control_flow {
-                ControlFlow::BreakLoop => Ok(true),
-                _ => Ok(false),
-            },
-            ControlFlow::ContinueLoop => match &other.control_flow {
-                ControlFlow::ContinueLoop => Ok(true),
-                _ => Ok(false),
-            },
-            ControlFlow::ForLoop {
-                collection: self_collection,
-                loop_param: self_loop_param,
-            } => match &other.control_flow {
-                ControlFlow::ForLoop {
-                    collection: other_collection,
-                    loop_param: other_loop_param,
-                } => Ok(self_collection == other_collection && self_loop_param == other_loop_param),
-                _ => Ok(false),
-            },
-            ControlFlow::IfElse {
-                condition: self_condition,
-            } => match &other.control_flow {
-                ControlFlow::IfElse {
-                    condition: other_condition,
-                } => Ok(self_condition == other_condition),
-                _ => Ok(false),
-            },
-            ControlFlow::Switch {
-                target: self_target,
-                label_spec: self_label_spec,
-                cases: self_cases,
-            } => match &other.control_flow {
-                ControlFlow::Switch {
-                    target: other_target,
-                    label_spec: other_label_spec,
-                    cases: other_cases,
-                } => Ok(self_cases == other_cases
-                    && self_target == other_target
-                    && self_label_spec == other_label_spec),
-                _ => Ok(false),
-            },
-            ControlFlow::While {
-                condition: self_condition,
-            } => match &other.control_flow {
-                ControlFlow::While {
-                    condition: other_condition,
-                } => Ok(self_condition == other_condition),
-                _ => Ok(false),
-            },
-        }
-    }
-
     pub fn create_py_op(
         &self,
         py: Python,
@@ -680,7 +684,13 @@ impl ControlFlowInstruction {
                         duration,
                         unit,
                         label,
-                        PyTuple::new(py, annotations)?,
+                        PyTuple::new(
+                            py,
+                            annotations
+                                .iter()
+                                .map(|a| create_py_annotation(a, py))
+                                .collect::<PyResult<Vec<_>>>()?,
+                        )?,
                     ),
                 )
             }
@@ -757,6 +767,83 @@ impl ControlFlowInstruction {
     }
 }
 
+impl PartialEq for ControlFlowInstruction {
+    /// Check if another control flow operations is equivalent to this one.
+    fn eq(&self, other: &ControlFlowInstruction) -> bool {
+        if self.num_qubits != other.num_qubits || self.num_clbits != other.num_clbits {
+            return false;
+        }
+        match &self.control_flow {
+            ControlFlow::Box {
+                duration: self_duration,
+                annotations: self_annotations,
+            } => match &other.control_flow {
+                ControlFlow::Box {
+                    duration: other_duration,
+                    annotations: other_annotations,
+                } => {
+                    if self_duration != other_duration
+                        || self_annotations.len() != other_annotations.len()
+                    {
+                        return false;
+                    }
+                    for (a, b) in self_annotations.iter().zip(other_annotations) {
+                        if a != b {
+                            return false;
+                        }
+                    }
+                    true
+                }
+                _ => false,
+            },
+            ControlFlow::BreakLoop => matches!(&other.control_flow, ControlFlow::BreakLoop),
+            ControlFlow::ContinueLoop => matches!(&other.control_flow, ControlFlow::ContinueLoop),
+            ControlFlow::ForLoop {
+                collection: self_collection,
+                loop_param: self_loop_param,
+            } => match &other.control_flow {
+                ControlFlow::ForLoop {
+                    collection: other_collection,
+                    loop_param: other_loop_param,
+                } => self_collection == other_collection && self_loop_param == other_loop_param,
+                _ => false,
+            },
+            ControlFlow::IfElse {
+                condition: self_condition,
+            } => match &other.control_flow {
+                ControlFlow::IfElse {
+                    condition: other_condition,
+                } => self_condition == other_condition,
+                _ => false,
+            },
+            ControlFlow::Switch {
+                target: self_target,
+                label_spec: self_label_spec,
+                cases: self_cases,
+            } => match &other.control_flow {
+                ControlFlow::Switch {
+                    target: other_target,
+                    label_spec: other_label_spec,
+                    cases: other_cases,
+                } => {
+                    self_cases == other_cases
+                        && self_target == other_target
+                        && self_label_spec == other_label_spec
+                }
+                _ => false,
+            },
+            ControlFlow::While {
+                condition: self_condition,
+            } => match &other.control_flow {
+                ControlFlow::While {
+                    condition: other_condition,
+                } => self_condition == other_condition,
+                _ => false,
+            },
+        }
+    }
+}
+
 impl Operation for ControlFlowInstruction {
     fn name(&self) -> &str {
         match &self.control_flow {
@@ -800,6 +887,7 @@ impl Operation for ControlFlowInstruction {
 pub enum ControlFlowView<'a, T> {
     Box {
         duration: Option<&'a BoxDuration>,
+        annotations: &'a [Arc<dyn Annotation>],
         body: &'a T,
     },
     BreakLoop,
@@ -845,9 +933,10 @@ impl<'a, T> ControlFlowView<'a, T> {
         let view = match &cf.control_flow {
             ControlFlow::Box {
                 duration,
-                annotations: _,
+                annotations,
             } => Self::Box {
                 duration: duration.as_ref(),
+                annotations: annotations.as_slice(),
                 body: &blocks[block_ids[0]],
             },
             ControlFlow::BreakLoop => Self::BreakLoop,
@@ -1195,10 +1284,18 @@ pub fn clone_param(param: &Param) -> Param {
         Param::Float(theta) => Param::Float(*theta),
         Param::ParameterExpression(theta) => Param::ParameterExpression(theta.clone()),
         Param::Obj(_) => unreachable!(),
+        Param::Int(int) => Param::Int(*int),
     }
 }
 
-/// Multiply a ``Param`` with a float.
+/// Multiply a [`Param`] with a float.
+///
+/// Multiplying is only supported between variants [`Param::Float`] and
+/// [`Param::ParameterExpression`]. [`Param::Int`] is not currently supported.
+///
+/// # Panics
+///
+/// The operation will panic if any of the parameters is [`Param::Int`] or [`Param::Obj`].
 pub fn multiply_param(param: &Param, mult: f64) -> Param {
     match param {
         Param::Float(theta) => Param::Float(theta * mult),
@@ -1208,11 +1305,22 @@ pub fn multiply_param(param: &Param, mult: f64) -> Param {
                 theta.mul(&ParameterExpression::from_f64(mult)).unwrap(),
             ))
         }
-        Param::Obj(_) => unreachable!("Unsupported multiplication of a Param::Obj."),
+        Param::Obj(_) | Param::Int(_) => {
+            panic!("Unsupported multiplication of a Param::Obj.")
+        }
     }
 }
 
 /// Multiply two ``Param``s.
+///
+/// Multiplication is supported between variants [`Param::Float`] and
+/// [`Param::ParameterExpression`]. Multiplying [`Param::Int`] by anything
+/// other than another [`Param::Int`] instance will result in a panic.
+///
+/// # Panics
+///
+/// The operation will panic if any of the parameters is [`Param::Obj`] or
+/// if a [`Param::Int`] instance is multiplied by a different variant.
 pub fn multiply_params(param1: Param, param2: Param) -> Param {
     match (&param1, &param2) {
         (Param::Float(theta), Param::Float(lambda)) => Param::Float(theta * lambda),
@@ -1222,10 +1330,19 @@ pub fn multiply_params(param1: Param, param2: Param) -> Param {
             // TODO we could properly propagate the error here
             Param::ParameterExpression(Arc::new(p1.mul(p2).expect("Name conflict during mul.")))
         }
-        _ => unreachable!("Unsupported multiplication."),
+        (Param::Int(left), Param::Int(right)) => Param::Int(left * right),
+        _ => panic!("Unsupported multiplication."),
     }
 }
 
+/// Adda a [`Param`] with a float.
+///
+/// Addition is only supported between variants [`Param::Float`] and
+/// [`Param::ParameterExpression`]. [`Param::Int`] is not currently supported.
+///
+/// # Panics
+///
+/// The operation will panic if any of the parameters is [`Param::Int`] or [`Param::Obj`].
 pub fn add_param(param: &Param, summand: f64) -> Param {
     match param {
         Param::Float(theta) => Param::Float(*theta + summand),
@@ -1233,15 +1350,25 @@ pub fn add_param(param: &Param, summand: f64) -> Param {
             // safe to unwrap as addition with float does not have name conflicts
             Arc::new(theta.add(&ParameterExpression::from_f64(summand)).unwrap()),
         ),
-        Param::Obj(_) => unreachable!("Unsupported addition of a Param::Obj."),
+        Param::Obj(_) | Param::Int(_) => {
+            panic!("Unsupported addition of a Param::Obj or Param::Int.")
+        }
     }
 }
 
+/// Adds two [`Param`] instances.
+///
+/// Addition is only supported between variants [`Param::Float`] and
+/// [`Param::ParameterExpression`]. Adding [`Param::Int`] with anything
+/// other than another [`Param::Int`] instance will result in a panic.
+///
+/// # Panics
+///
+/// The operation will panic if any of the parameters is [`Param::Obj`] or
+/// if a [`Param::Int`] instance is added to a different variant.
 pub fn radd_param(param1: Param, param2: Param) -> Param {
     match [&param1, &param2] {
-        [Param::Float(theta), Param::Float(lambda)] => Param::Float(theta + lambda),
-        [Param::Float(theta), Param::ParameterExpression(_lambda)] => add_param(&param2, *theta),
-        [Param::ParameterExpression(_theta), Param::Float(lambda)] => add_param(&param1, *lambda),
+        [param, Param::Float(float)] | [Param::Float(float), param] => add_param(param, *float),
         [
             Param::ParameterExpression(theta),
             Param::ParameterExpression(lambda),
@@ -1251,6 +1378,7 @@ pub fn radd_param(param1: Param, param2: Param) -> Param {
                 theta.add(lambda).expect("Name conflict during add."),
             ))
         }
+        [Param::Int(left), Param::Int(right)] => Param::Int(*left + right),
         _ => unreachable!("Unsupported addition."),
     }
 }
@@ -1778,7 +1906,7 @@ impl PauliProductRotation {
             .zip(self.x.iter())
             .filter(|(z, x)| **z || **x)
             .count();
-        let dim = 2u32.pow(num_qubits as u32);
+        let dim = (num_qubits as f64).exp2();
         let tr_over_dim = if num_qubits == 0 {
             // This is an identity Pauli rotation.
             (Complex64::new(0.0, -angle / 2.)).exp()
@@ -1786,7 +1914,7 @@ impl PauliProductRotation {
             Complex64::new((angle / 2.).cos(), 0.)
         };
 
-        Some((tr_over_dim, dim as f64))
+        Some((tr_over_dim, dim))
     }
 
     /// Return a dense matrix representation of the matrix.
@@ -1917,6 +2045,76 @@ impl PartialEq for PauliProductMeasurement {
 
 impl Eq for PauliProductMeasurement {}
 
+/// A manual storage of some classical value to a classical memory location
+#[derive(Debug, Clone, PartialEq)]
+pub struct Store {
+    lvalue: expr::Expr,
+    rvalue: expr::Expr,
+}
+
+impl Store {
+    pub fn create_py_op(&self, py: Python, label: Option<&str>) -> PyResult<Py<PyAny>> {
+        if let Some(label) = label {
+            Ok(imports::STORE
+                .get_bound(py)
+                .call1((self.lvalue.clone(), self.rvalue.clone(), label))?
+                .unbind())
+        } else {
+            Ok(imports::STORE
+                .get_bound(py)
+                .call1((self.lvalue.clone(), self.rvalue.clone()))?
+                .unbind())
+        }
+    }
+
+    /// Get an immutable borrow to the lvalue of this Store operation
+    pub fn lvalue(&self) -> &expr::Expr {
+        &self.lvalue
+    }
+
+    /// Get an immutable borrow to the rvalue of this Store operation
+    pub fn rvalue(&self) -> &expr::Expr {
+        &self.rvalue
+    }
+
+    /// Create a new Store operation
+    ///
+    /// The `lvalue` argument must be a valid lvalue (typically a var)
+    /// and the `rvalue` argument must be a valid value for that
+    /// storage location. This is a raw interface that has no input
+    /// checking done by this function to validate these constraints.
+    /// If they are violated you will create an invalid Store operation
+    /// that will potentially corrupt the [`CircuitData`] or [`DAGCircuit`]
+    /// objects when they are added. This is primarily intended to be used
+    /// when created the rust source of truth from a user created object
+    /// in Python (which has the input validation).
+    pub fn new(lvalue: expr::Expr, rvalue: expr::Expr) -> Self {
+        Self { lvalue, rvalue }
+    }
+}
+
+impl Operation for Store {
+    fn name(&self) -> &str {
+        "store"
+    }
+
+    fn num_qubits(&self) -> u32 {
+        0
+    }
+
+    fn num_clbits(&self) -> u32 {
+        0
+    }
+
+    fn num_params(&self) -> u32 {
+        0
+    }
+
+    fn directive(&self) -> bool {
+        true
+    }
+}
+
 /// Private module with especific traits that allow for the implementation
 /// of non dyn-compatible traits for [`CustomOperation`]. Namely [`PartialEq`]
 /// and [`Clone`].
@@ -2000,11 +2198,17 @@ pub trait CustomOperation:
         None
     }
 
-    /// If the instance is a gate, returns the unitary matrix that represents it,
-    /// if the parameters are correct. Otherwise, it returns None.
-    fn matrix(&self, _params: &[Param]) -> Option<Array2<Complex64>> {
-        // TODO: Make fallible.
-        None
+    /// Returns the dense unitary matrix for the operation or `None` by default
+    /// if not applicable or unimplemented.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there was a problem creating the matrix.
+    fn matrix(
+        &self,
+        _params: &[Param],
+    ) -> Result<Option<Array2<Complex64>>, Box<dyn error::Error>> {
+        Ok(None)
     }
 
     /// If the instance is a gate, returns the number of control qubits.
@@ -2058,7 +2262,7 @@ impl dyn CustomOperation + 'static {
 /// [`PackedOperation`].
 #[derive(Debug)]
 #[repr(align(8))]
-pub(crate) struct BoxedCustomOperation(Box<dyn CustomOperation>);
+pub struct BoxedCustomOperation(Box<dyn CustomOperation>);
 
 impl Deref for BoxedCustomOperation {
     type Target = dyn CustomOperation;
@@ -2147,6 +2351,8 @@ mod test_custom_operations {
     use smallvec::smallvec;
     use std::f64::consts::PI;
 
+    use super::*;
+
     macro_rules! impl_static_operation {
         ($ty:ident; $name:expr, $qubits:expr, $clbits:expr, $params:expr, $directive:expr) => {
             impl $crate::operations::Operation for $ty {
@@ -2184,8 +2390,11 @@ mod test_custom_operations {
             .ok()
         }
 
-        fn matrix(&self, params: &[Param]) -> Option<ndarray::Array2<numpy::Complex64>> {
-            params.is_empty().then_some(aview2(&H_GATE).to_owned())
+        fn matrix(
+            &self,
+            params: &[Param],
+        ) -> Result<Option<Array2<Complex64>>, Box<dyn error::Error>> {
+            Ok(params.is_empty().then_some(aview2(&H_GATE).to_owned()))
         }
 
         fn is_unitary(&self) -> bool {
@@ -2211,10 +2420,13 @@ mod test_custom_operations {
             true
         }
 
-        fn matrix(&self, params: &[Param]) -> Option<ndarray::Array2<numpy::Complex64>> {
+        fn matrix(
+            &self,
+            params: &[Param],
+        ) -> Result<Option<Array2<Complex64>>, Box<dyn error::Error>> {
             match params {
-                [Param::Float(theta)] => Some(aview2(&rz_gate(*theta)).to_owned()),
-                _ => None,
+                [Param::Float(theta)] => Ok(Some(aview2(&rz_gate(*theta)).to_owned())),
+                _ => Ok(None),
             }
         }
 
@@ -2315,12 +2527,11 @@ mod test_custom_operations {
         assert!(gate.is_unitary());
 
         let matrix_res = gate.matrix(&[]);
-        let matrix_exp = Some(aview2(&H_GATE));
-        assert_eq!(matrix_res.as_ref().map(|mat| mat.view()), matrix_exp);
+        let matrix_exp = aview2(&H_GATE);
+        assert!(matches!(matrix_res, Ok(Some(matrix)) if matrix == matrix_exp));
 
         let matrix_res = gate.matrix(&[Param::Float(PI)]);
-        let matrix_exp = None;
-        assert_eq!(matrix_res, matrix_exp,);
+        assert!(matches!(matrix_res, Ok(None)));
 
         let circuit = gate.definition(&[]).expect("Circuit should exist.");
         assert_eq!(circuit.len(), 1);
@@ -2352,7 +2563,10 @@ mod test_custom_operations {
         // Check that the retreived gate is still valid.
         assert_eq!(gate_as_h.num_qubits(), 1);
         assert!(gate_as_h.is_unitary());
-        assert_eq!(gate_as_h.matrix(&[]), Some(aview2(&H_GATE).to_owned()));
+        assert!(matches!(
+            gate_as_h.matrix(&[]),
+            Ok(Some(matrix)) if matrix == aview2(&H_GATE).to_owned()
+        ));
 
         // Final instance equality check.
         assert_eq!(Some(&CustomH), Some(downcast_gate))
@@ -2467,7 +2681,7 @@ mod test_custom_operations {
         let labeled_rz = ParametrizedAndLabeled::new(Some("rz"));
         let theta: Param = (PI / 4.0).into();
 
-        let Some(matrix) = labeled_rz.matrix(&[theta]) else {
+        let Ok(Some(matrix)) = labeled_rz.matrix(&[theta]) else {
             panic!("Matrix should exist");
         };
         // Compare matrices
@@ -2478,7 +2692,7 @@ mod test_custom_operations {
         ));
 
         // Compare null case
-        assert_eq!(labeled_rz.matrix(&[]), None,);
+        assert!(matches!(labeled_rz.matrix(&[]), Ok(None)));
     }
 
     // Test inversed gate

@@ -1,0 +1,8 @@
+---
+upgrade_qpy:
+  - |
+    QPY has been upgraded to version 18, which changes how a ``REGISTER_PARAM`` payload -- the
+    field that identifies either a :class:`.ClassicalRegister` or a single :class:`.Clbit` -- tells
+    the two apart.  It now begins with a tag byte and stores a clbit as a ``uint32_t`` index,
+    instead of overloading one string in which a clbit was a null character followed by its index
+    in decimal digits.  See :ref:`qpy_version_18` for the format description.

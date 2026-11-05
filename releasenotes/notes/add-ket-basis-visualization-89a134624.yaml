@@ -1,0 +1,6 @@
+---
+features_visualization:
+  - |
+    The ``latex`` and ``latex_source`` outputs of :meth:`.Statevector.draw` can now write
+    qubit states in the X or Y basis instead of the computational basis, using the new
+    ``ket_basis`` argument (``"x"``, ``"y"`` or ``"z"``, the default).

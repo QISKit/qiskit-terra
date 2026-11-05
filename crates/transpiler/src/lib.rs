@@ -10,6 +10,12 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#![allow(
+    clippy::self_named_module_files,
+    // See https://github.com/rust-lang/rust-clippy/issues/11916
+    reason = "false positive in clippy for Rust <= 1.91",
+)]
+
 pub mod angle_bound_registry;
 pub mod commutation_checker;
 pub mod equivalence;

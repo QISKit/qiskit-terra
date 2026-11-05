@@ -13,8 +13,6 @@
 use qiskit_circuit::{circuit_data::CircuitData, dag_circuit::DAGCircuit};
 use qiskit_transpiler::passes::run_litinski_transformation;
 
-use crate::pointers::mut_ptr_as_ref;
-
 /// @ingroup QkTranspilerPassesStandalone
 /// Run the ``LitinskiTransformation`` pass in-place on a circuit.
 ///
@@ -37,8 +35,8 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_litinski_transformation(
     fix_clifford: bool,
 ) {
     // SAFETY: The user guarantees the pointer is safe to read.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
-    let dag = DAGCircuit::from_circuit_data(circuit, false, None, None, None, None)
+    let circuit = unsafe { &mut *circuit };
+    let dag = DAGCircuit::from_circuit_data(circuit, false, None, None)
         .expect("Internal Circuit -> DAG conversion failed");
 
     // For now, run Litinski transformation with no approximation (to avoid C API change).

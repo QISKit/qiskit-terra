@@ -34,7 +34,7 @@ use pyo3::types::PyTuple;
 use pyo3::{PyResult, intern};
 
 /// Parent class for DAGOpNode, DAGInNode, and DAGOutNode.
-#[pyclass(module = "qiskit._accelerate.circuit", subclass, skip_from_py_object)]
+#[pyclass(module = "qiskit._accelerate.circuit", subclass)]
 #[derive(Clone, Debug)]
 pub struct DAGNode {
     pub node: Option<NodeIndex>,
@@ -197,7 +197,17 @@ impl DAGOpNode {
                         [Param::Obj(param_a), Param::Obj(param_b)] => {
                             param_a.bind(py).eq(param_b)?
                         }
-                        _ => false,
+                        [Param::Int(param_a), Param::Int(param_b)] => param_a == param_b,
+                        [Param::ParameterExpression(_), Param::Int(_)]
+                        | [Param::Int(_), Param::ParameterExpression(_)] => false,
+                        [Param::ParameterExpression(_), Param::Float(_)]
+                        | [Param::Float(_), Param::ParameterExpression(_)] => false,
+                        [Param::Int(_), Param::Float(_)] | [Param::Float(_), Param::Int(_)] => {
+                            false
+                        }
+                        [Param::Obj(obj_a), param_a] | [param_a, Param::Obj(obj_a)] => {
+                            obj_a.bind(py).eq(param_a)?
+                        }
                     };
                     if !res {
                         params_eq = false;

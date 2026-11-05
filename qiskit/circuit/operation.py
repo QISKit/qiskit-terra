@@ -51,18 +51,18 @@ class Operation(ABC):
 
     @property
     @abstractmethod
-    def name(self):
+    def name(self) -> str:
         """Unique string identifier for operation type."""
         raise NotImplementedError
 
     @property
     @abstractmethod
-    def num_qubits(self):
+    def num_qubits(self) -> int:
         """Number of qubits."""
         raise NotImplementedError
 
     @property
     @abstractmethod
-    def num_clbits(self):
+    def num_clbits(self) -> int:
         """Number of classical bits."""
         raise NotImplementedError

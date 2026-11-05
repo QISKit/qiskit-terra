@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    :class:`.UnitarySynthesis` no longer interprets an empty basis as a
+    Clifford+T-only basis. In particular, unitaries are now left
+    unchanged when no basis or target is supplied.
+    Fixes `#16688 <https://github.com/Qiskit/qiskit/issues/16688>`__.

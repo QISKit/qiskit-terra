@@ -11,9 +11,7 @@
 // that they have been altered from the originals.
 
 use qiskit_circuit::{circuit_data::CircuitData, dag_circuit::DAGCircuit};
-use qiskit_transpiler::passes::py_convert_to_pauli_rotations;
-
-use crate::pointers::mut_ptr_as_ref;
+use qiskit_transpiler::passes::convert_to_pauli_rotations;
 
 /// @ingroup QkTranspilerPassesStandalone
 /// Run the ``ConvertToPauliRotations`` pass in-place on a circuit.
@@ -34,12 +32,12 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_convert_to_pauli_rotation
     circuit: *mut CircuitData,
 ) {
     // SAFETY: The user guarantees the pointer is safe to read.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
-    let dag = match DAGCircuit::from_circuit_data(circuit, false, None, None, None, None) {
+    let circuit = unsafe { &mut *circuit };
+    let dag = match DAGCircuit::from_circuit_data(circuit, false, None, None) {
         Ok(dag) => dag,
         Err(_) => panic!("Internal Circuit -> DAG conversion failed"),
     };
-    let out = py_convert_to_pauli_rotations(&dag).expect("Failed running PBC conversion.");
+    let out = convert_to_pauli_rotations(&dag).expect("Failed running PBC conversion.");
     // If a DAG is returned, the circuit has been modified. Else just leave it as is.
     *circuit = CircuitData::from_dag_ref(&out).expect("Internal DAG -> Circuit conversion failed");
 }

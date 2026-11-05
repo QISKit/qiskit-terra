@@ -69,12 +69,13 @@ pub fn suzuki_trotter_evolution(
             global_phase = radd_param(global_phase.clone(), (view.coeff.re * coeff).into());
             modified_phase = true;
         }
+        let pauli = view
+            .bit_terms
+            .iter()
+            .map(|bit| bit.py_label())
+            .collect::<String>();
         let instructions = sparse_term_evolution(
-            view.bit_terms
-                .iter()
-                .map(|bit| bit.py_label())
-                .collect::<String>()
-                .leak(),
+            pauli.as_str(),
             view.indices.into(),
             (view.coeff.re * coeff).into(),
             false,
@@ -127,4 +128,21 @@ pub enum EvolutionError {
     /// A general error for terms reordering error
     #[error["Error ocurred when trying to reorder terms: {0}"]]
     TermsReorder(String),
+}
+
+#[cfg(test)]
+mod test {
+    use crate::suzuki_trotter::suzuki_trotter_evolution;
+    use num_complex::c64;
+    use qiskit_quantum_info::sparse_observable::SparseObservable;
+
+    #[test]
+    fn test_suzuki_trotter() {
+        let num_qubits = 2;
+        let mut obs = SparseObservable::zero(num_qubits);
+        obs.add_dense_label("ZZ", c64(1.0, 0.0)).unwrap();
+        obs.add_dense_label("XI", c64(1.0, 0.0)).unwrap();
+        let out = suzuki_trotter_evolution(&obs, 2, 10, 1.0, true, false).unwrap();
+        assert_eq!(out.num_qubits(), 2);
+    }
 }

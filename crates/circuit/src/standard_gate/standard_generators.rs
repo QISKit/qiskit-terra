@@ -10,12 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-// AI Attribution:
-// This module was developed with assistance from GitHub Copilot integrated in VS Code.
-// The underlying model : Claude Haiku 4.5.
-// Portions of the Pauli generator mapping logic and SoA layout were generated
-// and then manually verified for mathematical correctness against the commutation logic.
-
 use num_complex::Complex64;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, FRAC_PI_8, SQRT_2};
 
@@ -61,6 +55,7 @@ pub fn standard_gate_exponent(gate: StandardGate, params: &[Param]) -> Option<Sp
             Param::Float(f) => *f,
             Param::ParameterExpression(_) => 1.0,
             Param::Obj(_) => panic!("StandardGate does not have Param::Obj parameters"),
+            Param::Int(_) => panic!("StandardGate does not have Param::Int parameters"),
         })
         .collect::<Vec<f64>>();
 

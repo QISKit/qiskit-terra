@@ -22,8 +22,14 @@ from ddt import ddt, data, unpack
 from qiskit import transpile
 from qiskit.circuit import QuantumCircuit, Parameter
 from qiskit.circuit.library import PauliEvolutionGate, HamiltonianGate, PhaseGate, RZGate
-from qiskit.circuit.library.pauli_evolution import _merge_two_pauli_evolutions
-from qiskit.synthesis import LieTrotter, SuzukiTrotter, MatrixExponential, QDrift
+from qiskit.circuit.library.pauli_evolution import _contains_projectors, _merge_two_pauli_evolutions
+from qiskit.synthesis import (
+    LieTrotter,
+    SuzukiTrotter,
+    MatrixExponential,
+    QDrift,
+    EvolutionSynthesis,
+)
 from qiskit.synthesis.evolution.product_formula import reorder_paulis
 from qiskit.converters import circuit_to_dag
 from qiskit.quantum_info import Operator, SparsePauliOp, Pauli, Statevector, SparseObservable
@@ -222,7 +228,7 @@ class TestEvolutionGate(QiskitTestCase):
 
         synthesis = SuzukiTrotter(order=2, reps=reps)
         if use_plugin:
-            hls_config = HLSConfig(PauliEvolution=[("default", {"preserve_order": False})])
+            hls_config = HLSConfig(PauliEvolution=[("basic", {"preserve_order": False})])
         else:
             synthesis.preserve_order = False
             hls_config = None
@@ -289,6 +295,38 @@ class TestEvolutionGate(QiskitTestCase):
         exact = scipy.linalg.expm(-1j * time * op.to_matrix()).dot(np.eye(4)[0, :])
 
         self.assertAlmostEqual(energy(exact), np.average(qdrift_energy), places=2)
+
+    def test_qdrift_zero_time(self):
+        gate = PauliEvolutionGate(SparsePauliOp("X", coeffs=[1]), time=0)
+        expanded = QDrift(seed=123).expand(gate)
+        self.assertEqual(expanded, [])
+
+    def test_qdrift_zero_hermitian(self):
+        gate = PauliEvolutionGate(SparsePauliOp("X", coeffs=[0]), time=1)
+        expanded = QDrift(seed=123).expand(gate)
+        self.assertEqual(expanded, [])
+
+    def test_matrix_exponential_compilation(self):
+        gate = PauliEvolutionGate(
+            SparsePauliOp(["XI", "ZZ"]), time=1, synthesis=MatrixExponential()
+        )
+        circuit = QuantumCircuit(gate.num_qubits)
+        circuit.append(gate, circuit.qubits)
+        tqc = transpile(circuit, basis_gates=["u", "cx"], initial_layout=[0, 1])
+
+        self.assertTrue(np.allclose(Operator(tqc).data, gate.to_matrix()))
+
+    def test_custom_synthesis(self):
+        gate = PauliEvolutionGate(SparsePauliOp("ZZZ"), time=1, synthesis=EmptySynthesis())
+        with self.subTest(msg="test definition"):
+            self.assertEqual(gate.definition, QuantumCircuit(gate.num_qubits))
+
+        circuit = QuantumCircuit(gate.num_qubits)
+        circuit.append(gate, circuit.qubits)
+        tqc = transpile(circuit, basis_gates=["u", "cx"])
+
+        with self.subTest(msg="test transpile"):
+            self.assertEqual(tqc, QuantumCircuit(gate.num_qubits))
 
     @data(True, False)
     def test_passing_grouped_paulis(self, wrap):
@@ -853,6 +891,24 @@ class TestEvolutionGate(QiskitTestCase):
             merged = _merge_two_pauli_evolutions(gate1, gate2)
             self.assertIsNotNone(merged)
 
+    def test_contains_projectors(self):
+        """Test correctness of the `_contains_projector` helper function."""
+        with self.subTest("SparsePauliOp"):
+            gate = PauliEvolutionGate(SparsePauliOp("XY"))
+            self.assertFalse(_contains_projectors(gate))
+        with self.subTest("SparseObservable without projectors"):
+            gate = PauliEvolutionGate(SparseObservable("XY"))
+            self.assertFalse(_contains_projectors(gate))
+        with self.subTest("SparseObservable with projectors"):
+            gate = PauliEvolutionGate(SparseObservable("X+"))
+            self.assertTrue(_contains_projectors(gate))
+        with self.subTest("List of SparseObservables without projectors"):
+            gate = PauliEvolutionGate([SparseObservable("XX"), SparseObservable("YY")])
+            self.assertFalse(_contains_projectors(gate))
+        with self.subTest("List of SparseObservables with projectors"):
+            gate = PauliEvolutionGate([SparseObservable("XX"), SparseObservable("rY")])
+            self.assertTrue(_contains_projectors(gate))
+
 
 def exact_atomic_evolution(circuit, pauli, time):
     """An exact atomic evolution for Suzuki-Trotter.
@@ -950,6 +1006,17 @@ def observable_supporting_evolution(circuit, pauli, time):
         pauli = SparsePauliOp.from_sparse_observable(pauli)
 
     custom_atomic_evolution(circuit, pauli, time)
+
+
+class EmptySynthesis(EvolutionSynthesis):
+    """A custom synthesis returning an empty circuit of the right size."""
+
+    @property
+    def settings(self):
+        return {}
+
+    def synthesize(self, evolution):
+        return QuantumCircuit(evolution.num_qubits)
 
 
 @ddt

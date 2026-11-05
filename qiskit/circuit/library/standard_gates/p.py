@@ -13,13 +13,16 @@
 """Phase Gate."""
 
 from __future__ import annotations
+
 from cmath import exp
+
 import numpy
+
+from qiskit._accelerate.circuit import StandardGate
 from qiskit.circuit._utils import _ctrl_state_to_int
 from qiskit.circuit.controlledgate import ControlledGate
 from qiskit.circuit.gate import Gate
 from qiskit.circuit.parameterexpression import ParameterValueType
-from qiskit._accelerate.circuit import StandardGate
 
 
 class PhaseGate(Gate):
@@ -295,7 +298,7 @@ class CPhaseGate(ControlledGate):
 
     def power(self, exponent: float, annotated: bool = False):
         (theta,) = self.params
-        return CPhaseGate(exponent * theta)
+        return CPhaseGate(exponent * theta, ctrl_state=self.ctrl_state)
 
     def __eq__(self, other):
         if isinstance(other, CPhaseGate):
@@ -329,6 +332,7 @@ class MCPhaseGate(ControlledGate):
 
         :class:`~qiskit.circuit.library.standard_gates.CPhaseGate`:
         The singly-controlled-version of this gate.
+
     """
 
     def __init__(
@@ -352,29 +356,9 @@ class MCPhaseGate(ControlledGate):
         )
 
     def _define(self):
+        from qiskit.synthesis.multi_controlled import synth_mcp_noaux_default
 
-        from qiskit.circuit import QuantumCircuit, QuantumRegister
-
-        qr = QuantumRegister(self.num_qubits, "q")
-        qc = QuantumCircuit(qr)
-
-        if self.num_ctrl_qubits == 0:
-            qc.p(self.params[0], 0)
-        elif self.num_ctrl_qubits == 1:
-            qc.cp(self.params[0], 0, 1)
-        else:
-            lam = self.params[0]
-
-            q_controls = list(range(self.num_ctrl_qubits))
-            q_target = self.num_ctrl_qubits
-            new_target = q_target
-            for k in range(self.num_ctrl_qubits):
-                # Note: it's better *not* to run transpile recursively
-                qc.mcrz(lam / (2**k), q_controls, new_target, use_basis_gates=False)
-                new_target = q_controls.pop()
-            qc.p(lam / (2**self.num_ctrl_qubits), new_target)
-
-        self.definition = qc
+        self.definition = synth_mcp_noaux_default(self.num_ctrl_qubits, self.params[0])
 
     def control(
         self,
