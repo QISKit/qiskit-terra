@@ -84,7 +84,7 @@ pub struct KeyTensor {
 }
 
 impl KeyTensor {
-    /// Construct a tensor of `kind` keys from `words`, whose trailing axis holds the key words.
+    /// Construct a tensor of `kind` keys from `words` whose trailing axis holds the key words.
     ///
     /// Returns [`TensorError::KeyWords`] unless the trailing axis is [`PrngKind::key_words`].
     pub fn new(kind: PrngKind, words: ArcArrayD<u32>) -> Result<Self, TensorError> {
@@ -110,12 +110,12 @@ impl KeyTensor {
         &shape[..shape.len() - 1]
     }
 
-    /// Return the raw key words, with their trailing axis.
+    /// Return the raw key words with their trailing axis.
     pub fn keys(&self) -> &ArcArrayD<u32> {
         &self.keys
     }
 
-    /// Broadcast to a key tensor with the given `shape`, if possible.
+    /// Broadcast to a key tensor with the given `shape` if possible.
     pub(super) fn broadcast_to(&self, shape: &[usize]) -> Option<Self> {
         let mut target = shape.to_vec();
         target.push(self.kind.key_words());
