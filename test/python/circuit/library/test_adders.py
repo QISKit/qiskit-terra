@@ -35,6 +35,7 @@ from qiskit.synthesis.arithmetic import (
     adder_qft_d00,
     adder_modular_v17,
 )
+from qiskit.transpiler import OptimizationMetric
 from qiskit.transpiler.passes import HLSConfig, HighLevelSynthesis
 from test import QiskitTestCase
 
@@ -129,6 +130,7 @@ class TestAdder(QiskitTestCase):
                     expectations[index] += 1 / 2**num_superpos_qubits
 
         np.testing.assert_array_almost_equal(expectations, probabilities)
+        np.testing.assert_array_almost_equal(np.sqrt(expectations), statevector.data)
 
     @data(
         (3, "cdkm", "half"),
@@ -176,7 +178,7 @@ class TestAdder(QiskitTestCase):
                     with self.assertWarns(DeprecationWarning):
                         circuit = ADDER_CIRCUITS[adder](num_state_qubits, kind)
 
-        self.assertAdditionIsCorrect(num_state_qubits, circuit, True, kind)
+                self.assertAdditionIsCorrect(num_state_qubits, circuit, True, kind)
 
     @data(
         adder_ripple_c04,
@@ -272,65 +274,28 @@ class TestAdder(QiskitTestCase):
     def test_default_plugins(self):
         """Tests covering different branches in the default synthesis plugins."""
 
-        # Test's name indicates which synthesis method should get used.
-        with self.subTest(name="HalfAdder_use_ripple_rv_25"):
-            adder = HalfAdderGate(3)
-            circuit = QuantumCircuit(9)
-            circuit.append(adder, range(7))
-            hls = HighLevelSynthesis()
-            synth = hls(circuit)
-            ops = set(synth.count_ops().keys())
-            self.assertTrue("ccx" in ops)
-        with self.subTest(name="HalfAdder_use_ripple_c04"):
-            adder = HalfAdderGate(4)
-            circuit = QuantumCircuit(12)
-            circuit.append(adder, range(9))
-            hls = HighLevelSynthesis()
-            synth = hls(circuit)
-            ops = set(synth.count_ops().keys())
-            self.assertTrue("MAJ" in ops)
-        with self.subTest(name="HalfAdder_use_ripple_rv_25"):
-            adder = HalfAdderGate(4)
-            circuit = QuantumCircuit(9)
-            circuit.append(adder, range(9))
-            hls = HighLevelSynthesis()
-            synth = hls(circuit)
-            ops = set(synth.count_ops().keys())
-            self.assertTrue("ccx" in ops)
-
-        with self.subTest(name="FullAdder_use_ripple_c04"):
-            adder = FullAdderGate(4)
-            circuit = QuantumCircuit(10)
-            circuit.append(adder, range(10))
-            hls = HighLevelSynthesis()
-            synth = hls(circuit)
-            ops = set(synth.count_ops().keys())
-            self.assertTrue("MAJ" in ops)
-        with self.subTest(name="FullAdder_use_ripple_v95"):
-            adder = FullAdderGate(1)
-            circuit = QuantumCircuit(10)
-            circuit.append(adder, range(4))
-            hls = HighLevelSynthesis()
-            synth = hls(circuit)
-            ops = set(synth.count_ops().keys())
-            self.assertTrue("Carry" in ops)
-
-        with self.subTest(name="ModularAdder_use_qft_d00"):
-            adder = ModularAdderGate(4)
-            circuit = QuantumCircuit(8)
-            circuit.append(adder, range(8))
-            hls = HighLevelSynthesis()
-            synth = hls(circuit)
-            ops = set(synth.count_ops().keys())
-            self.assertTrue("cp" in ops)
-        with self.subTest(name="ModularAdder_use_v17"):
-            adder = ModularAdderGate(6)
-            circuit = QuantumCircuit(12)
-            circuit.append(adder, range(12))
-            hls = HighLevelSynthesis()
-            synth = hls(circuit)
-            ops = set(synth.count_ops().keys())
-            self.assertTrue("rccx" in ops)
+        count_2q = OptimizationMetric.COUNT_2Q
+        count_t = OptimizationMetric.COUNT_T
+        cases = [
+            ("half_2q_small", HalfAdderGate(3), 1, count_2q, "ccx"),
+            ("half_2q_c04", HalfAdderGate(4), 1, count_2q, "MAJ"),
+            ("half_2q_no_aux", HalfAdderGate(4), 0, count_2q, "ccx"),
+            ("full_2q_v95", FullAdderGate(1), 0, count_2q, "Carry"),
+            ("full_t_c04", FullAdderGate(1), 0, count_t, "MAJ"),
+            ("full_2q_c04", FullAdderGate(4), 0, count_2q, "MAJ"),
+            ("modular_2q_small", ModularAdderGate(1), 1, count_2q, "cx"),
+            ("modular_2q_qft", ModularAdderGate(3), 1, count_2q, "cp"),
+            ("modular_2q_qft_4", ModularAdderGate(4), 1, count_2q, "cp"),
+            ("modular_2q_c04_large", ModularAdderGate(5), 1, count_2q, "MAJ"),
+            ("modular_2q_v17_no_aux", ModularAdderGate(5), 0, count_2q, "rccx"),
+            ("modular_t_v17", ModularAdderGate(4), 1, count_t, "rccx"),
+        ]
+        for name, adder, num_aux, metric, expected_op in cases:
+            with self.subTest(name=name):
+                circuit = QuantumCircuit(adder.num_qubits + num_aux)
+                circuit.append(adder, range(adder.num_qubits))
+                synth = HighLevelSynthesis(optimization_metric=metric)(circuit)
+                self.assertIn(expected_op, synth.count_ops())
 
 
 if __name__ == "__main__":

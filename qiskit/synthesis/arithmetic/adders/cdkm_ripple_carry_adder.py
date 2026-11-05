@@ -18,9 +18,10 @@ from qiskit.circuit import QuantumCircuit, QuantumRegister, AncillaRegister
 def adder_ripple_c04(num_state_qubits: int, kind: str = "half") -> QuantumCircuit:
     r"""A ripple-carry circuit to perform in-place addition on two qubit registers.
 
-    This circuit uses :math:`2n + O(1)` CCX gates and :math:`5n + O(1)` CX gates,
-    at a depth of :math:`2n + O(1)` [1]. The constant depends on the kind
-    of adder implemented.
+    This circuit uses :math:`2n + O(1)` RCCX gates and :math:`5n + O(1)` CX gates,
+    at a depth of :math:`2n + O(1)` [1].
+    The relative phases introduced during majority computation cancel during
+    uncomputation. The constant depends on the kind of adder implemented.
 
     As an example, a ripple-carry adder circuit that performs addition on two 3-qubit sized
     registers with a carry-in bit (``kind="full"``) is as follows:
@@ -125,13 +126,13 @@ def adder_ripple_c04(num_state_qubits: int, kind: str = "half") -> QuantumCircui
     qc_maj = QuantumCircuit(3, name="MAJ")
     qc_maj.cx(0, 1)
     qc_maj.cx(0, 2)
-    qc_maj.ccx(2, 1, 0)
+    qc_maj.rccx(2, 1, 0)
     maj_gate = qc_maj.to_gate()
 
     # build circuit for reversing carry operation
     # corresponds to UMA gate in [1]
     qc_uma = QuantumCircuit(3, name="UMA")
-    qc_uma.ccx(2, 1, 0)
+    qc_uma.rccx(2, 1, 0)
     qc_uma.cx(0, 2)
     qc_uma.cx(2, 1)
     uma_gate = qc_uma.to_gate()

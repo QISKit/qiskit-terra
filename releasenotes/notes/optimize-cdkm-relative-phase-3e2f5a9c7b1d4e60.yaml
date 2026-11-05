@@ -1,0 +1,16 @@
+---
+features_synthesis:
+  - |
+    Updated :func:`.adder_ripple_c04` to use relative-phase Toffoli gates in
+    its compute-uncompute pairs. For an :math:`n`-bit fixed adder, this reduces
+    the CX count from :math:`16n` to :math:`10n - 8` and the T-count from
+    :math:`12n` to :math:`8n - 8` at optimization level 2, without changing
+    the implemented unitary.
+features_transpiler:
+  - |
+    Updated the default high-level synthesis methods for
+    :class:`.ModularAdderGate` and :class:`.FullAdderGate` to account for
+    the lower CX and T counts of :func:`.adder_ripple_c04`. For two-qubit-gate
+    count, modular adders with at least five state qubits use CDKM synthesis when
+    a clean auxiliary qubit is available. A single-qubit full adder uses CDKM
+    synthesis for T-count and VBE synthesis for two-qubit-gate count.

@@ -19,9 +19,9 @@ import unittest
 from ddt import data, ddt, unpack
 
 from qiskit.circuit import QuantumCircuit
-from qiskit.circuit.library.arithmetic.adders import ModularAdderGate
+from qiskit.circuit.library.arithmetic.adders import FullAdderGate, ModularAdderGate
 from qiskit.circuit.library.arithmetic.multipliers import MultiplierGate
-from qiskit.synthesis.arithmetic import adder_modular_v17
+from qiskit.synthesis.arithmetic import adder_modular_v17, adder_ripple_c04
 from qiskit.transpiler import (
     generate_preset_clifford_t_pass_manager,
     generate_preset_pass_manager,
@@ -39,6 +39,9 @@ class TestAdderSynthesisCounts(QiskitTestCase):
         # Need optimization level 2 for small modular adder counts
         self.pm = generate_preset_pass_manager(
             optimization_level=2, basis_gates=["u", "cx"], seed_transpiler=12345
+        )
+        self.clifford_t_pm = generate_preset_clifford_t_pass_manager(
+            optimization_level=2, seed_transpiler=12345
         )
 
     @data(
@@ -67,6 +70,45 @@ class TestAdderSynthesisCounts(QiskitTestCase):
         cx_count = transpiled.count_ops().get("cx", 0)
         self.assertLessEqual(cx_count, 16 * num_qubits - 13)
         self.assertEqual(transpiled.num_qubits, 2 * num_qubits)
+
+    @data(("fixed", -8, -8), ("half", 1, 0), ("full", 1, 0))
+    @unpack
+    def test_cdkm_adder_counts(self, kind, cx_offset, t_offset):
+        """Test CX and T-count upper bounds of the optimized CDKM adder."""
+        for num_qubits in range(1, 10):
+            circuit = adder_ripple_c04(num_qubits, kind=kind)
+            cx_count = self.pm.run(circuit).count_ops().get("cx", 0)
+            clifford_t_ops = self.clifford_t_pm.run(circuit).count_ops()
+            t_count = clifford_t_ops.get("t", 0) + clifford_t_ops.get("tdg", 0)
+            self.assertLessEqual(cx_count, 10 * num_qubits + cx_offset)
+            self.assertLessEqual(t_count, 8 * num_qubits + t_offset)
+
+    @data((4, 40), (5, 42))
+    @unpack
+    def test_modular_adder_with_clean_ancilla_counts(self, num_qubits, expected_cx):
+        """Test metric-aware default synthesis when a clean ancilla is available."""
+        circuit = QuantumCircuit(2 * num_qubits + 1)
+        circuit.append(ModularAdderGate(num_qubits), range(2 * num_qubits))
+
+        cx_count = self.pm.run(circuit).count_ops().get("cx", 0)
+        clifford_t_ops = self.clifford_t_pm.run(circuit).count_ops()
+        t_count = clifford_t_ops.get("t", 0) + clifford_t_ops.get("tdg", 0)
+
+        self.assertLessEqual(cx_count, expected_cx)
+        self.assertLessEqual(t_count, 8 * (num_qubits - 1))
+
+    def test_single_qubit_full_adder_counts(self):
+        """Test metric-aware synthesis of a single-qubit full adder."""
+        gate = FullAdderGate(1)
+        circuit = QuantumCircuit(gate.num_qubits)
+        circuit.append(gate, circuit.qubits)
+
+        cx_count = self.pm.run(circuit).count_ops().get("cx", 0)
+        clifford_t_ops = self.clifford_t_pm.run(circuit).count_ops()
+        t_count = clifford_t_ops.get("t", 0) + clifford_t_ops.get("tdg", 0)
+
+        self.assertLessEqual(cx_count, 10)
+        self.assertLessEqual(t_count, 8)
 
 
 @ddt

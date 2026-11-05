@@ -1825,6 +1825,11 @@ class ModularAdderSynthesisDefault(HighLevelSynthesisPlugin):
     * ``num_clean_ancillas``: The number of clean ancillary qubits available.
     * ``num_dirty_ancillas``: The number of dirty ancillary qubits available.
 
+    For two-qubit-gate count, this selects QFT synthesis for two to four state
+    qubits, and CDKM synthesis from five state qubits when a clean ancilla is
+    available. Otherwise, it uses the ancilla-free V17 synthesis. For T-count,
+    it always uses V17 synthesis.
+
     """
 
     def run(self, high_level_object, coupling_map=None, target=None, qubits=None, **options):
@@ -1833,13 +1838,15 @@ class ModularAdderSynthesisDefault(HighLevelSynthesisPlugin):
 
         metric = options.get("optimization_metric", OptimizationMetric.COUNT_2Q)
         if metric == OptimizationMetric.COUNT_2Q:
-            # The order is optimized towards CX -friendly synthesis methods.
+            # The order is optimized towards CX-friendly synthesis methods.
             methods = []
             if 2 <= high_level_object.num_state_qubits <= 4:
                 methods.append(ModularAdderSynthesisD00)
+            elif high_level_object.num_state_qubits >= 5:
+                methods.append(ModularAdderSynthesisC04)
             methods.append(ModularAdderSynthesisV17)
         else:
-            # The order is optimized towards Clifford+T -friendly synthesis methods.
+            # The order is optimized towards Clifford+T-friendly synthesis methods.
             methods = [ModularAdderSynthesisV17]
 
         for method in methods:
@@ -1942,16 +1949,12 @@ class ModularAdderSynthesisD00(HighLevelSynthesisPlugin):
 class HalfAdderSynthesisDefault(HighLevelSynthesisPlugin):
     r"""The default half-adder (no carry in, but a carry out qubit) synthesis.
 
-    If we have an auxiliary qubit available, the Cuccaro ripple-carry adder uses
-    :math:`O(n)` CX gates and 1 auxiliary qubit, whereas the Vedral ripple-carry uses more CX
-    and :math:`n-1` auxiliary qubits. The QFT-based adder uses no auxiliary qubits, but
-    :math:`O(n^2)`, hence it is only used if no auxiliary qubits are available.
+    The CDKM ripple-carry adder uses :math:`O(n)` CX gates and one clean auxiliary
+    qubit. The ancilla-free R25 ripple-carry adder is used when it has a lower cost
+    or no clean auxiliary qubit is available.
 
     This plugin name is:``HalfAdder.default`` which can be used as the key on
     an :class:`~.HLSConfig` object to use this method with :class:`~.HighLevelSynthesis`.
-
-    If at least one clean auxiliary qubit is available, the :class:`HalfAdderSynthesisC04`
-    is used, otherwise :class:`HalfAdderSynthesisD00`.
 
     The plugin supports the following plugin-specific options:
 
@@ -2076,15 +2079,21 @@ class FullAdderSynthesisDefault(HighLevelSynthesisPlugin):
 
     This plugin name is:``FullAdder.default`` which can be used as the key on
     an :class:`~.HLSConfig` object to use this method with :class:`~.HighLevelSynthesis`.
+
+    The plugin supports the ``optimization_metric`` option; see
+    :class:`.OptimizationMetric`.
     """
 
     def run(self, high_level_object, coupling_map=None, target=None, qubits=None, **options):
         if not isinstance(high_level_object, FullAdderGate):
             return None
 
-        # FullAdderSynthesisC04 requires no ancilla qubits and returns better results
-        # than FullAdderSynthesisV95 in all cases except for n=1.
-        if high_level_object.num_state_qubits == 1:
+        # V95 has one fewer CX for n=1, while C04 has the lower T-count.
+        if (
+            high_level_object.num_state_qubits == 1
+            and options.get("optimization_metric", OptimizationMetric.COUNT_2Q)
+            == OptimizationMetric.COUNT_2Q
+        ):
             decomposition = FullAdderSynthesisV95().run(
                 high_level_object, coupling_map, target, qubits, **options
             )
