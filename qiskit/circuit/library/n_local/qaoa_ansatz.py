@@ -63,8 +63,9 @@ def qaoa_ansatz(
         reps: The integer determining the depth of the circuit, called :math:`p` in [1].
         initial_state: An optional initial state to use, which defaults to a layer of
             Hadamard gates preparing the :math:`|+\rangle^{\otimes n}` state.
-            If a custom mixer is chosen, this circuit should be set to prepare its ground state,
-            to appropriately fulfill the annealing conditions.
+            If a custom mixer is chosen, this circuit should be set to prepare the maximum or
+            minimum eigenstate of the mixer, depending on whether the highest or lowest eigenvalue
+            of the cost operator is sought, according to the annealing conditions.
         mixer_operator: An optional custom mixer, which defaults to global Pauli-:math:`X`
             rotations. This is denoted as :math:`U(B, \beta)` in [1]. If this is set,
             the ``initial_state`` might also require modification.
