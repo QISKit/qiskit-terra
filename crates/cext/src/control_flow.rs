@@ -667,9 +667,8 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg(
 /// @param cf_inst A valid pointer to a ``QkControlFlowInstruction`` that must represent
 ///     an IfElse or While instruction with a classical register condition.
 ///
-/// @return The bit width of the condition over the classical register. Returns `UINT64_MAX` if the
-///     width would exceed it. The returned value is invalid if `cf_inst` isn't an IfElse or While
-///     instruction with a register condition.
+/// @return The condition value. The returned value is invalid if `cf_inst` isn't an IfElse or
+///     While instruction with a register condition.
 ///
 /// # Example
 /// ```c
