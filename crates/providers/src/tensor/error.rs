@@ -43,6 +43,13 @@ pub enum TensorError {
     /// An exponent of an integer dtype is negative.
     #[error("an exponent of dtype {dtype} cannot be negative")]
     NegativeExponent { dtype: DType },
+    /// A sequence of bits does not hold one bit per element of its shape.
+    #[error("a Bit tensor of shape {shape:?} holds {expected} bit(s), not {actual}")]
+    BitCount {
+        shape: Vec<usize>,
+        expected: usize,
+        actual: usize,
+    },
     /// A [`Dim::Bounded`] axis reached a position that needs a true size.
     #[error(
         "shape {} has an axis whose size is only bounded above, where a true size is required",

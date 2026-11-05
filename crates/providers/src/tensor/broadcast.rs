@@ -16,6 +16,24 @@ use ndarray::{ArcArrayD, IxDyn, Zip};
 
 use super::TensorError;
 
+/// Apply an element-wise binary operation to two arrays with NumPy-style broadcasting.
+pub(super) fn broadcast_elementwise<T, U, F>(
+    a: &ArcArrayD<T>,
+    b: &ArcArrayD<T>,
+    op: F,
+) -> Result<ArcArrayD<U>, TensorError>
+where
+    T: Clone,
+    U: Clone,
+    F: Fn(&T, &T) -> U,
+{
+    let out_shape = broadcast_shape(a.shape(), b.shape())?;
+    let out_ix = IxDyn(&out_shape);
+    let a_bc = a.broadcast(out_ix.clone()).expect("broadcast failed");
+    let b_bc = b.broadcast(out_ix).expect("broadcast failed");
+    Ok(Zip::from(a_bc).and(b_bc).map_collect(op).into_shared())
+}
+
 /// Pair up the axes of two shapes, right-aligned, padding the shorter one with `pad`.
 pub(super) fn align_axes<'a, T: Copy>(
     a: &'a [T],
@@ -46,26 +64,6 @@ pub fn broadcast_shape(a: &[usize], b: &[usize]) -> Result<Vec<usize>, TensorErr
             }),
         })
         .collect()
-}
-
-/// Apply an element-wise binary operation to two arrays with NumPy-style broadcasting.
-///
-/// ndarray's arithmetic operators broadcast on their own, so this is for an operation with no Rust
-/// operator, such as `pow`.
-pub(super) fn broadcast_elementwise<T, F>(
-    a: &ArcArrayD<T>,
-    b: &ArcArrayD<T>,
-    op: F,
-) -> Result<ArcArrayD<T>, TensorError>
-where
-    T: Clone,
-    F: Fn(&T, &T) -> T,
-{
-    let out_shape = broadcast_shape(a.shape(), b.shape())?;
-    let out_ix = IxDyn(&out_shape);
-    let a_bc = a.broadcast(out_ix.clone()).expect("broadcast failed");
-    let b_bc = b.broadcast(out_ix).expect("broadcast failed");
-    Ok(Zip::from(a_bc).and(b_bc).map_collect(op).into_shared())
 }
 
 #[cfg(test)]
