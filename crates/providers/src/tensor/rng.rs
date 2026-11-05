@@ -80,7 +80,7 @@ impl fmt::Display for PrngKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct KeyTensor {
     kind: PrngKind,
-    keys: ArcArrayD<u32>,
+    words: ArcArrayD<u32>,
 }
 
 impl KeyTensor {
@@ -90,7 +90,7 @@ impl KeyTensor {
     pub fn new(kind: PrngKind, words: ArcArrayD<u32>) -> Result<Self, TensorError> {
         let expected = kind.key_words();
         match words.shape().split_last() {
-            Some((&last, _)) if last == expected => Ok(Self { kind, keys: words }),
+            Some((&last, _)) if last == expected => Ok(Self { kind, words }),
             _ => Err(TensorError::KeyWords {
                 kind,
                 expected,
@@ -106,22 +106,22 @@ impl KeyTensor {
 
     /// Return the shape of the key tensor.
     pub fn shape(&self) -> &[usize] {
-        let shape = self.keys.shape();
+        let shape = self.words.shape();
         &shape[..shape.len() - 1]
     }
 
     /// Return the raw key words with their trailing axis.
-    pub fn keys(&self) -> &ArcArrayD<u32> {
-        &self.keys
+    pub fn words(&self) -> &ArcArrayD<u32> {
+        &self.words
     }
 
     /// Broadcast to a key tensor with the given `shape` if possible.
     pub(super) fn broadcast_to(&self, shape: &[usize]) -> Option<Self> {
         let mut target = shape.to_vec();
         target.push(self.kind.key_words());
-        self.keys.broadcast(IxDyn(&target)).map(|view| Self {
+        self.words.broadcast(IxDyn(&target)).map(|view| Self {
             kind: self.kind,
-            keys: view.to_owned().into_shared(),
+            words: view.to_owned().into_shared(),
         })
     }
 }
@@ -166,7 +166,7 @@ mod test {
         assert_eq!(keys(&[3]).shape(), &[3]);
         assert_eq!(keys(&[2, 3]).shape(), &[2, 3]);
 
-        assert_eq!(keys(&[3]).keys().shape(), &[3, 2]);
+        assert_eq!(keys(&[3]).words().shape(), &[3, 2]);
     }
 
     #[test]
@@ -195,7 +195,7 @@ mod test {
 
         // Every copy is the same key, which is what makes an extent-1 axis mean "shared".
         assert_eq!(
-            broadcast.keys().iter().copied().collect::<Vec<u32>>(),
+            broadcast.words().iter().copied().collect::<Vec<u32>>(),
             vec![0, 1, 0, 1, 0, 1]
         );
         assert_eq!(keys(&[3]).broadcast_to(&[4]), None);

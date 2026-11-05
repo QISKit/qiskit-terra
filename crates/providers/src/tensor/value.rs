@@ -1380,7 +1380,7 @@ mod test {
         let broadcast = key_tensor(&[1]).broadcast_to(&[3]).unwrap();
         assert_eq!(broadcast.shape(), &[3]);
         assert_eq!(
-            broadcast.keys().unwrap().keys().shape(),
+            broadcast.keys().unwrap().words().shape(),
             &[3, 2],
             "the words axis comes along"
         );
