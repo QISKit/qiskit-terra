@@ -94,10 +94,11 @@ impl Mir {
     ///
     /// This is not intended to be run *during* a pass to ensure correctness.
     pub fn verify(&self) -> Result<(), MirVerificationError> {
-        Ok(self
-            .instructions
-            .iter_main()
-            .try_for_each(|instr| instr.weight().verify(&self.resource_table))?)
+        Ok(self.instructions.iter_main().try_for_each(|instr| {
+            instr
+                .weight()
+                .verify(&self.resource_table, &self.symbol_table)
+        })?)
     }
 }
 
