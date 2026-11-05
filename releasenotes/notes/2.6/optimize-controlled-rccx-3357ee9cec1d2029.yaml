@@ -1,0 +1,9 @@
+---
+features_circuits:
+  - |
+    Added a compact exact decomposition for a singly-controlled
+    :class:`.RCCXGate`. Calling :meth:`.RCCXGate.control` with one control now
+    uses :class:`.RC3XGate` and :class:`.CSdgGate`, requiring 8 CX gates and
+    11 T or Tdg gates without ancillas. This also reduces the synthesis cost
+    of higher-level controlled circuits containing RCCX gates, such as
+    controlled modular adders.

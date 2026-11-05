@@ -15,7 +15,7 @@
 
 import unittest
 
-from qiskit.circuit import QuantumRegister, QuantumCircuit, Qubit
+from qiskit.circuit import Gate, QuantumRegister, QuantumCircuit, Qubit
 from qiskit.transpiler import PropertySet
 from qiskit.transpiler.passes import CommutationAnalysis
 from qiskit.converters import circuit_to_dag
@@ -293,6 +293,20 @@ class TestCommutationAnalysis(QiskitTestCase):
             qr[2]: [[4], [11, 13, 17, 19], [5]],
             qr[3]: [[6], [12, 13, 18, 19], [7]],
             qr[4]: [[8], [12, 15, 18], [9]],
+        }
+        self.assertCommutationSet(self.pset["commutation_set"], expected)
+
+    def test_custom_gates_sharing_wire(self):
+        """Custom gates sharing a wire do not commute"""
+        circuit = QuantumCircuit(2)
+        circuit.append(Gate("foo", 1, []), [1])
+        circuit.append(Gate("bar", 2, []), [0, 1])
+
+        self.pass_.run(circuit_to_dag(circuit))
+
+        expected = {
+            circuit.qubits[0]: [[0], [5], [1]],
+            circuit.qubits[1]: [[2], [4], [5], [3]],
         }
         self.assertCommutationSet(self.pset["commutation_set"], expected)
 

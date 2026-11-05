@@ -17,6 +17,7 @@ from __future__ import annotations
 import warnings
 import numpy as np
 from qiskit.circuit import QuantumCircuit
+from qiskit._accelerate.synthesis.qft import synth_qft_full as _synth_qft_full
 
 
 def synth_qft_full(
@@ -56,23 +57,12 @@ def synth_qft_full(
 
     """
     _warn_if_precision_loss(num_qubits - approximation_degree - 1)
-    circuit = QuantumCircuit(num_qubits)
 
-    for j in reversed(range(num_qubits)):
-        circuit.h(j)
-        num_entanglements = max(0, j - max(0, approximation_degree - (num_qubits - j - 1)))
-        for k in reversed(range(j - num_entanglements, j)):
-            # Use negative exponents so that the angle safely underflows to zero, rather than
-            # using a temporary variable that overflows to infinity in the worst case.
-            lam = np.pi * (2.0 ** (k - j))
-            circuit.cp(lam, j, k)
-
-        if insert_barriers:
-            circuit.barrier()
-
-    if do_swaps:
-        for i in range(num_qubits // 2):
-            circuit.swap(i, num_qubits - i - 1)
+    circuit = QuantumCircuit._from_circuit_data(
+        # Circuit built in Rust (H + CP + barriers + optional SWAPs)
+        _synth_qft_full(num_qubits, do_swaps, approximation_degree, insert_barriers),
+        legacy_qubits=True,
+    )
 
     if inverse:
         circuit = circuit.inverse()

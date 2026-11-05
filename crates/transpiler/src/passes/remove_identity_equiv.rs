@@ -20,7 +20,7 @@ use crate::gate_metrics::rotation_trace_and_dim;
 use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
 use crate::target::Target;
 use qiskit_circuit::PhysicalQubit;
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::imports;
 use qiskit_circuit::operations::Param;
 use qiskit_circuit::operations::StandardGate;
@@ -213,10 +213,11 @@ where
 #[pyo3(name = "remove_identity_equiv", signature=(dag, approx_degree=Some(1.0), target=None))]
 pub fn py_remove_identity_equiv(
     py: Python,
-    dag: &mut DAGCircuit,
+    dag: &mut PyDAGCircuit,
     approx_degree: Option<f64>,
     target: Option<&Target>,
 ) -> PyResult<()> {
+    let dag = dag.try_write()?;
     // TODO: This is a hack to avoid panicking in the case that the global phase contains `Py`
     // pointers (such as backrefs to `ParameterVector` objects in an expression `Symbol`) that would
     // get cloned when updating the global phase.  It's easier to do it out here than to try to

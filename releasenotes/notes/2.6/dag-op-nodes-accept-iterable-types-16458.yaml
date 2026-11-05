@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    Added support for passing an iterable of operation types to
+    :meth:`.DAGCircuit.op_nodes`, for example ``dag.op_nodes(op=(Measure, Reset))``.
+    This allows collecting multiple instruction types in a single DAG iteration.
+    Fixed `#16458 <https://github.com/Qiskit/qiskit/issues/16458>`__.

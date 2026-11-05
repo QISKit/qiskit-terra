@@ -17,7 +17,14 @@ import unittest
 import ddt
 import numpy as np
 
-from qiskit.circuit import QuantumRegister, QuantumCircuit, ClassicalRegister, Parameter, Gate
+from qiskit.circuit import (
+    QuantumRegister,
+    QuantumCircuit,
+    ClassicalRegister,
+    Parameter,
+    Gate,
+    Measure,
+)
 from qiskit.circuit.library.generalized_gates import UnitaryGate
 from qiskit.circuit.library.standard_gates import (
     UGate,
@@ -815,6 +822,34 @@ class TestOptimize1qGatesDecomposition(QiskitTestCase):
         expected = QuantumCircuit(1)
         expected.u(0, 0, 0.5, [0])
 
+        self.assertEqual(result, expected)
+
+    def test_custom_gate_in_target(self):
+        """Test reproduce of deadlock from: #16591."""
+
+        class CustomGate(Gate):
+            """Custom u1 gate."""
+
+            def __init__(self, lam):
+                super().__init__("custom_u1", 1, [lam])
+
+            def __array__(self, dtype=None, _copy=None):
+                return U1Gate(*self.params).__array__(dtype=dtype)
+
+        target = Target(num_qubits=2)
+        target.add_instruction(CustomGate(Parameter("lam")))
+        target.add_instruction(Measure())
+
+        qc = QuantumCircuit(2)
+        qc.append(CustomGate(0.5), [0])
+        qc.append(CustomGate(0.5), [1])
+        qc.measure_all()
+
+        result = Optimize1qGatesDecomposition(target)(qc)
+        expected = QuantumCircuit(2)
+        expected.append(CustomGate(0.5), [0])
+        expected.append(CustomGate(0.5), [1])
+        expected.measure_all()
         self.assertEqual(result, expected)
 
     def test_unitary_gate_row_major(self):

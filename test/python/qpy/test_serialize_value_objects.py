@@ -45,6 +45,60 @@ class TestQpySerializeParameterExpression(QiskitTestCase):
 
         self.assertEqual(qc, qc_from_qpy)
 
+    def test_roundtrip_assigned_values(self):
+        """Test that an expression which was assigned a value is correctly loaded."""
+        a = Parameter("a")
+        b = Parameter("b")
+        c = Parameter("c")
+
+        # lhs test
+        circuit = QuantumCircuit(1)
+        circuit.rz(a.sin() * b, 0)
+        circuit = circuit.assign_parameters({a: 3})
+
+        with io.BytesIO() as container:
+            qpy.dump(circuit, container)
+            container.seek(0)
+            loaded = qpy.load(container)[0]
+
+        self.assertEqual(circuit.parameters, loaded.parameters)
+        self.assertAlmostEqual(
+            float(circuit.data[0].operation.params[0].bind({b: 2})),
+            float(loaded.data[0].operation.params[0].bind({b: 2})),
+        )
+
+        # rhs test
+        circuit = QuantumCircuit(1)
+        circuit.rz(b * a.sin(), 0)
+        circuit = circuit.assign_parameters({a: 3})
+
+        with io.BytesIO() as container:
+            qpy.dump(circuit, container)
+            container.seek(0)
+            loaded = qpy.load(container)[0]
+
+        self.assertEqual(circuit.parameters, loaded.parameters)
+        self.assertAlmostEqual(
+            float(circuit.data[0].operation.params[0].bind({b: 2})),
+            float(loaded.data[0].operation.params[0].bind({b: 2})),
+        )
+
+        # both sides test
+        circuit = QuantumCircuit(1)
+        circuit.rz(c * b.cos() * a.sin(), 0)
+        circuit = circuit.assign_parameters({a: 3, b: 5})
+
+        with io.BytesIO() as container:
+            qpy.dump(circuit, container)
+            container.seek(0)
+            loaded = qpy.load(container)[0]
+
+        self.assertEqual(circuit.parameters, loaded.parameters)
+        self.assertAlmostEqual(
+            float(circuit.data[0].operation.params[0].bind({c: 7})),
+            float(loaded.data[0].operation.params[0].bind({c: 7})),
+        )
+
 
 class TestPauliEvolution(QiskitTestCase):
     """QPY serializing PauliEvolutionGate with SparseObservable and SparsePauliOp"""

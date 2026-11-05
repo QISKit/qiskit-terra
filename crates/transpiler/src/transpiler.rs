@@ -484,7 +484,7 @@ pub fn transpile(
     approximation_degree: Option<f64>,
     seed: Option<u64>,
 ) -> Result<(CircuitData, TranspileLayout)> {
-    let mut dag = DAGCircuit::from_circuit_data(circuit, false, None, None, None, None)?;
+    let mut dag = DAGCircuit::from_circuit_data(circuit, false, None, None)?;
     let mut commutation_checker = get_standard_commutation_checker();
     let mut equivalence_library = generate_standard_equivalence_library();
     let sabre_heuristic = get_sabre_heuristic(target)?;
@@ -884,9 +884,9 @@ mod tests {
         )
         .unwrap();
 
-        let dag1 = DAGCircuit::from_circuit_data(&circuit1, false, None, None, None, None).unwrap();
+        let dag1 = DAGCircuit::from_circuit_data(&circuit1, false, None, None).unwrap();
         let circuit2 = CircuitData::from_packed_operations(1, 1, vec![], Param::Float(0.)).unwrap();
-        let dag2 = DAGCircuit::from_circuit_data(&circuit2, false, None, None, None, None).unwrap();
+        let dag2 = DAGCircuit::from_circuit_data(&circuit2, false, None, None).unwrap();
 
         let mut state = MinPointState::new(&dag1);
         assert!(state.update_with(&dag1));
@@ -906,7 +906,7 @@ mod tests {
     #[test]
     fn test_backtrack_limit_stops_loop() {
         let circuit1 = CircuitData::from_packed_operations(1, 1, vec![], Param::Float(0.)).unwrap();
-        let dag1 = DAGCircuit::from_circuit_data(&circuit1, false, None, None, None, None).unwrap();
+        let dag1 = DAGCircuit::from_circuit_data(&circuit1, false, None, None).unwrap();
         let circuit2 = CircuitData::from_packed_operations(
             1,
             1,
@@ -920,7 +920,7 @@ mod tests {
         )
         .unwrap();
 
-        let dag2 = DAGCircuit::from_circuit_data(&circuit2, false, None, None, None, None).unwrap();
+        let dag2 = DAGCircuit::from_circuit_data(&circuit2, false, None, None).unwrap();
         let mut state = MinPointState::new(&dag1);
 
         state.update_with(&dag1);
@@ -946,8 +946,7 @@ mod tests {
             Param::Float(0.),
         )
         .unwrap();
-        let dag_worst =
-            DAGCircuit::from_circuit_data(&circuit1, false, None, None, None, None).unwrap();
+        let dag_worst = DAGCircuit::from_circuit_data(&circuit1, false, None, None).unwrap();
         let circuit2 = CircuitData::from_packed_operations(
             1,
             1,
@@ -960,11 +959,9 @@ mod tests {
             Param::Float(0.),
         )
         .unwrap();
-        let dag_better =
-            DAGCircuit::from_circuit_data(&circuit2, false, None, None, None, None).unwrap();
+        let dag_better = DAGCircuit::from_circuit_data(&circuit2, false, None, None).unwrap();
         let circuit3 = CircuitData::from_packed_operations(1, 1, vec![], Param::Float(0.)).unwrap();
-        let dag_best =
-            DAGCircuit::from_circuit_data(&circuit3, false, None, None, None, None).unwrap();
+        let dag_best = DAGCircuit::from_circuit_data(&circuit3, false, None, None).unwrap();
         let mut state = MinPointState::new(&dag_worst);
 
         state.update_with(&dag_worst);

@@ -1,0 +1,17 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.BarrierBeforeFinalMeasurements` where inserting the barrier could
+    reorder final measurements that write to the same clbit, quietly changing what the circuit
+    computes.
+
+    Say a circuit measures qubit 1 into clbit 0, and then measures qubit 0 into clbit 0. The second
+    measurement overwrites the first, so the circuit finishes with qubit 0's result in clbit 0. The
+    pass could put those two measurements back in the opposite order, leaving qubit 1's result there
+    instead. Nothing raised an error and the circuit it handed back was perfectly valid, so the only
+    hint that anything was wrong was that the answers came out different.
+
+    This reached :func:`.transpile` too, since the pass runs as part of the routing stage in the
+    preset pass managers. Final measurements are now always put back in the order they had in the
+    original circuit.
+    Fixed `#16851 <https://github.com/Qiskit/qiskit/issues/16851>`__.

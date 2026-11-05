@@ -115,6 +115,10 @@ class QDrift(ProductFormula):
         weights = np.abs(coeffs)
         lambd = np.sum(weights)
 
+        is_identity = lambd == 0 or time == 0
+        if is_identity:
+            return []
+
         num_gates = math.ceil(2 * (lambd**2) * (time**2) * self.reps)
 
         # The protocol calls for the removal of the individual coefficients,

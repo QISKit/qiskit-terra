@@ -22,7 +22,9 @@ use pyo3::IntoPyObjectExt;
 use pyo3::types::{PyBool, PyList, PyTuple, PyType};
 use pyo3::{PyResult, intern};
 
+use crate::annotation::AnnotationFromPython;
 use crate::circuit_data::{CircuitData, PyCircuitData};
+use crate::classical::expr;
 use crate::dag_circuit::DAGCircuit;
 use crate::duration::Duration;
 use crate::imports::{CONTROLLED_GATE, WARNINGS_WARN};
@@ -30,7 +32,7 @@ use crate::instruction::{Instruction, Parameters, create_py_op};
 use crate::operations::{
     ArrayType, BoxDuration, ControlFlow, ControlFlowInstruction, ControlFlowType, Operation,
     OperationRef, Param, PauliBased, PauliProductMeasurement, PauliProductRotation, PyInstruction,
-    PyOpKind, StandardGate, StandardInstruction, StandardInstructionType, UnitaryGate,
+    PyOpKind, StandardGate, StandardInstruction, StandardInstructionType, Store, UnitaryGate,
 };
 use crate::packed_instruction::PackedOperation;
 use crate::parameter::parameter_expression::ParameterExpression;
@@ -443,6 +445,7 @@ impl CircuitInstruction {
                                     &ParameterExpression::from_f64(*left) == right.as_ref()
                                 }
                                 Param::Obj(right) => right.bind(py).eq(left)?,
+                                Param::Int(_) => false,
                             },
                             Param::ParameterExpression(left) => match right {
                                 Param::Float(right) => {
@@ -450,8 +453,23 @@ impl CircuitInstruction {
                                 }
                                 Param::ParameterExpression(right) => left == right,
                                 Param::Obj(right) => right.bind(py).eq(left.as_ref().clone())?,
+                                Param::Int(right) => {
+                                    let right_val: crate::parameter::symbol_expr::Value =
+                                        (*right).into();
+                                    left.as_ref() == &ParameterExpression::from(right_val)
+                                }
                             },
                             Param::Obj(left) => left.bind(py).eq(right)?,
+                            Param::Int(left) => match right {
+                                Param::Float(_) => false,
+                                Param::ParameterExpression(right) => {
+                                    let left_val: crate::parameter::symbol_expr::Value =
+                                        (*left).into();
+                                    &ParameterExpression::from(left_val) == right.as_ref()
+                                }
+                                Param::Obj(right) => right.bind(py).eq(left)?,
+                                Param::Int(right) => left == right,
+                            },
                         };
                         if !eq {
                             return Ok(false);
@@ -593,8 +611,7 @@ impl CircuitBlock for CircuitData {
 }
 impl CircuitBlock for DAGCircuit {
     fn extract_py_block(ob: Bound<PyCircuitData>) -> PyResult<Self> {
-        Self::from_circuit_data(&ob.borrow().inner, false, None, None, None, None)
-            .map_err(Into::into)
+        Self::from_circuit_data(&ob.borrow().inner, false, None, None).map_err(Into::into)
     }
 }
 impl CircuitBlock for NoBlocks {
@@ -757,7 +774,14 @@ impl<'a, 'py, T: CircuitBlock> FromPyObject<'a, 'py> for OperationFromPython<T> 
                         } else {
                             None
                         };
-                        let annotations = ob.getattr(intern!(py, "annotations"))?.extract()?;
+                        let annotations = ob
+                            .getattr(intern!(py, "annotations"))?
+                            .try_iter()?
+                            .map(|a| {
+                                a?.extract::<AnnotationFromPython>()
+                                    .map(|a| a.into_annotation())
+                            })
+                            .collect::<PyResult<Vec<_>>>()?;
                         ControlFlow::Box {
                             duration,
                             annotations,
@@ -912,6 +936,16 @@ impl<'a, 'py, T: CircuitBlock> FromPyObject<'a, 'py> for OperationFromPython<T> 
                 params: Some(Parameters::Params(smallvec![angle])),
                 label: extract_label()?,
             });
+        } else if ob_name == "store" {
+            let params = get_params()?;
+            let lhs: expr::Expr = params.get_item(0)?.extract()?;
+            let rhs: expr::Expr = params.get_item(1)?.extract()?;
+            let store = Box::new(Store::new(lhs, rhs));
+            return Ok(OperationFromPython {
+                operation: PackedOperation::from_store(store),
+                params: None,
+                label: extract_label()?,
+            });
         }
 
         let Some(kind) = PyOpKind::from_type(ob_type.as_borrowed())? else {
@@ -988,13 +1022,13 @@ pub fn extract_params<T: CircuitBlock>(
         OperationRef::StandardInstruction(i) => {
             match &i {
                 StandardInstruction::Barrier(_) => None,
-                StandardInstruction::Delay(_) => {
+                StandardInstruction::Delay(unit) => {
                     // If the delay's duration is a Python int, we preserve it rather than
                     // coercing it to a float (e.g. when unit is 'dt').
                     Some(Parameters::Params(
                         params
                             .try_iter()?
-                            .map(|p| Param::extract_no_coerce(p?.as_borrowed()))
+                            .map(|p| Param::extract_duration(p?.as_borrowed(), unit))
                             .collect::<PyResult<_>>()?,
                     ))
                 }
@@ -1011,6 +1045,7 @@ pub fn extract_params<T: CircuitBlock>(
             let params: SmallVec<[Param; 3]> = params.extract()?;
             Some(Parameters::Params(params))
         }
+        OperationRef::Store(_) => None,
     })
 }
 

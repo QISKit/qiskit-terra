@@ -24,6 +24,43 @@ pub enum Pauli1q {
     Z,
 }
 
+/// An index identifying a two-qubit Pauli operator.
+///
+/// A two-qubit Pauli operator can be encoded as an integer in 0..16
+/// by packing the `x` and `z` components of the two qubits:
+/// ```text
+/// (x[0] << 3) | (z[0] << 2) | (x[1] << 1) | z[1].
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TwoQubitPauliIndex(u8);
+
+impl TwoQubitPauliIndex {
+    /// Constructor from the given index.
+    pub fn from_usize(index: usize) -> Self {
+        Self(index as u8)
+    }
+
+    /// Packs the bits into the index.
+    pub fn from_bits(x0: bool, z0: bool, x1: bool, z1: bool) -> Self {
+        Self(((x0 as u8) << 3) | ((z0 as u8) << 2) | ((x1 as u8) << 1) | (z1 as u8))
+    }
+
+    /// Unpacks bits from the index.
+    pub fn bits(self) -> (bool, bool, bool, bool) {
+        (
+            self.0 & 0b1000 != 0,
+            self.0 & 0b0100 != 0,
+            self.0 & 0b0010 != 0,
+            self.0 & 0b0001 != 0,
+        )
+    }
+
+    /// Returns the index as a `usize`.
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
 /// SIMD accelerated PauliList.
 ///
 /// Stores multiple Paulis with associated phases, but in a packed format
@@ -76,73 +113,76 @@ pub enum PauliLabelOrder {
 }
 
 impl PauliList {
-    /// A reference to the given x-row of the PauliList.
+    /// A reference to the given x-column of the PauliList.
     ///
-    /// Note: this function assumes that the given row exists
+    /// Note: this function assumes that the given column exists
     /// and panics otherwise.
     #[inline]
     pub fn get_x(&self, qubit: usize) -> &FixedBitSet {
         self.data.get(qubit).unwrap()
     }
 
-    /// A mutable reference to the given x-row of the PauliList.
+    /// A mutable reference to the given x-column of the PauliList.
     ///
-    /// Note: this function assumes that the given row exists
+    /// Note: this function assumes that the given column exists
     /// and panics otherwise.
     #[inline]
     pub fn get_x_mut(&mut self, qubit: usize) -> &mut FixedBitSet {
         self.data.get_mut(qubit).unwrap()
     }
 
-    /// A reference to the given z-row of the PauliList.
+    /// A reference to the given z-column of the PauliList.
     ///
-    /// Note: this function assumes that the given row exists
+    /// Note: this function assumes that the given column exists
     /// and panics otherwise.
     #[inline]
     pub fn get_z(&self, qubit: usize) -> &FixedBitSet {
         self.data.get(self.num_qubits + qubit).unwrap()
     }
 
-    /// A mutable reference to the z-row of the PauliList.
+    /// A mutable reference to the z-column of the PauliList.
     ///
-    /// Note: this function assumes that the given row exists
+    /// Note: this function assumes that the given column exists
     /// and panics otherwise.
     #[inline]
     pub fn get_z_mut(&mut self, qubit: usize) -> &mut FixedBitSet {
         self.data.get_mut(self.num_qubits + qubit).unwrap()
     }
 
-    /// A reference to the phase row of the PauliList.
+    /// A reference to the phase column of the PauliList.
     #[inline]
     pub fn get_phase(&self) -> &FixedBitSet {
         self.data.get(2 * self.num_qubits).unwrap()
     }
 
-    /// A mutable reference to the phase row of the PauliList.
+    /// A mutable reference to the phase column of the PauliList.
     #[inline]
     pub fn get_phase_mut(&mut self) -> &mut FixedBitSet {
         self.data.get_mut(2 * self.num_qubits).unwrap()
     }
 
-    /// The entry in the given x-row corresponding to the Pauli ``pauli_idx``.
+    /// The entry in the given x-column corresponding to the Pauli ``pauli_idx``.
     ///
-    /// Note: this function assumes that the given row exists
+    /// Note: this function assumes that the given pauli and the column exist
     /// and panics otherwise.
     #[inline]
     pub fn get_pauli_x(&self, pauli_idx: usize, qubit: usize) -> bool {
         self.data[qubit][pauli_idx]
     }
 
-    /// The entry in the given z-row corresponding to the Pauli ``pauli_idx``.
+    /// The entry in the given z-column corresponding to the Pauli ``pauli_idx``.
     ///
-    /// Note: this function assumes that the given row exists
+    /// Note: this function assumes that the given pauli and the column exist
     /// and panics otherwise.
     #[inline]
     pub fn get_pauli_z(&self, pauli_idx: usize, qubit: usize) -> bool {
         self.data[qubit + self.num_qubits][pauli_idx]
     }
 
-    /// The entry in the phase-row corresponding to the Pauli ``pauli_idx``.
+    /// The entry in the phase-column corresponding to the Pauli ``pauli_idx``.
+    ///
+    /// Note: this function assumes that the given pauli exists
+    /// and panics otherwise.
     #[inline]
     pub fn get_pauli_phase(&self, pauli_idx: usize) -> bool {
         self.data[2 * self.num_qubits][pauli_idx]
@@ -489,7 +529,29 @@ impl PauliList {
             .collect()
     }
 
+    /// If the Pauli with index `pauli_idx` has support `[q]` of exactly size 1, return `Some(q)`.
+    /// Return `None` otherwise.
+    pub fn get_pauli_support_if_size_1(&self, pauli_idx: usize) -> Option<usize> {
+        let mut found: Option<usize> = None;
+        for q in 0..self.num_qubits {
+            if self.data[q].contains(pauli_idx)
+                || self.data[q + self.num_qubits].contains(pauli_idx)
+            {
+                if found.is_some() {
+                    // Support size is at least 2
+                    return None;
+                }
+                found = Some(q);
+            }
+        }
+        found
+    }
+
     /// Returns whether two Paulis given `pauli_idx1` and `pauli_idx2` commute.
+    ///
+    /// # Panics
+    ///
+    /// This function assumes that `pauli_idx1 < self.num_paulis` and `pauli_idx2 < self.num_paulis`.
     pub fn commute(&self, pauli_idx1: usize, pauli_idx2: usize) -> bool {
         let mut parity = false;
         for i in 0..self.num_qubits {
@@ -605,6 +667,29 @@ impl PauliList {
             pauli_labels.push(s);
         }
         pauli_labels
+    }
+
+    /// Returns the index of 2-qubit Pauli operator induces by `pauli_idx` on qubits `i` and `j`.
+    ///
+    /// The two-qubit Pauli is encoded as an integer in `0..16` using the binary representation
+    /// ```text
+    /// (X[i] << 3) | (Z[i] << 2) | (X[j] << 1) | Z[j].
+    /// ```
+    /// where `X[i]`, `Z[i]`, `X[j]`, `Z[j]` are the X and Z components of the Pauli operator on qubits
+    /// `i` and `j` respectively.
+    /// For example, if the Pauli on `(i, j)` is `XY`, the corresponding index is 8 + 0 + 2 + 1 = 11.
+    ///
+    /// # Panics
+    ///
+    /// This function assumes that `pauli_idx < self.num_paulis` and
+    /// `i < self.num_qubits` and `j < self.num_qubits`.
+    #[inline]
+    pub fn pauli_pair_index(&self, pauli_idx: usize, i: usize, j: usize) -> usize {
+        let xi = self.get_pauli_x(pauli_idx, i);
+        let zi = self.get_pauli_z(pauli_idx, i);
+        let xj = self.get_pauli_x(pauli_idx, j);
+        let zj = self.get_pauli_z(pauli_idx, j);
+        TwoQubitPauliIndex::from_bits(xi, zi, xj, zj).as_usize()
     }
 }
 

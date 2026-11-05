@@ -14,6 +14,10 @@ and for one year with any security fixes.
 
 We provide more detail on [the release and support schedule of Qiskit in our documentation](https://quantum.cloud.ibm.com/docs/open-source/qiskit-sdk-version-strategy).
 
+## Remediation Process
+
+The repository's remediation process is explained in [the "security" section of the maintainers' guide](/MAINTAINING.md#security).
+
 ## Reporting a Vulnerability
 
 To report vulnerabilities, you can privately report a potential security issue

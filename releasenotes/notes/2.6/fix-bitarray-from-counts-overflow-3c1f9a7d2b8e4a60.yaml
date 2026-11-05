@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    :meth:`.BitArray.from_counts` and :meth:`.BitArray.from_samples` now raise a
+    :class:`ValueError` with a descriptive message, instead of an obscure
+    :class:`OverflowError` (``int too big to convert``), when a value does not fit
+    in the requested ``num_bits``.

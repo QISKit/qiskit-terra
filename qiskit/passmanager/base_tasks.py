@@ -31,7 +31,7 @@ IR_OUT = TypeVar("IR_OUT")
 class Task(ABC, Generic[IR, IR_OUT]):
     """An interface of the pass manager task.
 
-    The task takes a Qiskit IR, and outputs new Qiskit IR after some operation on it.
+    The task takes an IR, and outputs a (possibly different) IR after some operation on it.
     A task can rely on the :class:`.PropertySet` to communicate intermediate data among tasks.
     """
 

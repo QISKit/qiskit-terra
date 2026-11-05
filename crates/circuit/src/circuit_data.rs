@@ -52,13 +52,15 @@ use numpy::PyReadonlyArray1;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyList, PySet, PyTuple, PyType};
+use pyo3::types::{IntoPyDict, PyDict, PyList, PyNone, PySet, PyTuple, PyType};
 use pyo3::{PyTraverseError, PyVisit, import_exception, intern};
 
 use hashbrown::{HashMap, HashSet};
 use qiskit_util::IndexMap;
 use smallvec::SmallVec;
 use thiserror::Error;
+
+use crate::error::TryReserveError;
 
 import_exception!(qiskit.circuit.exceptions, CircuitError);
 
@@ -102,6 +104,8 @@ pub enum CircuitDataError {
     InvalidParameter,
     #[error("bad type after binding for gate '{0}': '{1}'")]
     StandardGateParameterIsComplex(String, String),
+    #[error(transparent)]
+    TryReserveError(TryReserveError),
 }
 impl<T: Debug> From<object_registry::AbsentObject<T>> for CircuitDataError {
     fn from(val: object_registry::AbsentObject<T>) -> Self {
@@ -111,6 +115,12 @@ impl<T: Debug> From<object_registry::AbsentObject<T>> for CircuitDataError {
 impl<T: Debug, B: Debug> From<object_registry::AddError<T, B>> for CircuitDataError {
     fn from(val: object_registry::AddError<T, B>) -> Self {
         Self::AddObjectRegistry(val.erase_type())
+    }
+}
+
+impl From<TryReserveError> for CircuitDataError {
+    fn from(val: TryReserveError) -> Self {
+        Self::TryReserveError(val)
     }
 }
 
@@ -125,9 +135,7 @@ impl From<CircuitDataError> for PyErr {
             CircuitDataError::AddObjectRegistry(e) => e.into(),
             CircuitDataError::ErrorFromPython(e) => e,
             CircuitDataError::ParameterTableError(e) => e.into(),
-            CircuitDataError::RegisterNameExists(name) => {
-                CircuitError::new_err(format!("register name {name} already exists"))
-            }
+            CircuitDataError::RegisterNameExists(e) => e.into(),
             CircuitDataError::BitExceedsCapacity(bit_type, bit_index) => CircuitError::new_err(
                 format!("{bit_type} at index {bit_index} exceds circuit capacity."),
             ),
@@ -144,6 +152,7 @@ impl From<CircuitDataError> for PyErr {
                     "bad type after binding for gate '{gate_name}': '{expr}'"
                 ))
             }
+            CircuitDataError::TryReserveError(error) => error.into(),
         }
     }
 }
@@ -216,64 +225,25 @@ pub struct CircuitData {
     global_phase: Param,
 }
 
-/// A container for :class:`.QuantumCircuit` instruction listings that stores
-/// :class:`.CircuitInstruction` instances in a packed form by interning
-/// their :attr:`~.CircuitInstruction.qubits` and
-/// :attr:`~.CircuitInstruction.clbits` to native vectors of indices.
+#[cfg(feature = "passmanager")]
+mod passmanager {
+    use super::CircuitData;
+    qiskit_util::dyn_types::static_dyn_typed!(CircuitData);
+    impl qiskit_passmanager::IR for CircuitData {}
+}
+
+/// Private internal Qiskit object that corresponds to the C-API :c:type:`QkCircuit`.
 ///
-/// Before adding a :class:`.CircuitInstruction` to this container, its
-/// :class:`.Qubit` and :class:`.Clbit` instances MUST be registered via the
-/// constructor or via :meth:`.CircuitData.add_qubit` and
-/// :meth:`.CircuitData.add_clbit`. This is because the order in which
-/// bits of the same type are added to the container determines their
-/// associated indices used for storage and retrieval.
+/// Regardless of naming, all methods and attributes of this object are private and not for user
+/// consumption from Python.  This is an implementation detail of Qiskit.
 ///
-/// Once constructed, this container behaves like a Python list of
-/// :class:`.CircuitInstruction` instances. However, these instances are
-/// created and destroyed on the fly, and thus should be treated as ephemeral.
+/// The only valid uses of this object for Python users are to pass it to methods that expect the
+/// "native" component of circuits.  This includes the C-API function
+/// :c:func:`qk_circuit_borrow_from_python`, for example.
 ///
-/// For example,
-///
-/// .. plot::
-///    :include-source:
-///    :no-figs:
-///
-///     qubits = [Qubit()]
-///     data = CircuitData(qubits)
-///     data.append(CircuitInstruction(XGate(), (qubits[0],), ()))
-///     assert(data[0] == data[0]) # => Ok.
-///     assert(data[0] is data[0]) # => PANICS!
-///
-/// .. warning::
-///
-///     This is an internal interface and no part of it should be relied upon
-///     outside of Qiskit.
-///
-/// Args:
-///     qubits (Iterable[:class:`.Qubit`] | None): The initial sequence of
-///         qubits, used to map :class:`.Qubit` instances to and from its
-///         indices.
-///     clbits (Iterable[:class:`.Clbit`] | None): The initial sequence of
-///         clbits, used to map :class:`.Clbit` instances to and from its
-///         indices.
-///     data (Iterable[:class:`.CircuitInstruction`]): An initial instruction
-///         listing to add to this container. All bits appearing in the
-///         instructions in this iterable must also exist in ``qubits`` and
-///         ``clbits``.
-///     reserve (int): The container's initial capacity. This is reserved
-///         before copying instructions into the container when ``data``
-///         is provided, so the initialized container's unused capacity will
-///         be ``max(0, reserve - len(data))``.
-///
-/// Raises:
-///     KeyError: if ``data`` contains a reference to a bit that is not present
-///         in ``qubits`` or ``clbits``.
-#[pyclass(
-    name = "CircuitData",
-    sequence,
-    module = "qiskit._accelerate.circuit",
-    skip_from_py_object
-)]
+/// This object is usable as a :class:`.passmanager.IR` corresponding to the Rust/C-native
+/// components of :class:`.QuantumCircuit`.
+#[pyclass(name = "CircuitData", sequence, module = "qiskit.circuit")]
 #[derive(Clone, Debug)]
 pub struct PyCircuitData {
     pub inner: CircuitData,
@@ -410,6 +380,9 @@ impl CircuitData {
 
     /// Registers a :class:`.QuantumRegister` instance.
     ///
+    /// Fails only if the register's name collides with an existing one under `strict`, or if
+    /// adding one of its (previously untracked) bits would push the qubit count past `u32`.
+    ///
     /// Args:
     ///     bit (:class:`.QuantumRegister`): The register to add.
     pub fn add_qreg(
@@ -447,6 +420,9 @@ impl CircuitData {
     }
 
     /// Registers a :class:`.ClassicalRegister` instance.
+    ///
+    /// Fails only if the register's name collides with an existing one under `strict`, or if
+    /// adding one of its (previously untracked) bits would push the clbit count past `u32`.
     ///
     /// Args:
     ///     bit (:class:`.ClassicalRegister`): The register to add.
@@ -767,6 +743,43 @@ impl CircuitData {
             cregs: RegisterData::new(),
             qubit_indices: BitLocator::with_capacity(num_qubits as usize),
             clbit_indices: BitLocator::with_capacity(num_clbits as usize),
+            vars_stretches: VarStretchContainer::new(),
+        };
+
+        // use the global phase setter to ensure parameters are registered
+        // in the parameter table
+        res.set_global_phase_param(global_phase)?;
+        res.add_anonymous_qubits(num_qubits)
+            .expect("cannot represent a too-large count");
+        res.add_anonymous_clbits(num_clbits)
+            .expect("cannot represent a too-large count");
+        Ok(res)
+    }
+
+    /// Build an empty CircuitData object with an initially allocated instruction capacity.
+    /// This will error if the specified capacity can not be allocated.
+    pub fn try_with_capacity(
+        num_qubits: u32,
+        num_clbits: u32,
+        instruction_capacity: usize,
+        global_phase: Param,
+    ) -> Result<Self, CircuitDataError> {
+        let mut data = Vec::new();
+        data.try_reserve(instruction_capacity)
+            .map_err(TryReserveError::VecTryReserve)?;
+        let mut res = CircuitData {
+            data,
+            qargs_interner: Interner::new(),
+            cargs_interner: Interner::new(),
+            qubits: ObjectRegistry::try_with_capacity(num_qubits as usize)?,
+            clbits: ObjectRegistry::try_with_capacity(num_clbits as usize)?,
+            blocks: ControlFlowBlocks::new(),
+            param_table: ParameterTable::new(),
+            global_phase: Param::Float(0.0),
+            qregs: RegisterData::new(),
+            cregs: RegisterData::new(),
+            qubit_indices: BitLocator::try_with_capacity(num_qubits as usize)?,
+            clbit_indices: BitLocator::try_with_capacity(num_clbits as usize)?,
             vars_stretches: VarStretchContainer::new(),
         };
 
@@ -1270,6 +1283,10 @@ impl CircuitData {
                         }
                     })?
                 }
+                Param::Int(u) => {
+                    let map: HashMap<&Symbol, Value> = HashMap::from([(symbol, Value::Int(*u))]);
+                    expr.bind(&map, false)?
+                }
             };
             // Param::from_expr() only errors in the python path when calling Python
             Ok(Param::from_expr(new_expr, coerce)?)
@@ -1313,7 +1330,8 @@ impl CircuitData {
                     | OperationRef::Unitary(_)
                     | OperationRef::PauliProductMeasurement(_)
                     | OperationRef::PauliProductRotation(_)
-                    | OperationRef::CustomOperation(_) => {
+                    | OperationRef::CustomOperation(_)
+                    | OperationRef::Store(_) => {
                         // TODO: `PauliProductRotation` actually stores a `Param` inside itself,
                         // which this code does not account for.  We most likely need to make an
                         // `OperationRefMut` in order to modify that without cloning the whole
@@ -1410,7 +1428,7 @@ impl CircuitData {
                             // All "user" operations (e.g. PyOperation) use Parameters::Param.
                             let previous_param = &previous.params_view()[parameter];
                             let new_param = match previous_param {
-                                Param::Float(_) => inconsistent(),
+                                Param::Float(_) | Param::Int(_) => inconsistent(),
                                 Param::ParameterExpression(expr) => {
                                     let new_param =
                                         bind_expr(expr, &symbol, value.as_ref(), false)?;
@@ -2086,6 +2104,13 @@ impl PyCircuitData {
         Ok(self_)
     }
 
+    #[classattr]
+    pub fn _qiskit_ir_builtin_(py: Python) -> Bound<PyNone> {
+        // Marker object for type checkers to recognise `CircuitData` as a special form of
+        // Python-available IRs.
+        PyNone::get(py).to_owned()
+    }
+
     pub fn __reduce__(self_: &Bound<PyCircuitData>, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let ty: Bound<PyType> = self_.get_type();
         let args = {
@@ -2551,6 +2576,7 @@ impl PyCircuitData {
                     OperationRef::CustomOperation(custom_operation) => {
                         BoxedCustomOperation::from(custom_operation.clone_dyn()).into()
                     }
+                    OperationRef::Store(store) => store.clone().into(),
                 };
                 res.data.push(PackedInstruction {
                     op: new_op,
@@ -2579,6 +2605,7 @@ impl PyCircuitData {
                     OperationRef::CustomOperation(custom_operation) => {
                         BoxedCustomOperation::from(custom_operation.clone_dyn()).into()
                     }
+                    OperationRef::Store(store) => store.clone().into(),
                 };
                 res.data.push(PackedInstruction {
                     op: new_op,
@@ -3493,7 +3520,7 @@ mod test {
         let other = qc.clone();
         check(&qc, &other);
         let roundtrip = py_dag_to_circuit(
-            &DAGCircuit::from_circuit_data(&qc, false, None, None, None, None)?,
+            &DAGCircuit::from_circuit_data(&qc, false, None, None)?.into(),
             false,
         )?;
         check(&qc, &roundtrip);

@@ -17,15 +17,15 @@ for optimal synthesis of linear (CNOT-only) reversible circuits.
 """
 from __future__ import annotations
 
-import copy
 import numpy as np
 from qiskit.circuit import QuantumCircuit
-from qiskit.exceptions import QiskitError
-from qiskit.synthesis.linear import synth_cnot_count_full_pmh
+from qiskit._accelerate.synthesis.linear_phase import (
+    synth_cnot_phase_aam as synth_cnot_phase_aam_xlated,
+)
 
 
 def synth_cnot_phase_aam(
-    cnots: list[list[int]], angles: list[str], section_size: int = 2
+    cnots: list[list[int]], angles: list[str], section_size: int | None = 2
 ) -> QuantumCircuit:
     r"""This function is an implementation of the `GraySynth` algorithm of
     Amy, Azimadeh and Mosca.
@@ -74,7 +74,9 @@ def synth_cnot_phase_aam(
         The decomposed quantum circuit.
 
     Raises:
-        QiskitError: when dimensions of ``cnots`` and ``angles`` don't align.
+        QiskitError: when dimensions of ``cnots`` and ``angles`` don't align or when an angle is
+            neither a floating-point value, nor one of the supported gates
+            't', 'tdg', 's', 'sdg' or 'z'.
 
     References:
         1. Matthew Amy, Parsiad Azimzadeh, and Michele Mosca.
@@ -82,125 +84,7 @@ def synth_cnot_phase_aam(
            Quantum Science and Technology 4.1 (2018): 015002.
            `arXiv:1712.01859 <https://arxiv.org/abs/1712.01859>`_
     """
-    num_qubits = len(cnots)
 
-    # Create a quantum circuit on num_qubits
-    qcir = QuantumCircuit(num_qubits)
-
-    if len(cnots[0]) != len(angles):
-        raise QiskitError('Size of "cnots" and "angles" do not match.')
-
-    range_list = list(range(num_qubits))
-    epsilon = num_qubits
-    sta = []
-    cnots_copy = np.transpose(np.array(copy.deepcopy(cnots)))
-    # This matrix keeps track of the state in the algorithm
-    state = np.eye(num_qubits).astype("int")
-
-    # Check if some phase-shift gates can be applied, before adding any C-NOT gates
-    for qubit in range(num_qubits):
-        index = 0
-        for icnots in cnots_copy:
-            if np.array_equal(icnots, state[qubit]):
-                if angles[index] == "t":
-                    qcir.t(qubit)
-                elif angles[index] == "tdg":
-                    qcir.tdg(qubit)
-                elif angles[index] == "s":
-                    qcir.s(qubit)
-                elif angles[index] == "sdg":
-                    qcir.sdg(qubit)
-                elif angles[index] == "z":
-                    qcir.z(qubit)
-                else:
-                    qcir.p(angles[index] % np.pi, qubit)
-                del angles[index]
-                cnots_copy = np.delete(cnots_copy, index, axis=0)
-                if index == len(cnots_copy):
-                    break
-                index -= 1
-            index += 1
-
-    # Implementation of the pseudo-code (Algorithm 1) in the aforementioned paper
-    sta.append([cnots, range_list, epsilon])
-    while sta:
-        [cnots, ilist, qubit] = sta.pop()
-        if cnots == []:
-            continue
-        if 0 <= qubit < num_qubits:
-            condition = True
-            while condition:
-                condition = False
-                for j in range(num_qubits):
-                    if (j != qubit) and (sum(cnots[j]) == len(cnots[j])):
-                        condition = True
-                        qcir.cx(j, qubit)
-                        state[qubit] ^= state[j]
-                        index = 0
-                        for icnots in cnots_copy:
-                            if np.array_equal(icnots, state[qubit]):
-                                if angles[index] == "t":
-                                    qcir.t(qubit)
-                                elif angles[index] == "tdg":
-                                    qcir.tdg(qubit)
-                                elif angles[index] == "s":
-                                    qcir.s(qubit)
-                                elif angles[index] == "sdg":
-                                    qcir.sdg(qubit)
-                                elif angles[index] == "z":
-                                    qcir.z(qubit)
-                                else:
-                                    qcir.p(angles[index] % np.pi, qubit)
-                                del angles[index]
-                                cnots_copy = np.delete(cnots_copy, index, axis=0)
-                                if index == len(cnots_copy):
-                                    break
-                                index -= 1
-                            index += 1
-                        for x in _remove_duplicates(sta + [[cnots, ilist, qubit]]):
-                            [cnotsp, _, _] = x
-                            if cnotsp == []:
-                                continue
-                            for ttt in range(len(cnotsp[j])):
-                                cnotsp[j][ttt] ^= cnotsp[qubit][ttt]
-        if ilist == []:
-            continue
-        # See line 18 in pseudo-code of Algorithm 1 in the aforementioned paper
-        # this choice of j maximizes the size of the largest subset (S_0 or S_1)
-        # and the larger a subset, the closer it gets to the ideal in the
-        # Gray code of one CNOT per string.
-        j = ilist[np.argmax([[max(row.count(0), row.count(1)) for row in cnots][k] for k in ilist])]
-        cnots0 = []
-        cnots1 = []
-        for y in list(map(list, zip(*cnots))):
-            if y[j] == 0:
-                cnots0.append(y)
-            elif y[j] == 1:
-                cnots1.append(y)
-        cnots0 = list(map(list, zip(*cnots0)))
-        cnots1 = list(map(list, zip(*cnots1)))
-        if qubit == epsilon:
-            sta.append([cnots1, list(set(ilist).difference([j])), j])
-        else:
-            sta.append([cnots1, list(set(ilist).difference([j])), qubit])
-        sta.append([cnots0, list(set(ilist).difference([j])), qubit])
-    qcir &= synth_cnot_count_full_pmh(state, section_size).inverse()
-    return qcir
-
-
-def _remove_duplicates(lists):
-    """
-    Remove duplicates in list
-
-    Args:
-        lists (list): a list which may contain duplicate elements.
-
-    Returns:
-        list: a list which contains only unique elements.
-    """
-
-    unique_list = []
-    for element in lists:
-        if element not in unique_list:
-            unique_list.append(element)
-    return unique_list
+    cnots_array = np.asarray(cnots).astype(bool)
+    _circuit_data = synth_cnot_phase_aam_xlated(cnots_array, angles, section_size)
+    return QuantumCircuit._from_circuit_data(_circuit_data, legacy_qubits=True)

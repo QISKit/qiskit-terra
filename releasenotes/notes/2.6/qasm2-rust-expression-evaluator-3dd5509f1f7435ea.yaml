@@ -1,0 +1,10 @@
+---
+upgrade_qasm:
+  - |
+    OpenQASM 2 ``gate``-body expressions are now evaluated in Rust.  Real-valued
+    expressions give the same results as before, but the exceptions raised for
+    mathematically invalid ones have changed type: ``sqrt``/``ln`` of a non-positive
+    argument, ``^`` with a negative base and non-integer exponent, and division by zero
+    now all raise :class:`~qiskit.qasm2.QASM2ParseError`, where they previously raised
+    :exc:`ValueError`, ``CircuitError`` and :exc:`ZeroDivisionError` respectively.  They
+    are still raised lazily, when the gate's ``definition`` is first built.

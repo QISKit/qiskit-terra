@@ -1,0 +1,7 @@
+---
+performance:
+  - |
+    Improved runtime of :py:func:`~qiskit.synthesis.synth_mcx_1_clean_b95` synthesis function by migrating implementation to Rust,
+    resulting in approximately 6x speedup across circuit sizes (k=50 to k=1000).   
+    See `#16710 <https://github.com/Qiskit/qiskit/pull/16710>`__ for more details.
+

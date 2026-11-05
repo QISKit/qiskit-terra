@@ -326,6 +326,19 @@ class BitArrayTestCase(QiskitTestCase):
         bit_array = BitArray.from_samples([0, 0, 0])
         self.assertEqual(bit_array, BitArray(u_8([[0], [0], [0]]), 1))
 
+    def test_from_samples_too_many_bits(self):
+        """Test that samples not fitting in ``num_bits`` raise a ``ValueError``."""
+        with self.assertRaisesRegex(ValueError, "fit in num_bits=8"):
+            BitArray.from_samples([1, 256], 8)
+
+        with self.assertRaisesRegex(ValueError, "fit in num_bits=3"):
+            BitArray.from_samples([-1], 3)
+
+    def test_from_counts_too_many_bits(self):
+        """Test that keys not fitting in ``num_bits`` raise a ``ValueError``."""
+        with self.assertRaisesRegex(ValueError, "fit in num_bits=4"):
+            BitArray.from_counts({"1" * 12: 3, "0" * 12: 1}, num_bits=4)
+
     def test_reshape(self):
         """Test the reshape method."""
         # this creates incrementing bitstrings from 0 to 360 * 32 - 1

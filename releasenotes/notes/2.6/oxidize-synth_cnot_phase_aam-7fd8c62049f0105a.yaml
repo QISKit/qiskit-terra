@@ -1,0 +1,10 @@
+---
+performance:
+  - Ported :func:`~.synth_cnot_phase_aam` to Rust.  The new implementation is about x853
+    faster than the previous Python implementation when synthesizing a parity network with 120
+    terms on 150 qubits. 
+    See `#12937 <https://github.com/Qiskit/qiskit/pull/12937>`__ for more details.
+
+fixes:
+  - Fixed a bug in :func:`~.synth_cnot_phase_aam` where the angles were reduced modulo :math:`\pi` instead of :math:`2 * \pi`.
+

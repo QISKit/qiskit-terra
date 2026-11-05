@@ -11,6 +11,7 @@
 # that they have been altered from the originals.
 
 """An analysis pass to find evolution gates in which the Paulis commute."""
+from collections import defaultdict
 
 import numpy as np
 
@@ -23,18 +24,31 @@ from .commuting_2q_block import Commuting2qBlock
 
 
 class FindCommutingPauliEvolutions(TransformationPass):
-    """Finds :class:`.PauliEvolutionGate` objects where the operators, that are evolved, all commute."""
+    """
+    Simplifies :class:`.PauliEvolutionGate`s where all summands commute.
+    """
 
     def run(self, dag: DAGCircuit) -> DAGCircuit:
-        """Check for :class:`.PauliEvolutionGate` objects where the summands all commute.
+        """
+        Replaces :class:`.PauliEvolutionGate` objects where all summands commute by
+        :class:`.Commuting2qBlock` objects.
+
+        The pass only modifies Pauli evolution gates that are defined on 2 or more qubits whose
+        Pauli terms all act nontrivially on exactly 2 qubits and commute qubit-wise. The pass
+        raises an error for Pauli evolution gates defined on 2 or more qubits and contains Pauli
+        terms that do not act nontrivially on 2 qubits.
 
         Args:
             dag: The DAG circuit in which to look for the commuting evolutions.
 
         Returns:
-            The dag in which :class:`.PauliEvolutionGate` objects made of commuting two-qubit Paulis
-            have been replaced with :class:`.Commuting2qBlocks`` gate instructions. These gates
-            contain nodes of two-qubit :class:`.PauliEvolutionGate` objects.
+            The dag in which :class:`.PauliEvolutionGate` objects made of commuting two-qubit
+            Paulis have been replaced with :class:`.Commuting2qBlocks`` gate instructions. These
+            gates contain nodes of two-qubit :class:`.PauliEvolutionGate` objects.
+
+        Raises:
+            QiskitError: If a :class:`.PauliEvolutionGate` is defined on 2+ qubits, but its terms
+                         don't act non-trivially on exactly 2 qubits.
         """
 
         for node in dag.op_nodes():
@@ -124,13 +138,12 @@ class FindCommutingPauliEvolutions(TransformationPass):
         """
         sub_dag = dag.copy_empty_like()
 
-        required_paulis = {
-            self._pauli_to_edge(pauli): (pauli, coeff)
-            for pauli, coeff in zip(op.operator.paulis, op.operator.coeffs)
-        }
+        required_paulis = defaultdict(int)
+        for pauli, coeff in zip(op.operator.paulis, op.operator.coeffs):
+            edge = self._pauli_to_edge(pauli)
+            required_paulis[(pauli, edge)] += coeff
 
-        for edge, (pauli, coeff) in required_paulis.items():
-
+        for (pauli, edge), coeff in required_paulis.items():
             qubits = [dag.qubits[edge[0]], dag.qubits[edge[1]]]
 
             simple_pauli = Pauli(pauli.to_label().replace("I", ""))

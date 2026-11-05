@@ -17,9 +17,9 @@ use thread_local::ThreadLocal;
 
 use super::optimize_1q_gates_decomposition::matmul_1q;
 use hashbrown::{HashMap, HashSet};
-use nalgebra::{Matrix2, Matrix4, U4};
+use nalgebra::{Matrix2, U4};
 use ndarray::ArrayView2;
-use ndarray::{Array2, aview2};
+use ndarray::aview2;
 use num_complex::Complex64;
 use numpy::PyReadonlyArray2;
 use pyo3::exceptions::PyIndexError;
@@ -27,7 +27,7 @@ use pyo3::intern;
 use pyo3::prelude::*;
 use qiskit_circuit::Qubit;
 use qiskit_circuit::circuit_data::CircuitData;
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::gate_matrix::{
     CH_GATE, CX_GATE, CY_GATE, CZ_GATE, DCX_GATE, ECR_GATE, ISWAP_GATE, ONE_QUBIT_IDENTITY,
 };
@@ -48,33 +48,11 @@ use qiskit_synthesis::two_qubit_decompose::{
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 use smallvec::SmallVec;
 
-use crate::passes::unitary_synthesis::{PARAM_SET, TWO_QUBIT_BASIS_SET};
+use super::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
+use super::unitary_synthesis::{PARAM_SET, TWO_QUBIT_BASIS_SET};
 use crate::target::{Qargs, Target};
 use qiskit_circuit::PhysicalQubit;
 use qiskit_util::getenv_use_multiple_threads;
-
-static IDENTITY_2Q: Matrix4<Complex64> = Matrix4::new(
-    // Row 1
-    Complex64::ONE,
-    Complex64::ZERO,
-    Complex64::ZERO,
-    Complex64::ZERO,
-    // Row 2
-    Complex64::ZERO,
-    Complex64::ONE,
-    Complex64::ZERO,
-    Complex64::ZERO,
-    // Row 3
-    Complex64::ZERO,
-    Complex64::ZERO,
-    Complex64::ONE,
-    Complex64::ZERO,
-    // Row 4
-    Complex64::ZERO,
-    Complex64::ZERO,
-    Complex64::ZERO,
-    Complex64::ONE,
-);
 
 /// Threshold in number of blocks to run the pass multithreaded vs serially
 /// At smaller block counts the overhead of multithreading outweighs the speedup
@@ -231,8 +209,9 @@ impl PhysQargsMap {
 
 /// The different actions to take from the analysis
 enum ConsolidateResult {
-    /// The block is equivalent to an identity and should be removed
-    Identity,
+    /// The block equals `exp(i phi) identity` and should be removed. The argument is the
+    /// global phase `phi`, e.g. is 0 for an exact identity.
+    Identity(f64),
     /// No consolidation should occur and the block should be left as is
     NoConsolidate,
     /// The block should be consolidated into a `UnitaryGate` of a given
@@ -253,6 +232,7 @@ fn should_substitute(
     block_qargs: &mut HashSet<Qubit>,
     phys_qargs: &mut PhysQargsMap,
     force_consolidate: bool,
+    tol: f64,
 ) -> PyResult<ConsolidateResult> {
     block_qargs.clear();
     if block.len() == 1 {
@@ -347,9 +327,10 @@ fn should_substitute(
                 .to_owned();
             Ok(matrix)
         })?;
-        let identity: Array2<Complex64> = Array2::eye(2usize.pow(block_qargs.len() as u32));
-        if approx::abs_diff_eq!(identity, matrix.view()) {
-            return Ok(ConsolidateResult::Identity);
+        let trace = matrix.diag().sum();
+        let dim = matrix.nrows() as f64;
+        if let Some(phase_update) = average_gate_fidelity_below_tol(trace / dim, dim, tol) {
+            return Ok(ConsolidateResult::Identity(phase_update));
         } else {
             let unitary_gate = UnitaryGate {
                 array: ArrayType::NDArray(matrix),
@@ -386,8 +367,10 @@ fn should_substitute(
                 num_basis_gates < basis_count
             };
             if consolidate {
-                if approx::abs_diff_eq!(IDENTITY_2Q, matrix) {
-                    return Ok(ConsolidateResult::Identity);
+                let trace = matrix.trace();
+                let dim = 4.0;
+                if let Some(phase_update) = average_gate_fidelity_below_tol(trace / dim, dim, tol) {
+                    return Ok(ConsolidateResult::Identity(phase_update));
                 } else {
                     let unitary_gate = UnitaryGate {
                         array: ArrayType::TwoQ(matrix),
@@ -415,6 +398,7 @@ fn consolidation_analysis_parallel<'a>(
     blocks: &'a [Vec<NodeIndex>],
     qubit_map: Option<Vec<PhysicalQubit>>,
     force_consolidate: bool,
+    tol: f64,
 ) -> PyResult<Vec<(&'a [NodeIndex], ConsolidateResult)>> {
     let block_qargs = ThreadLocal::new();
     let phys_qargs = ThreadLocal::new();
@@ -434,6 +418,7 @@ fn consolidation_analysis_parallel<'a>(
                 &mut block_qargs.borrow_mut(),
                 &mut phys_qargs.borrow_mut(),
                 force_consolidate,
+                tol,
             )?;
             Ok((block.as_slice(), consolidate_result))
         })
@@ -447,10 +432,11 @@ fn apply_consolidation(
 ) -> PyResult<()> {
     match consolidation {
         ConsolidateResult::NoConsolidate => {}
-        ConsolidateResult::Identity => {
+        ConsolidateResult::Identity(phase_update) => {
             for index in block {
                 dag.remove_op_node(*index);
             }
+            dag.add_global_phase(&Param::Float(phase_update))?;
         }
         ConsolidateResult::Matrix(block_index_map, unitary_gate) => {
             let clbit_pos_map = HashMap::new();
@@ -478,10 +464,10 @@ fn apply_consolidation(
 
 #[allow(clippy::too_many_arguments)]
 #[pyfunction]
-#[pyo3(name = "consolidate_blocks", signature = (dag, decomposer, basis_gate_name, force_consolidate, target=None, basis_gates=None, blocks=None, runs=None, qubit_map=None))]
+#[pyo3(name = "consolidate_blocks", signature = (dag, decomposer, basis_gate_name, force_consolidate, target=None, basis_gates=None, blocks=None, runs=None, qubit_map=None, approximation_degree=None))]
 fn py_run_consolidate_blocks(
     py: Python,
-    dag: &mut DAGCircuit,
+    dag: &mut PyDAGCircuit,
     decomposer: Option<DecomposerType>,
     basis_gate_name: &str,
     force_consolidate: bool,
@@ -490,7 +476,15 @@ fn py_run_consolidate_blocks(
     blocks: Option<Vec<Vec<usize>>>,
     runs: Option<Vec<Vec<usize>>>,
     qubit_map: Option<Vec<PhysicalQubit>>,
+    approximation_degree: Option<f64>,
 ) -> PyResult<()> {
+    let dag = dag.try_write()?;
+    let tol = if let Some(degree) = approximation_degree {
+        MINIMUM_TOL.max(1. - degree)
+    } else {
+        MINIMUM_TOL
+    };
+
     // If we don't have a decomposer and force consolidate is not set then there is not any
     // consolidation to do.
     if decomposer.is_none() && !force_consolidate {
@@ -550,6 +544,7 @@ fn py_run_consolidate_blocks(
                 &blocks,
                 qubit_map.clone(),
                 force_consolidate,
+                tol,
             )
         })?;
         for (block, result) in consolidations {
@@ -570,6 +565,7 @@ fn py_run_consolidate_blocks(
                 &mut block_qargs,
                 &mut phys_qargs,
                 force_consolidate,
+                tol,
             )?;
             apply_consolidation(dag, block, result)?;
         }
@@ -633,10 +629,13 @@ fn py_run_consolidate_blocks(
             if already_in_block {
                 continue;
             }
-            if approx::abs_diff_eq!(aview2(&ONE_QUBIT_IDENTITY), aview2(&matrix)) {
+            let trace = matrix[0][0] + matrix[1][1];
+            let dim = 2.0;
+            if let Some(phase_update) = average_gate_fidelity_below_tol(trace / dim, dim, tol) {
                 for node in run {
                     dag.remove_op_node(node);
                 }
+                dag.add_global_phase(&Param::Float(phase_update))?;
             } else {
                 let array: Matrix2<Complex64> =
                     Matrix2::from_row_iterator(matrix.into_iter().flat_map(|x| x.into_iter()));
@@ -683,6 +682,8 @@ pub fn run_consolidate_blocks(
     target: Option<&Target>,
 ) -> PyResult<()> {
     let approximation_degree = approximation_degree.unwrap_or(1.0);
+    let tol = MINIMUM_TOL.max(1. - approximation_degree);
+
     let (decomposer, basis_gate): (Option<DecomposerType>, Option<StandardGate>) =
         if force_consolidate {
             (None, None)
@@ -703,6 +704,7 @@ pub fn run_consolidate_blocks(
             &blocks,
             None,
             force_consolidate,
+            tol,
         )?;
         for (block, result) in consolidations {
             apply_consolidation(dag, block, result)?;
@@ -722,6 +724,7 @@ pub fn run_consolidate_blocks(
                 &mut block_qargs,
                 &mut phys_qargs,
                 force_consolidate,
+                tol,
             )?;
             apply_consolidation(dag, block, result)?;
         }
@@ -800,9 +803,8 @@ mod test_consolidate_blocks {
             .expect("Error while adding CXGate to target");
 
         // Convert the circuit to a DAG.
-        let mut circ_as_dag =
-            DAGCircuit::from_circuit_data(&circuit, false, None, None, None, None)
-                .expect("Error converting circuit to DAG.");
+        let mut circ_as_dag = DAGCircuit::from_circuit_data(&circuit, false, None, None)
+            .expect("Error converting circuit to DAG.");
         // Run the pass
         run_consolidate_blocks(&mut circ_as_dag, false, None, Some(&target))
             .expect("Error while running the consolidate blocks pass.");

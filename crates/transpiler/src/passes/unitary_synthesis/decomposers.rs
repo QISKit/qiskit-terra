@@ -441,13 +441,15 @@ impl DecomposerCache {
         };
         // TODO: this logic isn't really correct; we probably actually need to test if the basis set
         // permits _complete_ coverage of SU2/SO3 via SK.
+        //
+        // An empty basis should not be interpreted as Clifford+T.
         let permits_solovay_kitaev = || match constraint {
             QpuConstraint::Loose { basis_gates, .. } => {
-                basis_gates.iter().copied().all(valid_clifford_t)
+                !basis_gates.is_empty() && basis_gates.iter().copied().all(valid_clifford_t)
             }
             QpuConstraint::Target(target) => target
                 .operation_names_for_qargs(&[qubit])
-                .map(|gates| gates.into_iter().all(valid_clifford_t))
+                .map(|gates| !gates.is_empty() && gates.into_iter().all(valid_clifford_t))
                 .unwrap_or(false),
         };
         let init_solovay_kitaev = || {

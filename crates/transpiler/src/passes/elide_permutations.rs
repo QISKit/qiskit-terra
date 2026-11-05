@@ -13,7 +13,7 @@
 use numpy::PyReadonlyArray1;
 use pyo3::prelude::*;
 
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::operations::{Operation, OperationRef, Param, StandardGate};
 use qiskit_circuit::{BlocksMode, Qubit, VarsMode};
 
@@ -27,6 +27,28 @@ use qiskit_circuit::{BlocksMode, Qubit, VarsMode};
 ///     tuple consisting of the optimized DAG and the induced qubit permutation.
 #[pyfunction]
 #[pyo3(name = "run")]
+pub fn py_run_elide_permutations(
+    dag: &PyDAGCircuit,
+) -> PyResult<Option<(PyDAGCircuit, Vec<usize>)>> {
+    Ok(
+        run_elide_permutations(dag.try_read()?)?.map(|(out_dag, perm)| {
+            // Preserve the metadata
+            (
+                PyDAGCircuit::from_dagcircuit_with_cloned_metadata(out_dag, dag),
+                perm,
+            )
+        }),
+    )
+}
+
+/// Run the ElidePermutations pass on `dag`.
+///
+/// Args:
+///     dag (DAGCircuit): the DAG to be optimized.
+/// Returns:
+///     An `Option`: the value of `None` indicates that no optimization was
+///     performed and the original `dag` should be used, otherwise it's a
+///     tuple consisting of the optimized DAG and the induced qubit permutation.
 pub fn run_elide_permutations(dag: &DAGCircuit) -> PyResult<Option<(DAGCircuit, Vec<usize>)>> {
     let permutation_gate_names = ["swap".to_string(), "permutation".to_string()];
     let op_counts = dag.get_op_counts();
@@ -108,6 +130,6 @@ pub fn run_elide_permutations(dag: &DAGCircuit) -> PyResult<Option<(DAGCircuit, 
 }
 
 pub fn elide_permutations_mod(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(run_elide_permutations))?;
+    m.add_wrapped(wrap_pyfunction!(py_run_elide_permutations))?;
     Ok(())
 }

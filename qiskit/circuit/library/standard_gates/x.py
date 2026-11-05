@@ -14,6 +14,7 @@
 from __future__ import annotations
 import warnings
 import numpy
+from qiskit.circuit.annotated_operation import AnnotatedOperation
 from qiskit.circuit.controlledgate import ControlledGate
 from qiskit.circuit.singleton import SingletonGate, SingletonControlledGate, stdlib_singleton_key
 from qiskit.circuit._utils import _ctrl_state_to_int, with_gate_array, with_controlled_gate_array
@@ -497,6 +498,66 @@ class RCCXGate(SingletonGate):
     def __eq__(self, other):
         return isinstance(other, RCCXGate)
 
+    def control(
+        self,
+        num_ctrl_qubits: int = 1,
+        label: str | None = None,
+        ctrl_state: int | str | None = None,
+        annotated: bool | None = None,
+    ) -> ControlledGate | AnnotatedOperation:
+        """Return a controlled version of the RCCX gate.
+
+        For a single control qubit, the controlled gate uses a compact, exact
+        decomposition consisting of an :class:`.RC3XGate` and an
+        :class:`.CSdgGate`. For a new control qubit :math:`c`, the first RCCX
+        control :math:`a`, the second RCCX control :math:`b`, and target
+        :math:`t`, it uses the identity
+
+        .. math::
+
+            C(\\mathrm{RCCX})(c,a,b;t)
+            = \\mathrm{CS}^{\\dagger}(c,a)\\,\\mathrm{RC3X}(c,a,b;t).
+
+        This avoids separately controlling the T gates in the RCCX decomposition.
+        For more than one control qubit, the generic controlled-gate synthesis is
+        used.
+
+        Args:
+            num_ctrl_qubits: Number of controls to add. Defaults to ``1``.
+            label: Optional gate label. Defaults to ``None``.
+            ctrl_state: The control state of the gate, specified either as an
+                integer or a bitstring. If ``None``, defaults to the all-ones state.
+            annotated: For more than one control qubit, indicates whether to return
+                an annotated operation. Ignored for a single control qubit.
+
+        Returns:
+            A controlled version of this gate.
+        """
+        if num_ctrl_qubits != 1:
+            return super().control(
+                num_ctrl_qubits=num_ctrl_qubits,
+                label=label,
+                ctrl_state=ctrl_state,
+                annotated=annotated,
+            )
+
+        from qiskit.circuit import QuantumCircuit
+
+        definition = QuantumCircuit(4)
+        definition.append(RC3XGate(), definition.qubits)
+        definition.csdg(0, 1)
+
+        return ControlledGate(
+            "crccx",
+            4,
+            [],
+            label=label,
+            num_ctrl_qubits=1,
+            definition=definition,
+            ctrl_state=ctrl_state,
+            base_gate=RCCXGate(label=self.label),
+        )
+
     def inverse(self, annotated: bool = False):
         """Invert this gate. The RCCX gate is its own inverse.
 
@@ -940,9 +1001,9 @@ class MCXGate(ControlledGate):
     def _define(self):
         """This definition is based on MCPhaseGate implementation."""
 
-        from qiskit.synthesis.multi_controlled import synth_mcx_noaux_v24
+        from qiskit.synthesis.multi_controlled import synth_mcx_noaux_sp22
 
-        qc = synth_mcx_noaux_v24(self.num_ctrl_qubits)
+        qc = synth_mcx_noaux_sp22(self.num_ctrl_qubits)
         self.definition = qc
 
     @property
@@ -1318,8 +1379,15 @@ class MCXVChain(MCXGate):
 
         else:  # use clean ancillas
 
+            from qiskit.circuit import QuantumCircuit
             from qiskit.synthesis.multi_controlled import synth_mcx_n_clean_m15
 
             qc = synth_mcx_n_clean_m15(self.num_ctrl_qubits)
+            if qc.num_qubits < self.num_qubits:
+                # Preserve the deprecated MCXVChain width while the underlying synthesis now
+                # needs fewer clean ancillas.
+                padded = QuantumCircuit(self.num_qubits)
+                padded.compose(qc, range(qc.num_qubits), inplace=True)
+                qc = padded
 
         self.definition = qc

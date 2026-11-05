@@ -54,7 +54,8 @@ static int test_version(void) {
     if (strcmp(ref, QISKIT_VERSION) == 0)
         result = Ok;
     else {
-        printf("Qiskit version (%s) didn't match the expectation (%s)", QISKIT_VERSION, ref);
+        fprintf(stderr, "Qiskit version (%s) didn't match the expectation (%s)", QISKIT_VERSION,
+                ref);
         result = EqualityError;
     }
 

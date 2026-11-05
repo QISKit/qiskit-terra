@@ -66,7 +66,7 @@ class SolovayKitaevDecomposition:
 
                 Either this parameter, or ``basis_gates`` and ``depth`` can be specified.
             basis_gates: A list of discrete (i.e., non-parameterized) standard gates.
-                Defaults to ``["h", "t", "tdg"]``.
+                All gates must be single-qubit gates. Defaults to ``["h", "t", "tdg"]``.
             depth: The number of basis gate combinations to consider in the basis set. This
                 determines how fast (and if) the algorithm converges and should be chosen
                 sufficiently high.
@@ -279,9 +279,17 @@ def normalize_gates(gates: list[Gate | str]) -> list[Gate]:
 
     def normalize(gate: Gate | str) -> Gate:
         if isinstance(gate, Gate):
-            return gate
-        if gate in name_to_gate:
-            return name_to_gate[gate]
-        raise ValueError(f"Unsupported gate: {gate}")
+            normalized = gate
+        elif gate in name_to_gate:
+            normalized = name_to_gate[gate]
+        else:
+            raise ValueError(f"Unsupported gate: {gate}")
+
+        if normalized.num_qubits != 1:
+            raise ValueError(
+                "Solovay-Kitaev synthesis only supports single-qubit basis gates, "
+                f"but '{normalized.name}' acts on {normalized.num_qubits} qubits."
+            )
+        return normalized
 
     return list(map(normalize, gates))

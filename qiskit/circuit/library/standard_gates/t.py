@@ -79,7 +79,7 @@ class TGate(SingletonGate):
         )
 
     def inverse(self, annotated: bool = False):
-        """Return inverse T gate (i.e. Tdg).
+        r"""Return inverse T gate (i.e. :math:`T^\dagger`).
 
         Args:
             annotated: when set to ``True``, this is typically used to return an
@@ -155,7 +155,7 @@ class TdgGate(SingletonGate):
         )
 
     def inverse(self, annotated: bool = False):
-        """Return inverse Tdg gate (i.e. T).
+        r"""Return inverse :math:`T^\dagger` gate (i.e. T).
 
         Args:
             annotated: when set to ``True``, this is typically used to return an

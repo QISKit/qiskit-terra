@@ -14,7 +14,7 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use std::f64::consts::PI;
 
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::operations::{OperationRef, Param, StandardGate};
 use qiskit_circuit::packed_instruction::PackedInstruction;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
@@ -184,7 +184,7 @@ fn optimize_clifford_t_1q(
 
     let apply_ty = if basis_gates.is_some_and(|gates| !gates.contains(&StandardGate::SX)) {
         |(sequence, flip): (&mut Vec<StandardGate>, bool)| {
-            sequence.push(StandardGate::S);
+            sequence.push(StandardGate::Sdg);
             sequence.push(StandardGate::H);
             sequence.push(if flip {
                 StandardGate::Tdg
@@ -192,7 +192,7 @@ fn optimize_clifford_t_1q(
                 StandardGate::T
             });
             sequence.push(StandardGate::H);
-            sequence.push(StandardGate::Sdg);
+            sequence.push(StandardGate::S);
         }
     } else {
         |(sequence, flip): (&mut Vec<StandardGate>, bool)| {
@@ -336,6 +336,13 @@ fn optimize_clifford_t_1q(
 
 #[pyfunction]
 #[pyo3(name = "optimize_clifford_t", signature = (dag, basis_gates=None))]
+pub fn py_run_optimize_clifford_t(
+    dag: &mut PyDAGCircuit,
+    basis_gates: Option<Vec<StandardGate>>,
+) -> PyResult<()> {
+    run_optimize_clifford_t(dag.try_write()?, basis_gates)
+}
+
 pub fn run_optimize_clifford_t(
     dag: &mut DAGCircuit,
     basis_gates: Option<Vec<StandardGate>>,
@@ -381,7 +388,7 @@ pub fn run_optimize_clifford_t(
 }
 
 pub fn optimize_clifford_t_mod(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(run_optimize_clifford_t))?;
+    m.add_wrapped(wrap_pyfunction!(py_run_optimize_clifford_t))?;
     Ok(())
 }
 

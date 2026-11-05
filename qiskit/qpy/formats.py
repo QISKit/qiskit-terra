@@ -180,6 +180,22 @@ SPARSE_OBSERVABLE = namedtuple(
 SPARSE_OBSERVABLE_PACK = "!IQQQQ"
 SPARSE_OBSERVABLE_SIZE = struct.calcsize(SPARSE_OBSERVABLE_PACK)
 
+# Register instruction parameter - Version >=18
+#
+# A Register param payload holds either a whole classical register or a single clbit, told apart by a
+# leading tag byte.  A register's name follows the tag and runs to the end of the payload, whose
+# length the enclosing field already gives; a clbit is stored as its index in the circuit.
+#
+# Up to version 17 both cases shared one untyped string: a register was its bare name, and a clbit
+# was a b"\x00" byte followed by its index written out as ASCII digits.
+REGISTER_PARAM_TAG_REGISTER = 1
+REGISTER_PARAM_TAG_CLBIT = 0
+REGISTER_PARAM_TAG_PACK = "!B"
+REGISTER_PARAM_TAG_SIZE = struct.calcsize(REGISTER_PARAM_TAG_PACK)
+REGISTER_PARAM_CLBIT = namedtuple("REGISTER_PARAM_CLBIT", ["tag", "index"])
+REGISTER_PARAM_CLBIT_PACK = "!BI"
+REGISTER_PARAM_CLBIT_SIZE = struct.calcsize(REGISTER_PARAM_CLBIT_PACK)
+
 # Pauli Evolution Gate
 PAULI_EVOLUTION_DEF = namedtuple(
     "PAULI_EVOLUTION_DEF",

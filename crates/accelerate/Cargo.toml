@@ -52,8 +52,5 @@ features = ["rayon", "serde"]
 version = "0.22.2"
 features = ["macro"]
 
-[dev-dependencies]
-pyo3 = { workspace = true, features = ["auto-initialize"] }
-
 [features]
 cache_pygates = ["qiskit-circuit/cache_pygates"]

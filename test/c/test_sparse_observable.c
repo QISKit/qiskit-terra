@@ -43,6 +43,18 @@ static int test_identity(void) {
 }
 
 /**
+ * Test the with_capacity constructor.
+ */
+static int test_with_capacity(void) {
+    QkObs *obs = qk_obs_with_capacity(100, 100, 1000);
+    size_t num_terms = qk_obs_num_terms(obs);
+    uint32_t num_qubits = qk_obs_num_qubits(obs);
+    qk_obs_free(obs);
+
+    return (num_terms != 0 || num_qubits != 100) ? EqualityError : Ok;
+}
+
+/**
  * Test copying an observable.
  */
 static int test_copy(void) {
@@ -719,9 +731,11 @@ static int test_boundaries(void) {
 
     for (size_t i = 0; i < num_terms + 1; i++) {
         if (boundaries[i] != expected[i]) {
+            qk_obs_free(obs);
             return EqualityError;
         }
     }
+    qk_obs_free(obs);
     return Ok;
 }
 
@@ -975,6 +989,7 @@ int test_sparse_observable(void) {
     int num_failed = 0;
     num_failed += RUN_TEST(test_zero);
     num_failed += RUN_TEST(test_identity);
+    num_failed += RUN_TEST(test_with_capacity);
     num_failed += RUN_TEST(test_add);
     num_failed += RUN_TEST(test_add_inplace);
     num_failed += RUN_TEST(test_scaled_add);

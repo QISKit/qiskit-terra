@@ -1,0 +1,12 @@
+---
+performance:
+  - |
+    Improved the runtime performance of
+    :func:`~qiskit.synthesis.synth_mcx_1_clean_kg24`,
+    :func:`~qiskit.synthesis.synth_mcx_1_dirty_kg24`,
+    :func:`~qiskit.synthesis.synth_mcx_2_clean_kg24`, and
+    :func:`~qiskit.synthesis.synth_mcx_2_dirty_kg24`
+    by migrating the implementation to Rust. Benchmarks show a significant speedup
+    across control qubit counts from 50 to 1000.
+    See `#16783 <https://github.com/Qiskit/qiskit/pull/16783>`__ for more details.
+

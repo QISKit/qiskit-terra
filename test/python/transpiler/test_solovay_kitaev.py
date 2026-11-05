@@ -27,6 +27,7 @@ from qiskit.circuit.library import (
     TGate,
     TdgGate,
     HGate,
+    CXGate,
     SGate,
     SdgGate,
     QFTGate,
@@ -493,6 +494,16 @@ class TestSolovayKitaevDecomposition(QiskitTestCase):
         expected.h(0)
 
         self.assertEqual(synth, expected)
+
+    @data("cx", CXGate())
+    def test_rejects_multi_qubit_basis_gate(self, gate):
+        """Test that multi-qubit basis gates are rejected before calling into Rust."""
+        with self.assertRaisesRegex(
+            ValueError,
+            "Solovay-Kitaev synthesis only supports single-qubit basis gates, "
+            "but 'cx' acts on 2 qubits",
+        ):
+            SolovayKitaevDecomposition(basis_gates=["h", "t", "tdg", gate], depth=1)
 
 
 def _convert_u2_to_su2(u2_matrix: np.ndarray) -> tuple[np.ndarray, float]:

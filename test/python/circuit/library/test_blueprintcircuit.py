@@ -24,6 +24,7 @@ from qiskit.circuit import (
     Instruction,
     CircuitInstruction,
 )
+from qiskit.circuit.classical import expr, types
 from qiskit.circuit.library import BlueprintCircuit, XGate, EfficientSU2
 from test import QiskitTestCase
 
@@ -149,6 +150,43 @@ class TestBlueprintCircuit(QiskitTestCase):
         reference.x([0, 1, 2])
 
         self.assertEqual(reference, circuit)
+
+    def test_compose_respects_inline_captures(self):
+        """BlueprintCircuit.compose should forward inline_captures to QuantumCircuit.compose."""
+        a = expr.Var.new("a", types.Bool())
+        b = expr.Var.new("b", types.Bool())
+        c = expr.Var.new("c", types.Uint(8))
+        d = expr.Stretch.new("d")
+
+        class VarBlueprint(BlueprintCircuit):
+            def _check_configuration(self, raise_on_failure=True):
+                return True
+
+            def _build(self):
+                super()._build()
+                self.add_input(a)
+                self.add_input(b)
+                self.add_var(c, 255)
+                self.add_stretch(d)
+                self.store(a, expr.logic_or(a, b))
+
+        with self.assertWarns(DeprecationWarning):
+            blueprint = VarBlueprint()
+
+        other = QuantumCircuit(captures=[a, b, c, d])
+        other.store(c, 254)
+        other.store(b, expr.logic_or(a, b))
+
+        composed = blueprint.compose(other, inline_captures=True)
+
+        expected = QuantumCircuit(inputs=[a, b])
+        expected.add_var(c, 255)
+        expected.add_stretch(d)
+        expected.store(a, expr.logic_or(a, b))
+        expected.store(c, 254)
+        expected.store(b, expr.logic_or(a, b))
+
+        self.assertEqual(composed, expected)
 
     @data("gate", "instruction")
     def test_to_gate_and_instruction(self, method):

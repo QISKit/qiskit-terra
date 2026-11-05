@@ -17,7 +17,7 @@ use rustworkx_core::petgraph::stable_graph::NodeIndex;
 
 use crate::QiskitError;
 use crate::target::Target;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::operations::Operation;
 use thiserror::Error;
 
@@ -31,8 +31,8 @@ pub enum Unroll3qError {
 
 #[pyfunction]
 #[pyo3(name = "unroll_3q_or_more")]
-pub fn py_unroll_3q_or_more(dag: &mut DAGCircuit, target: Option<&Target>) -> PyResult<()> {
-    run_unroll_3q_or_more(dag, target).map_err(|err| match err {
+pub fn py_unroll_3q_or_more(dag: &mut PyDAGCircuit, target: Option<&Target>) -> PyResult<()> {
+    run_unroll_3q_or_more(dag.try_write()?, target).map_err(|err| match err {
         Unroll3qError::NoDefinition(e) => QiskitError::new_err(format!(
             "Cannot unroll all 3q or more gates. No rule to expand {}",
             e
@@ -64,8 +64,7 @@ pub fn run_unroll_3q_or_more(
                     }
                 };
                 let mut decomp_dag =
-                    match DAGCircuit::from_circuit_data(&definition, false, None, None, None, None)
-                    {
+                    match DAGCircuit::from_circuit_data(&definition, false, None, None) {
                         Ok(dag) => dag,
                         Err(e) => return Some(Err(Unroll3qError::SubstitutionError(e))),
                     };

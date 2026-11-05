@@ -10,13 +10,41 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""Methods for generating random quantum information objects."""
+"""
+=========================================================================
+Generating Random Quantum Information (:mod:`qiskit.quantum_info.random`)
+=========================================================================
 
+.. currentmodule:: qiskit.quantum_info.random
 
-# The import path via qiskit.quantum_info.random is not API-documented,
-# yet it existed for a long time and several packages rely on this import path.
-# Since it also mirrors the API-documented ``qiskit.circuit.random``, we keep
-# the re-export available here.
+Overview
+========
+
+The :mod:`qiskit.quantum_info.random` module provides functions for generating
+random quantum states, operators, and channels. These are useful for testing
+and benchmarking.
+
+Random States
+=============
+
+.. autofunction:: random_statevector
+.. autofunction:: random_density_matrix
+
+Random Operators
+================
+
+.. autofunction:: random_unitary
+.. autofunction:: random_hermitian
+.. autofunction:: random_pauli
+.. autofunction:: random_pauli_list
+.. autofunction:: random_clifford
+.. autofunction:: random_cnotdihedral
+
+Random Channels
+===============
+
+.. autofunction:: random_quantum_channel
+"""
 
 from qiskit.quantum_info.operators.random import (
     random_clifford,

@@ -14,21 +14,28 @@
 
 from .gray_code import generate_gray_code, gray_code_chain
 from .mcmt_vchain import synth_mcmt_vchain
+from .mcmt_xgate import synth_mcmt_xgate
+from .mcp_synthesis import (
+    synth_mcp_noaux_default,
+    synth_mcp_noaux_sp22,
+    synth_mcp_noaux_v24,
+)
 from .mcx_synthesis import (
+    synth_c3x,
+    synth_c4x,
+    synth_mcx_1_clean_b95,
     synth_mcx_1_clean_kg24,
     synth_mcx_1_dirty_kg24,
     synth_mcx_2_clean_kg24,
     synth_mcx_2_dirty_kg24,
-    synth_mcx_n_dirty_i15,
-    synth_mcx_n_clean_m15,
-    synth_mcx_1_clean_b95,
     synth_mcx_gray_code,
-    synth_mcx_noaux_v24,
+    synth_mcx_n_clean_m15,
+    synth_mcx_n_dirty_i15,
+    synth_mcx_n_dirty_m15,
     synth_mcx_noaux_hp24,
-    synth_c3x,
-    synth_c4x,
+    synth_mcx_noaux_sp22,
+    synth_mcx_noaux_v24,
 )
-from .mcmt_xgate import synth_mcmt_xgate
 
 __all__ = [
     "generate_gray_code",
@@ -37,6 +44,9 @@ __all__ = [
     "synth_c4x",
     "synth_mcmt_vchain",
     "synth_mcmt_xgate",
+    "synth_mcp_noaux_default",
+    "synth_mcp_noaux_sp22",
+    "synth_mcp_noaux_v24",
     "synth_mcx_1_clean_b95",
     "synth_mcx_1_clean_kg24",
     "synth_mcx_1_dirty_kg24",
@@ -45,6 +55,8 @@ __all__ = [
     "synth_mcx_gray_code",
     "synth_mcx_n_clean_m15",
     "synth_mcx_n_dirty_i15",
+    "synth_mcx_n_dirty_m15",
     "synth_mcx_noaux_hp24",
+    "synth_mcx_noaux_sp22",
     "synth_mcx_noaux_v24",
 ]

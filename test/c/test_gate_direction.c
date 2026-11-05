@@ -28,7 +28,7 @@ static QkTarget *create_target() {
         qk_target_add_instruction(target, cx_entry) != QkExitCode_Success ||
         qk_target_entry_add_property(rzx_entry, qargs, 2, 0.0, 0.0) != QkExitCode_Success ||
         qk_target_add_instruction(target, rzx_entry) != QkExitCode_Success) {
-        printf("Unexpected error encountered in create_target.");
+        fprintf(stderr, "Unexpected error encountered in create_target.");
         qk_target_free(target);
         return NULL;
     }
@@ -50,7 +50,8 @@ static int test_standalone_check_gate_direction(void) {
 
     if ((result = qk_circuit_gate(circuit, QkGate_CX, qargs, NULL)) != QkExitCode_Success ||
         (result = qk_circuit_gate(circuit, QkGate_CX, &qargs[1], NULL)) != QkExitCode_Success) {
-        printf("Unexpected error encountered while adding CX gates in test_check_gate_direction.");
+        fprintf(stderr,
+                "Unexpected error encountered while adding CX gates in test_check_gate_direction.");
         goto cleanup;
     }
 
@@ -59,8 +60,8 @@ static int test_standalone_check_gate_direction(void) {
         result = EqualityError;
     else {
         if ((result = qk_circuit_gate(circuit, QkGate_CX, &qargs[2], NULL)) != QkExitCode_Success) {
-            printf("Unexpected error encountered while adding a CX gate in "
-                   "test_check_gate_direction.");
+            fprintf(stderr, "Unexpected error encountered while adding a CX gate in "
+                            "test_check_gate_direction.");
             goto cleanup;
         }
         check_pass = qk_transpiler_pass_standalone_check_gate_direction(circuit, target);
@@ -96,7 +97,7 @@ static int test_standalone_gate_direction_simple(void) {
             QkExitCode_Success || // would be replaced by 5 gates
         (result = qk_circuit_gate(circuit, QkGate_RZX, &qargs[3], params)) !=
             QkExitCode_Success) { // would be replaced by 5 gates
-        printf("Unexpected error encountered while adding gates in test_gate_direction.");
+        fprintf(stderr, "Unexpected error encountered while adding gates in test_gate_direction.");
         goto cleanup;
     }
 

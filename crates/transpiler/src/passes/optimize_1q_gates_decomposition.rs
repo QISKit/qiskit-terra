@@ -25,7 +25,7 @@ use ndarray::prelude::*;
 use rayon::prelude::*;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::operations::{Operation, OperationRef, Param};
 use qiskit_util::getenv_use_multiple_threads;
 
@@ -367,6 +367,11 @@ impl Optimize1qGatesDecompositionState {
     }
 }
 
+struct AnalysisResults {
+    runs: Vec<Vec<NodeIndex>>,
+    sequences: Vec<Option<OneQubitGateSequence>>,
+}
+
 fn process_run(
     raw_run: &[NodeIndex],
     dag: &DAGCircuit,
@@ -462,6 +467,87 @@ fn process_run(
 
 #[pyfunction]
 #[pyo3(name = "optimize_1q_gates_decomposition", signature = (dag, state, *, target=None, basis_gates=None, global_decomposers=None))]
+pub fn py_run_optimize_1q_gates_decomposition(
+    py: Python,
+    dag: &mut PyDAGCircuit,
+    state: &Optimize1qGatesDecompositionState,
+    target: Option<&Target>,
+    basis_gates: Option<HashSet<String>>,
+    global_decomposers: Option<Vec<String>>,
+) -> PyResult<()> {
+    if getenv_use_multiple_threads() {
+        let results = py.detach(|| {
+            let dag_mut = dag.try_write()?;
+            parallel_analyze_runs(dag_mut, state, target, basis_gates, global_decomposers)
+        })?;
+        let dag_mut = dag.try_write()?;
+        apply_sequences(dag_mut, results.runs, results.sequences)?;
+    } else {
+        let dag_mut = dag.try_write()?;
+        let runs: Vec<Vec<NodeIndex>> = dag_mut.collect_1q_runs().unwrap().collect();
+        for raw_run in runs {
+            let sequence = process_run(
+                &raw_run,
+                dag_mut,
+                state,
+                target,
+                basis_gates.as_ref(),
+                global_decomposers.as_ref(),
+            )?;
+            if let Some(sequence) = sequence {
+                for gate in sequence.gates {
+                    dag_mut.insert_1q_on_incoming_qubit((gate.0, &gate.1), raw_run[0]);
+                }
+                dag_mut.add_global_phase(&Param::Float(sequence.global_phase))?;
+                dag_mut.remove_1q_sequence(&raw_run);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parallel_analyze_runs(
+    dag: &mut DAGCircuit,
+    state: &Optimize1qGatesDecompositionState,
+    target: Option<&Target>,
+    basis_gates: Option<HashSet<String>>,
+    global_decomposers: Option<Vec<String>>,
+) -> PyResult<AnalysisResults> {
+    let runs: Vec<Vec<NodeIndex>> = dag.collect_1q_runs().unwrap().collect();
+    let sequences = runs
+        .par_iter()
+        .map(|raw_run| {
+            process_run(
+                raw_run,
+                dag,
+                state,
+                target,
+                basis_gates.as_ref(),
+                global_decomposers.as_ref(),
+            )
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    Ok(AnalysisResults { runs, sequences })
+}
+
+fn apply_sequences(
+    dag: &mut DAGCircuit,
+    runs: Vec<Vec<NodeIndex>>,
+    sequences: Vec<Option<OneQubitGateSequence>>,
+) -> PyResult<()> {
+    runs.into_iter()
+        .zip(sequences)
+        .filter_map(|(raw_run, sequence)| sequence.map(|x| (raw_run, x)))
+        .try_for_each(|(raw_run, sequence)| -> PyResult<()> {
+            for gate in sequence.gates {
+                dag.insert_1q_on_incoming_qubit((gate.0, &gate.1), raw_run[0]);
+            }
+            dag.add_global_phase(&Param::Float(sequence.global_phase))?;
+            dag.remove_1q_sequence(&raw_run);
+            Ok(())
+        })
+}
+
 pub fn run_optimize_1q_gates_decomposition(
     dag: &mut DAGCircuit,
     state: &Optimize1qGatesDecompositionState,
@@ -469,33 +555,11 @@ pub fn run_optimize_1q_gates_decomposition(
     basis_gates: Option<HashSet<String>>,
     global_decomposers: Option<Vec<String>>,
 ) -> PyResult<()> {
-    let runs: Vec<Vec<NodeIndex>> = dag.collect_1q_runs().unwrap().collect();
     if getenv_use_multiple_threads() {
-        let sequences = runs
-            .par_iter()
-            .map(|raw_run| {
-                process_run(
-                    raw_run,
-                    dag,
-                    state,
-                    target,
-                    basis_gates.as_ref(),
-                    global_decomposers.as_ref(),
-                )
-            })
-            .collect::<PyResult<Vec<_>>>()?;
-        runs.into_iter()
-            .zip(sequences)
-            .filter_map(|(raw_run, sequence)| sequence.map(|x| (raw_run, x)))
-            .try_for_each(|(raw_run, sequence)| -> PyResult<()> {
-                for gate in sequence.gates {
-                    dag.insert_1q_on_incoming_qubit((gate.0, &gate.1), raw_run[0]);
-                }
-                dag.add_global_phase(&Param::Float(sequence.global_phase))?;
-                dag.remove_1q_sequence(&raw_run);
-                Ok(())
-            })?;
+        let results = parallel_analyze_runs(dag, state, target, basis_gates, global_decomposers)?;
+        apply_sequences(dag, results.runs, results.sequences)?;
     } else {
+        let runs: Vec<Vec<NodeIndex>> = dag.collect_1q_runs().unwrap().collect();
         for raw_run in runs {
             let sequence = process_run(
                 &raw_run,
@@ -547,7 +611,7 @@ pub fn matmul_1q_with_slice(operator: &mut [[Complex64; 2]; 2], other: &[[Comple
 }
 
 pub fn optimize_1q_gates_decomposition_mod(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(run_optimize_1q_gates_decomposition))?;
+    m.add_wrapped(wrap_pyfunction!(py_run_optimize_1q_gates_decomposition))?;
     m.add_class::<Optimize1qGatesDecompositionState>()?;
     Ok(())
 }

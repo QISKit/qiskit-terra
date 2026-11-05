@@ -61,9 +61,6 @@ features = ["rayon"]
 workspace = true
 features = ["rayon"]
 
-[dev-dependencies]
-pyo3 = { workspace = true, features = ["auto-initialize"] }
-
 [features]
 cache_pygates = [
     "qiskit-circuit/cache_pygates",

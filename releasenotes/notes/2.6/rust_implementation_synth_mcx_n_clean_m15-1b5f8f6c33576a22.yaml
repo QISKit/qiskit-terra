@@ -1,0 +1,9 @@
+---
+performance:
+  - Improved the runtime performance of :py:func:`~qiskit.synthesis.synth_mcx_n_clean_m15`
+    function by migrating the implementation to Rust.  The function synthesizes multi-controlled 
+    X gates using clean ancillary qubits (Maslov 2016). Benchmarks show **1.5-1.6x speedup** across
+    control qubit counts from 50 to 5000. There are no API changes.
+    See `#16703 <https://github.com/Qiskit/qiskit/pull/16703/>`__ for more
+    details
+

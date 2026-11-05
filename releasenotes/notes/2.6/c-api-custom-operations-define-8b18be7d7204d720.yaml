@@ -1,0 +1,9 @@
+---
+features_c:
+  - |
+    Custom operations can now be defined via the C API using :c:struct:`QkCustomOp`.
+    Any implementors should refer to the documentation defined in :ref:`capi-operations`
+    for further information.
+  - |
+    Add :c:func:`qk_circuit_custom_operation` and :c:func:`qk_dag_apply_custom_operation`
+    to add custom operations defined in C to a circuit.

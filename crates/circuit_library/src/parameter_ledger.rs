@@ -10,8 +10,10 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use pyo3::prelude::*;
-use qiskit_circuit::{imports, operations::Param};
+use qiskit_circuit::{
+    operations::Param,
+    parameter::{parameter_expression::ParameterExpression, symbol_expr::SymbolVector},
+};
 
 use super::blocks::{Block, Entanglement};
 
@@ -56,7 +58,6 @@ impl ParameterLedger {
     /// parameter of a specific layer.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn from_nlocal(
-        py: Python,
         num_qubits: u32,
         reps: usize,
         entanglement: &Entanglement,
@@ -64,7 +65,7 @@ impl ParameterLedger {
         entanglement_blocks: &[&Block],
         skip_final_rotation_layer: bool,
         parameter_prefix: &String,
-    ) -> PyResult<Self> {
+    ) -> Self {
         // if we keep the final layer (i.e. skip=false), add parameters on the final layer
         let final_layer_rep = match skip_final_rotation_layer {
             true => 0,
@@ -102,12 +103,12 @@ impl ParameterLedger {
         // generate a ParameterVector Python-side, containing all parameters, and then
         // map it onto Rust-space parameters
         let num_parameters = num_rotation_params + num_entangle_params;
-        let parameter_vector: Vec<Param> = imports::PARAMETER_VECTOR
-            .get_bound(py)
-            .call1((parameter_prefix, num_parameters))? // get the Python ParameterVector
-            .try_iter()? // iterate over the elements and cast them to Rust Params
-            .map(|ob| Param::extract_no_coerce(ob?.as_borrowed()))
-            .collect::<PyResult<_>>()?;
+
+        let parameter_vector: Vec<Param> =
+            SymbolVector::new(parameter_prefix.to_string(), num_parameters)
+                .iter()
+                .map(|sym| Param::ParameterExpression(ParameterExpression::from_symbol(sym).into()))
+                .collect();
 
         // finally, distribute the parameters onto the repetitions and blocks for each
         // rotation layer and entanglement layer
@@ -124,13 +125,13 @@ impl ParameterLedger {
             rotation_indices.push(index);
         }
 
-        Ok(ParameterLedger {
+        ParameterLedger {
             parameter_vector,
             rotation_indices,
             entangle_indices,
             rotations,
             entanglements,
-        })
+        }
     }
 
     /// Get the parameters in the rotation or entanglement layer.

@@ -14,16 +14,12 @@
 Mixin for gate operator interface.
 """
 
-import sys
 from abc import ABC, abstractmethod
 from numbers import Integral
 
 from qiskit.exceptions import QiskitError
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from typing import Self
 
 
 class GroupMixin(ABC):

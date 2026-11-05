@@ -259,7 +259,7 @@ impl<'a> BasicPrinter<'a> {
     }
 
     fn visit_duration_literal(&mut self, expression: &DurationLiteral) {
-        write!(self.stream, "{}{}", expression.value, expression.unit).unwrap();
+        write!(self.stream, "{}", expression).unwrap();
     }
 
     fn visit_unary(&mut self, expression: &Unary) {

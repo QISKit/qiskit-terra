@@ -103,12 +103,12 @@ class AnnotatedOperation(Operation):
         in order from lowest index to highest index."""
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Unique string identifier for operation type."""
         return "annotated"
 
     @property
-    def num_qubits(self):
+    def num_qubits(self) -> int:
         """Number of qubits."""
         num_ctrl_qubits = 0
         for modifier in self.modifiers:
@@ -118,7 +118,7 @@ class AnnotatedOperation(Operation):
         return num_ctrl_qubits + self.base_op.num_qubits
 
     @property
-    def num_clbits(self):
+    def num_clbits(self) -> int:
         """Number of classical bits."""
         return self.base_op.num_clbits
 

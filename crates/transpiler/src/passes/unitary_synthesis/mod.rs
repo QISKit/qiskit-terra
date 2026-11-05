@@ -35,7 +35,7 @@ use crate::QiskitError;
 use crate::target::Target;
 use qiskit_circuit::bit::QuantumRegister;
 use qiskit_circuit::circuit_data::CircuitData;
-use qiskit_circuit::dag_circuit::{DAGCircuit, DAGCircuitBuilder, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, DAGCircuitBuilder, NodeType, PyDAGCircuit};
 use qiskit_circuit::instruction::Parameters;
 use qiskit_circuit::operations::{Operation, OperationRef, Param, PythonOperation, StandardGate};
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
@@ -1108,10 +1108,10 @@ fn conjugate_with_swaps(mut m: ArrayViewMut2<Complex64>) {
 /// Python entry point to [run_unitary_synthesis].
 #[allow(clippy::too_many_arguments)]
 #[pyfunction]
-#[pyo3(name = "run_main_loop", signature=(dag, qubit_indices, min_qubits, target, basis_gates, synth_gates, coupling_edges, approximation_degree=None, natural_direction=None, pulse_optimize=None))]
+#[pyo3(name = "run_main_loop", signature=(py_dag, qubit_indices, min_qubits, target, basis_gates, synth_gates, coupling_edges, approximation_degree=None, natural_direction=None, pulse_optimize=None))]
 pub fn py_unitary_synthesis(
     py: Python,
-    dag: &DAGCircuit,
+    py_dag: &PyDAGCircuit,
     qubit_indices: Vec<PhysicalQubit>,
     min_qubits: usize,
     target: Option<&Target>,
@@ -1121,7 +1121,8 @@ pub fn py_unitary_synthesis(
     approximation_degree: Option<f64>,
     natural_direction: Option<bool>,
     pulse_optimize: Option<bool>,
-) -> PyResult<Option<DAGCircuit>> {
+) -> PyResult<Option<PyDAGCircuit>> {
+    let dag = py_dag.try_read()?;
     let config = UnitarySynthesisConfig {
         approximation: Approximation::from_py_approximation_degree(approximation_degree),
         use_pulse_optimizer: UsePulseOptimizer::from_py_pulse_optimize(pulse_optimize),
@@ -1166,7 +1167,7 @@ pub fn py_unitary_synthesis(
                 min_qubits,
             )
         })?;
-        Ok(Some(apply_synthesis(
+        let out_dag = apply_synthesis(
             dag,
             node_replace_map,
             &qubit_indices,
@@ -1174,16 +1175,24 @@ pub fn py_unitary_synthesis(
             min_qubits,
             &mut state,
             constraint,
-        )?))
+        )?;
+        // Preserve metadata
+        Ok(Some(PyDAGCircuit::from_dagcircuit_with_cloned_metadata(
+            out_dag, py_dag,
+        )))
     } else {
-        Ok(Some(serial_run_unitary_synthesis(
+        let out_dag = serial_run_unitary_synthesis(
             dag,
             &synth_gates,
             min_qubits,
             &qubit_indices,
             &mut state,
             constraint,
-        )?))
+        )?;
+        // Preserve metadata
+        Ok(Some(PyDAGCircuit::from_dagcircuit_with_cloned_metadata(
+            out_dag, py_dag,
+        )))
     }
 }
 
@@ -1199,7 +1208,7 @@ pub fn py_synthesize_unitary_matrix(
     approximation_degree: Option<f64>,
     natural_direction: Option<bool>,
     pulse_optimize: Option<bool>,
-) -> PyResult<DAGCircuit> {
+) -> PyResult<PyDAGCircuit> {
     let config = UnitarySynthesisConfig {
         approximation: Approximation::from_py_approximation_degree(approximation_degree),
         use_pulse_optimizer: UsePulseOptimizer::from_py_pulse_optimize(pulse_optimize),
@@ -1241,7 +1250,7 @@ pub fn py_synthesize_unitary_matrix(
     )? {
         return Err(QiskitError::new_err("Failed to decompose unitary"));
     }
-    Ok(out_dag.build())
+    Ok(out_dag.build().into())
 }
 
 pub fn unitary_synthesis_mod(m: &Bound<PyModule>) -> PyResult<()> {

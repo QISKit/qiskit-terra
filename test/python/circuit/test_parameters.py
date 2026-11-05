@@ -2256,6 +2256,13 @@ class TestParameterEquality(QiskitTestCase):
         self.assertEqual(expr, theta)
         self.assertEqual(theta, expr)
 
+    def test_inverse_equals_negative_power(self):
+        """Verify 1/x is equal to x ** (-1) for parameter expressions."""
+        theta = Parameter("theta")
+
+        self.assertEqual(1 / theta, theta ** (-1))
+        self.assertEqual(theta ** (-2), 1 / (theta**2))
+
 
 class TestParameterView(QiskitTestCase):
     """Test the ParameterView object."""

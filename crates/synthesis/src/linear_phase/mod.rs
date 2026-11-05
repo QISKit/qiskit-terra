@@ -19,6 +19,7 @@ use pyo3::{
     wrap_pyfunction,
 };
 use qiskit_circuit::{circuit_data::CircuitData, circuit_data::PyCircuitData, operations::Param};
+mod cnot_phase_synth;
 mod cx_cz_depth_lnn;
 
 pub(crate) mod cz_depth_lnn;
@@ -54,5 +55,6 @@ pub fn linear_phase(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(
         cx_cz_depth_lnn::py_synth_cx_cz_depth_line_my
     ))?;
+    m.add_wrapped(wrap_pyfunction!(cnot_phase_synth::synth_cnot_phase_aam))?;
     Ok(())
 }

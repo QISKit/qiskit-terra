@@ -10,11 +10,15 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+use std::sync::Arc;
+
+use crate::error::ParseError;
 
 /// Information about a custom instruction that Python space is able to construct to pass down to
 /// us.
-#[pyclass(from_py_object)]
+#[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone)]
 pub struct CustomInstruction {
     pub name: String,
@@ -23,6 +27,7 @@ pub struct CustomInstruction {
     pub builtin: bool,
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl CustomInstruction {
     #[new]
@@ -72,18 +77,118 @@ impl ClassicalBuiltinExt {
     }
 }
 
-#[derive(Clone, Debug)]
+/// The only thing permitted to invoke a [ClassicalCallableExt].
+///
+/// Encapsulating the call this way means call sites don't have to know which arm of the enum they
+/// hold, nor whether an interpreter is available.
+#[derive(Clone, Copy)]
+pub struct ClassicalEvaluator<'py> {
+    /// `None` when no interpreter is attached; see [ClassicalEvaluator::detached].
+    #[cfg(feature = "py")]
+    py: Option<Python<'py>>,
+    #[cfg(not(feature = "py"))]
+    _lifetime: std::marker::PhantomData<&'py ()>,
+}
+
+impl<'py> ClassicalEvaluator<'py> {
+    /// An evaluator that can call every kind of callable, including Python ones.
+    #[cfg(feature = "py")]
+    pub fn attached(py: Python<'py>) -> Self {
+        Self { py: Some(py) }
+    }
+
+    /// An evaluator for callers with no attached interpreter, such as the C API.
+    ///
+    /// Python callables can't be invoked through this; that is reported as an error rather than
+    /// trying to attach, since the interpreter may not even be initialised.
+    pub fn detached() -> Self {
+        Self {
+            #[cfg(feature = "py")]
+            py: None,
+            #[cfg(not(feature = "py"))]
+            _lifetime: std::marker::PhantomData,
+        }
+    }
+
+    #[cfg(feature = "py")]
+    pub fn eval(&self, callable: &ClassicalCallableExt, params: &[f64]) -> Result<f64, ParseError> {
+        match self.py {
+            Some(py) => callable.call_attached(py, params),
+            None => callable.call(params),
+        }
+    }
+
+    #[cfg(not(feature = "py"))]
+    pub fn eval(&self, callable: &ClassicalCallableExt, params: &[f64]) -> Result<f64, ParseError> {
+        callable.call(params)
+    }
+}
+
+/// A pure-Rust callable type for custom classical functions.
+pub type ClassicalFn = Arc<dyn Fn(&[f64]) -> Result<f64, ParseError> + Send + Sync>;
+
+/// A classical callable used during expression constant-folding in the qasm2 parser.
+#[derive(Clone)]
 pub enum ClassicalCallableExt {
     /// An extension to OpenQASM 2 that's built into Qiskit.
     Builtin(ClassicalBuiltinExt),
-    /// A callable Python object.
-    Py { num_params: usize, ob: Py<PyAny> },
+    /// A user-supplied callable wrapped in an Arc closure.
+    Custom { num_params: usize, f: ClassicalFn },
+    #[cfg(feature = "py")]
+    Python {
+        num_params: usize,
+        callable: Py<PyAny>,
+    },
 }
+
 impl ClassicalCallableExt {
     pub fn num_params(&self) -> usize {
         match self {
             Self::Builtin(builtin) => builtin.num_params(),
-            Self::Py { num_params, ob: _ } => *num_params,
+            Self::Custom { num_params, .. } => *num_params,
+            #[cfg(feature = "py")]
+            Self::Python { num_params, .. } => *num_params,
+        }
+    }
+
+    fn call(&self, params: &[f64]) -> Result<f64, ParseError> {
+        match self {
+            Self::Builtin(builtin) => builtin.call(params).map_err(|expected| {
+                ParseError::new(format!(
+                    "argument mismatch: expected {expected}, got {}",
+                    params.len()
+                ))
+            }),
+            Self::Custom { f, .. } => f(params),
+            #[cfg(feature = "py")]
+            Self::Python { .. } => Err(ParseError::new(
+                "cannot constant-fold with a Python callable without an attached Python interpreter",
+            )),
+        }
+    }
+
+    /// Call the function on the given parameters, with an attached Python interpreter available for
+    /// the callables that need one.
+    #[cfg(feature = "py")]
+    fn call_attached(&self, py: Python<'_>, params: &[f64]) -> Result<f64, ParseError> {
+        match self {
+            Self::Python { callable, .. } => {
+                let pyargs =
+                    pyo3::types::PyTuple::new(py, params).expect("f64 to pyfloat wont fail");
+                let result = callable.call1(py, pyargs).map_err(|e| {
+                    ParseError::with_source(
+                        format!("caught exception when constant folding: {e}"),
+                        e,
+                    )
+                })?;
+                result.extract::<f64>(py).map_err(|e| {
+                    ParseError::with_source(
+                        "user provided classical function returned non-float",
+                        e,
+                    )
+                })
+            }
+            _ => self.call(params),
         }
     }
 }
@@ -94,13 +199,14 @@ impl ClassicalCallableExt {
 /// The given `callable` must be a Python function that takes `num_params` floats, and returns a
 /// float.  The `name` is the identifier that refers to it in the OpenQASM 2 program.  This cannot
 /// clash with any defined gates.
-#[pyclass(from_py_object)]
+#[cfg_attr(feature = "py", pyclass(from_py_object))]
 #[derive(Clone)]
 pub struct CustomClassical {
     pub name: String,
     pub callable: ClassicalCallableExt,
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl CustomClassical {
     #[new]
@@ -108,9 +214,9 @@ impl CustomClassical {
     fn __new__(name: String, num_params: usize, callable: Py<PyAny>) -> Self {
         Self {
             name,
-            callable: ClassicalCallableExt::Py {
+            callable: ClassicalCallableExt::Python {
                 num_params,
-                ob: callable,
+                callable,
             },
         }
     }
@@ -130,5 +236,23 @@ impl CustomClassical {
             callable: ClassicalCallableExt::Builtin(builtin),
         })
         .collect()
+    }
+}
+
+/// The callables themselves can't be printed, so only their arity is.
+impl std::fmt::Debug for ClassicalCallableExt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Builtin(builtin) => f.debug_tuple("Builtin").field(builtin).finish(),
+            Self::Custom { num_params, .. } => f
+                .debug_struct("Custom")
+                .field("num_params", num_params)
+                .finish(),
+            #[cfg(feature = "py")]
+            Self::Python { num_params, .. } => f
+                .debug_struct("Python")
+                .field("num_params", num_params)
+                .finish(),
+        }
     }
 }

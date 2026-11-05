@@ -88,6 +88,7 @@ class CommutationChecker:
         max_num_qubits: int | None = None,
         approximation_degree: float = 1.0,
         matrix_max_num_qubits: int = 3,
+        check_inputs: bool = True,
     ) -> bool:
         """
         Checks if two Operations commute. The return value of ``True`` means that the operations
@@ -111,6 +112,9 @@ class CommutationChecker:
             matrix_max_num_qubits: the maximum number of qubits for which it is allowed to compute
                 the matrix representation. This is needed if there is no efficient check readily
                 available, e.g. for custom gates.
+            check_inputs: If ``True`` (default), reject duplicate qubit arguments with
+                :exc:`.QiskitError` at the public boundary. Pass ``False`` to skip that
+                validation when the caller already guarantees distinct qubits.
 
         Returns:
             Whether two operations commute.
@@ -125,6 +129,7 @@ class CommutationChecker:
             max_num_qubits,
             approximation_degree,
             matrix_max_num_qubits,
+            check_inputs,
         )
 
     @deprecate_func(since="2.5", removal_timeline="in Qiskit 3.0")

@@ -149,6 +149,12 @@ def _matrix_to_latex(matrix, decimals=10, prefix="", max_size=(8, 8)):
 def array_to_latex(array, precision=10, prefix="", source=False, max_size=8):
     """Latex representation of a complex numpy array (with dimension 1 or 2)
 
+    .. warning::
+
+       This method will relies on SymPy internally which is
+       inherently unsafe as SymPy heavily relies on Python's :func:`.eval`
+       function. This method is not safe to use with untrusted input.
+
     Args:
         array (ndarray): The array to be converted to latex, must have dimension 1 or 2 and
                          contain only numerical data.
