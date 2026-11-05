@@ -22,7 +22,10 @@ from qiskit import QuantumRegister, QuantumCircuit
 from qiskit.converters import circuit_to_dag
 from qiskit.circuit.library import (
     U1Gate,
+    RXGate,
+    RYGate,
     RZGate,
+    CXGate,
     PhaseGate,
     UnitaryGate,
     PauliEvolutionGate,
@@ -1334,6 +1337,39 @@ measure q0[1] -> c0[1];
         qc_expected.append(PauliProductMeasurement(Pauli("YX")), [0, 2], [1])
 
         self.assertEqual(qct, qc_expected)
+
+    def test_random_cx_and_rotations_circuits(self):
+        """Test random circuits with CX, RX, RY and RZ gates."""
+        qc = _random_cx_and_rotations_circuit(3, 1000, seed=42)
+        qct = CommutativeOptimization()(qc)
+        self.assertEqual(Operator(qc), Operator(qct))
+
+
+def _random_cx_and_rotations_circuit(num_qubits, num_gates, seed):
+    """Generate a pseudo-random circuit containing CX, RX, RY and RZ gates."""
+
+    # These circuits are useful to check optimizations in CommutativeOptimization
+    # related to commutativity tracking for RX, RY and RZ gates.
+
+    rng = np.random.default_rng(seed)
+
+    gate_classes = [RXGate, RYGate, RZGate, CXGate]
+
+    circ = QuantumCircuit(num_qubits)
+    samples = rng.choice(gate_classes, num_gates)
+
+    for gate_cls in samples:
+        if gate_cls in [RXGate, RYGate, RZGate]:
+            param = rng.choice([-0.2, -0.1, 0.0, 0.1, 0.2])
+            gate = gate_cls(param)
+            qubits = rng.choice(range(num_qubits), 1).tolist()
+        else:
+            gate = gate_cls()
+            qubits = rng.choice(range(num_qubits), 2, replace=False).tolist()
+
+        circ.append(gate, qubits)
+
+    return circ
 
 
 if __name__ == "__main__":

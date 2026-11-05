@@ -25,14 +25,13 @@ use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
 use crate::passes::remove_identity_equiv::is_identity_equiv;
 use qiskit_circuit::circuit_instruction::OperationFromPython;
 use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
+use qiskit_circuit::interner::Interned;
 use qiskit_circuit::operations::{
     Operation, OperationRef, Param, PauliBased, PauliProductMeasurement, PauliProductRotation,
     StandardGate, multiply_param, radd_param,
 };
-use qiskit_circuit::{BlocksMode, Clbit, NoBlocks, Qubit, imports};
-
-use qiskit_circuit::VarsMode;
 use qiskit_circuit::packed_instruction::PackedInstruction;
+use qiskit_circuit::{BlocksMode, Clbit, NoBlocks, Qubit, VarsMode, imports};
 
 /// Holds the action for each node in the original DAGCircuit.
 #[derive(Clone, Debug)]
@@ -44,8 +43,10 @@ enum NodeAction {
     /// However, unless this representative gate is removed or merged,
     /// we will add the original instruction to the output circuit.
     Canonical(PackedInstruction, Param),
-    /// The node's instruction has been removed.
-    Drop,
+    /// The node's instruction has been removed. If the removed instruction is a standard
+    /// gate in `PARAMETER_INDEPENDENT_COMMUTATION_GATES`, we additionally save the gate
+    /// and the qubits it acts on.
+    Drop(Option<(StandardGate, Interned<[Qubit]>)>),
     /// The node's instruction has been replaced by the current instruction.
     Replace(PackedInstruction),
 }
@@ -85,7 +86,7 @@ static SYMMETRIC_GATES: [StandardGate; 12] = [
 
 /// List of single-parameter rotation gates. This gates can be merged into a gate
 /// of the same class with the summed parameter. The list should contain only the
-/// "canonical" gates that remain after `canonicalize`.`
+/// "canonical" gates that remain after `canonicalize`.
 static MERGEABLE_ROTATION_GATES: [StandardGate; 12] = [
     StandardGate::RX,
     StandardGate::RY,
@@ -99,6 +100,47 @@ static MERGEABLE_ROTATION_GATES: [StandardGate; 12] = [
     StandardGate::CRZ,
     StandardGate::CPhase,
     StandardGate::CU1,
+];
+
+/// List of gates such that all nontrivial instances of this gate either commute
+/// or all do not commute with a given unitary `U`. This includes gates without
+/// parameters (such as CX) and single-qubit rotation gates represented by a single
+/// generator (such as RX), but this does not include gates such as `R` or such
+/// as `CRX`. Here, "nontrivial" means not equivalent to identity up to a global phase.
+static PARAMETER_INDEPENDENT_COMMUTATION_GATES: [StandardGate; 33] = [
+    StandardGate::H,
+    StandardGate::X,
+    StandardGate::Y,
+    StandardGate::Z,
+    StandardGate::Phase,
+    StandardGate::RX,
+    StandardGate::RY,
+    StandardGate::RZ,
+    StandardGate::S,
+    StandardGate::Sdg,
+    StandardGate::SX,
+    StandardGate::SXdg,
+    StandardGate::T,
+    StandardGate::Tdg,
+    StandardGate::U1,
+    StandardGate::CH,
+    StandardGate::CX,
+    StandardGate::CY,
+    StandardGate::CZ,
+    StandardGate::DCX,
+    StandardGate::ECR,
+    StandardGate::Swap,
+    StandardGate::ISwap,
+    StandardGate::CS,
+    StandardGate::CSdg,
+    StandardGate::RXX,
+    StandardGate::RYY,
+    StandardGate::RZX,
+    StandardGate::RZZ,
+    StandardGate::CCX,
+    StandardGate::CCZ,
+    StandardGate::CSwap,
+    StandardGate::RCCX,
 ];
 
 /// Check if `inst` is symmetric for some special values of its parameters,
@@ -617,6 +659,10 @@ pub fn run_commutative_optimization(
     let mut node_actions: Vec<NodeAction> = vec![NodeAction::Keep; num_nodes];
     let mut new_global_phase = new_dag.set_global_phase_f64(0.0);
 
+    // For each instruction we will store the index of the last instruction in the backward scan
+    // that is known to commute with it.
+    let mut commutes_to: Vec<usize> = (0..num_nodes).collect();
+
     let mut modified: bool = false;
 
     for idx1 in 0..num_nodes {
@@ -629,7 +675,7 @@ pub fn run_commutative_optimization(
         }
 
         if let Some(phase_update) = is_identity_equiv(instr1, false, Some(0), error_cutoff_fn)? {
-            node_actions[idx1] = NodeAction::Drop;
+            node_actions[idx1] = NodeAction::Drop(None);
             new_global_phase = radd_param(new_global_phase, Param::Float(phase_update));
             modified = true;
             continue;
@@ -643,7 +689,7 @@ pub fn run_commutative_optimization(
             NodeAction::Replace(instruction) => (instruction, Param::Float(0.)),
             NodeAction::Keep => (instr1, Param::Float(0.)),
             NodeAction::Canonical(instruction, phase) => (instruction, phase.clone()),
-            NodeAction::Drop => {
+            NodeAction::Drop(_) => {
                 unreachable!("The current instruction should not be deleted.")
             }
         };
@@ -658,14 +704,40 @@ pub fn run_commutative_optimization(
         let qargs1: &[Qubit] = new_dag.get_qargs(instr1.qubits);
         let cargs1: &[Clbit] = new_dag.get_cargs(instr1.clbits);
 
-        for idx2 in (0..idx1).rev() {
+        let key1 = match instr1.op.view() {
+            OperationRef::StandardGate(gate)
+                if PARAMETER_INDEPENDENT_COMMUTATION_GATES.contains(&gate) =>
+            {
+                Some((gate, instr1.qubits))
+            }
+            _ => None,
+        };
+
+        let mut idx2 = idx1;
+
+        while idx2 > 0 {
+            idx2 -= 1;
+
             let node_index2 = node_indices[idx2];
 
             let (instr2, extraphase2) = match &node_actions[idx2] {
                 NodeAction::Replace(instruction) => (instruction, Param::Float(0.)),
                 NodeAction::Keep => (dag[node_index2].unwrap_operation(), Param::Float(0.)),
                 NodeAction::Canonical(instruction, phase) => (instruction, phase.clone()),
-                NodeAction::Drop => continue,
+                NodeAction::Drop(None) => {
+                    continue;
+                }
+                NodeAction::Drop(Some(key2)) => {
+                    // We apply an addition optimization when the commutativity of the instruction
+                    // only depends on its kind and the qubits it acts on (e.g. RX or CX).
+                    // If during the backward scan we reach a removed instruction of the same kind and acting on the same,
+                    // qubits, then we can immediately skip all the gates the removed instruction was known to commute with
+                    // prior to being removed.
+                    if key1 == Some(*key2) {
+                        idx2 = commutes_to[idx2];
+                    }
+                    continue;
+                }
             };
 
             // For now, assume that control-flow operations do not commute with anything.
@@ -686,13 +758,14 @@ pub fn run_commutative_optimization(
                 try_merge(&new_dag, instr1, instr2, tol, matrix_max_num_qubits)?;
 
             if can_be_merged {
+                commutes_to[idx1] = commutes_to[idx2];
                 if let Some(merged_instruction) = merged_instruction {
                     node_actions[idx1] = NodeAction::Replace(merged_instruction);
                 } else {
-                    node_actions[idx1] = NodeAction::Drop;
+                    node_actions[idx1] = NodeAction::Drop(key1);
                 }
 
-                node_actions[idx2] = NodeAction::Drop;
+                node_actions[idx2] = NodeAction::Drop(key1);
                 new_global_phase = radd_param(new_global_phase, Param::Float(phase_update));
                 new_global_phase = radd_param(new_global_phase, extraphase1.clone());
                 new_global_phase = radd_param(new_global_phase, extraphase2.clone());
@@ -710,6 +783,8 @@ pub fn run_commutative_optimization(
                 commutation_checker,
             )? {
                 break;
+            } else {
+                commutes_to[idx1] = idx2;
             }
         }
     }
@@ -723,7 +798,7 @@ pub fn run_commutative_optimization(
 
     for idx in 0..num_nodes {
         match &node_actions[idx] {
-            NodeAction::Drop => {}
+            NodeAction::Drop(_) => {}
             NodeAction::Keep | NodeAction::Canonical(_, _) => {
                 new_dag.push_back(dag[node_indices[idx]].unwrap_operation().clone())?;
             }
