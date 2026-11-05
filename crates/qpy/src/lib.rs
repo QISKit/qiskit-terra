@@ -40,6 +40,12 @@ pub const QPY_READ_MIN_VERSION: u8 = 13;
 /// The oldest QPY format version that the Rust QPY implementation can write.
 pub const QPY_WRITE_MIN_VERSION: u8 = 17;
 
+#[cfg(target_os = "windows")]
+const NATIVE_QPY_RECURSION_DEPTH: usize = 30;
+
+#[cfg(not(target_os = "windows"))]
+const NATIVE_QPY_RECURSION_DEPTH: usize = 100;
+
 /// Internal module supplying the QPY capabilities.  The entries in it should largely
 /// be re-exposed directly to public Python space.
 pub fn qpy(module: &Bound<PyModule>) -> PyResult<()> {

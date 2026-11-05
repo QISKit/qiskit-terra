@@ -14,10 +14,12 @@ import ctypes
 import io
 import os
 from pathlib import Path
+import sys
 import tempfile
 
 from qiskit import QuantumCircuit, capi, qpy
 from qiskit.circuit.library import PermutationGate, QFTGate, SdgGate
+from qiskit.circuit.controlflow import IfElseOp
 from qiskit.qpy import dump, common as qpy_common
 from test import QiskitTestCase
 
@@ -324,3 +326,28 @@ class TestQpyCAPI(QiskitTestCase):
         self.assertTrue(capi.qk_param_as_int(instruction.params[0], ctypes.byref(param_val)))
         self.assertEqual(param_val.value, 5)
         capi.qk_qpy_loaded_circuits_clear(output)
+
+    def test_recursion_limit(self):
+        if sys.platform == "win32":
+            depth = 31
+        else:
+            depth = 101
+        body = QuantumCircuit(1, 1)
+        for _ in range(depth):
+            qc = QuantumCircuit(1, 1)
+            qc.append(IfElseOp((qc.clbits[0], 1), body), [0], [0])
+            body = qc
+        with io.BytesIO() as buf:
+            dump(qc, buf)
+            buffer = buf.getvalue()
+        length = len(buffer)
+        array_type = ctypes.c_ubyte * length
+        array_data = array_type.from_buffer(bytearray(buffer))
+        output = capi.QkQpyLoadedCircuits(None, 0)
+        error = ctypes.POINTER(ctypes.c_char)()
+        result = capi.qk_qpy_load_buffer(
+            ctypes.byref(output), ctypes.POINTER(ctypes.c_ubyte)(array_data), length, error
+        )
+        self.assertEqual(result, capi.QkExitCode.QpyError.value.value)
+        self.assertIn(b"recursion", ctypes.string_at(error))
+        capi.qk_str_free(error)

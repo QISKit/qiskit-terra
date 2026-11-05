@@ -242,6 +242,10 @@ pub(crate) fn unpack_parameter_expression(
     pack: &formats::ParameterExpressionPack,
     qpy_data: &mut QPYReadData,
 ) -> Result<ParameterExpression, QpyError> {
+    qpy_data.remaining_depth = qpy_data
+        .remaining_depth
+        .checked_sub(1)
+        .ok_or_else(|| QpyError::RecursionError)?;
     let uuid_map = pack.symbol_table_data.iter().try_fold(
         HashMap::new(),
         |mut map, item| -> Result<_, QpyError> {
@@ -469,6 +473,7 @@ pub(crate) fn unpack_parameter_expression(
             stack.len()
         )));
     }
+    qpy_data.remaining_depth += 1;
     stack.pop().ok_or_else(empty_stack)
 }
 
@@ -655,7 +660,11 @@ pub(crate) fn generic_value_to_param(
         }
         GenericValue::ParameterExpression(exp) => Ok(Param::ParameterExpression(exp.clone())),
         _ => qpy_data.caller.attach("Python defined parameter", |py| {
-            Ok(Param::Obj(py_convert_from_generic_value(py, value)?))
+            Ok(Param::Obj(py_convert_from_generic_value(
+                py,
+                value,
+                qpy_data.remaining_depth,
+            )?))
         }),
     }
 }
@@ -664,6 +673,7 @@ pub(crate) fn generic_value_to_param(
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::NATIVE_QPY_RECURSION_DEPTH;
     use crate::annotations::{AnnotationHandler, NativeDeserializers, NativeSerializers};
     use crate::value::QpyCaller;
     use qiskit_circuit::circuit_data::CircuitData;
@@ -687,6 +697,7 @@ mod tests {
                 NativeDeserializers::default(),
             ),
             caller: QpyCaller::Native,
+            remaining_depth: NATIVE_QPY_RECURSION_DEPTH,
         }
     }
 
@@ -743,5 +754,89 @@ mod tests {
             result.is_err(),
             "an index past the end of the vector must not resolve: {result:?}"
         );
+    }
+
+    #[test]
+    fn test_deep_subs_unpack_parameter_expression() {
+        let mut qpy_read_data = QPYReadData {
+            circuit_data: CircuitData::new(None, None, Param::Float(0.0)).unwrap(),
+            version: 18,
+            use_symengine: false,
+            standalone_vars: HashMap::new(),
+            standalone_stretches: HashMap::new(),
+            vectors: HashMap::new(),
+            parameter_vectors: Vec::new(),
+            annotation_handler: AnnotationHandler::native(
+                Vec::new(),
+                NativeSerializers::default(),
+                NativeDeserializers::default(),
+            ),
+            caller: QpyCaller::Native,
+            remaining_depth: 5,
+        };
+        let params: Vec<formats::ParameterSymbolPack> = (0..5)
+            .map(|x| {
+                let name = "p".repeat(x + 1);
+                formats::ParameterSymbolPack {
+                    uuid: Uuid::new_v4().into_bytes(),
+                    name,
+                }
+            })
+            .collect();
+        let pack_param_as_symbol = |param: &formats::ParameterSymbolPack| {
+            formats::ParameterExpressionSymbolPack::Parameter(
+                formats::ParameterExpressionParameterSymbolPack {
+                    value_key: ValueType::Parameter,
+                    value_data: Bytes::new(),
+                    symbol_data: formats::ParameterSymbolPack {
+                        uuid: param.uuid,
+                        name: param.name.clone(),
+                    },
+                },
+            )
+        };
+        let base_subs = formats::ParameterExpressionElementPack::Abs(
+            formats::ParameterExpressionStandardOpPack {
+                lhs_type: ParameterType::Parameter,
+                lhs: params[0].uuid,
+                rhs_type: ParameterType::Null,
+                rhs: [0u8; 16],
+            },
+        );
+        let mut expr = formats::ParameterExpressionPack {
+            expression_data: serialize(&base_subs).unwrap(),
+            symbol_table_data: vec![pack_param_as_symbol(&params[0])],
+        };
+        for param in &params {
+            let mapping_pack = formats::MappingPack {
+                items: vec![formats::MappingItem {
+                    key_bytes: param.uuid.into(),
+                    item_type: ValueType::ParameterExpression,
+                    item_bytes: serialize(&expr).unwrap(),
+                }],
+            };
+            let subs_pack = formats::ParameterExpressionElementPack::Substitute(
+                formats::ParameterExpressionSubsOpPack {
+                    mapping_data: serialize(&mapping_pack).unwrap(),
+                },
+            );
+            let abs_pack = formats::ParameterExpressionElementPack::Abs(
+                formats::ParameterExpressionStandardOpPack {
+                    lhs_type: ParameterType::Parameter,
+                    lhs: param.uuid,
+                    rhs_type: ParameterType::Null,
+                    rhs: [0u8; 16],
+                },
+            );
+            let mut expression_data = Vec::new();
+            expression_data.extend(serialize(&abs_pack).unwrap());
+            expression_data.extend(serialize(&subs_pack).unwrap());
+            expr = formats::ParameterExpressionPack {
+                expression_data: Bytes(expression_data),
+                symbol_table_data: vec![pack_param_as_symbol(param)],
+            };
+        }
+        let res = unpack_parameter_expression(&expr, &mut qpy_read_data);
+        assert!(matches!(res, Err(QpyError::RecursionError)));
     }
 }

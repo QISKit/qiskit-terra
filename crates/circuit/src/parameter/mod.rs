@@ -10,6 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+mod iter;
 pub mod parameter_expression;
 pub mod symbol_expr;
 pub mod symbol_parser;
