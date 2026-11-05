@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a bug in :meth:`.TwoQubitWeylDecomposition.circuit` where the global
+    phase of the returned circuit was wrong (off by a factor of :math:`-1`)
+    for roughly half of all two-qubit unitaries. The global phases of the
+    single-qubit gate sequences for ``K1r`` and ``K1l`` were not accumulated
+    correctly. Fixed `#17401 <https://github.com/Qiskit/qiskit/issues/17401>`__.
