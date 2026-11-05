@@ -23,11 +23,7 @@ pub(super) type ResultDType = fn(DType) -> DType;
 
 /// Admit every dtype that has a position in the promotion lattice.
 pub(super) fn promotable(dtype: DType) -> bool {
-    match dtype {
-        // currently, everything except keys are in the promotion lattice
-        DType::Key(_) => false,
-        _ => true,
-    }
+    promotion(dtype, dtype).is_some()
 }
 
 /// Infer the result type of an elementwise operation over two operands.
