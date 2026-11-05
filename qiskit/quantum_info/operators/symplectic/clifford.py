@@ -598,9 +598,9 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
         mat_i = calc_inverse_matrix(mat)
 
         dim = len(mat)
-        zero = np.zeros((dim, dim), dtype=int)
-        symplectic_mat = np.block([[mat_t, zero], [zero, mat_i]])
-        phase = np.zeros(2 * dim, dtype=int)
+        zero = np.zeros((dim, dim), dtype=bool)
+        symplectic_mat = np.block([[mat_t, zero], [zero, mat_i]]).astype(bool, copy=False)
+        phase = np.zeros(2 * dim, dtype=bool)
         tableau = cls._stack_table_phase(symplectic_mat, phase)
         return tableau
 
@@ -617,7 +617,7 @@ class Clifford(BaseOperator, AdjointMixin, Operation):
 
         pat = permutation_gate.pattern
         dim = len(pat)
-        symplectic_mat = np.zeros((2 * dim, 2 * dim), dtype=int)
+        symplectic_mat = np.zeros((2 * dim, 2 * dim), dtype=bool)
         for i, j in enumerate(pat):
             symplectic_mat[j, i] = True
             symplectic_mat[j + dim, i + dim] = True
