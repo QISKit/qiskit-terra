@@ -87,7 +87,10 @@ jobs:
           set -e
           coverage combine
           coverage lcov -o python.info
-          lcov --add-tracefile python.info --add-tracefile rust.info --output-file coveralls.info
+          # Python executes a function's definition when importing its module, even if
+          # the function is never called. LCOV's function/line consistency check rejects
+          # this valid coverage data. Preserve the counts without applying that check.
+          lcov --rc check_data_consistency=0 --add-tracefile python.info --add-tracefile rust.info --output-file coveralls.info
 
       - name: Coveralls
         uses: coverallsapp/github-action@v2.3.8
