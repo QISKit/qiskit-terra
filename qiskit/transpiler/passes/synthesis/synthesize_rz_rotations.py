@@ -15,6 +15,7 @@
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.dagcircuit import DAGCircuit
 from qiskit._accelerate.synthesize_rz_rotations import synthesize_rz_rotations
+from qiskit.transpiler.passes.utils import control_flow
 
 
 class SynthesizeRZRotations(TransformationPass):
@@ -77,18 +78,20 @@ class SynthesizeRZRotations(TransformationPass):
             approximation_degree: Controls the overall degree of approximation. Defaults
                 to ``1 - 1e-10``.
             synthesis_error: Maximum allowed error for the approximate synthesis of
-                :math:`RZ(\theta)`.
+                :math:`RZ(\theta)`. If specified, must be in the range ``(0, 1]``.
             cache_error: Maximum allowed error when reusing a cached synthesis
-                result for angles close to :math:`\theta`.
+                result for angles close to :math:`\theta`. If specified, must be in the
+                range ``[0, 1]``.
         """
         super().__init__()
         self.approximation_degree = approximation_degree
         self.synthesis_error = synthesis_error
         self.cache_error = cache_error
 
+    @control_flow.trivial_recurse
     def run(self, dag: DAGCircuit) -> DAGCircuit:
         """Run the SynthesizeRZRotations pass on `dag`."""
-        new_dag = synthesize_rz_rotations(
+        synthesize_rz_rotations(
             dag, self.approximation_degree, self.synthesis_error, self.cache_error
         )
-        return new_dag
+        return dag

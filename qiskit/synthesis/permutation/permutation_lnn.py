@@ -14,7 +14,8 @@
 
 from __future__ import annotations
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+
+from qiskit.circuit import QuantumCircuit
 from qiskit._accelerate.synthesis.permutation import _synth_permutation_depth_lnn_kms
 
 

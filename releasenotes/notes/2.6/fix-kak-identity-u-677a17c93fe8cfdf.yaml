@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    :class:`.OneQubitEulerDecomposer` with the ``"U"`` or ``"U3"`` basis no longer
+    emits a one-qubit gate that is equal to the identity.  When the rotation angle
+    is zero the gate only depends on ``phi + lam``, but the two angles were checked
+    separately, so a case like ``U(0, -pi, -pi)`` was not recognised as an identity.
+    This also removes the redundant one-qubit gates that
+    :class:`.TwoQubitBasisDecomposer` produced with those bases, for example when
+    decomposing :class:`.CXGate` in the ``CX`` basis.
+    Fixes `#9315 <https://github.com/Qiskit/qiskit/issues/9315>`__.

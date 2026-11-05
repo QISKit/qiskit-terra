@@ -9,9 +9,14 @@ license.workspace = true
 name = "qiskit_providers"
 
 [dependencies]
-rustworkx-core.workspace = true
 num-complex.workspace = true
 thiserror.workspace = true
+qiskit-circuit.workspace = true
+
+[dev-dependencies]
+num-traits.workspace = true
+# Only a test uses this, to check the promotion table against the dtype lattice as a graph.
+rustworkx-core.workspace = true
 
 [dependencies.approx]
 workspace = true

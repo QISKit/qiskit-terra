@@ -13,3 +13,8 @@
 """The basis change circuits."""
 
 from .qft import QFT, QFTGate
+
+__all__ = [
+    "QFT",
+    "QFTGate",
+]

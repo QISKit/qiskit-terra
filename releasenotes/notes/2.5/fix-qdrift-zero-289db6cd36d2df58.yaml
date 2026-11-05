@@ -1,0 +1,5 @@
+fixes:
+  - |
+    Fixed divide by zero errors in :meth:`.QDrift.expand`. The method now
+    returns an empty list when all coefficients are 0 or time is 0. See
+    `#17113 <https://github.com/Qiskit/qiskit/issues/17113>`__.

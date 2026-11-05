@@ -158,6 +158,91 @@ class TestBarrierBeforeFinalMeasurements(QiskitTestCase):
 
         self.assertEqual(result, circuit_to_dag(expected))
 
+    def test_two_qregs_to_a_single_clbit(self):
+        """Two measurements in different qregs writing the *same* clbit keep their order.
+
+        The clbit carries a write-after-write dependency, so swapping the two measurements
+        changes which value c0 ends up holding.  Regression test of gh-16851.
+                                          |
+        q0:-------[m]------     q0:-------|------[m]--
+                   |                      |       |
+        q1:--[X]---|--[m]--  -> q1:--[X]--|--[m]--|---
+                   |   |                  |   |   |
+         c:--------.---.---      c:-----------.---.---
+        """
+        qr = QuantumRegister(2, "q")
+        cr = ClassicalRegister(1, "c")
+
+        circuit = QuantumCircuit(qr, cr)
+        circuit.x(qr[1])
+        circuit.measure(qr[1], cr[0])
+        circuit.measure(qr[0], cr[0])
+
+        expected = QuantumCircuit(qr, cr)
+        expected.x(qr[1])
+        expected.barrier(qr)
+        expected.measure(qr[1], cr[0])
+        expected.measure(qr[0], cr[0])
+
+        pass_ = BarrierBeforeFinalMeasurements()
+        result = pass_.run(circuit_to_dag(circuit))
+
+        self.assertEqual(result, circuit_to_dag(expected))
+
+    def test_three_qregs_to_a_single_clbit(self):
+        """Three measurements writing the same clbit keep their order.
+
+        The measurement order q2, q0, q1 is deliberately not the qubit order, so an
+        implementation that reinserts the final operations qubit-by-qubit produces
+        q0, q1, q2 instead.  Regression test of gh-16851.
+        """
+        qr = QuantumRegister(3, "q")
+        cr = ClassicalRegister(1, "c")
+
+        circuit = QuantumCircuit(qr, cr)
+        circuit.measure(qr[2], cr[0])
+        circuit.measure(qr[0], cr[0])
+        circuit.measure(qr[1], cr[0])
+
+        expected = QuantumCircuit(qr, cr)
+        expected.barrier(qr)
+        expected.measure(qr[2], cr[0])
+        expected.measure(qr[0], cr[0])
+        expected.measure(qr[1], cr[0])
+
+        pass_ = BarrierBeforeFinalMeasurements()
+        result = pass_.run(circuit_to_dag(circuit))
+
+        self.assertEqual(result, circuit_to_dag(expected))
+
+    def test_shared_clbit_across_an_existing_barrier(self):
+        """Measurements writing the same clbit keep their order across an existing barrier.
+
+        q0:-------|--[m]--     q0:--|-------|--[m]--
+                  |   |                     |   |
+        q1:--[m]--|---|---  -> q1:--|--[m]--|---|---
+              |   |   |                 |   |   |
+         c:---.-------.---      c:------.-------.---
+        """
+        qr = QuantumRegister(2, "q")
+        cr = ClassicalRegister(1, "c")
+
+        circuit = QuantumCircuit(qr, cr)
+        circuit.measure(qr[1], cr[0])
+        circuit.barrier(qr)
+        circuit.measure(qr[0], cr[0])
+
+        expected = QuantumCircuit(qr, cr)
+        expected.barrier(qr)
+        expected.measure(qr[1], cr[0])
+        expected.barrier(qr)
+        expected.measure(qr[0], cr[0])
+
+        pass_ = BarrierBeforeFinalMeasurements()
+        result = pass_.run(circuit_to_dag(circuit))
+
+        self.assertEqual(result, circuit_to_dag(expected))
+
     def test_determinism(self):
         """Test that the pass modifies the DAG in a deterministic manner.
 

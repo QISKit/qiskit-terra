@@ -229,7 +229,7 @@ class BlueprintCircuit(QuantumCircuit, ABC):
             wrap,
             copy=copy,
             var_remap=var_remap,
-            inline_captures=False,
+            inline_captures=inline_captures,
         )
 
     def inverse(self, annotated: bool = False):

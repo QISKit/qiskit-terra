@@ -17,6 +17,7 @@ import ddt
 from qiskit import QuantumRegister, QuantumCircuit
 from qiskit.circuit import ControlFlowOp, Parameter, library as lib
 from qiskit.transpiler import Layout, TranspilerError, PassManager, passes
+from qiskit.transpiler.passes import TrivialLayout, ApplyLayout
 from qiskit.transpiler.passes.layout.vf2_post_layout import VF2PostLayout, VF2PostLayoutStopReason
 from qiskit.converters import circuit_to_dag
 from qiskit.providers.fake_provider import GenericBackendV2
@@ -410,6 +411,55 @@ class TestVF2PostLayout(QiskitTestCase):
         layout = pass_.property_set["post_layout"]
         self.assertEqual(layout, Layout(dict(zip(qc.qubits, [4, 3, 2, 1, 0]))))
 
+    @ddt.data(False, True)
+    def test_error_clipping(self, strict_direction):
+        target = Target(3)
+        props_1q = {
+            # Too low.
+            (0,): InstructionProperties(error=-1e-15),
+            # Too high.
+            (1,): InstructionProperties(error=1 + 1e-15),
+            # Juuuuust right.
+            (2,): InstructionProperties(error=1e-5),
+        }
+        # Set the same 1q on both types of 1q operation because we don't want any averaging to mess
+        # with our clipping.
+        target.add_instruction(lib.SXGate(), props_1q)
+        target.add_instruction(lib.RZGate(Parameter("a")), props_1q)
+        target.add_instruction(
+            lib.CXGate(),
+            {
+                (0, 1): InstructionProperties(error=-1e-15),
+                (1, 2): InstructionProperties(error=1 + 1e-15),
+                (2, 0): InstructionProperties(error=1e-3),
+            },
+        )
+
+        # This circuit has a symmetric interaction graph, but we break the degeneracy by weighting
+        # each edge and node by different amounts, so the resulting layout will be deterministic.
+        # One qubit deliberately doesn't have any instructions so we test the zero-weighted path
+        # with all the types of clipped error too.
+        qc = QuantumCircuit(3)
+        qc.cx(2, 1)
+        qc.cx(0, 2)
+        qc.cx(0, 2)
+        qc.sx(1)
+        qc.sx(2)
+
+        qc = PassManager(
+            [
+                TrivialLayout(target),
+                ApplyLayout(),
+                VF2PostLayout(target=target, strict_direction=strict_direction),
+                ApplyLayout(),
+            ]
+        ).run(qc)
+        # If not `strict_direction`, then we can align the really high-cost 1q and 2q physical parts
+        # with the least used virtual ones.  If `strict_direction`, then we can only align one, and
+        # it's better to align the 2q.
+        expected = [2, 1, 0] if strict_direction else [1, 2, 0]
+        self.assertEqual(qc.layout.initial_index_layout(), expected)
+
 
 class TestVF2PostLayoutUndirected(QiskitTestCase):
     """Tests the VF2Layout pass"""
@@ -567,11 +617,10 @@ class TestVF2PostLayoutUndirected(QiskitTestCase):
             coupling_map=YORKTOWN_CMAP,
             seed=self.seed,
         )
-
         qr = QuantumRegister(2, "qr")
         circuit = QuantumCircuit(qr)
         circuit.cx(qr[1], qr[0])  # qr1 -> qr0
-        tqc = transpile(circuit, backend, layout_method="dense")
+        tqc = transpile(circuit, backend, initial_layout=[1, 0])
         initial_layout = tqc._layout
         dag = circuit_to_dag(tqc)
         pass_ = VF2PostLayout(target=backend.target, seed=self.seed, strict_direction=False)

@@ -43,6 +43,18 @@ static int test_identity(void) {
 }
 
 /**
+ * Test the with_capacity constructor.
+ */
+static int test_with_capacity(void) {
+    QkObs *obs = qk_obs_with_capacity(100, 100, 1000);
+    size_t num_terms = qk_obs_num_terms(obs);
+    uint32_t num_qubits = qk_obs_num_qubits(obs);
+    qk_obs_free(obs);
+
+    return (num_terms != 0 || num_qubits != 100) ? EqualityError : Ok;
+}
+
+/**
  * Test copying an observable.
  */
 static int test_copy(void) {
@@ -719,9 +731,11 @@ static int test_boundaries(void) {
 
     for (size_t i = 0; i < num_terms + 1; i++) {
         if (boundaries[i] != expected[i]) {
+            qk_obs_free(obs);
             return EqualityError;
         }
     }
+    qk_obs_free(obs);
     return Ok;
 }
 
@@ -803,10 +817,18 @@ static int test_direct_fail(void) {
  * Test string generator for observable
  */
 static int test_obs_str(void) {
-    QkObs *obs = qk_obs_identity(100);
+    uint32_t num_qubits = 100;
+    uint64_t num_terms = 2;
+    uint64_t num_bits = 4;
+    QkComplex64 coeffs[] = {{1, 2}, {-1, 0}};
+
+    QkBitTerm bits[4] = {QkBitTerm_X, QkBitTerm_Y, QkBitTerm_Plus, QkBitTerm_Minus};
+
+    uint32_t indices[4] = {0, 1, 98, 99};
+    size_t boundaries[3] = {0, 2, 4};
+    QkObs *obs = qk_obs_new(num_qubits, num_terms, num_bits, coeffs, bits, indices, boundaries);
     char *string = qk_obs_str(obs);
-    char *expected = "SparseObservable { num_qubits: 100, coeffs: [Complex { re: 1.0, im: 0.0 }], "
-                     "bit_terms: [], indices: [], boundaries: [0, 0] }";
+    char *expected = "<QkObs with 2 terms on 100 qubits: (1+2j)(Y_1 X_0) + (-1+0j)(-_99 +_98)>";
     int result = strcmp(string, expected);
     qk_str_free(string);
     qk_obs_free(obs);
@@ -835,8 +857,7 @@ static int test_obsterm_str(void) {
     QkObsTerm out_term;
     qk_obs_term(obs, 1, &out_term);
     char *string = qk_obsterm_str(&out_term);
-    char *expected = "SparseTermView { num_qubits: 100, coeff: Complex { re: 1.0, im: 1.0 }, "
-                     "bit_terms: [X, Y, Z], indices: [0, 1, 2] }";
+    char *expected = "<QkObsTerm on 100 qubits: (1+1j)(Z_2 Y_1 X_0)>";
     int result = strcmp(string, expected);
     qk_str_free(string);
     qk_obs_free(obs);
@@ -864,8 +885,7 @@ static int test_obsterm_id(void) {
     qk_obs_term(obs, 1, &out_term);
 
     char *string = qk_obsterm_str(&out_term);
-    char *expected = "SparseTermView { num_qubits: 100, coeff: Complex { re: 1.0, im: 1.0 }, "
-                     "bit_terms: [], indices: [] }";
+    char *expected = "<QkObsTerm on 100 qubits: (1+1j)()>";
     int result = strcmp(string, expected);
     qk_str_free(string);
     qk_obs_free(obs);
@@ -969,6 +989,7 @@ int test_sparse_observable(void) {
     int num_failed = 0;
     num_failed += RUN_TEST(test_zero);
     num_failed += RUN_TEST(test_identity);
+    num_failed += RUN_TEST(test_with_capacity);
     num_failed += RUN_TEST(test_add);
     num_failed += RUN_TEST(test_add_inplace);
     num_failed += RUN_TEST(test_scaled_add);

@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 use num_complex::Complex64;
-use num_complex::ComplexFloat;
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
@@ -18,9 +17,10 @@ use rustworkx_core::petgraph::visit::NodeIndexable;
 
 use crate::commutation_checker::try_matrix_with_definition;
 use crate::gate_metrics::rotation_trace_and_dim;
+use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
 use crate::target::Target;
 use qiskit_circuit::PhysicalQubit;
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::imports;
 use qiskit_circuit::operations::Param;
 use qiskit_circuit::operations::StandardGate;
@@ -33,31 +33,6 @@ use qiskit_util::getenv_use_multiple_threads;
 // https://github.com/Qiskit/qiskit/pull/14719 it can be tweaked
 // if the performance of this pass changes over time.
 const PARALLEL_THRESHOLD: usize = 50_000;
-
-pub const MINIMUM_TOL: f64 = 1e-12;
-
-/// Fidelity-based computation to check whether an operation `G` is equivalent
-/// to identity up to a global phase.
-///
-/// # Arguments
-///
-/// * `tr_over_dim`: `|Tr(G)| / dim(G)`.
-/// * `dim`: `dim(G)`.
-/// * `tol`: tolerance.
-///
-/// # Returns
-///
-/// * `Some(update to the global phase)` if the operation can be removed.
-/// * `None` if the operation cannot be removed.
-pub fn average_gate_fidelity_below_tol(tr_over_dim: Complex64, dim: f64, tol: f64) -> Option<f64> {
-    let f_pro = tr_over_dim.abs().powi(2);
-    let gate_fidelity = (dim * f_pro + 1.) / (dim + 1.);
-    if (1. - gate_fidelity).abs() < tol {
-        Some(tr_over_dim.arg())
-    } else {
-        None
-    }
-}
 
 /// Fidelity-based computation to check whether an operation `inst` is equivalent
 /// to identity up to a global phase.
@@ -194,23 +169,23 @@ where
     }
 
     // Special handling for pauli evolution gates.
-    if view.name() == "PauliEvolution" {
-        if let OperationRef::Gate(py_gate) = view {
-            let result = Python::attach(|py| -> PyResult<Option<(Complex64, usize)>> {
-                let result = imports::PAULI_ROTATION_TRACE_AND_DIM
-                    .get_bound(py)
-                    .call1((py_gate.instruction.clone_ref(py),))?
-                    .extract()?;
-                Ok(result)
-            })?;
+    if view.name() == "PauliEvolution"
+        && let OperationRef::PyCustom(py_gate) = view
+    {
+        let result = Python::attach(|py| -> PyResult<Option<(Complex64, usize)>> {
+            let result = imports::PAULI_ROTATION_TRACE_AND_DIM
+                .get_bound(py)
+                .call1((py_gate.ob.clone_ref(py),))?
+                .extract()?;
+            Ok(result)
+        })?;
 
-            if let Some((tr_over_dim, dim)) = result {
-                return Ok(average_gate_fidelity_below_tol(
-                    tr_over_dim,
-                    dim as f64,
-                    error_cutoff_fn(inst),
-                ));
-            }
+        if let Some((tr_over_dim, dim)) = result {
+            return Ok(average_gate_fidelity_below_tol(
+                tr_over_dim,
+                dim as f64,
+                error_cutoff_fn(inst),
+            ));
         }
     }
 
@@ -238,10 +213,11 @@ where
 #[pyo3(name = "remove_identity_equiv", signature=(dag, approx_degree=Some(1.0), target=None))]
 pub fn py_remove_identity_equiv(
     py: Python,
-    dag: &mut DAGCircuit,
+    dag: &mut PyDAGCircuit,
     approx_degree: Option<f64>,
     target: Option<&Target>,
 ) -> PyResult<()> {
+    let dag = dag.try_write()?;
     // TODO: This is a hack to avoid panicking in the case that the global phase contains `Py`
     // pointers (such as backrefs to `ParameterVector` objects in an expression `Symbol`) that would
     // get cloned when updating the global phase.  It's easier to do it out here than to try to

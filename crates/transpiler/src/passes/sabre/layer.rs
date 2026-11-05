@@ -10,162 +10,277 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use indexmap::IndexMap;
 use ndarray::prelude::*;
+use rustworkx_core::petgraph::graph::IndexType;
 use rustworkx_core::petgraph::prelude::*;
-
-use qiskit_circuit::PhysicalQubit;
+use std::num::NonZero;
 
 use super::vec_map::VecMap;
+use qiskit_circuit::{PhysicalQubit, VirtualQubit, nlayout::NLayout};
 
-/// A container for 2q gates in a layer that are yet to be routed.
+#[derive(Clone, Debug)]
+pub struct Layers {
+    layers: Box<[Layer]>,
+    /// Mapping of `NodeIndex` to the location it is in the layer structure (by index).
+    locations: VecMap<NodeIndex, Option<Location>>,
+}
+impl Layers {
+    /// Create a new set of layers.
+    ///
+    /// # Panics
+    ///
+    /// If `num_layers` is zero - you have to have at least a front layer!
+    pub fn new(num_layers: u16, num_qubits: u32, num_nodes: u32) -> Self {
+        assert!(num_layers > 0, "must have at least a front layer!");
+        Self {
+            layers: vec![Layer::new(num_qubits); num_layers as usize].into_boxed_slice(),
+            locations: vec![None; num_nodes as usize].into(),
+        }
+    }
+
+    #[inline]
+    pub fn num_layers(&self) -> NonZero<u16> {
+        self.layers
+            .len()
+            .try_into()
+            .and_then(|x: u16| x.try_into())
+            .expect("constructor enforces front layer and upper bound")
+    }
+
+    /// The front layer.
+    #[inline]
+    pub fn front(&self) -> &Layer {
+        self.layers
+            .first()
+            .expect("constructor enforces that the front layer exists")
+    }
+
+    #[inline]
+    pub fn layers(&self) -> &[Layer] {
+        &self.layers
+    }
+
+    #[inline]
+    pub fn apply_swap(&mut self, swap: [PhysicalQubit; 2]) {
+        for layer in self.layers.iter_mut() {
+            layer.apply_swap(swap);
+        }
+    }
+
+    /// Set the layer of a given node.
+    ///
+    /// This removes the node from any layer it may already be in.
+    #[inline]
+    pub fn insert(
+        &mut self,
+        layer: u16,
+        node: NodeIndex,
+        qubits: [VirtualQubit; 2],
+        layout: &NLayout,
+    ) {
+        if let Some(Location { layer, position }) = self.locations[node]
+            && let Some(moved) = self.layers[layer as usize].remove(position, layout)
+        {
+            self.locations[moved] = Some(Location { layer, position });
+        }
+        let position = self.layers[layer as usize].insert(node, qubits, layout);
+        self.locations[node] = Some(Location { layer, position });
+    }
+
+    /// Remove a node from the layer it is in.
+    ///
+    /// Returns the layer the node was in, if any.
+    #[inline]
+    pub fn remove(&mut self, node: NodeIndex, layout: &NLayout) -> Option<u16> {
+        let Location { layer, position } = self.locations[node].take()?;
+        if let Some(moved) = self.layers[layer as usize].remove(position, layout) {
+            self.locations[moved] = Some(Location { layer, position });
+        }
+        Some(layer)
+    }
+}
+
+/// Location of a node within the layer structure.
 ///
-/// The graph nodes in this structure always refer to `TwoQ` entries, since `Synchronize` nodes do
-/// not impact the scoring; they only affect when nodes are eligible to move forwards a layer, or to
-/// become routed.
-///
-/// It would be more algorithmically natural for this struct to work in terms of virtual qubits,
-/// because then a swap insertion would not change the data contained.  However, for each swap we
-/// insert, we score tens or hundreds, yet the subsequent update only affects two qubits.  This
-/// makes it more efficient to do everything in terms of physical qubits, so the conversion between
-/// physical and virtual qubits via the layout happens once per inserted swap and on layer
-/// extension, not for every swap trialled.
+/// Both attributes are indices into arrays: `layer` says which layer the node is in, and `position`
+/// says which position in [Layer::gates] corresponds to the node.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Location {
+    // There's deliberate padding in this struct to allow `Option<Location>` to be only 8 bytes.  It
+    // seems somewhat unlikely we'd need 65,536 layers...
+    /// Which layer the node is in.
+    layer: u16,
+    /// Which position in [Layer::gates] corresponds to this node.
+    position: u32,
+}
+
+/// A container for the current non-routable parts of a layer.  This only ever holds two-qubit
+/// gates, which are the only ones that contribute to routing costs.
 #[derive(Clone, Debug)]
 pub struct Layer {
-    /// Map of the (index to the) node to the qubits it acts on.
-    nodes: IndexMap<NodeIndex, [PhysicalQubit; 2], ::foldhash::fast::RandomState>,
-    /// Map of each qubit to the node that acts on it and the other qubit that node acts on, if this
-    /// qubit is active (otherwise `None`).
-    qubits: VecMap<PhysicalQubit, Option<(NodeIndex, PhysicalQubit)>>,
+    /// The qubits that each stored gate in the layer is active on.  For any given pair of qubits
+    /// making up a gate in the layer, all three equalities hold:
+    ///
+    /// ```
+    /// let virtuals: [VirtualQubit; 2];
+    /// let physicals = virtuals.map(|q| layout[q]);
+    /// physicals[0] == layer.other[physicals[1]];
+    /// physicals[1] == layer.other[physicals[0]];
+    /// layer.node[virtuals[0]] == layer.node[virtuals[1]];
+    /// ```
+    ///
+    /// The indexing into this `Vec` is arbitrary but deterministic for a given input and random
+    /// seed.  The indexing is tracked by [Layers::locations].
+    gates: Vec<[VirtualQubit; 2]>,
+    /// If a given qubit is active in the layer, `other[qubit]` will be the other `PhysicalQubit` in
+    /// the corresponding gate.  If the qubit is not active, the maximum physical qubit is stored
+    /// (we assume you don't use the absolute maximum).
+    other: VecMap<PhysicalQubit, PhysicalQubit>,
+    /// If a given qubit is active in the layer, the corresponding `node` will be the [SabreDAG]
+    /// node corresponding to its gate.  If not active, the maximum node index is stored.
+    node: VecMap<VirtualQubit, NodeIndex>,
 }
 
 impl Layer {
+    #[inline]
     pub fn new(num_qubits: u32) -> Self {
+        assert!(num_qubits < <PhysicalQubit as IndexType>::max().index() as u32);
         Layer {
-            // This is the maximum capacity of the layer, since each qubit must be one of a pair,
-            // and can only have one gate in the layer.
-            nodes: IndexMap::with_capacity_and_hasher(
-                num_qubits as usize / 2,
-                ::foldhash::fast::RandomState::default(),
-            ),
-            qubits: vec![None; num_qubits as usize].into(),
+            gates: Vec::with_capacity(num_qubits as usize / 2),
+            other: vec![IndexType::max(); num_qubits as usize].into(),
+            node: vec![IndexType::max(); num_qubits as usize].into(),
         }
+    }
+
+    /// Apply a physical swap to the current layout data structure.
+    #[inline]
+    fn apply_swap(&mut self, swap: [PhysicalQubit; 2]) {
+        if self.other[swap[0]] == swap[1] {
+            // The two qubits of the swap are both involved in the gate in this layer, so nothing
+            // actually changes; they're both still each other's "other".
+            return;
+        }
+        if let Some(other) = self.other_qubit(swap[0]) {
+            debug_assert_eq!(self.other[other], swap[0]);
+            self.other[other] = swap[1];
+        }
+        if let Some(other) = self.other_qubit(swap[1]) {
+            debug_assert_eq!(self.other[other], swap[1]);
+            self.other[other] = swap[0];
+        }
+        self.other.swap(swap[0], swap[1]);
     }
 
     /// Number of gates currently stored in the layer.
+    #[inline]
     pub fn len(&self) -> usize {
-        self.nodes.len()
-    }
-
-    /// View onto the mapping between qubits and their `(node, other_qubit)` pair.  Index `i`
-    /// corresponds to physical qubit `i`.
-    pub fn qubits(&self) -> &VecMap<PhysicalQubit, Option<(NodeIndex, PhysicalQubit)>> {
-        &self.qubits
+        self.gates.len()
     }
 
     /// Add a node into the layer, with the two qubits it operates on.
-    pub fn insert(&mut self, index: NodeIndex, qubits: [PhysicalQubit; 2]) {
+    ///
+    /// Returns the location into its tracking vector that the gate was inserted at.
+    #[inline]
+    fn insert(&mut self, index: NodeIndex, qubits: [VirtualQubit; 2], layout: &NLayout) -> u32 {
         let [a, b] = qubits;
-        self.qubits[a] = Some((index, b));
-        self.qubits[b] = Some((index, a));
-        self.nodes.insert(index, qubits);
+        debug_assert_eq!(self.other[layout[a]], IndexType::max());
+        debug_assert_eq!(self.other[layout[b]], IndexType::max());
+        debug_assert_eq!(self.node[a], IndexType::max());
+        debug_assert_eq!(self.node[b], IndexType::max());
+        self.other[layout[a]] = layout[b];
+        self.other[layout[b]] = layout[a];
+        self.node[a] = index;
+        self.node[b] = index;
+        self.gates.push(qubits);
+        self.gates.len() as u32 - 1
     }
 
-    /// Remove a node from the layer.
-    pub fn remove(&mut self, index: &NodeIndex) {
-        // The actual order in the indexmap doesn't matter as long as it's reproducible.
-        // Swap-remove is more efficient than a full shift-remove.
-        let [a, b] = self
-            .nodes
-            .swap_remove(index)
-            .expect("Tried removing index that does not exist.");
-        self.qubits[a] = None;
-        self.qubits[b] = None;
+    /// Remove a node from the layer, given by position into the tracking vector.
+    ///
+    /// Returns the node that is now in this location in the tracking vector, if any.
+    #[must_use]
+    #[inline]
+    fn remove(&mut self, location: u32, layout: &NLayout) -> Option<NodeIndex> {
+        let replacement = if location as usize + 1 == self.len() {
+            None
+        } else {
+            self.gates.last().map(|[a, _]| self.node[*a])
+        };
+        let [a, b] = self.gates.swap_remove(location as usize);
+        debug_assert_eq!(self.other[layout[a]], layout[b]);
+        debug_assert_eq!(self.other[layout[b]], layout[a]);
+        self.other[layout[a]] = IndexType::max();
+        self.other[layout[b]] = IndexType::max();
+        self.node[a] = IndexType::max();
+        self.node[b] = IndexType::max();
+        replacement
     }
 
-    /// Remove all nodes from the layer.
-    pub fn clear(&mut self) {
-        for (_, [a, b]) in self.nodes.drain(..) {
-            self.qubits[a] = None;
-            self.qubits[b] = None;
-        }
+    /// Get the node index of an active qubit.
+    #[inline]
+    pub fn node_of(&self, qubit: VirtualQubit) -> Option<NodeIndex> {
+        (self.node[qubit] != IndexType::max()).then_some(self.node[qubit])
+    }
+
+    /// Get the pair of the given qubit, if it's active in the layer.
+    #[inline]
+    pub fn other_qubit(&self, qubit: PhysicalQubit) -> Option<PhysicalQubit> {
+        (self.other[qubit] != IndexType::max()).then_some(self.other[qubit])
     }
 
     /// Query whether a qubit has an active node.
     #[inline]
     pub fn is_active(&self, qubit: PhysicalQubit) -> bool {
-        self.qubits[qubit].is_some()
+        self.other_qubit(qubit).is_some()
     }
 
     /// Calculate the score _difference_ caused by this swap, compared to not making the swap.
-    #[inline(always)]
+    #[inline]
     pub fn score(&self, swap: [PhysicalQubit; 2], dist: &ArrayView2<f64>) -> f64 {
-        // At most there can be two affected gates in the layer (one on each qubit in the swap),
-        // since any gate whose closest path passes through the swapped qubit link has its
-        // "virtual-qubit path" order changed, but not the total weight.
         let [a, b] = swap;
-        let mut total = 0.0;
-        if let Some((_, c)) = self.qubits[a] {
-            if c == b {
-                return 0.0;
+        let score = |cur: PhysicalQubit, new: PhysicalQubit| {
+            let other = self.other[cur];
+            if other == IndexType::max() {
+                0.0
+            } else {
+                dist[[other.index(), new.index()]] - dist[[other.index(), cur.index()]]
             }
-            total += dist[[b.index(), c.index()]] - dist[[a.index(), c.index()]]
+        };
+        if self.other[a] == b {
+            0.0
+        } else {
+            score(a, b) + score(b, a)
         }
-        if let Some((_, c)) = self.qubits[b] {
-            total += dist[[a.index(), c.index()]] - dist[[b.index(), c.index()]]
-        }
-        total
     }
 
     /// Calculate the total absolute score of the layer for the set layout.
-    pub fn total_score(&self, dist: &ArrayView2<f64>) -> f64 {
-        self.iter()
-            .map(|(_, &[a, b])| dist[[a.index(), b.index()]])
-            .sum::<f64>()
-    }
-
-    /// Apply a physical swap to the current layout data structure.
-    pub fn apply_swap(&mut self, swap: [PhysicalQubit; 2]) {
-        let [a, b] = swap;
-        match (self.qubits[a], self.qubits[b]) {
-            (Some((index1, _)), Some((index2, _))) if index1 == index2 => {
-                let entry = self.nodes.get_mut(&index1).unwrap();
-                *entry = [entry[1], entry[0]];
-                return;
-            }
-            _ => {}
-        }
-        if let Some((index, c)) = self.qubits[a] {
-            self.qubits[c] = Some((index, b));
-            let entry = self.nodes.get_mut(&index).unwrap();
-            *entry = if *entry == [a, c] { [b, c] } else { [c, b] };
-        }
-        if let Some((index, c)) = self.qubits[b] {
-            self.qubits[c] = Some((index, a));
-            let entry = self.nodes.get_mut(&index).unwrap();
-            *entry = if *entry == [b, c] { [a, c] } else { [c, a] };
-        }
-        self.qubits.swap(a, b);
+    #[inline]
+    pub fn total_score(&self, layout: &NLayout, dist: &ArrayView2<f64>) -> f64 {
+        self.gates
+            .iter()
+            .map(|&[a, b]| dist[[layout[a].index(), layout[b].index()]])
+            .sum()
     }
 
     /// True if there are no nodes in the current layer.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.gates.is_empty()
     }
 
-    /// Iterator over the nodes and the pair of qubits they act on.
-    pub fn iter(&self) -> impl Iterator<Item = (&NodeIndex, &[PhysicalQubit; 2])> {
-        self.nodes.iter()
-    }
-
-    /// Iterator over the nodes.
-    pub fn iter_nodes(&self) -> impl Iterator<Item = &NodeIndex> {
-        self.nodes.keys()
+    /// Iterator over gates and the qubits they act on.
+    pub fn iter_gates(&self) -> impl ExactSizeIterator<Item = (NodeIndex, [VirtualQubit; 2])> + '_ {
+        self.gates
+            .iter()
+            .copied()
+            .map(|qubits| (self.node[qubits[0]], qubits))
     }
 
     /// Iterator over the qubits that have active nodes on them.
-    pub fn iter_active(&self) -> impl Iterator<Item = &PhysicalQubit> {
-        self.nodes.values().flatten()
+    pub fn iter_active<'a>(
+        &'a self,
+        layout: &'a NLayout,
+    ) -> impl Iterator<Item = PhysicalQubit> + 'a {
+        self.gates.iter().flatten().map(|q| layout[*q])
     }
 }

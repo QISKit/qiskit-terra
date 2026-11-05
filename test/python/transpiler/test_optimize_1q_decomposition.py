@@ -17,7 +17,14 @@ import unittest
 import ddt
 import numpy as np
 
-from qiskit.circuit import QuantumRegister, QuantumCircuit, ClassicalRegister, Parameter, Gate
+from qiskit.circuit import (
+    QuantumRegister,
+    QuantumCircuit,
+    ClassicalRegister,
+    Parameter,
+    Gate,
+    Measure,
+)
 from qiskit.circuit.library.generalized_gates import UnitaryGate
 from qiskit.circuit.library.standard_gates import (
     UGate,
@@ -154,6 +161,70 @@ class TestOptimize1qGatesDecomposition(QiskitTestCase):
         passmanager.append(Optimize1qGatesDecomposition())
         result = passmanager.run(circuit)
         self.assertEqual(QuantumCircuit(1), result)
+
+    def test_optimize_error_over_target_basis_choice(self):
+        """Euler basis selection must use target error rates, not just gate count.
+
+        Regression test of gh-16460: with rz and rx both available, the pass
+        must pick the basis with the lowest total error for the target at
+        hand, so flipping which gate is expensive must flip the chosen basis.
+        """
+
+        def make_target(rx_error, rz_error):
+            target = Target(num_qubits=1)
+            target.add_instruction(RXGate(theta), {(0,): InstructionProperties(error=rx_error)})
+            target.add_instruction(RZGate(theta), {(0,): InstructionProperties(error=rz_error)})
+            return target
+
+        def total_error(circuit, target):
+            fidelity = 1.0
+            for instruction in circuit.data:
+                fidelity *= 1.0 - target[instruction.operation.name][(0,)].error
+            return 1.0 - fidelity
+
+        circuit = QuantumCircuit(1)
+        circuit.rz(0.2, 0)
+        circuit.rx(0.3, 0)
+        circuit.rz(0.4, 0)
+        circuit.rx(0.5, 0)
+        circuit.rz(0.6, 0)
+
+        for rx_error, rz_error in [(1e-2, 1e-6), (1e-6, 1e-2)]:
+            with self.subTest(rx_error=rx_error, rz_error=rz_error):
+                target = make_target(rx_error, rz_error)
+                result = PassManager([Optimize1qGatesDecomposition(target=target)]).run(circuit)
+                self.assertEqual(Operator(circuit), Operator(result))
+                # the alternative Euler basis (rx<->rz swapped roles) must not
+                # have been cheaper than what the pass selected
+                swapped = QuantumCircuit(1)
+                for instruction in result.data:
+                    other = "rx" if instruction.operation.name == "rz" else "rz"
+                    getattr(swapped, other)(*instruction.operation.params, 0)
+                self.assertLessEqual(total_error(result, target), total_error(swapped, target))
+
+    def test_optimize_basis_choice_no_error_uses_gate_count(self):
+        """Without target error rates, basis selection falls back to gate count.
+
+        Companion to test_optimize_error_over_target_basis_choice for the rz/rx
+        family: when the target carries no error rates the pass must still return
+        a correct, minimal-length decomposition rather than erroring.
+        """
+        target = Target(num_qubits=1)
+        target.add_instruction(RXGate(theta), {(0,): None})
+        target.add_instruction(RZGate(theta), {(0,): None})
+
+        circuit = QuantumCircuit(1)
+        circuit.rz(0.2, 0)
+        circuit.rx(0.3, 0)
+        circuit.rz(0.4, 0)
+        circuit.rx(0.5, 0)
+        circuit.rz(0.6, 0)
+
+        result = PassManager([Optimize1qGatesDecomposition(target=target)]).run(circuit)
+        self.assertEqual(Operator(circuit), Operator(result))
+        # a generic 1q run is three gates in either rz/rx Euler basis; the pass must
+        # not return something longer than the original run when it resynthesizes
+        self.assertLessEqual(sum(result.count_ops().values()), len(circuit.data))
 
     def test_optimize_error_over_target_3(self):
         """U is shorter than RZ-RY-RZ or RY-RZ-RY so use it when no error given."""
@@ -751,6 +822,34 @@ class TestOptimize1qGatesDecomposition(QiskitTestCase):
         expected = QuantumCircuit(1)
         expected.u(0, 0, 0.5, [0])
 
+        self.assertEqual(result, expected)
+
+    def test_custom_gate_in_target(self):
+        """Test reproduce of deadlock from: #16591."""
+
+        class CustomGate(Gate):
+            """Custom u1 gate."""
+
+            def __init__(self, lam):
+                super().__init__("custom_u1", 1, [lam])
+
+            def __array__(self, dtype=None, _copy=None):
+                return U1Gate(*self.params).__array__(dtype=dtype)
+
+        target = Target(num_qubits=2)
+        target.add_instruction(CustomGate(Parameter("lam")))
+        target.add_instruction(Measure())
+
+        qc = QuantumCircuit(2)
+        qc.append(CustomGate(0.5), [0])
+        qc.append(CustomGate(0.5), [1])
+        qc.measure_all()
+
+        result = Optimize1qGatesDecomposition(target)(qc)
+        expected = QuantumCircuit(2)
+        expected.append(CustomGate(0.5), [0])
+        expected.append(CustomGate(0.5), [1])
+        expected.measure_all()
         self.assertEqual(result, expected)
 
     def test_unitary_gate_row_major(self):

@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    :class:`.VF2Layout` and :class:`.VF2PostLayout` will no longer panic saying
+    "float scores must not return nan" when encountering instructions with errors
+    reported as ``1.0``.

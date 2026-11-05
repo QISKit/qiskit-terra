@@ -95,11 +95,7 @@ impl<'py> IntoPyObject<'py> for RXXEquivalent {
 }
 
 #[derive(Clone, Debug)]
-#[pyclass(
-    module = "qiskit._accelerate.two_qubit_decompose",
-    subclass,
-    skip_from_py_object
-)]
+#[pyclass(module = "qiskit._accelerate.two_qubit_decompose", subclass)]
 pub struct TwoQubitControlledUDecomposer {
     rxx_equivalent_gate: RXXEquivalent,
     euler_basis: EulerBasis,
@@ -137,9 +133,9 @@ impl TwoQubitControlledUDecomposer {
                     .unwrap();
                 (res.0.into(), res.1)
             }
-            OperationRef::Gate(gate) => {
+            OperationRef::PyCustom(inst) => {
                 Python::attach(|py: Python| -> PyResult<(PackedOperation, SmallVec<_>)> {
-                    let raw_inverse = gate.instruction.call_method0(py, intern!(py, "inverse"))?;
+                    let raw_inverse = inst.ob.call_method0(py, intern!(py, "inverse"))?;
                     let mut inverse: OperationFromPython<NoBlocks> = raw_inverse.extract(py)?;
                     let params = inverse.take_params().unwrap_or_default();
                     Ok((inverse.operation, params))

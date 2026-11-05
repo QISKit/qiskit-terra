@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed :func:`~.sampled_expectation_value` silently dropping the imaginary
+    component of expectation values when the operator has complex coefficients.
+    The function now returns ``complex`` values when the input coefficients are
+    complex, and ``float`` values otherwise.
+    Fixed `#11393 <https://github.com/Qiskit/qiskit/issues/11393>`__.

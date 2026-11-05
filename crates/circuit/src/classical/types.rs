@@ -30,7 +30,7 @@ pub enum Type {
     Bool,
     Duration,
     Float,
-    Uint(u16),
+    Uint(u32),
 }
 
 impl<'py> IntoPyObject<'py> for Type {
@@ -88,7 +88,7 @@ impl PyType {
     ///
     /// This is exactly equal to the Python type object that defines
     /// this type, that is ``t.kind is type(t)``, but is exposed like this to make it clear that
-    /// this a hashable enum-like discriminator you can rely on."""
+    /// this a hashable enum-like discriminator you can rely on.
     #[getter]
     fn get_kind(&self, py: Python) -> Py<PyAny> {
         match self.0 {
@@ -236,17 +236,17 @@ impl PyFloat {
     from_py_object
 )]
 #[derive(PartialEq, Clone, Copy, Debug, Hash)]
-struct PyUint(u16);
+struct PyUint(u32);
 
 #[pymethods]
 impl PyUint {
     #[new]
-    fn new(py: Python, width: u16) -> Py<Self> {
+    fn new(py: Python, width: u32) -> Py<Self> {
         Py::new(py, (PyUint(width), PyType(TypeKind::Uint))).unwrap()
     }
 
     #[getter]
-    fn get_width(&self) -> u16 {
+    fn get_width(&self) -> u32 {
         self.0
     }
 

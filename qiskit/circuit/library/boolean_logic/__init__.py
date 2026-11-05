@@ -16,3 +16,15 @@ from .quantum_and import AND, AndGate
 from .quantum_or import OR, OrGate
 from .quantum_xor import XOR, BitwiseXorGate, random_bitwise_xor
 from .inner_product import InnerProduct, InnerProductGate
+
+__all__ = [
+    "AND",
+    "OR",
+    "XOR",
+    "AndGate",
+    "BitwiseXorGate",
+    "InnerProduct",
+    "InnerProductGate",
+    "OrGate",
+    "random_bitwise_xor",
+]

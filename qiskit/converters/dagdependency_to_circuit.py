@@ -33,6 +33,7 @@ def dagdependency_to_circuit(dagdependency):
         name=name,
     )
     circuit.metadata = dagdependency.metadata
+    circuit.global_phase = dagdependency.global_phase
 
     for node in dagdependency.topological_nodes():
         circuit._append(CircuitInstruction(node.op.copy(), node.qargs, node.cargs))

@@ -15,3 +15,10 @@
 from .solovay_kitaev import SolovayKitaevDecomposition
 from .generate_basis_approximations import generate_basic_approximations
 from .ross_selinger import gridsynth_rz, gridsynth_unitary
+
+__all__ = [
+    "SolovayKitaevDecomposition",
+    "generate_basic_approximations",
+    "gridsynth_rz",
+    "gridsynth_unitary",
+]

@@ -17,3 +17,12 @@ from .clifford_decompose_ag import synth_clifford_ag
 from .clifford_decompose_bm import synth_clifford_bm
 from .clifford_decompose_greedy import synth_clifford_greedy
 from .clifford_decompose_layers import synth_clifford_layers, synth_clifford_depth_lnn
+
+__all__ = [
+    "synth_clifford_ag",
+    "synth_clifford_bm",
+    "synth_clifford_depth_lnn",
+    "synth_clifford_full",
+    "synth_clifford_greedy",
+    "synth_clifford_layers",
+]

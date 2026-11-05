@@ -1,0 +1,10 @@
+---
+features_transpiler:
+  - Enable multi-IR compiler workflows using the :class:`.MultiStagePassManager`.
+    This pass manager provides a staged execution flow, where each stage can either 
+    preserve the IR or lower into another IR. Stages can be generically defined via 
+    the :class:`~.passmanager.Task` interface (and the base class :class:`.GenericPass`),
+    which can be used to lower the IR, or via :class:`.BasePassManager` objects,
+    which makes them compatible with existing pipelines such as provided by
+    :func:`.generate_preset_pass_manager`.
+    

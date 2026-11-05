@@ -1,3 +1,5 @@
+.. _capi-config:
+
 =============
 Configuration
 =============

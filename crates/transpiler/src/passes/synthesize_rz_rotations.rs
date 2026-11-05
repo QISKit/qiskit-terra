@@ -14,9 +14,9 @@ use pyo3::prelude::*;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 use crate::QiskitError;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::PyDAGCircuit;
 use qiskit_circuit::operations::{OperationRef, Param, StandardGate, add_param};
-use qiskit_synthesis::ross_selinger::gridsynth_rz;
+use qiskit_synthesis::ross_selinger::{gridsynth_cleanup, gridsynth_rz};
 
 const MINIMUM_EPSILON: f64 = 1e-12; // minimum epsilon for synthesis
 
@@ -106,15 +106,26 @@ fn synthesize_rz_gate_via_gridsynth(
 #[pyo3(name = "synthesize_rz_rotations")]
 #[pyo3(signature = (dag, approximation_degree=None, synthesis_error=None, cache_error=None))]
 pub fn py_run_synthesize_rz_rotations(
-    dag: &mut DAGCircuit,
+    dag: &mut PyDAGCircuit,
     approximation_degree: Option<f64>,
     synthesis_error: Option<f64>,
     cache_error: Option<f64>,
 ) -> PyResult<()> {
+    let dag = dag.try_write()?;
     // Skip the pass if there are no RZ rotation gates.
     if dag.get_op_counts().keys().all(|k| k != "rz") {
         return Ok(());
     }
+
+    // rsgridsynth internally caches results of various computations that depend on the
+    // number of precision bits. Generally speaking, these caches become invalid when
+    // precision changes. Fortunately, rsgridsynth exposes a method to clear some (though not all)
+    // of these caches. The current approach is to clear the caches at the start of each run
+    // of SynthesizeRZRotations, while the cached values can be safely reused for all
+    // rotation gates in the circuit.
+    // This is not a complete or perfect solution, so a major refactor of
+    // gridsynth is probably needed.
+    gridsynth_cleanup();
 
     // Compute error budgets. When approximation degree is used, the total error is
     // computed as 1 - approximation_degree, and the error budget for synthesis and for

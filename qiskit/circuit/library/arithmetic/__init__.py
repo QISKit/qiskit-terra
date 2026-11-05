@@ -12,6 +12,7 @@
 
 """The arithmetic circuit library."""
 
+
 from .functional_pauli_rotations import FunctionalPauliRotations
 from .integer_comparator import IntegerComparator, IntegerComparatorGate
 from .linear_pauli_rotations import LinearPauliRotations, LinearPauliRotationsGate
@@ -29,12 +30,33 @@ from .quadratic_form import QuadraticForm, QuadraticFormGate
 from .linear_amplitude_function import LinearAmplitudeFunction, LinearAmplitudeFunctionGate
 from .piecewise_chebyshev import PiecewiseChebyshev, PiecewiseChebyshevGate
 from .exact_reciprocal import ExactReciprocal, ExactReciprocalGate
-from .adders import (
-    VBERippleCarryAdder,
-    CDKMRippleCarryAdder,
-    DraperQFTAdder,
-    ModularAdderGate,
-    HalfAdderGate,
-    FullAdderGate,
-)
-from .multipliers import HRSCumulativeMultiplier, RGQFTMultiplier, MultiplierGate
+from .adders import *
+from .multipliers import *
+
+from . import adders, multipliers
+
+__all__ = [
+    "ExactReciprocal",
+    "ExactReciprocalGate",
+    "FunctionalPauliRotations",
+    "IntegerComparator",
+    "IntegerComparatorGate",
+    "LinearAmplitudeFunction",
+    "LinearAmplitudeFunctionGate",
+    "LinearPauliRotations",
+    "LinearPauliRotationsGate",
+    "PiecewiseChebyshev",
+    "PiecewiseChebyshevGate",
+    "PiecewiseLinearPauliRotations",
+    "PiecewiseLinearPauliRotationsGate",
+    "PiecewisePolynomialPauliRotations",
+    "PiecewisePolynomialPauliRotationsGate",
+    "PolynomialPauliRotations",
+    "PolynomialPauliRotationsGate",
+    "QuadraticForm",
+    "QuadraticFormGate",
+    "WeightedAdder",
+    "WeightedSumGate",
+]
+__all__ += adders.__all__
+__all__ += multipliers.__all__

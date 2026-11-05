@@ -1,3 +1,4 @@
+.. _capi-target-entry:
 
 =============
 QkTargetEntry

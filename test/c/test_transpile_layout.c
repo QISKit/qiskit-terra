@@ -65,6 +65,7 @@ result_cleanup:
 
 cleanup:
     qk_transpile_layout_free(layout);
+    qk_quantum_register_free(qr);
     qk_dag_free(orig_dag);
     qk_target_free(target);
     return result;

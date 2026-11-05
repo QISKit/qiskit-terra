@@ -184,3 +184,12 @@ class TestConvertToPauliRotations(QiskitTestCase):
             with qc_exp.while_loop((cr, 0)):
                 qc_exp.compose(qc2, [0, 1], inplace=True)
         self.assertEqual(qct, qc_exp)
+
+    def test_pprs_and_ppms_are_unchanged(self):
+        """Test that the pass leaves Pauli product rotations and measurements unchanged."""
+        qc = QuantumCircuit(4, 2)
+        qc.append(PauliProductRotationGate(Pauli("XYZ"), 0.1), [1, 2, 3])
+        qc.append(PauliProductMeasurement(Pauli("-XZ")), [1, 2], [1])
+
+        qct = ConvertToPauliRotations()(qc)
+        self.assertEqual(qc, qct)

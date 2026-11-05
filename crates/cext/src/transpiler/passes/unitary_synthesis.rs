@@ -10,8 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
-
 use qiskit_circuit::PhysicalQubit;
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::dag_circuit::DAGCircuit;
@@ -27,6 +25,12 @@ use qiskit_transpiler::target::Target;
 /// The UnitarySynthesis transpiler pass will synthesize any UnitaryGates in the circuit into gates
 /// available in the target.
 ///
+/// This pass is multithreaded and will potentially launch a thread pool
+/// with threads equal to the number of CPUs by default. You can tune the
+/// number of threads with the ``RAYON_NUM_THREADS`` environment variable.
+/// For example, setting ``RAYON_NUM_THREADS=4`` would limit the thread pool
+/// to 4 threads.
+///
 /// @param circuit A pointer to the circuit to run UnitarySynthesis on
 /// @param target A pointer to the target to run UnitarySynthesis on
 /// @param min_qubits The minimum number of qubits in the unitary to synthesize. If the unitary
@@ -40,26 +44,26 @@ use qiskit_transpiler::target::Target;
 /// # Example
 ///
 /// ```c
-///     QkTarget *target = qk_target_new(2);
-///     uint32_t current_num_qubits = qk_target_num_qubits(target);
-///     QkTargetEntry *cx_entry = qk_target_entry_new(QkGate_CX);
-///     for (uint32_t i = 0; i < current_num_qubits - 1; i++) {
-///         uint32_t qargs[2] = {i, i + 1};
-///         double inst_error = 0.0090393 * (current_num_qubits - i);
-///         double inst_duration = 0.020039;
-///         qk_target_entry_add_property(cx_entry, qargs, 2, inst_duration, inst_error);
-///     }
-///     QkExitCode result_cx = qk_target_add_instruction(target, cx_entry);
-///     QkCircuit *qc = qk_circuit_new(2, 0);
-///     QkComplex64 c0 = {0., 0.};
-///     QkComplex64 c1 = {1., 0.};
-///     QkComplex64 unitary[16] = {c1, c0, c0, c0,  // row 0
-///                                c0, c1, c0, c0,  // row 1
-///                                c0, c0, c1, c0,  // row 2
-///                                c0, c0, c0, c1}; // row 3
-///     uint32_t qargs[2] = {0, 1};
-///     qk_circuit_unitary(qc, unitary, qargs, 2, false);
-///     qk_transpiler_pass_standalone_unitary_synthesis(qc, target, 0, 1.0);
+/// QkTarget *target = qk_target_new(2);
+/// uint32_t current_num_qubits = qk_target_num_qubits(target);
+/// QkTargetEntry *cx_entry = qk_target_entry_new(QkGate_CX);
+/// for (uint32_t i = 0; i < current_num_qubits - 1; i++) {
+///     uint32_t qargs[2] = {i, i + 1};
+///     double inst_error = 0.0090393 * (current_num_qubits - i);
+///     double inst_duration = 0.020039;
+///     qk_target_entry_add_property(cx_entry, qargs, 2, inst_duration, inst_error);
+/// }
+/// QkExitCode result_cx = qk_target_add_instruction(target, cx_entry);
+/// QkCircuit *qc = qk_circuit_new(2, 0);
+/// QkComplex64 c0 = {0., 0.};
+/// QkComplex64 c1 = {1., 0.};
+/// QkComplex64 unitary[16] = {c1, c0, c0, c0,  // row 0
+///                            c0, c1, c0, c0,  // row 1
+///                            c0, c0, c1, c0,  // row 2
+///                            c0, c0, c0, c1}; // row 3
+/// uint32_t qargs[2] = {0, 1};
+/// qk_circuit_unitary(qc, unitary, qargs, 2, false);
+/// qk_transpiler_pass_standalone_unitary_synthesis(qc, target, 0, 1.0);
 /// ```
 ///
 /// # Safety
@@ -73,9 +77,9 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_unitary_synthesis(
     approximation_degree: f64,
 ) {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let circuit = unsafe { mut_ptr_as_ref(circuit) };
-    let target = unsafe { const_ptr_as_ref(target) };
-    let dag = match DAGCircuit::from_circuit_data(circuit, false, None, None, None, None) {
+    let circuit = unsafe { &mut *circuit };
+    let target = unsafe { &*target };
+    let dag = match DAGCircuit::from_circuit_data(circuit, false, None, None) {
         Ok(dag) => dag,
         Err(e) => panic!("{}", e),
     };
@@ -100,6 +104,7 @@ pub unsafe extern "C" fn qk_transpiler_pass_standalone_unitary_synthesis(
         &physical_qubits,
         &mut synthesis_state,
         target.into(),
+        false,
     ) {
         Ok(dag) => dag,
         Err(e) => panic!("{}", e),
@@ -181,15 +186,15 @@ mod tests {
         )
         .unwrap();
         let params = Some(Parameters::Params(smallvec![
-            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(Symbol::new(
-                "ϴ", None, None,
-            )))),
-            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(Symbol::new(
-                "φ", None, None,
-            )))),
-            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(Symbol::new(
-                "λ", None, None,
-            )))),
+            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(
+                Symbol::standalone("ϴ".to_owned(), None)
+            ))),
+            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(
+                Symbol::standalone("φ".to_owned(), None)
+            ))),
+            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(
+                Symbol::standalone("λ".to_owned(), None)
+            ))),
         ]));
         target
             .add_instruction(

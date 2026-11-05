@@ -33,7 +33,7 @@ pub const VERIFY_TOL: f64 = 1e-7;
 /// Errors that might occur in linear algebra computations
 #[derive(Error, Debug)]
 pub enum LinAlgError {
-    #[error("Eigen decomposition failed")]
+    #[error("eigen decomposition failed")]
     EigenDecompositionFailed,
 
     #[error("SVD decomposition failed")]

@@ -1,0 +1,4 @@
+---
+performance:
+  - :class:`.ParameterVector` was re-implemented in Rust.  In is now approximately five times faster
+    to construct, and its vector elements require significantly less memory.

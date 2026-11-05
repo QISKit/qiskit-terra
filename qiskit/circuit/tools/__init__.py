@@ -14,3 +14,5 @@
 Helpful routines
 """
 from .pi_check import pi_check
+
+__all__ = ["pi_check"]

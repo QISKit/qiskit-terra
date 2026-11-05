@@ -15,7 +15,7 @@ use std::fmt;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use indexmap::IndexSet;
+use qiskit_util::IndexSet;
 use smallvec::SmallVec;
 
 /// A key to retrieve a value (by reference) from an interner of the same type.  This is narrower
@@ -207,9 +207,7 @@ mod interned_map {
 /// assert_eq!(interner.get(key), &[0, 1, 2, 3, 4]);
 /// ```
 #[derive(Default)]
-pub struct Interner<T: ?Sized + ToOwned>(
-    IndexSet<<T as ToOwned>::Owned, ::foldhash::fast::RandomState>,
-);
+pub struct Interner<T: ?Sized + ToOwned>(IndexSet<<T as ToOwned>::Owned>);
 
 // `Clone` and `Debug` can't use the derivation mechanism because the values that are actually
 // stored are of type `<T as ToOwned>::Owned`, which the derive system doesn't reason about.

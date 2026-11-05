@@ -150,7 +150,7 @@ pub fn load(
                 .call1((pathlike_or_filelike,))?
                 .extract::<OsString>()?;
             ::std::fs::read_to_string(&path).map_err(|err| {
-                QASM3ImporterError::new_err(format!("failed to read file '{:?}': {:?}", &path, err))
+                QASM3ImporterError::new_err(format!("failed to read file '{:?}': {:?}", path, err))
             })?
         };
     loads(py, source, custom_gates, include_path)

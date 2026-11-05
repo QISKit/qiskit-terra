@@ -1,0 +1,30 @@
+---
+
+# This file is just for updating base caches on PR-target branches.  It isn't a branch-protection
+# requirement, just a CI performance improvement.
+#
+# Some of our branch-protection workflows use caching to avoid needlessly recalculating heavy
+# initial state.  The way GitHub caching works, this can only propagate through to later PRs and the
+# merge queue if a cache triggered trigger _from_ the target branch also runs.  We don't want to
+# waste CI resources actually running a load of test suites on every push if they're not necessary
+# (and typically they're not, because the merge-queue branch-protection rules require the test suite
+# to have passed on the literal commit objects that branches get fast-forwarded onto).
+
+name: Update caches
+on:
+  push:
+    branches: ["main", "stable/*"]
+
+jobs:
+  config:
+    name: Configure
+    uses: ./.github/workflows/config.yml
+
+  qpy:
+    name: QPY
+    needs: config
+    uses: ./.github/workflows/qpy.yml
+    with:
+      python-version: ${{ needs.config.outputs.python-old }}
+      runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
+      only-update-cache: true

@@ -83,8 +83,11 @@ __all__ = [
     "default_num_processes",
     "deprecate_arg",
     "deprecate_func",
+    "detach_prefix",
     "is_main_process",
     "local_hardware_info",
+    "optionals",
     "parallel_map",
     "should_run_in_parallel",
+    "wrap_method",
 ]

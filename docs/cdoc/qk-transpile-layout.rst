@@ -1,3 +1,5 @@
+.. _capi-transpile-layout:
+
 =================
 QkTranspileLayout
 =================

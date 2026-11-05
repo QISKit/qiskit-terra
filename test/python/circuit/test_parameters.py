@@ -960,6 +960,13 @@ class TestParameters(QiskitTestCase):
         other = ParameterVector("a", 5)
         self.assertNotEqual(list(left), list(other))
 
+    def test_parameter_vector_backrefs_equal(self):
+        vector = ParameterVector("a", 10)
+        # With `ParameterVector` implemented in Rust and the actual Python object not cached,
+        # there's no guarantee that `pv[0].vector is pv` (as the pure-Python implementation used to
+        # preserve), but we need to maintain `pv[0].vector == pv`.
+        self.assertEqual([x.vector for x in vector], [vector] * len(vector))
+
     def test_binding_parameterized_circuits_built_in_multiproc(self):
         """Verify subcircuits built in a subprocess can still be bound."""
         # ref: https://github.com/Qiskit/qiskit-terra/issues/2429
@@ -2248,6 +2255,13 @@ class TestParameterEquality(QiskitTestCase):
 
         self.assertEqual(expr, theta)
         self.assertEqual(theta, expr)
+
+    def test_inverse_equals_negative_power(self):
+        """Verify 1/x is equal to x ** (-1) for parameter expressions."""
+        theta = Parameter("theta")
+
+        self.assertEqual(1 / theta, theta ** (-1))
+        self.assertEqual(theta ** (-2), 1 / (theta**2))
 
 
 class TestParameterView(QiskitTestCase):

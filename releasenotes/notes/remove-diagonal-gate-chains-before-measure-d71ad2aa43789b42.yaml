@@ -1,0 +1,7 @@
+---
+features_transpiler:
+  - |
+    The :class:`.RemoveDiagonalGatesBeforeMeasure` transpiler pass now removes all
+    consecutive diagonal gates before a measurement in one run, and the chain can mix
+    single- and multi-qubit diagonal gates. Before, the pass removed only the diagonal
+    gate directly in front of each measurement.

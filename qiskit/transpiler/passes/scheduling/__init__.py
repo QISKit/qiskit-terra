@@ -18,4 +18,18 @@ from .padding import PadDelay, PadDynamicalDecoupling, ContextAwareDynamicalDeco
 from .alignments import InstructionDurationCheck, ConstrainedReschedule
 
 # For backward compatibility
+# ruff: noqa: F401
 from . import alignments as instruction_alignments
+
+__all__ = [
+    "ALAPScheduleAnalysis",
+    "ASAPScheduleAnalysis",
+    "ConstrainedReschedule",
+    "ContextAwareDynamicalDecoupling",
+    "InstructionDurationCheck",
+    "PadDelay",
+    "PadDynamicalDecoupling",
+    "SetIOLatency",
+    "TimeUnitConversion",
+    "alignments",
+]

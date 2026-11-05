@@ -24,8 +24,6 @@ from qiskit.synthesis.permutation import (
     synth_permutation_depth_lnn_kms,
     synth_permutation_basic,
     synth_permutation_reverse_lnn_kms,
-)
-from qiskit.synthesis.permutation.permutation_utils import (
     _inverse_pattern,
     _validate_permutation,
 )

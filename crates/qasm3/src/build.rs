@@ -16,7 +16,7 @@ use pyo3::types::{PySequence, PyTuple};
 use foldhash::fast::RandomState;
 
 use hashbrown::HashMap;
-use indexmap::IndexMap;
+use qiskit_util::IndexMap;
 
 use oq3_semantics::asg;
 use oq3_semantics::symbols::{SymbolId, SymbolTable, SymbolType};
@@ -191,10 +191,11 @@ impl BuilderState {
         let qubits = if let Some(asg_qubits) = barrier.qubits().as_ref() {
             // We want any deterministic order for easier circuit reproducibility in Python space,
             // and to include each seen qubit once.  This simply maintains insertion order.
-            let mut qubits = IndexMap::<*const ::pyo3::ffi::PyObject, Py<PyAny>, RandomState>::with_capacity_and_hasher(
-                asg_qubits.len(),
-                RandomState::default()
-            );
+            let mut qubits =
+                IndexMap::<*const ::pyo3::ffi::PyObject, Py<PyAny>>::with_capacity_and_hasher(
+                    asg_qubits.len(),
+                    RandomState::default(),
+                );
             for qarg in asg_qubits.iter() {
                 let qarg = expr::expect_gate_operand(qarg)?;
                 match expr::eval_qarg(py, &self.symbols, ast_symbols, qarg)? {

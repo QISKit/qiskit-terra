@@ -14,7 +14,7 @@
 import copy
 
 from qiskit import QuantumCircuit, ClassicalRegister, QuantumRegister, transpile
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.synthesis.one_qubit import OneQubitEulerDecomposer
 
 

@@ -1,0 +1,7 @@
+numpy>=2.0.0
+scipy>=1.14
+
+# This is a loose constraint because we want to test different versions,
+# as defined in 'test/qpy_compat/run_tests.sh', but any symengine version 
+# above (and including) 0.14 will be incompatible with qpy.
+symengine<0.14

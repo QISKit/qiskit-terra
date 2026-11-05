@@ -3,10 +3,11 @@ FROM python:${PYTHON_VERSION}-slim
 
 ARG PACKAGE_NAME=qiskit
 ARG PACKAGE_VERSION=
+ARG CONSTRAINTS_FILE=qpy_test_constraints.txt
 
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /work
-COPY qpy_test_constraints.txt .
+COPY ${CONSTRAINTS_FILE} qpy_test_constraints.txt
 RUN python -m pip install --upgrade pip && pip install -c qpy_test_constraints.txt packaging "${PACKAGE_NAME}==${PACKAGE_VERSION}";
 
 CMD ["python", "-c", "import qiskit; import sys; print(f'Qiskit version: {qiskit.__version__}'); print(f'Python version: {sys.version}')"]

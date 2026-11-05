@@ -14,8 +14,8 @@
 
 from __future__ import annotations
 from math import ceil
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit import QuantumRegister
+
+from qiskit.circuit import QuantumRegister, QuantumCircuit
 
 
 def _mcx_ladder(n_mcx: int, alpha: int):

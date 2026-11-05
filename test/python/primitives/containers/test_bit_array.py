@@ -174,6 +174,16 @@ class BitArrayTestCase(QiskitTestCase):
         ba = BitArray.from_bool_array([[1, 0, 0], [1, 1, 0]])
         self.assertEqual(~ba, BitArray.from_bool_array([[0, 1, 1], [0, 0, 1]]))
 
+    @ddt.data(1, 7, 9, 13)
+    def test_bitcount_ignores_padding_bits(self, num_bits):
+        """Test bitcount only counts logical bits."""
+        ba = BitArray.from_samples([0], num_bits)
+        self.assertEqual(ba.bitcount().tolist(), [0])
+
+        ba = ~BitArray.from_samples([0], num_bits)
+        np.testing.assert_array_equal(ba.bitcount(), ba.to_bool_array().sum(axis=-1))
+        self.assertEqual(ba.bitcount().tolist(), [num_bits])
+
     def test_logical_xor(self):
         """Test the logical XOR operator."""
         ba1 = BitArray.from_bool_array([[1, 0, 0], [1, 1, 0]])
@@ -315,6 +325,19 @@ class BitArrayTestCase(QiskitTestCase):
 
         bit_array = BitArray.from_samples([0, 0, 0])
         self.assertEqual(bit_array, BitArray(u_8([[0], [0], [0]]), 1))
+
+    def test_from_samples_too_many_bits(self):
+        """Test that samples not fitting in ``num_bits`` raise a ``ValueError``."""
+        with self.assertRaisesRegex(ValueError, "fit in num_bits=8"):
+            BitArray.from_samples([1, 256], 8)
+
+        with self.assertRaisesRegex(ValueError, "fit in num_bits=3"):
+            BitArray.from_samples([-1], 3)
+
+    def test_from_counts_too_many_bits(self):
+        """Test that keys not fitting in ``num_bits`` raise a ``ValueError``."""
+        with self.assertRaisesRegex(ValueError, "fit in num_bits=4"):
+            BitArray.from_counts({"1" * 12: 3, "0" * 12: 1}, num_bits=4)
 
     def test_reshape(self):
         """Test the reshape method."""

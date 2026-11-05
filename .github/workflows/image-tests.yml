@@ -22,11 +22,13 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ inputs.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
+      - name: Install Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - name: Install Image dependencies
         run: |
           set -e
@@ -38,8 +40,7 @@ jobs:
             --group test \
             --group optionals-all \
             -e .
-          sudo apt-get update
-          sudo apt-get install -y graphviz pandoc
+          sudo tools/install_ubuntu_graphviz.sh
           pip check
       - name: Run image tests
         run: |

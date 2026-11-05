@@ -1,0 +1,15 @@
+---
+features_c:
+  - |
+    Added ability to add :class:`.Delay` in terms of ``Dt`` to a ``QkCircuit`` (via :c:func:`qk_circuit_delay_dt`).
+  - |
+    Add :c:func:`qk_circuit_delay_unit` to retrieve the unit type of a :class:`.Delay` instruction in the
+    C API.
+upgrade_c:
+  - |
+    Added variants :c:enum:`QkDelayUnit_DT`, :c:enum:`QkDelayUnit_EXPR`, and :c:enum:`QkDelayUnit_Unknown` to the
+    :c:enum:`QkDelayUnit` enumeration.
+  - |
+    When adding a delay to a :c:type:`QkCircuit` using :c:func:`qk_circuit_delay` with units of  :c:enum:`QkDelayUnit_DT`,
+    :c:enum:`QkDelayUnit_EXPR`, or :c:enum:`QkDelayUnit_Unknown`, the operation will fail with an exit code.
+    For more detail check the updated documentation for :c:func:`qk_circuit_delay`.

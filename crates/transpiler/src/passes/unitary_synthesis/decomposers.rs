@@ -23,9 +23,9 @@ use std::sync::LazyLock;
 
 use approx::relative_eq;
 use hashbrown::{HashMap, HashSet, hash_map};
-use indexmap::{IndexMap, IndexSet};
 use ndarray::{ArrayView2, CowArray, Ix2};
 use num_complex::Complex64;
+use qiskit_util::{IndexMap, IndexSet};
 use smallvec::{SmallVec, smallvec};
 
 use numpy::convert::ToPyArray;
@@ -43,7 +43,9 @@ use crate::passes::optimize_clifford_t::CLIFFORD_T_GATE_NAMES;
 use crate::target::{NormalOperation, Target, TargetOperation};
 use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::instruction::Instruction;
-use qiskit_circuit::operations::{Operation, OperationRef, Param, StandardGate};
+use qiskit_circuit::operations::{
+    Operation, OperationRef, Param, PyInstruction, PyOpKind, StandardGate,
+};
 use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::{PhysicalQubit, imports};
 use qiskit_synthesis::discrete_basis::solovay_kitaev::SolovayKitaevSynthesis;
@@ -177,7 +179,7 @@ impl StaticKakSource {
                     .collect::<Vec<_>>();
                 g.matrix(&params).map(CowArray::from)
             }
-            OperationRef::Gate(g) => g.matrix().map(CowArray::from),
+            OperationRef::PyCustom(i) => i.matrix().map(CowArray::from),
             OperationRef::Unitary(u) => Some(CowArray::from(u.matrix_view())),
             _ => None,
         }
@@ -320,9 +322,7 @@ impl Decomposer2q {
 ///
 /// This exists mostly just to attach methods to and to shorten a bunch of type signatures.
 #[derive(Clone, Debug, Default)]
-struct Decomposer2qCacheInner(
-    IndexMap<Decomposer2qConstructor, Option<Decomposer2q>, ::foldhash::fast::RandomState>,
-);
+struct Decomposer2qCacheInner(IndexMap<Decomposer2qConstructor, Option<Decomposer2q>>);
 impl Decomposer2qCacheInner {
     /// Get a decomposer by known-good index.
     ///
@@ -441,13 +441,15 @@ impl DecomposerCache {
         };
         // TODO: this logic isn't really correct; we probably actually need to test if the basis set
         // permits _complete_ coverage of SU2/SO3 via SK.
+        //
+        // An empty basis should not be interpreted as Clifford+T.
         let permits_solovay_kitaev = || match constraint {
             QpuConstraint::Loose { basis_gates, .. } => {
-                basis_gates.iter().copied().all(valid_clifford_t)
+                !basis_gates.is_empty() && basis_gates.iter().copied().all(valid_clifford_t)
             }
             QpuConstraint::Target(target) => target
                 .operation_names_for_qargs(&[qubit])
-                .map(|gates| gates.into_iter().all(valid_clifford_t))
+                .map(|gates| !gates.is_empty() && gates.into_iter().all(valid_clifford_t))
                 .unwrap_or(false),
         };
         let init_solovay_kitaev = || {
@@ -639,7 +641,7 @@ fn get_2q_decomposers(
             let euler_bases = euler_bases_from_target(target, qubits[0]);
             let candidates_2q =
                 get_candidate_2q_operations(target, qubits, config.decomposition_direction_2q);
-            let mut decomposers = IndexSet::new();
+            let mut decomposers = IndexSet::default();
 
             // Ising-like gates.
             for candidate in candidates_2q.iter() {
@@ -652,8 +654,12 @@ fn get_2q_decomposers(
                     OperationRef::StandardGate(standard @ super::PARAM_SET!()) => {
                         RXXEquivalent::Standard(standard)
                     }
-                    OperationRef::Gate(gate) => Python::attach(|py| {
-                        RXXEquivalent::CustomPython(gate.instruction.bind(py).get_type().unbind())
+                    OperationRef::PyCustom(PyInstruction {
+                        kind: PyOpKind::Gate,
+                        ob,
+                        ..
+                    }) => Python::attach(|py| {
+                        RXXEquivalent::CustomPython(ob.bind(py).get_type().unbind())
                     }),
                     _ => continue,
                 };

@@ -22,20 +22,53 @@ import scipy.sparse
 import ddt
 
 from qiskit import QiskitError
-from qiskit.circuit import Parameter, ParameterExpression, ParameterVector
+from qiskit.circuit import Parameter, ParameterExpression, ParameterVector, QuantumCircuit
 from qiskit.circuit.library import efficient_su2
+from qiskit.circuit.library import (
+    CXGate,
+    CYGate,
+    CZGate,
+    HGate,
+    IGate,
+    ECRGate,
+    SdgGate,
+    SGate,
+    SwapGate,
+    iSwapGate,
+    XGate,
+    YGate,
+    ZGate,
+    SXGate,
+    SXdgGate,
+    RXGate,
+    RYGate,
+    RZGate,
+    CPhaseGate,
+    CRXGate,
+    CRYGate,
+    CRZGate,
+    RXXGate,
+    RYYGate,
+    RZZGate,
+    RZXGate,
+    XXMinusYYGate,
+    XXPlusYYGate,
+)
 from qiskit.circuit.parametertable import ParameterView
 from qiskit.compiler.transpiler import transpile
 from qiskit.primitives import BackendEstimatorV2
 from qiskit.providers.fake_provider import GenericBackendV2
-from qiskit.quantum_info import SparseObservable
+from qiskit.quantum_info import SparseObservable, random_clifford, random_pauli_list
 from qiskit.quantum_info.operators import (
+    Clifford,
     Operator,
     Pauli,
     PauliList,
     SparsePauliOp,
 )
 from qiskit.utils import optionals
+
+from .test_pauli import pauli_group_labels
 
 
 def pauli_mat(label):
@@ -834,6 +867,196 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         np.testing.assert_allclose(value_mat, target, atol=1e-8)
         np.testing.assert_array_equal(op.paulis.phase, np.zeros(op.size))
 
+    def test_evolve_default_frame_is_heisenberg(self):
+        """Test that the default frame is Heisenberg (frame='h')."""
+        op = SparsePauliOp(pauli_group_labels(1, True))
+        gate = HGate()
+        self.assertListEqual(
+            [Operator(p) for p in op.evolve(gate)],
+            [Operator(p) for p in op.evolve(gate, frame="h")],
+        )
+
+    @combine(
+        gate=(
+            IGate(),
+            XGate(),
+            YGate(),
+            ZGate(),
+            HGate(),
+            SGate(),
+            SdgGate(),
+            SXGate(),
+            SXdgGate(),
+            RXGate(theta=np.pi / 2),
+            RYGate(theta=np.pi / 2),
+            RZGate(phi=np.pi / 2),
+            Clifford(IGate()),
+            Clifford(XGate()),
+            Clifford(YGate()),
+            Clifford(ZGate()),
+            Clifford(HGate()),
+            Clifford(SGate()),
+            Clifford(SdgGate()),
+            CXGate(),
+            CYGate(),
+            CZGate(),
+            SwapGate(),
+            iSwapGate(),
+            CPhaseGate(theta=np.pi),
+            CRXGate(theta=np.pi),
+            CRYGate(theta=np.pi),
+            CRZGate(theta=np.pi),
+            RXXGate(theta=np.pi / 2),
+            RYYGate(theta=np.pi / 2),
+            RZZGate(theta=np.pi / 2),
+            RZXGate(theta=np.pi / 2),
+            XXMinusYYGate(theta=np.pi),
+            XXPlusYYGate(theta=-np.pi),
+            ECRGate(),
+            Clifford(CXGate()),
+            Clifford(CYGate()),
+            Clifford(CZGate()),
+            Clifford(SwapGate()),
+            Clifford(ECRGate()),
+        )
+    )
+    def test_evolve_clifford(self, gate):
+        """Test evolve method for Clifford gates."""
+        op = Operator(gate)
+        sparse_pauli_op = SparsePauliOp(pauli_group_labels(gate.num_qubits, True))
+        value = [Operator(pauli) for pauli in sparse_pauli_op.evolve(gate)]
+        value_s = [Operator(pauli) for pauli in sparse_pauli_op.evolve(gate, frame="s")]
+        if isinstance(gate, Clifford):
+            value_inv = [Operator(pauli) for pauli in sparse_pauli_op.evolve(gate.adjoint())]
+        else:
+            value_inv = [Operator(pauli) for pauli in sparse_pauli_op.evolve(gate.inverse())]
+        target = [op.adjoint().dot(pauli).dot(op) for pauli in sparse_pauli_op]
+        self.assertListEqual(value, target)
+        self.assertListEqual(value_inv, value_s)
+
+    def test_evolve_clifford_qargs(self):
+        """Test evolve method for SparsePauliOp with qargs (random Clifford)."""
+        cliff = random_clifford(3, seed=10)
+        op = Operator(cliff)
+        sparse_op = SparsePauliOp(random_pauli_list(5, 3, seed=10, phase=False))
+        qargs = [3, 0, 1]
+        value = [Operator(pauli) for pauli in sparse_op.evolve(cliff, qargs=qargs)]
+        value_inv = [Operator(pauli) for pauli in sparse_op.evolve(cliff.adjoint(), qargs=qargs)]
+        value_s = [Operator(pauli) for pauli in sparse_op.evolve(cliff, qargs=qargs, frame="s")]
+        target = [
+            Operator(pauli).compose(op.adjoint(), qargs=qargs).dot(op, qargs=qargs)
+            for pauli in sparse_op
+        ]
+        self.assertListEqual(value, target)
+        self.assertListEqual(value_inv, value_s)
+
+    @combine(
+        gate=(
+            IGate(),
+            XGate(),
+            YGate(),
+            ZGate(),
+            HGate(),
+            SGate(),
+            SdgGate(),
+            Clifford(HGate()),
+            Clifford(SGate()),
+        )
+    )
+    def test_evolve_sum_matrix_1q(self, gate):
+        """Test evolve of a multi-term SparsePauliOp with mixed coefficients (1-qubit gate)"""
+        coeffs = [0.5, -1.3j, 2.0 + 0.5j, -0.7]
+        labels = ["X", "Y", "Z", "I"]
+        op = SparsePauliOp.from_list(zip(labels, coeffs))
+        u = Operator(gate)
+
+        evolved = op.evolve(gate)
+
+        # Phases must be fully absorbed into coefficients — paulis.phase stays zero.
+        np.testing.assert_array_equal(evolved.paulis.phase, np.zeros(evolved.size))
+
+        # Per-term comparison
+        for c_orig, p_orig, c_evo, p_evo in zip(
+            op.coeffs, op.paulis, evolved.coeffs, evolved.paulis
+        ):
+            np.testing.assert_allclose(
+                c_evo * Operator(p_evo).data,
+                c_orig * (u.adjoint().dot(p_orig).dot(u)),
+                atol=1e-8,
+            )
+
+        # Full matrix comparison
+        target_matrix = u.adjoint().data @ op.to_matrix() @ u.data
+        np.testing.assert_allclose(evolved.to_matrix(), target_matrix, atol=1e-8)
+
+    @combine(
+        gate=(
+            CXGate(),
+            CZGate(),
+            SwapGate(),
+            Clifford(CXGate()),
+            Clifford(CZGate()),
+        )
+    )
+    def test_evolve_sum_matrix_2q(self, gate):
+        """Test evolve of a multi-term SparsePauliOp with mixed coefficients (2-qubit gate)"""
+        coeffs = [1.0, -0.5j, 0.3 + 0.2j, -1.1, 0.8j, -0.4]
+        labels = ["XX", "YZ", "ZI", "IX", "ZZ", "YY"]
+        op = SparsePauliOp.from_list(zip(labels, coeffs))
+        u = Operator(gate)
+
+        evolved = op.evolve(gate)
+
+        # Phases must be fully absorbed into coefficients — paulis.phase stays zero.
+        np.testing.assert_array_equal(evolved.paulis.phase, np.zeros(evolved.size))
+
+        # Per-term comparison
+        for c_orig, p_orig, c_evo, p_evo in zip(
+            op.coeffs, op.paulis, evolved.coeffs, evolved.paulis
+        ):
+            np.testing.assert_allclose(
+                c_evo * Operator(p_evo).data,
+                c_orig * (u.adjoint().dot(p_orig).dot(u)),
+                atol=1e-8,
+            )
+
+        # Full matrix comparison
+        target_matrix = u.adjoint().data @ op.to_matrix() @ u.data
+        np.testing.assert_allclose(evolved.to_matrix(), target_matrix, atol=1e-8)
+
+    def test_evolve_sum_matrix_qargs(self):
+        """Test evolve of a multi-term SparsePauliOp with qargs.
+
+        Applies a 2-qubit Clifford to a subset of qubits of a 4-qubit operator.
+        """
+        coeffs = [1.0, -0.5j, 0.3 + 0.2j, -1.1, 0.8j]
+        labels = ["XIIZ", "YZIX", "ZZII", "IXXY", "ZZYX"]
+        op = SparsePauliOp.from_list(zip(labels, coeffs))
+        cliff = random_clifford(2, seed=42)
+        u = Operator(cliff)
+        qargs = [1, 3]
+
+        evolved = op.evolve(cliff, qargs=qargs)
+
+        # Phases must be fully absorbed into coefficients — paulis.phase stays zero.
+        np.testing.assert_array_equal(evolved.paulis.phase, np.zeros(evolved.size))
+
+        # Full matrix comparison
+        op_full = Operator(op)
+        target_matrix = op_full.compose(u.adjoint(), qargs=qargs).dot(Operator(u), qargs=qargs).data
+        np.testing.assert_allclose(evolved.to_matrix(), target_matrix, atol=1e-8)
+
+    def test_evolve_non_clifford_circuit_raises(self):
+        """Test that evolve raises QiskitError when the QuantumCircuit
+        contains a non-Clifford gate (T gate).
+        """
+        op = SparsePauliOp.from_list([("X", 1.0), ("Z", -0.5)])
+        qc = QuantumCircuit(1)
+        qc.t(0)
+
+        with self.assertRaisesRegex(QiskitError, "non-Clifford"):
+            op.evolve(qc)
+
     def test_simplify(self):
         """Test simplify method"""
         coeffs = [3 + 1j, -3 - 1j, 0, 4, -5, 2.2, -1.1j]
@@ -873,7 +1096,6 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         np.testing.assert_array_equal(zero_op.paulis.phase, np.zeros(zero_op.size))
         np.testing.assert_array_equal(simplified_op.paulis.phase, np.zeros(simplified_op.size))
 
-    @unittest.skipUnless(optionals.HAS_SYMPY, "sympy required")
     def test_simplify_parameters(self):
         """Test simplify methods for parameterized SparsePauliOp."""
         a = Parameter("a")
@@ -887,7 +1109,6 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         self.assertEqual(simplified_op, target_op)
         np.testing.assert_array_equal(simplified_op.paulis.phase, np.zeros(simplified_op.size))
 
-    @unittest.skipUnless(optionals.HAS_SYMPY, "Sympy required")
     def test_simplify_complex_parameters(self):
         """Test calling simplify when a parameter has a complex coefficient."""
         a = Parameter("a")
@@ -899,6 +1120,21 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         target_coeffs = np.array([(1 + 1j) * a])
         target_labels = ["X"]
         target_op = SparsePauliOp(target_labels, target_coeffs)
+        self.assertEqual(simplified_op, target_op)
+        np.testing.assert_array_equal(simplified_op.paulis.phase, np.zeros(simplified_op.size))
+
+    def test_simplify_multiparameter_cancellation(self):
+        """Multi-parameter coefficients that cancel to zero are dropped without sympy."""
+        a = Parameter("a")
+        b = Parameter("b")
+        c = Parameter("c")
+        # The four X terms sum to a + b - a - b == 0 and must be removed;
+        # the Z term must survive.
+        coeffs = np.array([a, b, -a, -b, c])
+        labels = ["X", "X", "X", "X", "Z"]
+        spp_op = SparsePauliOp(labels, coeffs)
+        simplified_op = spp_op.simplify()
+        target_op = SparsePauliOp(["Z"], np.array([c]))
         self.assertEqual(simplified_op, target_op)
         np.testing.assert_array_equal(simplified_op.paulis.phase, np.zeros(simplified_op.size))
 
@@ -1125,6 +1361,10 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         self.assertFalse(op1.equiv(op2))
         self.assertTrue(op1.equiv(op2, atol=1e-7))
         self.assertEqual(op1.coeffs.dtype, np.complex128)
+
+        op3 = op1 + 1e-10 * SparsePauliOp.from_list([("I", 1)])
+        self.assertFalse(op1.equiv(op3, atol=1e-11))
+        self.assertTrue(op1.equiv(op3, atol=1e-9))
 
     def test_eq_equiv(self):
         """Test __eq__ and equiv methods with some specific cases."""

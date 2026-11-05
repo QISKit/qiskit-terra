@@ -13,3 +13,5 @@
 """Module containing one qubit unitary synthesis methods."""
 
 from .one_qubit_decompose import OneQubitEulerDecomposer
+
+__all__ = ["OneQubitEulerDecomposer"]

@@ -19,8 +19,9 @@ import typing
 from itertools import chain
 from collections.abc import Callable
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.quantum_info.operators import SparsePauliOp
+
+from qiskit.circuit import QuantumCircuit
+from qiskit.quantum_info import SparsePauliOp
 from qiskit.exceptions import QiskitError
 import qiskit.quantum_info
 
@@ -113,6 +114,10 @@ class QDrift(ProductFormula):
         # We artificially make the weights positive
         weights = np.abs(coeffs)
         lambd = np.sum(weights)
+
+        is_identity = lambd == 0 or time == 0
+        if is_identity:
+            return []
 
         num_gates = math.ceil(2 * (lambd**2) * (time**2) * self.reps)
 

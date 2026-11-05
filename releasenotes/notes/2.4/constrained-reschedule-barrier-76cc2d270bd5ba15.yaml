@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed :class:`.ConstrainedReschedule` raising a :class:`.TranspilerError`
+    when rescheduling a circuit containing a :class:`.Barrier`. Fixed
+    `#16135 <https://github.com/Qiskit/qiskit/issues/16135>`__.

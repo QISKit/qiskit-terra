@@ -10,12 +10,11 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use pyo3::prelude::*;
 use pyo3::types::PyAnyMethods;
 use pyo3::{PyResult, Python};
-use qiskit_circuit::circuit_data::{CircuitData, CircuitDataError, PyCircuitData};
+use qiskit_circuit::circuit_data::{CircuitData, CircuitDataError};
 use qiskit_circuit::operations::{
-    Operation, OperationRef, Param, PyInstruction, PyOperationTypes, StandardGate, multiply_param,
+    Operation, OperationRef, Param, PyInstruction, PyOpKind, StandardGate, multiply_param,
 };
 use qiskit_circuit::{BlocksMode, imports};
 use qiskit_circuit::{Clbit, Qubit, VarsMode};
@@ -33,9 +32,8 @@ pub fn ccx() -> CircuitData {
 }
 
 /// Definition circuit for C3X.
-#[pyfunction]
-pub fn c3x() -> PyCircuitData {
-    StandardGate::C3X.definition(&[]).unwrap().into()
+pub fn c3x() -> CircuitData {
+    StandardGate::C3X.definition(&[]).unwrap()
 }
 
 /// Definition circuit for RCCX.
@@ -73,13 +71,13 @@ trait CircuitDataForSynthesis {
 
     /// Appends Phase to the circuit.
     #[allow(dead_code)]
-    fn p(&mut self, theta: f64, q: u32) -> Result<(), CircuitDataError>;
+    fn p(&mut self, theta: impl Into<Param>, q: u32) -> Result<(), CircuitDataError>;
 
     /// Appends CX to the circuit.
     fn cx(&mut self, q1: u32, q2: u32) -> Result<(), CircuitDataError>;
 
     /// Appends CPhase to the circuit.
-    fn cp(&mut self, theta: f64, q1: u32, q2: u32) -> Result<(), CircuitDataError>;
+    fn cp(&mut self, theta: impl Into<Param>, q1: u32, q2: u32) -> Result<(), CircuitDataError>;
 
     /// Appends CCPhase to the circuit.
     fn ccp(&mut self, theta: f64, q1: u32, q2: u32, q3: u32) -> Result<(), CircuitDataError>;
@@ -89,6 +87,9 @@ trait CircuitDataForSynthesis {
 
     /// Appends RCCX to the circuit.
     fn rccx(&mut self, q1: u32, q2: u32, q3: u32) -> Result<(), CircuitDataError>;
+
+    /// Appends CRX to the circuit.
+    fn crx(&mut self, theta: f64, q1: u32, q2: u32) -> Result<(), CircuitDataError>;
 
     /// Compose ``other`` into ``self``, while remapping the qubits
     /// over which ``other`` is defined. The operations are added in-place.
@@ -130,8 +131,8 @@ impl CircuitDataForSynthesis for CircuitData {
 
     /// Appends Phase to the circuit.
     #[inline]
-    fn p(&mut self, theta: f64, q: u32) -> Result<(), CircuitDataError> {
-        self.push_standard_gate(StandardGate::Phase, &[Param::Float(theta)], &[Qubit(q)])
+    fn p(&mut self, theta: impl Into<Param>, q: u32) -> Result<(), CircuitDataError> {
+        self.push_standard_gate(StandardGate::Phase, &[theta.into()], &[Qubit(q)])
     }
 
     /// Appends CX to the circuit.
@@ -142,9 +143,19 @@ impl CircuitDataForSynthesis for CircuitData {
 
     /// Appends CPhase to the circuit.
     #[inline]
-    fn cp(&mut self, theta: f64, q1: u32, q2: u32) -> Result<(), CircuitDataError> {
+    fn cp(&mut self, theta: impl Into<Param>, q1: u32, q2: u32) -> Result<(), CircuitDataError> {
         self.push_standard_gate(
             StandardGate::CPhase,
+            &[theta.into()],
+            &[Qubit(q1), Qubit(q2)],
+        )
+    }
+
+    /// Appends CRX to the circuit.
+    #[inline]
+    fn crx(&mut self, theta: f64, q1: u32, q2: u32) -> Result<(), CircuitDataError> {
+        self.push_standard_gate(
+            StandardGate::CRX,
             &[Param::Float(theta)],
             &[Qubit(q1), Qubit(q2)],
         )
@@ -252,8 +263,11 @@ impl CircuitDataForSynthesis for CircuitData {
 }
 
 /// Efficient synthesis for 4-controlled X-gate.
-#[pyfunction]
-pub fn c4x() -> Result<PyCircuitData, CircuitDataError> {
+pub fn c4x() -> CircuitData {
+    c4x_inner().expect("c4x is a fixed circuit with valid qubit indices and float parameters")
+}
+
+fn c4x_inner() -> Result<CircuitData, CircuitDataError> {
     let mut circuit = CircuitData::with_capacity(5, 0, 0, Param::Float(0.0))?;
     circuit.h(4)?;
     circuit.cp(PI2, 3, 4)?;
@@ -268,7 +282,7 @@ pub fn c4x() -> Result<PyCircuitData, CircuitDataError> {
         &[],
     )?;
     circuit.compose(&c3sx(), &[Qubit(0), Qubit(1), Qubit(2), Qubit(4)], &[])?;
-    Ok(circuit.into())
+    Ok(circuit)
 }
 
 /// Adds gates of the "action gadget" to the circuit
@@ -322,18 +336,8 @@ pub fn synth_mcx_n_dirty_i15(
     relative_phase: bool,
     action_only: bool,
 ) -> Result<CircuitData, CircuitDataError> {
-    if num_controls == 0 {
-        let mut circuit = CircuitData::with_capacity(1, 0, 1, Param::Float(0.0))?;
-        circuit.x(0)?;
-        Ok(circuit)
-    } else if num_controls == 1 {
-        let mut circuit = CircuitData::with_capacity(2, 0, 1, Param::Float(0.0))?;
-        circuit.cx(0, 1)?;
-        Ok(circuit)
-    } else if num_controls == 2 {
-        Ok(ccx())
-    } else if num_controls == 3 && !relative_phase {
-        Ok(c3x().into())
+    if num_controls <= 2 || (num_controls == 3 && !relative_phase) {
+        synth_mcx_explicit(num_controls)
     } else {
         let num_ancillas = num_controls - 2;
         let num_qubits = num_controls + 1 + num_ancillas;
@@ -391,43 +395,375 @@ pub fn synth_mcx_n_dirty_i15(
     }
 }
 
-/// Synthesize a multi-controlled X gate with :math:`k` controls based on
-/// the implementation for `MCPhaseGate`.
+/// Helper function to create linear-depth ladder operations used in Khattar and Gidney's MCX synthesis.
 ///
-/// In turn, the MCPhase gate uses the decomposition for multi-controlled
-/// special unitaries described in [1].
+/// Together with the caller's initial rccx(control_0, control_1, ancilla), this implements
+/// the "up" and "down" Toffoli ladders of Step-1 and Step-2 in Fig. 3a of [1].
+///
+/// # Arguments
+/// - num_controls: the number of qubits involved in the ladder operation.
+///
+/// # Returns
+///
+/// A tuple consisting of the linear-depth ladder circuit and the index of the control qubit
+/// to apply to the final CCX gate.
+///
+/// # Errors
+///
+/// Returns an error if `num_controls < 3`.
+///
+/// # References
+///
+/// 1. Khattar and Gidney, *Rise of conditionally clean ancillae for optimizing quantum circuits*,
+///    [arXiv:2407.17966](https://arxiv.org/abs/2407.17966).
+fn linear_depth_ladder_ops(num_controls: u32) -> Result<(CircuitData, u32), CircuitDataError> {
+    let k = num_controls;
+
+    if k < 3 {
+        return Err(QiskitError::new_err("linear_depth_ladder_ops requires >= 3 controls.").into());
+    }
+
+    // At most k-2 rungs, each RCCX (9 gates) + X (1 gate); pre-size to avoid reallocation.
+    let mut circuit =
+        CircuitData::with_capacity(k, 0, 10 * k.saturating_sub(2) as usize, Param::Float(0.0))?;
+
+    // Fold all k controls into a running partial-AND via RCCX+X pairs. RCCX is used
+    // instead of CCX because its relative phase cancels when composed with its inverse.
+    // The trailing X after each RCCX prepares the written qubit as a control for the next rung.
+
+    // Up-sweep: fold controls into qubit 1 two at a time, walking toward the middle.
+    for i in (1..k - 2).step_by(2) {
+        circuit.rccx(i + 1, i + 2, i)?;
+        circuit.x(i)?;
+    }
+
+    // Peak: where the up-sweep and down-sweep meet. Parity of k determines which qubits
+    // participate. target < 0 means no distinct peak (up-sweep already reaches the end).
+    let has_peak = if k.is_multiple_of(2) { k >= 6 } else { k >= 5 };
+
+    if has_peak {
+        let (a, b, peak) = if k.is_multiple_of(2) {
+            (k - 3, k - 5, k - 6)
+        } else {
+            (k - 1, k - 4, k - 5)
+        };
+        circuit.rccx(a, b, peak)?;
+        circuit.x(peak)?;
+
+        // Down-sweep: mirror of the up-sweep, walking back toward qubit 1.
+        for i in (2..=peak).rev().step_by(2) {
+            circuit.rccx(i, i - 1, i - 2)?;
+            circuit.x(i - 2)?;
+        }
+    }
+    // final_ctrl holds the AND of the controls not covered by the ladder (qubits 0..1).
+    // The caller pairs it with the ancilla in one final CCX.
+    let final_ctrl = 5u32.saturating_sub(k);
+    Ok((circuit, final_ctrl))
+}
+
+/// Synthesize a multi-controlled X gate with :math:`k\ge 3` controls using :math:`1` ancillary qubit.
+///
+/// The construction is described in Section 5 of [1]. For :math:`k\le 2`, the returned circuit
+/// consists of a single X, CX, or CCX gate (corresponding to :math:`k = 0, 1, 2`, respectively)
+/// and uses no ancillary qubits.
+///
+/// # Arguments
+/// - num_controls: the number of control qubits.
+/// - clean: if `true`, the ancilla is clean; if `false`, the ancilla is dirty.
+///
+/// # References
+///
+/// 1. Khattar and Gidney, *Rise of conditionally clean ancillae for optimizing quantum circuits*,
+///    [arXiv:2407.17966](https://arxiv.org/abs/2407.17966).
+pub fn synth_mcx_1_kg24(num_controls: usize, clean: bool) -> Result<CircuitData, CircuitDataError> {
+    if num_controls <= 2 {
+        synth_mcx_explicit(num_controls)
+    } else {
+        // --- General case: k >= 3 controls, 1 ancilla ---
+        let k = num_controls as u32;
+        let target = k;
+        let ancilla = k + 1;
+
+        let (ladder, final_ctrl) = linear_depth_ladder_ops(k)?;
+
+        // Precompute once; the dirty-ancilla case reuses it for the second pass.
+        let ladder_inv = ladder.inverse()?;
+
+        // num_passes=1 for clean ancilla, 2 for dirty (repeat to cancel initial-state dependence).
+        // Fixed costs: 2 RCCX (9 gates each) + num_passes * (2 * ladder + 1 CCX (15 gates)).
+        let num_passes = if clean { 1 } else { 2 };
+        let instruction_capacity = 2 * 9 + num_passes * (2 * ladder.data().len() + 15);
+        let mut circuit =
+            CircuitData::with_capacity(k + 2, 0, instruction_capacity, Param::Float(0.0))?;
+
+        let controls_map: Vec<Qubit> = (0..k).map(Qubit).collect();
+
+        // The steps below follow the base (clean) construction of Fig. 3a in [1].
+        // Step 1 (up ladder), part 1: turn the ancilla into a "conditionally clean" qubit
+        // holding AND(control_0, control_1) — the first gate of Fig. 3a's "up" ladder.
+        // RCCX is used (rather than CCX) because its stray relative phase is harmless:
+        // it will cancel against the same RCCX's inverse later.
+        circuit.rccx(0, 1, ancilla)?;
+        // Step 1 (up ladder), part 2, and Step 2 (down ladder): fold in the remaining
+        // controls so that `final_ctrl` ends up holding AND(control_2, ..., control_{k-1}).
+        circuit.compose(&ladder, &controls_map, &[])?;
+        // Step 3: the actual MCX action — flip the target iff the ancilla AND
+        // final_ctrl are both set, i.e. iff AND(control_0, ..., control_{k-1}) holds.
+        circuit.ccx(ancilla, final_ctrl, target)?;
+        // Step 4: undo Steps 1-2, restoring every control qubit and the ancilla
+        // to their original state (the ancilla ends back at |0> if it started there).
+        circuit.compose(&ladder_inv, &controls_map, &[])?;
+        circuit.rccx(0, 1, ancilla)?;
+
+        if !clean {
+            // Dirty ancilla: repeat the compute/uncompute sandwich above once more
+            // (toggle-detection) so that dependence on the ancilla's unknown initial
+            // state cancels out.
+            circuit.compose(&ladder, &controls_map, &[])?;
+            circuit.ccx(ancilla, final_ctrl, target)?;
+            circuit.compose(&ladder_inv, &controls_map, &[])?;
+        }
+
+        Ok(circuit)
+    }
+}
+
+/// Builds the log-depth AND-folding ladder (Step 2 in Fig. 4b of [1]).
+///
+/// Reduces `num_controls` controls to a set of AND-flag qubits using a
+/// doubling-width tree of parallel X+RCCX gates. Qubits 0 and 1 must have
+/// already been primed by the caller via `rccx(0, 1, ancilla0)`.
+///
+/// Returns `(ladder_circuit, leftover_ctrls)`: the ladder gates and the qubit
+/// indices to feed into the final CCX or 1-ancilla MCX. Order of
+/// `leftover_ctrls` is not significant (MCX is symmetric in its controls).
+///
+/// # References
+///
+/// 1. Khattar and Gidney, *Rise of conditionally clean ancillae for optimizing quantum circuits*,
+///    [arXiv:2407.17966](https://arxiv.org/abs/2407.17966).
+fn log_depth_ladder_ops(num_controls: u32) -> Result<(CircuitData, Vec<u32>), CircuitDataError> {
+    if num_controls < 3 {
+        return Err(QiskitError::new_err("log_depth_ladder_ops requires >= 3 controls.").into());
+    }
+
+    // Rough upper bound: at most (num_controls-1) X+RCCX pairs across all rounds, 10 gates each.
+    let mut qc = CircuitData::with_capacity(
+        num_controls,
+        0,
+        10 * (num_controls - 1) as usize,
+        Param::Float(0.0),
+    )?;
+
+    // Qubits 0 and 1 seed the pool: the caller's priming RCCX already consumed them,
+    // so they are free to be overwritten as AND-flag targets.
+    let mut ancilla_pool: Vec<u32> = vec![0, 1];
+    // Controls not yet folded into the AND-tree.
+    let mut unprocessed: Vec<u32> = (2..num_controls).collect();
+    // Single survivors from each round — passed to the caller's final gate.
+    let mut leftover_ctrls: Vec<u32> = Vec::new();
+    // Hoisted out of the outer loop to reuse the allocation across rounds.
+    let mut newly_freed: Vec<u32> = Vec::new();
+
+    // --- Outer loop: one round per batch of unprocessed controls -----------
+    // Each round pulls a batch whose size fits the current ancilla pool (+1),
+    // folds it entirely via the inner loop, then doubles the pool.
+    // Loop exits when at most one unprocessed control remains (handled below).
+    while unprocessed.len() > 1 {
+        // Batch size = pool + 1 ensures the inner tree fully collapses to one survivor.
+        let batch_size = (ancilla_pool.len() + 1).min(unprocessed.len());
+        let mut batch: Vec<u32> = unprocessed.drain(..batch_size).collect();
+
+        // Track controls consumed by this batch; they rejoin the pool after the inner loop.
+        newly_freed.clear();
+
+        // --- Inner loop: parallel X+RCCX tree, halving `batch` each step ---
+        // Each step pairs up the elements of `batch` and writes their AND-flags
+        // into the last `pair_count` entries of `ancilla_pool`. After the step,
+        // `batch` is updated to hold the AND-flag target qubits (plus the
+        // odd-one-out if any), ready to be paired again in the next step.
+        while batch.len() > 1 {
+            let pair_count = batch.len() / 2;
+            // `leftover`: 0 or 1 element that cannot be paired this step.
+            let leftover = batch.len() % 2;
+            let pool_len = ancilla_pool.len();
+
+            let ctrl_a = &batch[leftover..leftover + pair_count];
+            let ctrl_b = &batch[leftover + pair_count..];
+            let targets = &ancilla_pool[pool_len - pair_count..];
+
+            // Phase 1: X on every target (|0⟩ → |1⟩) so the RCCX relative phase
+            // is correct for the "conditionally clean ancilla" construction.
+            for &t in targets {
+                qc.x(t)?;
+            }
+            // Phase 2: RCCX(aᵢ, bᵢ, tᵢ) in parallel — writes AND(aᵢ, bᵢ) into tᵢ.
+            for i in 0..pair_count {
+                qc.rccx(ctrl_a[i], ctrl_b[i], targets[i])?;
+            }
+
+            // Record consumed controls; they'll rejoin ancilla_pool after this inner loop.
+            newly_freed.extend_from_slice(&batch[leftover..]);
+
+            batch[leftover..leftover + pair_count].copy_from_slice(targets);
+            batch.truncate(leftover + pair_count);
+            batch.sort_unstable();
+            ancilla_pool.truncate(pool_len - pair_count);
+        }
+
+        // `batch` is now one element: the AND-flag for all controls in this batch.
+        // Return consumed controls to the pool (order irrelevant — AND is commutative).
+        ancilla_pool.extend_from_slice(&newly_freed);
+        ancilla_pool.sort_unstable();
+        leftover_ctrls.extend_from_slice(&batch);
+    }
+
+    // Odd leftover control (if any) passes directly to the caller's final gate.
+    leftover_ctrls.extend_from_slice(&unprocessed);
+    leftover_ctrls.sort_unstable();
+    Ok((qc, leftover_ctrls))
+}
+
+/// Flips `target` iff AND(ancilla0, leftover_ctrls...) holds (Step 3 of Fig. 4b in [1]).
+///
+/// Uses a single CCX when `leftover_ctrls` has one element, or a precomputed
+/// `synth_mcx_1_kg24` circuit + qubit map (`mid_mcx`) for two or more.
+/// Called once per pass (twice in the dirty-ancilla case).
+///
+/// [1]: Khattar and Gidney, arXiv:2407.17966
+fn synth_mcx_2_finish(
+    circuit: &mut CircuitData,
+    ancilla0: u32,
+    target: u32,
+    leftover_ctrls: &[u32],
+    mid_mcx: Option<(&CircuitData, &[Qubit])>,
+) -> Result<(), CircuitDataError> {
+    if leftover_ctrls.len() == 1 {
+        // Single leftover: CCX(ancilla0, leftover_ctrl, target).
+        circuit.ccx(ancilla0, leftover_ctrls[0], target)
+    } else {
+        let (mid_mcx, qubits_map) =
+            mid_mcx.expect("mid_mcx must be precomputed when leftover_ctrls.len() > 1");
+        circuit.compose(mid_mcx, qubits_map, &[])
+    }
+}
+
+/// Synthesize a multi-controlled X gate with :math:`k\ge 3` controls using :math:`2`
+/// ancillary qubits, producing a circuit with depth :math:`O(\log k)`, as described in
+/// Sec. 5.2/5.4 of [1]. For :math:`k\le 2`, the returned circuit consists of a single X,
+/// CX, or CCX gate (corresponding to :math:`k = 0, 1, 2`, respectively) and uses no
+/// ancillary qubits.
+///
+/// # Arguments
+/// - num_controls: the number of control qubits.
+/// - clean: if `true`, both ancillas are clean; if `false`, both are dirty.
+///
+/// # References
+///
+/// 1. Khattar and Gidney, *Rise of conditionally clean ancillae for optimizing quantum circuits*,
+///    [arXiv:2407.17966](https://arxiv.org/abs/2407.17966).
+pub fn synth_mcx_2_kg24(num_controls: usize, clean: bool) -> Result<CircuitData, CircuitDataError> {
+    if num_controls <= 2 {
+        synth_mcx_explicit(num_controls)
+    } else {
+        // --- General case: k >= 3 controls, 2 ancillas ---
+        let k = num_controls as u32;
+        let target = k;
+        let ancilla0 = k + 1;
+        let ancilla1 = k + 2;
+
+        let controls_map: Vec<Qubit> = (0..k).map(Qubit).collect();
+
+        let (ladder, leftover_ctrls) = log_depth_ladder_ops(k)?;
+        // Precompute once; the dirty-ancilla case reuses it for the second pass.
+        let ladder_inv = ladder.inverse()?;
+
+        // Precompute mid-MCX and its qubit map together once; reused for both
+        // passes in the dirty case. clean=true: ancilla1 is fully uncomputed
+        // per pass. None → a single CCX suffices instead.
+        let mid_mcx_and_map: Option<(CircuitData, Vec<Qubit>)> = if leftover_ctrls.len() > 1 {
+            let circuit = synth_mcx_1_kg24(leftover_ctrls.len() + 1, true)?;
+            let mut qubits_map: Vec<Qubit> = Vec::with_capacity(leftover_ctrls.len() + 3);
+            qubits_map.push(Qubit(ancilla0));
+            qubits_map.extend(leftover_ctrls.iter().map(|&c| Qubit(c)));
+            qubits_map.push(Qubit(target));
+            qubits_map.push(Qubit(ancilla1));
+            Some((circuit, qubits_map))
+        } else {
+            None
+        };
+        let mid_mcx_for_finish = mid_mcx_and_map
+            .as_ref()
+            .map(|(circuit, qubits_map)| (circuit, qubits_map.as_slice()));
+
+        // num_passes=1 for clean ancilla, 2 for dirty (repeat to cancel initial-state dependence).
+        // Fixed costs: 2 RCCX (9 gates each) + num_passes * (2 * ladder + finish step).
+        // finish_len = 15 when leftover_ctrls.len() == 1 (one CCX).
+        let finish_len = mid_mcx_and_map.as_ref().map_or(15, |(m, _)| m.data().len());
+        let num_passes = if clean { 1 } else { 2 };
+        let instruction_capacity = 2 * 9 + num_passes * (2 * ladder.data().len() + finish_len);
+        let mut circuit =
+            CircuitData::with_capacity(k + 3, 0, instruction_capacity, Param::Float(0.0))?;
+
+        // The steps below follow Fig. 4b in [1].
+        // Step 1: prime -- turn ancilla0 into a conditionally clean qubit holding
+        // AND(control_0, control_1). RCCX is used (rather than CCX) because its stray
+        // relative phase is harmless: it will cancel against the same RCCX's inverse
+        // in step 5.
+        circuit.rccx(0, 1, ancilla0)?;
+        // Step 2: fold -- log-depth AND-folding ladder over the remaining controls.
+        circuit.compose(&ladder, &controls_map, &[])?;
+        // Step 3: finish -- flip the target iff AND(all k controls) holds.
+        synth_mcx_2_finish(
+            &mut circuit,
+            ancilla0,
+            target,
+            &leftover_ctrls,
+            mid_mcx_for_finish,
+        )?;
+        // Step 4: unfold -- undo step 2, restoring all control qubits.
+        circuit.compose(&ladder_inv, &controls_map, &[])?;
+        // Step 5: unprime -- undo step 1, restoring ancilla0 to its initial state.
+        circuit.rccx(0, 1, ancilla0)?;
+
+        if !clean {
+            // Dirty ancilla: repeat the compute/uncompute sandwich (toggle-detection) to
+            // cancel dependence on the ancillas' initial state. Prime/unprime happen only
+            // once (matches synth_mcx_1_kg24's dirty-ancilla pattern).
+            circuit.compose(&ladder, &controls_map, &[])?;
+            synth_mcx_2_finish(
+                &mut circuit,
+                ancilla0,
+                target,
+                &leftover_ctrls,
+                mid_mcx_for_finish,
+            )?;
+            circuit.compose(&ladder_inv, &controls_map, &[])?;
+        }
+
+        Ok(circuit)
+    }
+}
+
+/// Synthesize a multi-controlled X gate with :math:`k` controls using no auxiliary qubits via the relation
+/// MCX = H · MCP(π) · H.
+/// For details on MCP synthesis see Python's `synth_mcp_noaux_default` in `qiskit/synthesis/multi_controlled/mcp_synthesis.py`.
 ///
 /// # Arguments
 /// - num_controls: the number of control qubits.
 ///
 /// # Returns
 ///
-/// A quantum circuit with :math:`k + 1` qubits. The number of CX-gates is
-/// quadratic in :math:`k`.
+/// A quantum circuit with :math:`k + 1` qubits.
 ///
-/// # References
-///
-/// 1. Vale et. al., *Circuit Decomposition of Multicontrolled Special Unitary
-///    Single-Qubit Gates*, IEEE TCAD 43(3) (2024),
-///    [arXiv:2302.06377] (https://arxiv.org/abs/2302.06377).
-pub fn synth_mcx_noaux_v24(
+#[allow(dead_code)]
+pub fn synth_mcx_mcp_noaux(
     py: Python,
     num_controls: usize,
 ) -> Result<CircuitData, CircuitDataError> {
-    if num_controls == 0 {
-        let mut circuit = CircuitData::with_capacity(1, 0, 1, Param::Float(0.0))?;
-        circuit.x(0)?;
-        Ok(circuit)
-    } else if num_controls == 1 {
-        let mut circuit = CircuitData::with_capacity(2, 0, 1, Param::Float(0.0))?;
-        circuit.cx(0, 1)?;
-        Ok(circuit)
-    } else if num_controls == 2 {
-        Ok(ccx())
-    } else if num_controls == 3 {
-        Ok(c3x().into())
-    } else if num_controls == 4 {
-        c4x().map(Into::into)
+    if num_controls <= 4 {
+        synth_mcx_explicit(num_controls)
     } else {
         let num_qubits = (num_controls + 1) as u32;
         let target = num_controls as u32;
@@ -440,17 +776,17 @@ pub fn synth_mcx_noaux_v24(
             .call1((PI, num_controls))
             .map_err(CircuitDataError::ErrorFromPython)?;
 
-        let as_py_gate = PyOperationTypes::Gate(PyInstruction {
+        let inst = PyInstruction {
             qubits: num_qubits,
             clbits: 0,
             params: 1,
             op_name: "mcphase".to_string(),
-            instruction: mcphase_gate.into(),
-        });
-
+            ob: mcphase_gate.into(),
+            kind: PyOpKind::Gate,
+        };
         circuit.push_packed_operation(
-            as_py_gate.into(),
-            None,
+            inst.into(),
+            Some(Parameters::Params(smallvec::smallvec![Param::Float(PI)])),
             &(0..num_qubits).map(Qubit).collect::<Vec<Qubit>>(),
             &[],
         )?;
@@ -459,6 +795,379 @@ pub fn synth_mcx_noaux_v24(
 
         Ok(circuit)
     }
+}
+
+/// Synthesize a multi-controlled X gate with :math:`k` controls using a single clean
+/// ancillary qubit, by Barenco et al. [1] and Iten et al. [2].
+///
+/// For :math:`k \ge 5` the method uses 1 clean ancillary qubit, producing a circuit with
+/// :math:`k + 2` qubits and at most :math:`16 * k - 24` CX gates. For :math:`k \le 4`
+/// explicit efficient circuits that require no ancillary qubits are used instead.
+///
+/// # Arguments
+/// - num_controls: the number of control qubits.
+///
+/// # Returns
+///
+/// The synthesized quantum circuit.
+///
+/// # References
+///
+/// 1. Barenco et al., *Elementary gates for quantum computation*, Phys. Rev. A52 3457 (1995),
+///    [arXiv:quant-ph/9503016] (https://arxiv.org/abs/quant-ph/9503016).
+/// 2. Iten et al., *Quantum Circuits for Isometries*, Phys. Rev. A 93, 032318 (2016),
+///    [arXiv:1501.06911] (https://arxiv.org/abs/1501.06911).
+pub fn synth_mcx_1_clean_b95(num_controls: usize) -> Result<CircuitData, CircuitDataError> {
+    if num_controls <= 4 {
+        synth_mcx_explicit(num_controls)
+    } else {
+        // k >= 5: 1-clean-ancilla construction (Barenco et al. 1995, Lemma 7.3)
+        // decompose the gate into two halves and add 2 qubits, target and ancilla
+        let nc = num_controls as u32;
+        let num_qubits = nc + 2;
+        let q_ancilla = num_qubits - 1;
+        let q_target = num_qubits - 2;
+        let middle = (nc + 1).div_ceil(2);
+        let nc2: u32 = nc - middle + 1; // second half, plus the ancilla
+
+        // Qubit layout (num_controls + 2 qubits total):
+        //   nc = num_controls
+        //   [0 .. middle-1]   controls1 (first half)
+        //   [middle .. nc-1]  controls2 (second half)
+        //   [nc]              target
+        //   [nc+1]            ancilla (clean)
+        //
+        // mcx1: controls1 -> ancilla , up to relative phase
+        //   drives the ancilla using the first-half controls;
+        //   borrows second-half control qubits as dirty ancillas.
+        //
+        // mcx2: controls2, ancilla -> target, exact
+        //   drives the target using second-half controls + ancilla;
+        //   borrows first-half control qubits as dirty ancillas.
+
+        let mcx1 = synth_mcx_n_dirty_i15(middle as usize, true, false)?;
+        let mcx2 = synth_mcx_n_dirty_i15(nc2 as usize, false, false)?;
+
+        let num_dirty1 = (mcx1.num_qubits() as u32) - middle - 1;
+        let qubits1: Vec<Qubit> = (0..middle)
+            .chain([q_ancilla])
+            .chain(middle..middle + num_dirty1)
+            .map(Qubit)
+            .collect();
+
+        let num_dirty2 = (mcx2.num_qubits() as u32) - nc2 - 1;
+        let qubits2: Vec<Qubit> = (middle..nc)
+            .chain([q_ancilla, q_target])
+            .chain(0..num_dirty2)
+            .map(Qubit)
+            .collect();
+
+        // Compose pattern: mcx1 · mcx2 · mcx1† · mcx2  (Lemma 7.3 [1], Lemma 9 [2]).
+        // mcx1/mcx1† are synthesized up to relative phase (Lemma 7 [2]): the relative
+        // phase commutes with mcx2 and cancels between mcx1 and mcx1†. mcx2 must be exact.
+        let mut circuit: CircuitData =
+            CircuitData::with_capacity(num_qubits, 0, 0, Param::Float(0.0))?;
+        let mcx1_inv = mcx1.inverse()?;
+        circuit.compose(&mcx1, &qubits1, &[])?;
+        circuit.compose(&mcx2, &qubits2, &[])?;
+        circuit.compose(&mcx1_inv, &qubits1, &[])?;
+        circuit.compose(&mcx2, &qubits2, &[])?;
+
+        Ok(circuit)
+    }
+}
+
+/// The short relative-phase Toffoli ``RTS`` from Maslov (2016), Figure 3, gates 2--6.
+fn rts() -> Result<CircuitData, CircuitDataError> {
+    let mut circuit = CircuitData::with_capacity(3, 0, 5, Param::Float(0.0))?;
+    add_action_gadget(&mut circuit, 1, 0, 2)?;
+    Ok(circuit)
+}
+
+/// The short special-form relative-phase Toffoli ``SRTS`` from Maslov (2016),
+/// circuit (3), dashed.
+fn srts() -> Result<CircuitData, CircuitDataError> {
+    let mut circuit = CircuitData::with_capacity(3, 0, 9, Param::Float(0.0))?;
+    circuit.h(2)?;
+    circuit.cx(2, 1)?;
+    circuit.tdg(1)?;
+    circuit.cx(0, 1)?;
+    circuit.t(1)?;
+    circuit.cx(2, 1)?;
+    circuit.tdg(1)?;
+    circuit.cx(0, 1)?;
+    circuit.t(1)?;
+    Ok(circuit)
+}
+
+/// The short relative-phase four-qubit Toffoli ``RT4S`` from Maslov (2016),
+/// Figure 4, dashed.
+fn rt4s() -> Result<CircuitData, CircuitDataError> {
+    let mut circuit = CircuitData::with_capacity(4, 0, 10, Param::Float(0.0))?;
+    circuit.h(3)?;
+    circuit.t(3)?;
+    circuit.cx(2, 3)?;
+    circuit.tdg(3)?;
+    circuit.h(3)?;
+    circuit.cx(0, 3)?;
+    circuit.t(3)?;
+    circuit.cx(1, 3)?;
+    circuit.tdg(3)?;
+    circuit.cx(0, 3)?;
+    Ok(circuit)
+}
+
+/// Synthesize a multi-controlled X gate with :math:`k\ge 3` controls, following
+/// Proposition 4 of Maslov (2016) [1].
+///
+/// The method uses :math:`\lceil(k - 2) / 2\rceil` clean ancillary qubits and produces a
+/// circuit with :math:`k + 1 + \lceil(k - 2) / 2\rceil` qubits, :math:`8 * k - 9` T gates,
+/// and :math:`6 * k - 6` CX gates.
+/// For :math:`k\le 2`, the returned circuit consists of a single X, CX or CCX gate
+/// (corresponding to :math:`k = 0, 1, 2`, respectively) and uses no ancillary qubits.
+///
+/// # Arguments
+/// - num_controls: the number of control qubits.
+///
+/// # Returns
+/// The synthesized quantum circuit.
+///
+/// # References
+///
+/// 1. D. Maslov, Phys. Rev. A 93, 022311 (2016), "Advantages of using
+///    relative-phase Toffoli gates with an application to multiple control Toffoli optimization",
+///    [arXiv:1508.03273](https://arxiv.org/abs/1508.03273).
+pub fn synth_mcx_n_clean_m15(num_controls: usize) -> Result<CircuitData, CircuitDataError> {
+    if num_controls <= 2 {
+        synth_mcx_explicit(num_controls)
+    } else {
+        let num_ancillas = (num_controls - 1) / 2;
+        let num_qubits = num_controls + 1 + num_ancillas;
+        let num_instructions = 18 * num_controls - 21;
+        let mut circuit =
+            CircuitData::with_capacity(num_qubits as u32, 0, num_instructions, Param::Float(0.0))?;
+        let target = num_controls as u32;
+        let first_ancilla = (num_controls + 1) as u32;
+        let rccx_gate = rccx();
+        let rc3x_gate = rc3x();
+        let rc3x_inverse = rc3x_gate.inverse()?;
+
+        // Proposition 4 starts with RT3 for an odd number of controls and RT4 for an
+        // even number.
+        let first_new_control = if num_controls % 2 == 1 {
+            circuit.compose(&rccx_gate, &[Qubit(0), Qubit(1), Qubit(first_ancilla)], &[])?;
+            2
+        } else {
+            circuit.compose(
+                &rc3x_gate,
+                &[Qubit(0), Qubit(1), Qubit(2), Qubit(first_ancilla)],
+                &[],
+            )?;
+            3
+        };
+
+        // Each subsequent RT4 absorbs two more controls into one clean ancilla.
+        for i in 1..num_ancillas {
+            let control = first_new_control + 2 * (i - 1);
+            circuit.compose(
+                &rc3x_gate,
+                &[
+                    Qubit((num_controls + i) as u32),
+                    Qubit(control as u32),
+                    Qubit((control + 1) as u32),
+                    Qubit((num_controls + 1 + i) as u32),
+                ],
+                &[],
+            )?;
+        }
+
+        let final_control = first_new_control + 2 * (num_ancillas - 1);
+        debug_assert_eq!(final_control, num_controls - 1);
+        circuit.ccx(
+            (num_controls + num_ancillas) as u32,
+            final_control as u32,
+            target,
+        )?;
+
+        for i in (1..num_ancillas).rev() {
+            let control = first_new_control + 2 * (i - 1);
+            circuit.compose(
+                &rc3x_inverse,
+                &[
+                    Qubit((num_controls + i) as u32),
+                    Qubit(control as u32),
+                    Qubit((control + 1) as u32),
+                    Qubit((num_controls + 1 + i) as u32),
+                ],
+                &[],
+            )?;
+        }
+
+        if num_controls % 2 == 1 {
+            // Inverse RCCX (RCCX is self-inverse).
+            circuit.compose(&rccx_gate, &[Qubit(0), Qubit(1), Qubit(first_ancilla)], &[])?;
+        } else {
+            circuit.compose(
+                &rc3x_inverse,
+                &[Qubit(0), Qubit(1), Qubit(2), Qubit(first_ancilla)],
+                &[],
+            )?;
+        }
+
+        Ok(circuit)
+    }
+}
+
+/// Synthesize a multi-controlled X gate using dirty ancillary qubits, following
+/// circuit (5) for three controls and Proposition 5 for four or more controls in
+/// Maslov (2016).
+///
+/// For three controls the construction uses one dirty ancilla and has 16 T gates and 14 CX gates.
+/// For :math:`k \ge 4` controls it uses :math:`\lceil(k - 2) / 2\rceil` dirty ancillas and has
+/// :math:`8k - 8` T gates and :math:`8k - 12` CX gates.
+///
+/// # References
+///
+/// 1. D. Maslov, *Advantages of using relative-phase Toffoli gates with an application to
+///    multiple control Toffoli optimization*, Phys. Rev. A 93, 022311 (2016),
+///    [arXiv:1508.03273](https://arxiv.org/abs/1508.03273).
+pub fn synth_mcx_n_dirty_m15(num_controls: usize) -> Result<CircuitData, CircuitDataError> {
+    if num_controls <= 2 {
+        return synth_mcx_explicit(num_controls);
+    }
+
+    let srts_gate = srts()?;
+    let srts_inverse = srts_gate.inverse()?;
+    let rtl_gate = rccx();
+
+    if num_controls == 3 {
+        let mut circuit = CircuitData::with_capacity(5, 0, 36, Param::Float(0.0))?;
+        circuit.compose(&srts_gate, &[Qubit(2), Qubit(4), Qubit(3)], &[])?;
+        circuit.compose(&rtl_gate, &[Qubit(0), Qubit(1), Qubit(4)], &[])?;
+        circuit.compose(&srts_inverse, &[Qubit(2), Qubit(4), Qubit(3)], &[])?;
+        // Inverse RCCX (RCCX is self-inverse).
+        circuit.compose(&rtl_gate, &[Qubit(0), Qubit(1), Qubit(4)], &[])?;
+        return Ok(circuit);
+    }
+
+    // Maslov numbers the n-1 controls 1..n-1, the n-3 initial ancillas n..2n-4,
+    // and the target 2n-3. The RT4 replacements eliminate ancillas n, n+2, ...;
+    // compact the remaining paper indices into Qiskit's controls-target-ancillas order.
+    let n = num_controls + 1;
+    let map_qubit_idx = |original: usize| {
+        let compact = if original < n {
+            original - 1
+        } else if original == 2 * n - 3 {
+            num_controls
+        } else {
+            num_controls + 1 + (original - n) / 2
+        };
+        Qubit(compact as u32)
+    };
+
+    let num_qubits = num_controls + 1 + (num_controls - 1) / 2;
+    let mut circuit = CircuitData::with_capacity(num_qubits as u32, 0, 0, Param::Float(0.0))?;
+    let rts_gate = rts()?;
+    let rts_inverse = rts_gate.inverse()?;
+    let rt4s_gate = rt4s()?;
+    let rt4s_inverse = rt4s_gate.inverse()?;
+    let rt4l_gate = rc3x();
+    let rt4l_inverse = rt4l_gate.inverse()?;
+
+    circuit.compose(
+        &srts_gate,
+        &[
+            map_qubit_idx(n - 1),
+            map_qubit_idx(2 * n - 4),
+            map_qubit_idx(2 * n - 3),
+        ],
+        &[],
+    )?;
+
+    for forward_pass in [true, false] {
+        // Items 2 and 6 of Proposition 5, with adjacent RTS pairs replaced by RT4S.
+        let first_unpaired = if n.is_multiple_of(2) {
+            circuit.compose(
+                &rts_gate,
+                &[
+                    map_qubit_idx(2 * n - 5),
+                    map_qubit_idx(n - 2),
+                    map_qubit_idx(2 * n - 4),
+                ],
+                &[],
+            )?;
+            2
+        } else {
+            1
+        };
+        for k in (first_unpaired..n - 4).step_by(2) {
+            circuit.compose(
+                &rt4s_gate,
+                &[
+                    map_qubit_idx(2 * n - 5 - k),
+                    map_qubit_idx(n - 2 - k),
+                    map_qubit_idx(n - 1 - k),
+                    map_qubit_idx(2 * n - 3 - k),
+                ],
+                &[],
+            )?;
+        }
+
+        circuit.compose(
+            if forward_pass {
+                &rt4l_gate
+            } else {
+                &rt4l_inverse
+            },
+            &[
+                map_qubit_idx(1),
+                map_qubit_idx(2),
+                map_qubit_idx(3),
+                map_qubit_idx(n + 1),
+            ],
+            &[],
+        )?;
+
+        // Items 4 and 8, using inverses of the same short relative-phase blocks.
+        for k in (2..n - 4).step_by(2) {
+            circuit.compose(
+                &rt4s_inverse,
+                &[
+                    map_qubit_idx(n - 1 + k),
+                    map_qubit_idx(k + 2),
+                    map_qubit_idx(k + 3),
+                    map_qubit_idx(n + k + 1),
+                ],
+                &[],
+            )?;
+        }
+        if n.is_multiple_of(2) {
+            let k = n - 4;
+            circuit.compose(
+                &rts_inverse,
+                &[
+                    map_qubit_idx(n - 1 + k),
+                    map_qubit_idx(k + 2),
+                    map_qubit_idx(n + k),
+                ],
+                &[],
+            )?;
+        }
+
+        if forward_pass {
+            circuit.compose(
+                &srts_inverse,
+                &[
+                    map_qubit_idx(n - 1),
+                    map_qubit_idx(2 * n - 4),
+                    map_qubit_idx(2 * n - 3),
+                ],
+                &[],
+            )?;
+        }
+    }
+
+    Ok(circuit)
 }
 
 // The following synth_mcx_noaux_hp24 algorithm is based on the work by Huang and Palsberg.
@@ -889,16 +1598,12 @@ fn increment_2_dirty(n: u32, flag_add: bool) -> PyResult<CircuitData> {
 /// 1. Huang and Palsberg, *Compiling Conditional Quantum Gates without Using Helper Qubits*, PLDI (2024),
 ///    https://dl.acm.org/doi/10.1145/3656436.
 pub fn synth_mcx_noaux_hp24(num_controls: usize) -> PyResult<CircuitData> {
-    let n = num_controls + 1;
-
-    let mut circuit = CircuitData::with_capacity(n as u32, 0, 0, Param::Float(0.0))?;
-
-    // Handle small cases explicitly
-    if n == 1 {
-        circuit.x(0)?;
-    } else if n == 2 {
-        circuit.cx(0, 1)?;
+    // Handle small cases explicitly.
+    if num_controls <= 1 {
+        synth_mcx_explicit(num_controls).map_err(Into::into)
     } else {
+        let n: usize = num_controls + 1;
+        let mut circuit = CircuitData::with_capacity(n as u32, 0, 0, Param::Float(0.0))?;
         circuit.h(num_controls as u32)?;
 
         // The construction described in Fig.7 of the paper only works for even values of n.
@@ -962,17 +1667,337 @@ pub fn synth_mcx_noaux_hp24(num_controls: usize) -> PyResult<CircuitData> {
         }
 
         circuit.h(num_controls as u32)?;
+        Ok(circuit)
+    }
+}
+
+/// Synthesize a multi-controlled X gate with :math:`k` controls using the relation
+/// MCX = H · MCP(π) · H, where MCP is synthesized via `synth_mcp_noaux_sp22` [1][2].
+///
+/// Produces a quantum circuit with :math:`k + 1` qubits.
+/// The number of CX-gates is quadratic in :math:`k`.
+///
+/// # Arguments
+///
+/// - num_ctrl_qubits: The number of control qubits.
+///
+/// # Returns
+///
+/// The synthesized quantum circuit.
+///
+/// # References
+/// 1. A. J. da Silva and D. K. Park, *Linear-depth quantum circuits for multiqubit controlled gates*,
+///    [Phys. Rev. A 106, 042602](https://journals.aps.org/pra/abstract/10.1103/PhysRevA.106.042602).
+///
+/// 2. <https://github.com/qclib/qclib/blob/master/qclib/gates/ldmcu.py>
+pub fn synth_mcx_noaux_sp22(num_ctrl_qubits: usize) -> Result<CircuitData, CircuitDataError> {
+    if num_ctrl_qubits <= 4 {
+        synth_mcx_explicit(num_ctrl_qubits)
+    } else {
+        // 2n^2-2n+1 instructions from synth_mcp_noaux_sp22, plus 2 H gates wrapping it.
+        let num_instructions = 2 * num_ctrl_qubits * num_ctrl_qubits - 2 * num_ctrl_qubits + 3;
+        let mut circuit = CircuitData::with_capacity(
+            (num_ctrl_qubits + 1) as u32,
+            0,
+            num_instructions,
+            Param::Float(0.0),
+        )?;
+        circuit.h(num_ctrl_qubits as u32)?;
+        let pi_phase = Param::Float(PI);
+        // Adding MCP(π) on `circuit` which has target qubit at index `num_ctrl_qubits`.
+        // Instead of calling `synth_mcp_noaux_sp22`, we call its step functions directly. This avoids
+        // allocating and copying an intermediate circuit and is ~2x faster.
+        sp22::step_1(&mut circuit, &pi_phase, num_ctrl_qubits)?;
+        sp22::step_2(&mut circuit, &pi_phase, num_ctrl_qubits)?;
+        sp22::step_3(&mut circuit, num_ctrl_qubits)?;
+        sp22::step_4(&mut circuit, num_ctrl_qubits)?;
+        circuit.h(num_ctrl_qubits as u32)?;
+        Ok(circuit)
+    }
+}
+
+/// Synthesize multi-controlled X explicit gates with up to 4 control qubits.
+///
+/// # Arguments
+///
+/// - num_ctrl_qubits: The number of control qubits.
+///
+/// Panics if called with more than 4 control qubits.
+///
+/// # Returns
+///
+/// The synthesized quantum circuit.
+pub fn synth_mcx_explicit(num_ctrl_qubits: usize) -> Result<CircuitData, CircuitDataError> {
+    assert!(
+        num_ctrl_qubits <= 4,
+        "synth_mcx_explicit called with num_ctrl_qubits = {num_ctrl_qubits}, expected <= 4"
+    );
+    match num_ctrl_qubits {
+        0 => {
+            let mut circuit = CircuitData::with_capacity(1, 0, 1, Param::Float(0.0))?;
+            circuit.x(0)?;
+            Ok(circuit)
+        }
+        1 => {
+            let mut circuit = CircuitData::with_capacity(2, 0, 1, Param::Float(0.0))?;
+            circuit.cx(0, 1)?;
+            Ok(circuit)
+        }
+        2 => Ok(ccx()),
+        3 => Ok(c3x()),
+        4 => Ok(c4x()),
+        _ => unreachable!(),
+    }
+}
+
+// The following code (synth_mcp_noaux_sp22 and mod sp22) is a derivative work of qclib
+// (https://github.com/qclib/qclib/blob/master/qclib/gates/ldmcu.py).
+// Copyright 2021 qclib project. Licensed under the Apache License, Version 2.0.
+
+/// Synthesize a multi-controlled phase gate with :math:`n` controls based on the paper
+/// by da Silva et al. [1] and the implementation in qclib [2].
+///
+/// For :math:`n \ge 2`, the method produces a circuit with :math:`4n^2-4n+2` CX gates
+/// and requires :math:`O(n)` depth.
+///
+/// # Arguments
+///
+/// - num_ctrl_qubits: the number of control qubits.
+/// - phase: the phase angle for the multi-controlled phase gate.
+///
+/// # Returns
+///
+/// A quantum circuit implementing the multi-controlled phase gate with :math:`4n^2-4n+2` CX gates.
+///
+/// # References
+///
+/// 1. A. J. da Silva and D. K. Park, *Linear-depth quantum circuits for multiqubit controlled gates*,
+///    [Phys. Rev. A 106, 042602](https://journals.aps.org/pra/abstract/10.1103/PhysRevA.106.042602).
+///
+/// 2. <https://github.com/qclib/qclib/blob/master/qclib/gates/ldmcu.py>
+pub fn synth_mcp_noaux_sp22(
+    num_ctrl_qubits: usize,
+    phase: Param,
+) -> Result<CircuitData, CircuitDataError> {
+    // For n>1 steps 1-4 emit 2n-1 CP gates and 2(n-1)^2 CRX gates, i.e. 2n^2-2n+1 instructions
+    // in total (later each of which decomposes into two CX gates, giving total of 4n^2-4n+2 of the
+    // doc comment).
+    let num_instructions = if num_ctrl_qubits < 2 {
+        1
+    } else {
+        2 * num_ctrl_qubits * num_ctrl_qubits - 2 * num_ctrl_qubits + 1
+    };
+    let mut circuit = CircuitData::with_capacity(
+        (num_ctrl_qubits + 1) as u32,
+        0,
+        num_instructions,
+        Param::Float(0.0),
+    )?;
+
+    if num_ctrl_qubits == 0 {
+        circuit.p(phase, 0)?;
+    } else if num_ctrl_qubits == 1 {
+        circuit.cp(phase, 0, 1)?;
+    } else {
+        sp22::step_1(&mut circuit, &phase, num_ctrl_qubits)?;
+        sp22::step_2(&mut circuit, &phase, num_ctrl_qubits)?;
+        sp22::step_3(&mut circuit, num_ctrl_qubits)?;
+        sp22::step_4(&mut circuit, num_ctrl_qubits)?;
+    }
+    Ok(circuit)
+}
+
+mod sp22 {
+    use std::f64::consts::PI;
+
+    use qiskit_circuit::circuit_data::{CircuitData, CircuitDataError};
+    use qiskit_circuit::operations::{Param, multiply_param};
+
+    use super::CircuitDataForSynthesis;
+
+    /// Returns all `(control, target)` index pairs with `0 <= control < target < n_qubits`,
+    /// sorted by `control + target` descending.
+    fn pairs_high_sum_first(n_qubits: usize) -> Vec<(usize, usize)> {
+        let mut pairs: Vec<(usize, usize)> = (0..n_qubits)
+            .flat_map(|target| (0..target).map(move |control| (control, target)))
+            .collect();
+        pairs.sort_by_key(|a| std::cmp::Reverse(a.0 + a.1));
+        pairs
     }
 
-    Ok(circuit)
+    /// Returns all `(control, target)` index pairs with `1 <= control < target < n_qubits`,
+    /// sorted by `control + target` ascending.
+    fn pairs_low_sum_first(n_qubits: usize) -> Vec<(usize, usize)> {
+        let mut pairs: Vec<(usize, usize)> = (1..n_qubits)
+            .flat_map(|target| (1..target).map(move |control| (control, target)))
+            .collect();
+        pairs.sort_by_key(|a| a.0 + a.1);
+        pairs
+    }
+
+    /// Returns `2^exponent` where `exponent = (target - control) - 1` if `control == 0`,
+    /// or `(target - control)` otherwise. This is the divisor of the fractional angle
+    /// (`φ / divisor` for CP gates, `π / divisor` for CRX gates) applied to each qubit pair.
+    /// Uses `f64::exp2` rather than a bit shift to avoid overflow for `n > 64` controls.
+    /// Note that target > control by design, no need to assert for.
+    fn angle_divisor(control: usize, target: usize) -> f64 {
+        let exponent = if control == 0 {
+            target - control - 1
+        } else {
+            target - control
+        };
+        (exponent as f64).exp2()
+    }
+
+    /// SP22 Step 1 — forward phase accumulation on controls and target.
+    ///
+    /// Iterates over all pairs `0 <= c < t <= num_ctrl_qubits`, high-sum first.
+    /// Emits CP(+φ/divisor, c, t) when `t` is the target qubit, CRX(+π/divisor, c, t) otherwise.
+    /// The CP gates accumulate phase on the target; the CRX gates entangle the controls
+    /// so that the phases cancel for all input states except |11…1⟩.
+    /// Gate count: :math:`n` CP and :math:`n(n-1)/2` CRX.
+    pub fn step_1(
+        circuit: &mut CircuitData,
+        phi: &Param,
+        num_ctrl_qubits: usize,
+    ) -> Result<(), CircuitDataError> {
+        for (control, target) in pairs_high_sum_first(num_ctrl_qubits + 1) {
+            let divisor = angle_divisor(control, target);
+            if target == num_ctrl_qubits {
+                circuit.cp(
+                    multiply_param(phi, 1.0 / divisor),
+                    control as u32,
+                    target as u32,
+                )?;
+            } else {
+                circuit.crx(PI / divisor, control as u32, target as u32)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// SP22 Step 2 — reverse sweep on controls and target.
+    ///
+    /// Iterates over all pairs `1 <= c < t <= num_ctrl_qubits`, low-sum first.
+    /// Emits CP(−φ/divisor, c, t) when `t` is the target qubit, CRX(−π/divisor, c, t) otherwise.
+    /// Mirrors step 1 in reverse order to complete the phase accumulation pattern.
+    /// Gate count: :math:`n-1` CP and :math:`(n-1)(n-2)/2` CRX.
+    pub fn step_2(
+        circuit: &mut CircuitData,
+        phi: &Param,
+        num_ctrl_qubits: usize,
+    ) -> Result<(), CircuitDataError> {
+        for (control, target) in pairs_low_sum_first(num_ctrl_qubits + 1) {
+            let divisor = angle_divisor(control, target);
+            if target == num_ctrl_qubits {
+                circuit.cp(
+                    multiply_param(phi, -1.0 / divisor),
+                    control as u32,
+                    target as u32,
+                )?;
+            } else {
+                circuit.crx(-PI / divisor, control as u32, target as u32)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// SP22 Step 3 — uncomputation on controls only, forward order.
+    ///
+    /// Iterates over all pairs `0 <= c < t < num_ctrl_qubits`, high-sum first.
+    /// Emits CRX(−π/divisor, c, t) when `c == 0`, CRX(+π/divisor, c, t) otherwise.
+    /// The sign alternation here and in step 4 cancels the CRX entanglement from steps 1 and 2.
+    /// Gate count: :math:`n(n-1)/2` CRX.
+    pub fn step_3(
+        circuit: &mut CircuitData,
+        num_ctrl_qubits: usize,
+    ) -> Result<(), CircuitDataError> {
+        for (control, target) in pairs_high_sum_first(num_ctrl_qubits) {
+            let divisor = angle_divisor(control, target);
+            let sign = if control == 0 { -1.0 } else { 1.0 };
+            circuit.crx(sign * PI / divisor, control as u32, target as u32)?;
+        }
+        Ok(())
+    }
+
+    /// SP22 Step 4 — uncomputation on controls only, reverse order.
+    ///
+    /// Iterates over all pairs `1 <= c < t < num_ctrl_qubits`, low-sum first.
+    /// Emits CRX(−π/divisor, c, t) for all pairs (`c == 0` never occurs in this range).
+    /// Mirrors step 3 in reverse order to complete the uncomputation.
+    /// Gate count: :math:`(n-1)(n-2)/2` CRX.
+    pub fn step_4(
+        circuit: &mut CircuitData,
+        num_ctrl_qubits: usize,
+    ) -> Result<(), CircuitDataError> {
+        for (control, target) in pairs_low_sum_first(num_ctrl_qubits) {
+            let divisor = angle_divisor(control, target);
+            circuit.crx(-PI / divisor, control as u32, target as u32)?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(all(test, not(miri)))]
 mod test {
     use crate::matrix::sim::sim_unitary_circuit;
     use approx::abs_diff_eq;
+    use qiskit_circuit::circuit_data::CircuitData;
 
-    use super::{increment_n_dirty_large, increment_n_dirty_small};
+    use super::{
+        increment_n_dirty_large, increment_n_dirty_small, synth_mcx_n_clean_m15,
+        synth_mcx_n_dirty_m15,
+    };
+
+    fn assert_mcx(circuit: &CircuitData, num_controls: usize, clean_ancillas: bool) {
+        let unitary = sim_unitary_circuit(circuit).unwrap();
+        let control_mask = (1 << num_controls) - 1;
+        let target_mask = 1 << num_controls;
+        let columns = if clean_ancillas {
+            1 << (num_controls + 1)
+        } else {
+            unitary.ncols()
+        };
+
+        for column in 0..columns {
+            let expected_row = if column & control_mask == control_mask {
+                column ^ target_mask
+            } else {
+                column
+            };
+            for row in 0..unitary.nrows() {
+                let expected = if row == expected_row { 1.0 } else { 0.0 };
+                assert!(abs_diff_eq!(
+                    unitary[(row, column)].re,
+                    expected,
+                    epsilon = 1e-10
+                ));
+                assert!(abs_diff_eq!(
+                    unitary[(row, column)].im,
+                    0.0,
+                    epsilon = 1e-10
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn test_synth_mcx_n_clean_m15() {
+        // Exercise odd and even control counts, including an RT4 ladder with two ancillas.
+        for num_controls in 3..=6 {
+            let circuit = synth_mcx_n_clean_m15(num_controls).unwrap();
+            assert_mcx(&circuit, num_controls, true);
+        }
+    }
+
+    #[test]
+    fn test_synth_mcx_n_dirty_m15() {
+        // Exercise both the three-control special case and the general RT4 construction.
+        for num_controls in 3..=4 {
+            let circuit = synth_mcx_n_dirty_m15(num_controls).unwrap();
+            assert_mcx(&circuit, num_controls, false);
+        }
+    }
 
     #[test]
     fn test_increment_n_dirty() {

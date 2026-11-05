@@ -12,6 +12,8 @@
 """Circuit synthesizers and related classes for boolean expressions"""
 
 import itertools
+from math import pi
+
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import ZGate, XGate
 
@@ -81,11 +83,12 @@ def synth_phase_oracle_from_esop(esop, num_qubits):
     where 1 is the variable, 0 is negated variable and - is don't care
     """
     qc = QuantumCircuit(num_qubits)
-    clause_data = [
-        (zip(*[qubit_data for qubit_data in enumerate(clause) if qubit_data[1] != "-"]))
-        for clause in esop
-    ]
-    for qubit_indices, control_data in clause_data:
+    for clause in esop:
+        clause_data = [(index, bit) for index, bit in enumerate(clause) if bit != "-"]
+        if len(clause_data) == 0:
+            qc.global_phase += pi
+            continue
+        qubit_indices, control_data = zip(*clause_data)
         control_state = "".join(control_data)
         if len(control_state) == 1:  # single qubit; either Z or XZX
             if control_state == "0":
@@ -114,11 +117,12 @@ def synth_bit_oracle_from_esop(esop, num_qubits):
     """
     output_index = num_qubits - 1
     qc = QuantumCircuit(num_qubits)
-    clause_data = [
-        (zip(*[qubit_data for qubit_data in enumerate(clause) if qubit_data[1] != "-"]))
-        for clause in esop
-    ]
-    for qubit_indices, control_data in clause_data:
+    for clause in esop:
+        clause_data = [(index, bit) for index, bit in enumerate(clause) if bit != "-"]
+        if len(clause_data) == 0:
+            qc.x(output_index)
+            continue
+        qubit_indices, control_data = zip(*clause_data)
         control_state = "".join(control_data)
         # use custom controlled-X gate
         gate = XGate().control(len(qubit_indices), ctrl_state=control_state[::-1], annotated=False)

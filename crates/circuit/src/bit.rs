@@ -160,13 +160,7 @@ trait ManifestableBit: ShareableBit {
 ///     This class cannot be instantiated directly. Its only purpose is to allow generic type
 ///     checking for :class:`.Clbit` and :class:`.Qubit`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[pyclass(
-    subclass,
-    name = "Bit",
-    module = "qiskit.circuit",
-    frozen,
-    skip_from_py_object
-)]
+#[pyclass(subclass, name = "Bit", module = "qiskit.circuit", frozen)]
 pub struct PyBit;
 /// Implement a generic register.
 ///
@@ -179,8 +173,7 @@ pub struct PyBit;
     subclass,
     frozen,
     eq,
-    hash,
-    skip_from_py_object
+    hash
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct PyRegister;
@@ -433,7 +426,7 @@ macro_rules! create_bit_object {
 
         #[doc = concat!("A ", $bit_desc, ", which can be compared between different circuits.")]
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        #[pyclass(subclass, name=$pybit_name, module="qiskit.circuit", extends=PyBit, frozen, eq, hash, skip_from_py_object)]
+        #[pyclass(subclass, name=$pybit_name, module="qiskit.circuit", extends=PyBit, frozen, eq, hash)]
         pub struct $pybit_struct($bit_struct);
         #[pymethods]
         impl $pybit_struct {
@@ -443,24 +436,24 @@ macro_rules! create_bit_object {
             fn new(
                 register: Option<Bound<$pyreg_struct>>,
                 index: Option<u32>,
-            ) -> PyResult<(Self, PyBit)> {
-                match (register, index) {
+            ) -> PyResult<PyClassInitializer<Self>> {
+                let bit = match (register, index) {
                     (Some(register), Some(index)) => {
                         let register = &register.borrow().0;
-                        let bit = register.get(index as usize).ok_or_else(|| {
+                        register.get(index as usize).ok_or_else(|| {
                             PyIndexError::new_err(format!(
                                 "index {} out of range for size {}",
                                 index,
                                 register.len()
                             ))
-                        })?;
-                        Ok((Self(bit), PyBit))
+                        })?
                     }
-                    (None, None) => Ok((Self($bit_struct::new_anonymous()), PyBit)),
-                    _ => Err(PyTypeError::new_err(
+                    (None, None) => $bit_struct::new_anonymous(),
+                    _ => return Err(PyTypeError::new_err(
                         "either both 'register' and 'index' are provided, or neither are",
                     )),
-                }
+                };
+                Ok(PyClassInitializer::from(PyBit).add_subclass(Self(bit)))
             }
 
             fn __repr__(slf: Bound<Self>) -> PyResult<String> {
@@ -713,7 +706,7 @@ macro_rules! create_bit_object {
         }
 
         /// Implement a register.
-        #[pyclass(subclass, name=$pyreg_name, module="qiskit.circuit", extends=PyRegister, frozen, eq, hash, sequence, skip_from_py_object)]
+        #[pyclass(subclass, name=$pyreg_name, module="qiskit.circuit", extends=PyRegister, frozen, eq, hash, sequence)]
         #[derive(Clone, Debug, PartialEq, Eq, Hash)]
         pub struct $pyreg_struct($reg_struct);
 
@@ -746,7 +739,7 @@ macro_rules! create_bit_object {
                 size: Option<isize>,
                 name: Option<String>,
                 bits: Option<Vec<$bit_struct>>,
-            ) -> PyResult<(Self, PyRegister)> {
+            ) -> PyResult<PyClassInitializer<Self>> {
                 let name = name.unwrap_or_else(|| {
                     format!(
                         "{}{}",
@@ -754,8 +747,8 @@ macro_rules! create_bit_object {
                         $reg_struct::anonymous_instance_count().fetch_add(1, Ordering::Relaxed)
                     )
                 });
-                match (size, bits) {
-                    (None, None) | (Some(_), Some(_)) => Err(CircuitError::new_err(
+                let register = match (size, bits) {
+                    (None, None) | (Some(_), Some(_)) => return Err(CircuitError::new_err(
                         "Exactly one of the size or bits arguments can be provided.",
                     )),
                     (Some(size), None) => {
@@ -767,7 +760,7 @@ macro_rules! create_bit_object {
                         let Ok(size) = size.try_into() else {
                             return Err(CircuitError::new_err("Register size too large."));
                         };
-                        Ok((Self($reg_struct::new_owning(name, size)), PyRegister))
+                        $reg_struct::new_owning(name, size)
                     }
                     (None, Some(bits)) => {
                         if bits.iter().cloned().collect::<HashSet<_>>().len() != bits.len() {
@@ -775,9 +768,10 @@ macro_rules! create_bit_object {
                                 "Register bits must not be duplicated.",
                             ));
                         }
-                        Ok((Self($reg_struct::new_alias(Some(name), bits)), PyRegister))
+                        $reg_struct::new_alias(Some(name), bits)
                     }
-                }
+                };
+                Ok(PyClassInitializer::from(PyRegister).add_subclass(Self(register)))
             }
 
             /// The name of the register.
@@ -936,7 +930,7 @@ impl ShareableQubit {
 
 /// A qubit used as an ancilla.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[pyclass(name="AncillaQubit", module="qiskit.circuit", extends=PyQubit, frozen, skip_from_py_object)]
+#[pyclass(name="AncillaQubit", module="qiskit.circuit", extends=PyQubit, frozen)]
 pub struct PyAncillaQubit;
 #[pymethods]
 impl PyAncillaQubit {
@@ -1054,7 +1048,6 @@ impl QuantumRegister {
     module = "qiskit.circuit",
     frozen,
     extends=PyQuantumRegister,
-    skip_from_py_object,
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PyAncillaRegister;

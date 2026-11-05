@@ -1,0 +1,7 @@
+---
+performance:
+  - The :class:`.Optimize1qGatesDecomposition` transpiler pass, and its
+    C API functions :c:func:`qk_transpiler_pass_optimize_1q_sequences`
+    :c:func:`qk_transpiler_pass_standalone_optimize_1q_sequences`, are now
+    multithreaded which results in improved runtime performance. See
+    `#15567 <https://github.com/Qiskit/qiskit/pull/15567>`__ for more details.

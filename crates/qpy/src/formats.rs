@@ -16,41 +16,66 @@ use crate::expr::{read_expression, write_expression};
 use crate::params::ParameterType;
 use crate::value::{
     BitType, CircuitInstructionType, ExpressionType, ExpressionVarDeclaration, ModifierType,
-    QPYReadData, QPYWriteData, RegisterType, ValueType,
+    ProgramType, QPYReadData, QPYWriteData, RegisterType, SymbolicEncoding, ValueType,
 };
 use binrw::{BinRead, BinResult, BinWrite, Endian, binread, binrw, binwrite};
 use qiskit_circuit::classical::expr::Expr;
 use std::io::{Read, Seek, Write};
 use std::marker::PhantomData;
 
-/// The overall structure of the QPY data
+/// The QPY file header
+/// This is up-to-date with all the header data found in QPY13.
+/// Earlier versions were missing the `symbolic_encoding` and `type_key` fields
+/// The file header contains:
+/// 1) Every QPY file begins with "QISKIT" (in binary)
+/// 2) The QPY version.
+/// 3) The Qiskit version used to create the QPY file (major, minor, patch)
+/// 4) The number of programs in the file
+/// 5) The symbolic encoding type (for parameter expressions)
+/// An additional field, which in Python was not part of the header but came right after, was adjoined to the header:
+/// 6) The type of the programs stored in the file (a "program" is currently just a circuit; schedule is obsolete)
 
-// For now, the top-level is one circuit, and python handles the complete QPY file
-// Only QPY version 17 is currently supported
-
-// the main file structure:
-// 1) Header: Contains the global data such as name, number of qubits etc.
-// 2) Standalone vars: Contains the qiskit_circuit::Var elements used in expressions
-// 3) Annotation Headers: The annotation-related global data.
-// 4) Custom instructions: List of custom gates used in the circuits, e.g. gate with nonstandard control
-// 5) Instruction: The sequential list of gates in the circuit.
-// 6) Calibrations: Obsolete; this was pulse-related data. Here for backwards compatibility.
-// 7) Layout: The transpilation layout, if one exists (otherwise a dummy is used).
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
-#[brw(import (version: u32))]
+pub struct QPYFileHeader {
+    #[brw(magic = b"QISKIT")]
+    pub qpy_version: u8,
+    pub qiskit_version: (u8, u8, u8),
+    pub num_programs: u64,
+    /// Symbolic encoding type (for parameter expressions)
+    pub symbolic_encoding: SymbolicEncoding,
+    pub type_key: ProgramType,
+}
+
+// the main circuit data structure:
+// 1) Header: Contains the global data such as name, number of qubits etc.
+// 2) Standalone vars: Contains the qiskit_circuit::Var elements used in expressions
+// 3) Annotation Headers: The annotation-related global data.
+// 4) Parameter vectors (QPY 18+): the `ParameterVector`s that elements in this circuit belong to.
+// 5) Custom instructions: List of custom gates used in the circuits, e.g. gate with nonstandard control
+// 6) Instruction: The sequential list of gates in the circuit.
+// 7) Calibrations: Obsolete; this was pulse-related data. Here for backwards compatibility.
+// 8) Layout: The transpilation layout, if one exists (otherwise a dummy is used).
+#[binrw]
+#[brw(big)]
+#[derive(Debug)]
+#[brw(import (version: u8))]
 pub struct QPYCircuit {
+    #[brw(args(version,))]
     pub header: CircuitHeaderV12Pack,
     #[br(count = header.num_vars)]
     pub standalone_vars: Vec<ExpressionVarDeclarationPack>,
     #[br(if(version >= 15))]
     pub annotation_headers: Option<AnnotationHeaderStaticPack>,
+    #[br(if(version >= 18))]
+    pub parameter_vectors: Option<ParameterVectorTablePack>,
     pub custom_instructions: CustomCircuitInstructionsPack,
     #[br(count = header.num_instructions, args { inner: (true,) })]
     pub instructions: Vec<CircuitInstructionV2Pack>,
-    #[br(args(version,))]
-    pub calibrations: CalibrationsPack,
+    #[brw(if(version < 18), args(version,))]
+    pub calibrations: Option<CalibrationsPack>,
+    #[brw(args(version,))]
     pub layout: LayoutV2Pack,
 }
 
@@ -60,6 +85,7 @@ pub struct QPYCircuit {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
+#[brw(import (version: u8))]
 pub struct CircuitHeaderV12Pack {
     #[bw(calc = circuit_name.len() as u16)]
     pub name_size: u16,
@@ -81,8 +107,19 @@ pub struct CircuitHeaderV12Pack {
     pub global_phase_data: Bytes,
     #[br(count = metadata_size)]
     pub metadata: Bytes,
-    #[br(count = num_registers)]
-    pub registers: Vec<RegisterV4Pack>,
+    #[br(count = num_registers, args { inner: (version,) })]
+    pub registers: Vec<RegisterPack>,
+}
+
+#[binrw]
+#[derive(Debug)]
+#[br(import (version: u8))]
+pub enum RegisterPack {
+    #[br(pre_assert(version < 18))]
+    V4(RegisterV4Pack),
+
+    #[br(pre_assert(version >= 18))]
+    V18(RegisterV18Pack),
 }
 
 // The data for a specific instruction in the circuit
@@ -125,7 +162,7 @@ pub struct CircuitInstructionV2Pack {
     #[br(parse_with = ConditionPack::read, args(condition_register_size, extract_conditional_key(extras_key), condition_value))]
     #[bw(write_with = ConditionPack::write)]
     pub condition: ConditionPack,
-    #[br(count = num_qargs + num_cargs)]
+    #[br(count = num_qargs as usize + num_cargs as usize)]
     #[br(if(read_bits))]
     pub bit_data: Vec<CircuitInstructionArgPack>,
     #[br(count = num_parameters as usize)]
@@ -206,6 +243,30 @@ pub struct CustomCircuitInstructionDefPack {
     pub base_gate_raw: Bytes,
 }
 
+#[binread]
+#[binwrite]
+#[brw(big)]
+#[derive(Debug)]
+pub struct RegisterV18Pack {
+    pub register_type: RegisterType,
+    pub standalone: u8,
+    pub size: u32,
+    #[bw(calc = name.len() as u16)]
+    pub name_size: u16,
+    pub in_circuit: u8,
+    pub register_attachment: u8,
+    #[br(count = name_size as usize, try_map = String::from_utf8)]
+    #[bw(map = |s| s.as_bytes())]
+    pub name: String,
+    #[br(if(register_attachment == 1))]
+    #[bw(if(*register_attachment == 1))]
+    pub start_index: u32,
+
+    #[br(if(register_attachment == 0), count = size)]
+    #[bw(if(*register_attachment == 0))]
+    pub bit_indices: Vec<u32>,
+}
+
 // Register data. Containing its type (qubits/clbits), its size, name,
 // whether it's a standalone register or aliasing register,
 // whether it's part of the circuit or not
@@ -234,7 +295,8 @@ pub struct RegisterV4Pack {
 // 1) None.
 // 2) Two-tuple: a tuple of the form (register, target) where the register value should be compared with the target.
 // In this case the target is a python int, represented in rust as BigUInt, but in python qpy it was saved using i64 so we keep it for now.
-// Note that we also use (clbit, bool_target) as two tuple, where the clbit is encoded using the "\x00" hack that can be seen in ParamRegisterValue
+// Note that we also use (clbit, bool_target) as two tuple; register and clbit alike are encoded as
+// a register payload, see `ParamRegisterPack` below
 // 3) Expression
 // In the two-tuple representation, the target value is stored in the `value` field and the number of bytes in the serialized registered are stored in the
 // `register_size` fields. Both are unused in the other cases, making the packing and decoding of this struct rather non-uniform.
@@ -266,13 +328,33 @@ impl TryFrom<u8> for ConditionType {
     }
 }
 
-// register SHOULD be a string, but since we encode some registers starting with "\x00" they are rendered illegal
-// we should probably change this in future versions to support magic numbers (TODO: change in QPY18?)
+// The condition's register is carried as an opaque blob because its encoding depends on the QPY
+// version: up to 17 it is the string hack described on `ParamRegisterPack`, from 18 it is that
+// tagged struct.  `value::load_param_register_value` decodes it.
 #[derive(Debug)]
 pub enum ConditionData {
     None,
     Register(Bytes),
     Expression(GenericDataPack),
+}
+
+/// A `Register` payload, which is either a whole `ClassicalRegister` or a single `Clbit`.  It
+#[binrw]
+#[brw(big)]
+#[derive(Debug)]
+pub enum ParamRegisterPack {
+    /// A classical register, identified by name.  The name runs to the end of the payload, whose
+    /// length the enclosing field already carries (`condition_register_size` for a condition, the
+    /// `INSTRUCTION_PARAM` header's `size` for a parameter), so it needs no length of its own.
+    #[brw(magic = 1u8)]
+    Register {
+        #[br(parse_with = binrw::helpers::until_eof, try_map = String::from_utf8)]
+        #[bw(map = |name| name.as_bytes())]
+        name: String,
+    },
+    /// A single clbit, identified by its index in the circuit's clbit list.
+    #[brw(magic = 0u8)]
+    Clbit { index: u32 },
 }
 
 // most of the data here is "virtual" in the sense that is is not stored as-is
@@ -330,8 +412,20 @@ impl ConditionPack {
         let condition_type = ConditionType::try_from(key).map_err(|e| to_binrw_error(reader, e))?;
         let data = match condition_type {
             ConditionType::TwoTuple => {
-                let mut buf = vec![0u8; register_size as usize];
-                reader.read_exact(&mut buf)?;
+                let mut buf = Vec::new();
+                buf.try_reserve_exact(register_size as usize).map_err(|e| {
+                    binrw::Error::Io(binrw::io::Error::new(
+                        binrw::io::ErrorKind::OutOfMemory,
+                        e.to_string(),
+                    ))
+                })?;
+                reader.take(register_size as u64).read_to_end(&mut buf)?;
+                if buf.len() != register_size as usize {
+                    return Err(binrw::Error::Io(binrw::io::Error::new(
+                        binrw::io::ErrorKind::UnexpectedEof,
+                        "Insufficient bytes in QPY for specified size",
+                    )));
+                }
                 ConditionData::Register(buf.into())
             }
             ConditionType::Expression => {
@@ -351,6 +445,7 @@ impl ConditionPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
+#[brw(import (version: u8))]
 pub struct LayoutV2Pack {
     pub exists: u8,
     pub initial_layout_size: i32,
@@ -359,27 +454,90 @@ pub struct LayoutV2Pack {
     #[bw(calc = extra_registers.len() as u32)]
     pub extra_registers_length: u32,
     pub input_qubit_count: i32,
-    #[br(count = extra_registers_length)]
-    pub extra_registers: Vec<RegisterV4Pack>,
-    #[br(count = initial_layout_size.max(0))]
-    pub initial_layout_items: Vec<InitialLayoutItemV2Pack>,
+    #[br(count = extra_registers_length, args { inner: (version,) })]
+    pub extra_registers: Vec<RegisterPack>,
+    #[br(count = initial_layout_size.max(0), args { inner: (version,) })]
+    #[bw(args_raw = (version,))]
+    pub initial_layout_items: Vec<VirtualQBitPack>,
     #[br(count = input_mapping_size.max(0))]
     pub input_mapping_items: Vec<u32>,
     #[br(count = final_layout_size.max(0))]
     pub final_layout_items: Vec<u32>,
 }
 
-// Data for initial layout item: its index and its register name, stored in a rather ad-hoc manner
-// TODO: Improve in QPY18?
-#[binrw]
-#[brw(big)]
 #[derive(Debug)]
-pub struct InitialLayoutItemV2Pack {
-    pub index_value: i32,
-    pub register_name_length: i32, // in this special case, reg_name_length can be -1 indicating "no name"
-    #[br(count = register_name_length.max(0) as usize, try_map = String::from_utf8)]
-    #[bw(map = |s| s.as_bytes())]
-    pub register_name: String,
+pub enum VirtualQBitPack {
+    Anonymous,
+    InRegister { index: u32, register_name: String },
+}
+
+impl BinRead for VirtualQBitPack {
+    type Args<'a> = (u8,); // version
+
+    fn read_options<R: Read + Seek>(
+        reader: &mut R,
+        endian: Endian,
+        (version,): (u8,),
+    ) -> BinResult<Self> {
+        let first = i32::read_options(reader, endian, ())?;
+        if first < 0 {
+            // Anonymous: v<=17 has a second i32 (-1) that we must consume; v>=18 does not
+            if version < 18 {
+                let _ = i32::read_options(reader, endian, ())?;
+            }
+            Ok(VirtualQBitPack::Anonymous)
+        } else {
+            // InRegister: first value is the index; name_length is always i32
+            let name_length = i32::read_options(reader, endian, ())? as usize;
+            let mut buf = String::new();
+            buf.try_reserve_exact(name_length).map_err(|e| {
+                binrw::Error::Io(binrw::io::Error::new(
+                    binrw::io::ErrorKind::OutOfMemory,
+                    e.to_string(),
+                ))
+            })?;
+            if reader.take(name_length as u64).read_to_string(&mut buf)? == name_length {
+                Ok(VirtualQBitPack::InRegister {
+                    index: first as u32,
+                    register_name: buf,
+                })
+            } else {
+                Err(binrw::Error::Io(binrw::io::Error::new(
+                    binrw::io::ErrorKind::UnexpectedEof,
+                    "Insufficient bytes in QPY for specified size",
+                )))
+            }
+        }
+    }
+}
+
+impl BinWrite for VirtualQBitPack {
+    type Args<'a> = (u8,); // version
+
+    fn write_options<W: Write + Seek>(
+        &self,
+        writer: &mut W,
+        endian: Endian,
+        (version,): (u8,),
+    ) -> BinResult<()> {
+        match self {
+            VirtualQBitPack::Anonymous => {
+                (-1i32).write_options(writer, endian, ())?;
+                if version < 18 {
+                    (-1i32).write_options(writer, endian, ())?;
+                }
+            }
+            VirtualQBitPack::InRegister {
+                index,
+                register_name,
+            } => {
+                (*index as i32).write_options(writer, endian, ())?;
+                (register_name.len() as i32).write_options(writer, endian, ())?;
+                writer.write_all(register_name.as_bytes())?;
+            }
+        }
+        Ok(())
+    }
 }
 
 // A serialized "generic data".
@@ -418,7 +576,7 @@ pub struct GenericDataSequencePack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
-#[br(import (version: u32))]
+#[brw(import (version: u8))]
 pub struct PauliEvolutionDefPack {
     #[bw(calc = pauli_data.len() as u64)]
     pub operator_size: u64,
@@ -429,6 +587,7 @@ pub struct PauliEvolutionDefPack {
     #[bw(calc = synth_data.len() as u64)]
     pub synth_method_size: u64,
     #[br(count = operator_size, args { inner: (version,) })]
+    #[bw(args(version))]
     pub pauli_data: Vec<PauliDataPack>,
     #[br(count = time_size)]
     pub time_data: Bytes,
@@ -439,14 +598,19 @@ pub struct PauliEvolutionDefPack {
 // A pauli operator data for pauli evolution gates
 // The operator is given either as a SparesePauliOp list or as a SparasePauliObservable
 // SparsePauliObservable was added in V17
+//
+// This variant covers V17 *and later*: the only difference from V18 onwards is the width of the
+// bit terms inside `SparsePauliObservableElemPack`, which that struct handles itself given
+// `version`.
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
+#[brw(import(version: u8))]
 pub enum PauliDataPackV17 {
     #[brw(magic = 0u8)] // old style: sparse pauli op list
     SparsePauliOp(SparsePauliOpListElemPack),
     #[brw(magic = 1u8)] // new style added in v17: sparse observable
-    SparseObservable(SparsePauliObservableElemPack),
+    SparseObservable(#[brw(args(version))] SparsePauliObservableElemPack),
 }
 
 // The V16 version of the Pauli data pack only allows SparsePauliOp and doesn't use a distinguishing first byte
@@ -459,13 +623,13 @@ pub enum PauliDataPackV16 {
 
 #[binrw]
 #[derive(Debug)]
-#[br(import(version: u32))]
+#[brw(import(version: u8))]
 pub enum PauliDataPack {
     #[br(pre_assert(version <= 16))]
     V16(PauliDataPackV16),
 
     #[br(pre_assert(version >= 17))]
-    V17(PauliDataPackV17),
+    V17(#[brw(args(version))] PauliDataPackV17),
 }
 
 // SparsePauliOpList is a serialized python numpy array
@@ -479,28 +643,79 @@ pub struct SparsePauliOpListElemPack {
     pub data: Bytes,
 }
 
+/// Read the bit terms of a `SPARSE_OBSERVABLE` payload.
+///
+/// `BitTerm` is `#[repr(u8)]`, so a single byte is always enough.  QPY 17 nonetheless stored each
+/// bit term as a `u16`, wasting a byte per term; QPY 18 narrowed it to `u8`.  The in-memory
+/// representation is always `u8` and this parser absorbs the difference, so nothing downstream has
+/// to care which version produced the payload.
+#[binrw::parser(reader, endian)]
+fn read_bitterms(version: u8, byte_count: u64) -> BinResult<Vec<u8>> {
+    let count = (byte_count / bitterm_size(version) as u64) as usize;
+    if version >= 18 {
+        Vec::<u8>::read_options(reader, endian, binrw::VecArgs { count, inner: () })
+    } else {
+        let wide = Vec::<u16>::read_options(reader, endian, binrw::VecArgs { count, inner: () })?;
+        let pos = reader.stream_position().unwrap_or(0);
+        wide.into_iter()
+            .map(|term| {
+                u8::try_from(term).map_err(|_| binrw::Error::AssertFail {
+                    pos,
+                    message: format!("bit term {term} does not fit in a u8"),
+                })
+            })
+            .collect()
+    }
+}
+
+/// Write the bit terms of a `SPARSE_OBSERVABLE` payload, widening back to `u16` for QPY < 18.
+/// Mirror of [`read_bitterms`].
+#[binrw::writer(writer, endian)]
+fn write_bitterms(bitterms: &Vec<u8>, version: u8) -> BinResult<()> {
+    if version >= 18 {
+        bitterms.write_options(writer, endian, ())
+    } else {
+        let wide: Vec<u16> = bitterms.iter().map(|&term| term as u16).collect();
+        wide.write_options(writer, endian, ())
+    }
+}
+
+const fn bitterm_size(version: u8) -> usize {
+    if version <= 17 {
+        std::mem::size_of::<u16>()
+    } else {
+        std::mem::size_of::<u8>()
+    }
+}
+
 // SparsePauiObservable has explicit data that can be used to reconstruct
 // a rust SparseObservable struct
+//
+// Note that the `*_size` fields are element *counts*, not byte lengths.
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
+#[brw(import(version: u8))]
 pub struct SparsePauliObservableElemPack {
     pub num_qubits: u32,
-    #[bw(calc = coeff_data.len() as u64)]
+    // coeffs are Complex64 numbers, stored as a vector of f64 in the format [re1, im1, re2, im2,...]
+    #[bw(calc = (coeff_data.len() * std::mem::size_of::<f64>()) as u64)]
     pub coeff_data_size: u64,
-    #[bw(calc = bitterm_data.len() as u64)]
+    #[bw(calc = (bitterm_data.len() * bitterm_size(version)) as u64)]
     pub bitterm_data_size: u64,
-    #[bw(calc = inds_data.len() as u64)]
+    #[bw(calc = (inds_data.len() * std::mem::size_of::<u32>()) as u64)]
     pub inds_data_size: u64,
-    #[bw(calc = bounds_data.len() as u64)]
+    #[bw(calc = (bounds_data.len() * std::mem::size_of::<u64>()) as u64)]
     pub bounds_data_size: u64,
-    #[br(count = coeff_data_size)]
+    #[br(count = coeff_data_size / std::mem::size_of::<f64>() as u64)]
     pub coeff_data: Vec<f64>, // complex numbers stored in format [re1, im1, re2, im2,...]
-    #[br(count = bitterm_data_size)]
-    pub bitterm_data: Vec<u16>,
-    #[br(count = inds_data_size)]
+    // Stored as `u16` up to QPY 17 and as `u8` from QPY 18 on; always `u8` in memory.
+    #[br(parse_with = read_bitterms, args(version, bitterm_data_size))]
+    #[bw(write_with = write_bitterms, args(version))]
+    pub bitterm_data: Vec<u8>,
+    #[br(count = inds_data_size / std::mem::size_of::<u32>() as u64)]
     pub inds_data: Vec<u32>,
-    #[br(count = bounds_data_size)]
+    #[br(count = bounds_data_size / std::mem::size_of::<u64>() as u64)]
     pub bounds_data: Vec<u64>,
 }
 
@@ -519,13 +734,51 @@ pub struct ParameterSymbolPack {
     pub name: String,
 }
 
-// A single parameter vector element. Since vectors has no standalone representation in QPY
-// the vector data (name and size) is stored along with the element-specific data (uuid and index in the vector)
-// This is obviously not optimal compared to storing a list of vector and keeping a pointer in each element so TODO: improve in QPY18?
+// A `ParameterVector`, stored once per circuit payload and referred to by index from each of its
+// elements.
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
-pub struct ParameterVectorElementPack {
+pub struct ParameterVectorPack {
+    #[bw(calc = name.len() as u16)]
+    pub name_size: u16,
+    pub vector_size: u64,
+    pub uuid: [u8; 16],
+    #[br(count = name_size as usize, try_map = String::from_utf8)]
+    #[bw(map = |s| s.as_bytes())]
+    pub name: String,
+}
+
+// The parameter vectors referenced by this circuit payload, in index order.  Nested payloads (a
+// control-flow block, or a custom instruction definition) carry their own table, so that a circuit
+// remains decodable on its own.
+#[binrw]
+#[brw(big)]
+#[derive(Debug)]
+pub struct ParameterVectorTablePack {
+    #[bw(calc = vectors.len() as u16)]
+    pub num_vectors: u16,
+    #[br(count = num_vectors)]
+    pub vectors: Vec<ParameterVectorPack>,
+}
+
+// A single parameter vector element.
+// From QPY 18 the vector lives once in `ParameterVectorTablePack` and the element only points at it.
+#[binrw]
+#[brw(big)]
+#[derive(Debug)]
+#[brw(import(version: u8))]
+pub enum ParameterVectorElementPack {
+    #[br(pre_assert(version < 18))]
+    V17(ParameterVectorElementV17Pack),
+    #[br(pre_assert(version >= 18))]
+    V18(ParameterVectorElementV18Pack),
+}
+
+#[binrw]
+#[brw(big)]
+#[derive(Debug)]
+pub struct ParameterVectorElementV17Pack {
     #[bw(calc = name.len() as u16)]
     pub name_size: u16,
     pub vector_size: u64,
@@ -534,6 +787,17 @@ pub struct ParameterVectorElementPack {
     #[br(count = name_size as usize, try_map = String::from_utf8)]
     #[bw(map = |s| s.as_bytes())]
     pub name: String,
+}
+
+// The QPY 18 element encoding: a pointer into the payload's parameter vector table.
+#[binrw]
+#[brw(big)]
+#[derive(Debug)]
+pub struct ParameterVectorElementV18Pack {
+    /// Index into this payload's `ParameterVectorTablePack`.
+    pub vector_index: u16,
+    /// Index of this element within that vector.
+    pub index: u64,
 }
 
 // The various types of components available in a parameter expression
@@ -638,6 +902,7 @@ pub struct ParameterExpressionSubsOpPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
+#[brw(import(version: u8))]
 pub struct ParameterExpressionPack {
     #[bw(calc = symbol_table_data.len() as u64)]
     pub symbol_tables_length: u64,
@@ -645,7 +910,8 @@ pub struct ParameterExpressionPack {
     pub expression_data_length: u64,
     #[br(count = expression_data_length)]
     pub expression_data: Bytes,
-    #[br(count = symbol_tables_length)]
+    #[br(count = symbol_tables_length, args { inner: (version,) })]
+    #[bw(args(version))]
     pub symbol_table_data: Vec<ParameterExpressionSymbolPack>,
 }
 
@@ -656,18 +922,19 @@ pub struct ParameterExpressionPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
+#[brw(import(version: u8))]
 pub enum ParameterExpressionSymbolPack {
     #[brw(magic = b'p')]
     Parameter(ParameterExpressionParameterSymbolPack),
     #[brw(magic = b'v')]
-    ParameterVector(ParameterExpressionParameterVectorSymbolPack),
+    ParameterVector(#[brw(args(version))] ParameterExpressionParameterVectorSymbolPack),
     /// This variant _should not_ exist; it is counter to the QPY spec, and has no semantic meaning.
     /// However, Qiskit 2.0 (with QPY 13 non-symengine serialisation but before Rust-space
     /// `ParameterExpression` or QPY) would populate the "symbol map" with the raw dictionaries
     /// given to `ParameterExpression.subs` calls, which include expressions.  The equivalent "read"
     /// code would load up the entries, then immediately filter them out to make the symbol map.
     #[brw(magic = b'e')]
-    ParameterExpression(ParameterExpressionParameterExpressionSymbolPack),
+    ParameterExpression(#[brw(args(version))] ParameterExpressionParameterExpressionSymbolPack),
 }
 
 // symbol->value mapping for parameter expressions
@@ -687,10 +954,12 @@ pub struct ParameterExpressionParameterSymbolPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
+#[brw(import(version: u8))]
 pub struct ParameterExpressionParameterVectorSymbolPack {
     pub value_key: ValueType,
     #[bw(calc = value_data.len() as u64)]
     pub value_data_len: u64,
+    #[brw(args(version))]
     pub symbol_data: ParameterVectorElementPack,
     #[br(count = value_data_len)]
     pub value_data: Bytes,
@@ -700,10 +969,12 @@ pub struct ParameterExpressionParameterVectorSymbolPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
+#[brw(import(version: u8))]
 pub struct ParameterExpressionParameterExpressionSymbolPack {
     pub value_key: u8,
     #[bw(calc = value_data.len() as u64)]
     pub value_data_len: u64,
+    #[brw(args(version))]
     pub symbol_data: ParameterExpressionPack,
     #[br(count = value_data_len)]
     pub value_data: Bytes,
@@ -745,7 +1016,7 @@ pub struct MappingItem {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
-#[br(import(qpy_read_data: &'a QPYReadData<'a>))]
+#[br(import(qpy_read_data: &QPYReadData))]
 #[bw(import(qpy_write_data: &'a QPYWriteData<'a>))]
 pub struct ExpressionPack<'a> {
     #[br(parse_with = read_expression, args(qpy_read_data))]
@@ -961,7 +1232,7 @@ pub struct AnnotationHeaderStaticPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
-#[brw(import(version: u32))]
+#[brw(import(version: u8))]
 pub struct CalibrationsPack {
     #[bw(calc = calibrations.len() as u16)]
     pub num_cals: u16,
@@ -972,7 +1243,7 @@ pub struct CalibrationsPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
-#[brw(import(version: u32))]
+#[brw(import(version: u8))]
 pub struct CalibrationDefPack {
     #[bw(calc = name.len() as u16)]
     pub name_size: u16,
@@ -995,7 +1266,7 @@ pub struct CalibrationDefPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
-#[brw(import(version: u32))] // should not work for version < 5 but we do not support it yet
+#[brw(import(version: u8))] // should not work for version < 5 but we do not support it yet
 pub struct ScheduleBlockPack {
     #[bw(calc = name.len() as u16)]
     pub name_size: u16,
@@ -1031,7 +1302,7 @@ pub struct AlignmentContextPack {
 #[binrw]
 #[brw(big)]
 #[derive(Debug)]
-#[brw(import(version: u32))]
+#[brw(import(version: u8))]
 pub struct ScheduleBlockElementPack {
     pub element_type: u8,
     #[br(if(element_type == b's'), args(version,))]

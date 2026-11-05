@@ -17,8 +17,8 @@ from __future__ import annotations
 import typing
 import warnings
 import numpy as np
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.circuit.gate import Gate
+
+from qiskit.circuit import QuantumCircuit, Gate
 from qiskit.circuit.library import get_standard_gate_name_mapping, IGate
 from qiskit.utils.deprecation import deprecate_func
 from qiskit._accelerate.synthesis.discrete_basis import (
@@ -66,7 +66,7 @@ class SolovayKitaevDecomposition:
 
                 Either this parameter, or ``basis_gates`` and ``depth`` can be specified.
             basis_gates: A list of discrete (i.e., non-parameterized) standard gates.
-                Defaults to ``["h", "t", "tdg"]``.
+                All gates must be single-qubit gates. Defaults to ``["h", "t", "tdg"]``.
             depth: The number of basis gate combinations to consider in the basis set. This
                 determines how fast (and if) the algorithm converges and should be chosen
                 sufficiently high.
@@ -240,10 +240,7 @@ class SolovayKitaevDecomposition:
         circuit = QuantumCircuit._from_circuit_data(data, legacy_qubits=True)
 
         if return_dag:
-            from qiskit.converters import circuit_to_dag
-
-            return circuit_to_dag(circuit)
-
+            return circuit.to_dag()
         return circuit
 
     def query_basic_approximation(self, gate: np.ndarray | Gate) -> QuantumCircuit:
@@ -282,9 +279,17 @@ def normalize_gates(gates: list[Gate | str]) -> list[Gate]:
 
     def normalize(gate: Gate | str) -> Gate:
         if isinstance(gate, Gate):
-            return gate
-        if gate in name_to_gate:
-            return name_to_gate[gate]
-        raise ValueError(f"Unsupported gate: {gate}")
+            normalized = gate
+        elif gate in name_to_gate:
+            normalized = name_to_gate[gate]
+        else:
+            raise ValueError(f"Unsupported gate: {gate}")
+
+        if normalized.num_qubits != 1:
+            raise ValueError(
+                "Solovay-Kitaev synthesis only supports single-qubit basis gates, "
+                f"but '{normalized.name}' acts on {normalized.num_qubits} qubits."
+            )
+        return normalized
 
     return list(map(normalize, gates))

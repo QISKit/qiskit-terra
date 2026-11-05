@@ -25,11 +25,9 @@ use rustworkx_core::petgraph::algo::toposort;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 use rustworkx_core::petgraph::visit::NodeIndexable;
 
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::instruction::Parameters;
-use qiskit_circuit::operations::{
-    Operation, OperationRef, Param, PyOperationTypes, PythonOperation,
-};
+use qiskit_circuit::operations::{Operation, OperationRef, Param, PythonOperation};
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
 use qiskit_circuit::{BlocksMode, Qubit, VarsMode};
 
@@ -56,17 +54,23 @@ type MappingIterItem = Option<(TwoQSynthesisResult<f64>, [Qubit; 2])>;
 #[pyfunction(name = "two_qubit_unitary_peephole_optimize")]
 pub fn py_two_qubit_unitary_peephole_optimize(
     py: Python,
-    dag: &DAGCircuit,
+    dag: &PyDAGCircuit,
     target: &Target,
     approximation_degree: Option<f64>,
-) -> PyResult<Option<DAGCircuit>> {
+) -> PyResult<Option<PyDAGCircuit>> {
+    let dag_ref = dag.try_read()?;
     let result = py.detach(move || {
-        two_qubit_unitary_peephole_optimize_analysis(dag, target, approximation_degree)
+        two_qubit_unitary_peephole_optimize_analysis(dag_ref, target, approximation_degree)
     })?;
     let Some(result) = result else {
         return Ok(None);
     };
-    two_qubit_unitary_peephole_optimize_apply(dag, result)
+    Ok(
+        two_qubit_unitary_peephole_optimize_apply(dag_ref, result)?.map(|out_dag| {
+            // Preserve metadata
+            PyDAGCircuit::from_dagcircuit_with_cloned_metadata(out_dag, dag)
+        }),
+    )
 }
 
 /// A non-python entry-point to the pass function.
@@ -286,7 +290,7 @@ fn two_qubit_unitary_peephole_optimize_apply(
 ) -> PyResult<Option<DAGCircuit>> {
     // After we've computed all the sequences to execute now serially build up a new dag.
     let mut processed_runs: Vec<bool> = vec![false; result.run_mapping.len()];
-    let out_dag = dag.copy_empty_like_with_same_capacity(VarsMode::Alike, BlocksMode::Keep)?;
+    let out_dag = dag.copy_empty_like_with_same_capacity(VarsMode::Alike, BlocksMode::Keep);
     let mut out_dag_builder = out_dag.into_builder();
     for node in toposort(dag.dag(), None).expect("DAG has no cycles") {
         if !matches!(dag.dag()[node], NodeType::Operation(_)) {
@@ -334,13 +338,10 @@ fn two_qubit_unitary_peephole_optimize_apply(
                 };
                 let op = match gate.view() {
                     OperationRef::StandardGate(gate) => PackedOperation::from(gate),
-                    OperationRef::Gate(py_gate) => Python::attach(|py| -> PyResult<_> {
+                    OperationRef::PyCustom(py_gate) => Python::attach(|py| -> PyResult<_> {
                         let gate = py_gate.py_copy(py)?;
-                        gate.instruction
-                            .setattr(py, intern!(py, "params"), params)?;
-                        Ok(PackedOperation::from(Box::new(PyOperationTypes::Gate(
-                            gate,
-                        ))))
+                        gate.ob.setattr(py, intern!(py, "params"), params)?;
+                        Ok(PackedOperation::from(gate))
                     })?,
                     _ => {
                         panic!("internal logic error: decomposed sequence contains a non-gate")

@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.Optimize1qGatesDecomposition` where the choice
+    among the possible Euler bases for a resynthesized run ignored the error
+    rates of the ``target`` and was made on gate count alone, with ties broken
+    by an internal fixed ordering.  The pass now selects the candidate
+    decomposition with the lowest total error according to the ``target``, as
+    it did before the pass was ported to Rust.  When no ``target`` is given
+    (or it has no error rates), the selection still minimizes the gate count.
+    Fixed `#16460 <https://github.com/Qiskit/qiskit/issues/16460>`__.

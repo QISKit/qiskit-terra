@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed :class:`.ForLoopOp` with negative integers in its index set.  Previously, an
+    :exc:`OverflowError` was raised.  See `#16412 <https://github.com/Qiskit/qiskit/issues/16412>`__.
+  - |
+    In Qiskit v2.5.0rc1 only, the C API type :c:type:`QkLoopElements` erroneously listed its ``elements``
+    member as ``const size_t *``.  This is now ``const ptrdiff_t *`` to account for negative values.

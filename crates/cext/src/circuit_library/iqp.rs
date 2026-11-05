@@ -10,6 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+use crate::pointers::ExposesOwnedPointers;
 use ndarray::ArrayView2;
 use qiskit_circuit::{circuit_data::CircuitData, operations::Param};
 use qiskit_circuit_library::iqp::{check_symmetric, iqp, py_random_iqp};
@@ -59,7 +60,7 @@ pub unsafe extern "C" fn qk_circuit_library_iqp(
             Param::Float(0.0),
         )
         .expect("qk_circuit_library_iqp: failed to build empty IQP circuit");
-        return Box::into_raw(Box::new(circuit));
+        return circuit.into_leaked();
     }
 
     // For n > 0 we require a valid interactions pointer.
@@ -85,7 +86,7 @@ pub unsafe extern "C" fn qk_circuit_library_iqp(
     let circuit_data =
         CircuitData::from_standard_gates(num_qubits as u32, iqp(view), Param::Float(0.0))
             .expect("qk_circuit_library_iqp: failed to build CircuitData from IQP interactions");
-    Box::into_raw(Box::new(circuit_data))
+    circuit_data.into_leaked()
 }
 
 /// @ingroup QkCircuitLibrary

@@ -15,10 +15,10 @@
 import copy
 from collections.abc import Callable
 import numpy as np
-from qiskit.circuit import QuantumCircuit
+
+from qiskit.circuit import QuantumCircuit, CircuitError
 from qiskit.exceptions import QiskitError
-from qiskit.circuit.exceptions import CircuitError
-from . import calc_inverse_matrix, check_invertible_binary_matrix
+from qiskit._accelerate.synthesis.linear import calc_inverse_matrix, check_invertible_binary_matrix
 
 
 def transpose_cx_circ(qc: QuantumCircuit):

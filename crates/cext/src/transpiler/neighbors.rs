@@ -13,8 +13,6 @@
 use qiskit_transpiler::neighbors::Neighbors;
 use qiskit_transpiler::target::{Target, TargetCouplingError};
 
-use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
-
 /// An adjacency-list representation of a coupling graph.
 ///
 /// This is initialized by `qk_neighbors_from_target`.
@@ -65,11 +63,12 @@ pub struct CNeighbors {
 ///
 /// # Safety
 ///
-/// `neighbors` must point to a valid, initialized `QkNeighbors` object.
+/// `neighbors` must an aligned pointer to a valid, initialized `QkNeighbors` object.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_neighbors_is_all_to_all(neighbors: *const CNeighbors) -> bool {
     // SAFETY: per documentation, `neighbors` points to a valid initialized `CNeighbors`.
-    unsafe { (*neighbors).neighbors.is_null() && (*neighbors).partition.is_null() }
+    let neighbors = unsafe { &*neighbors };
+    neighbors.neighbors.is_null() && neighbors.partition.is_null()
 }
 
 /// @ingroup QkNeighbors
@@ -118,7 +117,7 @@ pub unsafe extern "C" fn qk_neighbors_from_target(
     // creating a reference would be Rust-side UB.
 
     // SAFETY: per documentation, `target` points to a valid `Target`.
-    let target = unsafe { const_ptr_as_ref(target) };
+    let target = unsafe { &*target };
     let coupling = match target.coupling_graph() {
         Ok(coupling) | Err(TargetCouplingError::MultiQ(coupling)) => coupling,
         Err(TargetCouplingError::AllToAll) => {
@@ -168,7 +167,7 @@ pub unsafe extern "C" fn qk_neighbors_from_target(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qk_neighbors_clear(neighbors: *mut CNeighbors) {
     // SAFETY: per documentation, `neighbors` points to a valid initialised `CNeighbors`.
-    let neighbors = unsafe { mut_ptr_as_ref(neighbors) };
+    let neighbors = unsafe { &mut *neighbors };
     // Not strictly necessary, but doesn't really hurt to make things more obvious.
     let num_qubits = std::mem::replace(&mut neighbors.num_qubits, u32::MAX) as usize;
     let partition_ptr = std::mem::replace(&mut neighbors.partition, std::ptr::null());
@@ -203,10 +202,10 @@ pub unsafe extern "C" fn qk_neighbors_clear(neighbors: *mut CNeighbors) {
 mod test {
     use super::*;
 
-    use indexmap::IndexMap;
     use qiskit_circuit::PhysicalQubit;
     use qiskit_circuit::operations::StandardGate;
     use qiskit_transpiler::target::{Qargs, Target};
+    use qiskit_util::IndexMap;
 
     // This is mostly for Miri.
     #[test]
@@ -224,7 +223,7 @@ mod test {
             None,
         )
         .unwrap();
-        let mut line: IndexMap<_, _, _> = Default::default();
+        let mut line: IndexMap<_, _> = Default::default();
         for qubit in 0..num_qubits - 1 {
             line.insert(Qargs::from([qubit, qubit + 1].map(PhysicalQubit)), None);
         }
@@ -268,7 +267,7 @@ mod test {
             None,
         )
         .unwrap();
-        let mut line: IndexMap<_, _, _> = Default::default();
+        let mut line: IndexMap<_, _> = Default::default();
         line.insert(Qargs::Global, None);
         target
             .add_instruction(StandardGate::CZ.into(), None, None, Some(line))

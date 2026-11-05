@@ -110,6 +110,17 @@ class TestSampledExpval(QiskitTestCase):
         result2 = sampled_expectation_value(dist, "00ZI")
         self.assertAlmostEqual(result2, 0.4376)
 
+    def test_complex_coefficient(self):
+        """Test that complex coefficients return complex expectation values.
+
+        Regression test for #11393."""
+        dist = {"11111": 1}
+        complex_coeff = SparsePauliOp(["ZZZZZ"], coeffs=[1j])
+        float_coeff = SparsePauliOp(["ZZZZZ"], coeffs=[1])
+
+        self.assertAlmostEqual(-1j, sampled_expectation_value(dist, complex_coeff))
+        self.assertAlmostEqual(-1, sampled_expectation_value(dist, float_coeff))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

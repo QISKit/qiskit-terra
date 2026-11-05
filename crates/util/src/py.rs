@@ -59,8 +59,6 @@ impl ImportOnceCell {
 pub mod imports {
     use super::ImportOnceCell;
 
-    pub static NUMPY_COPY_ONLY_IF_NEEDED: ImportOnceCell =
-        ImportOnceCell::new("qiskit._numpy_compat", "COPY_ONLY_IF_NEEDED");
     pub static NUMPY_ARRAY: ImportOnceCell = ImportOnceCell::new("numpy", "ndarray");
     pub static DEEPCOPY: ImportOnceCell = ImportOnceCell::new("copy", "deepcopy");
     pub static WARNINGS_WARN: ImportOnceCell = ImportOnceCell::new("warnings", "warn");

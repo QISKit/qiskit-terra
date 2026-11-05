@@ -13,6 +13,7 @@
 
 import unittest
 
+import ddt
 import numpy as np
 import rustworkx as rx
 
@@ -25,6 +26,7 @@ from ..visualization.visualization import QiskitVisualizationTestCase, path_to_d
 from ..legacy_cmaps import RUESCHLIKON_CMAP
 
 
+@ddt.ddt
 class CouplingTest(QiskitTestCase):
     def test_empty_coupling_class(self):
         coupling = CouplingMap()
@@ -32,13 +34,15 @@ class CouplingTest(QiskitTestCase):
         self.assertEqual([], coupling.physical_qubits)
         self.assertEqual([], coupling.get_edges())
         self.assertFalse(coupling.is_connected())
-        self.assertEqual("", str(coupling))
+        self.assertEqual([], list(coupling))
 
     def test_coupling_str(self):
         coupling_list = [[0, 1], [0, 2], [1, 2]]
         coupling = CouplingMap(coupling_list)
-        expected = "[[0, 1], [0, 2], [1, 2]]"
-        self.assertEqual(expected, str(coupling))
+        # The purpose is just to make sure the methods aren't broken.  The edge order and exact
+        # format aren't specified.
+        self.assertIsInstance(str(coupling), str)
+        self.assertIsInstance(repr(coupling), str)
 
     def test_coupling_distance(self):
         coupling_list = [(0, 1), (0, 2), (1, 2)]
@@ -51,10 +55,10 @@ class CouplingTest(QiskitTestCase):
 
     def test_add_physical_qubits(self):
         coupling = CouplingMap()
-        self.assertEqual("", str(coupling))
+        self.assertEqual([], list(coupling))
         coupling.add_physical_qubit(0)
         self.assertEqual([0], coupling.physical_qubits)
-        self.assertEqual("", str(coupling))
+        self.assertEqual([], list(coupling))
 
     def test_add_physical_qubits_not_int(self):
         coupling = CouplingMap()
@@ -62,10 +66,9 @@ class CouplingTest(QiskitTestCase):
 
     def test_add_edge(self):
         coupling = CouplingMap()
-        self.assertEqual("", str(coupling))
+        self.assertEqual([], list(coupling))
         coupling.add_edge(0, 1)
-        expected = "[[0, 1]]"
-        self.assertEqual(expected, str(coupling))
+        self.assertEqual([(0, 1)], list(coupling))
 
     def test_neighbors(self):
         """Test neighboring qubits are found correctly."""
@@ -518,6 +521,77 @@ class CouplingTest(QiskitTestCase):
 
         # additional test for comparison to a non-CouplingMap object
         self.assertNotEqual(coupling0, 1)
+
+    def test_ignores_self_coupling(self):
+        edges = [(0, 1), (1, 1), (1, 2), (2, 3)]
+        with self.assertWarnsRegex(Warning, "qubits cannot be coupled to themselves"):
+            coupling = CouplingMap(edges)
+        self.assertEqual(set(coupling.get_edges()), {(a, b) for (a, b) in edges if a != b})
+        with self.assertWarnsRegex(Warning, "qubits cannot be coupled to themselves"):
+            coupling.add_edge(2, 2)
+        self.assertEqual(set(coupling.get_edges()), {(a, b) for (a, b) in edges if a != b})
+
+    def test_ignores_duplicate_coupling(self):
+        """A repeated coupling collapses onto the existing edge instead of adding a parallel one.
+
+        Regression test of gh-16987.
+        """
+        # `get_edges` makes no promise about the order it returns edges in, so sort before
+        # comparing; sorting still preserves the multiplicity that this test is about.
+        coupling = CouplingMap([(0, 1), (0, 1), (1, 2)])
+        self.assertEqual(sorted(coupling.get_edges()), [(0, 1), (1, 2)])
+
+        coupling.add_edge(0, 1)
+        self.assertEqual(sorted(coupling.get_edges()), [(0, 1), (1, 2)])
+
+        # The reverse direction is a distinct coupling, so it is still added.
+        coupling.add_edge(1, 0)
+        self.assertEqual(sorted(coupling.get_edges()), [(0, 1), (1, 0), (1, 2)])
+
+    def test_duplicate_coupling_symmetry(self):
+        """Duplicate couplings should not affect whether the coupling map is symmetric.
+
+        Regression test for gh-16987.
+        """
+        # The same connectivity given in two different orders; both are symmetric.
+        self.assertTrue(CouplingMap([(0, 1), (1, 0), (0, 1)]).is_symmetric)
+        self.assertTrue(CouplingMap([(0, 1), (0, 1), (1, 0)]).is_symmetric)
+
+        coupling = CouplingMap([(0, 1), (0, 1), (1, 2)])
+        self.assertFalse(coupling.is_symmetric)
+        coupling.make_symmetric()
+        self.assertTrue(coupling.is_symmetric)
+        self.assertEqual(sorted(coupling.get_edges()), [(0, 1), (1, 0), (1, 2), (2, 1)])
+
+    @ddt.named_data(
+        ["empty", CouplingMap],
+        ["couplinglist", lambda: CouplingMap([(0, 1), (0, 1), (1, 2), (1, 0)])],
+        ["full", lambda: CouplingMap.from_full(4)],
+        ["full_unidirectional", lambda: CouplingMap.from_full(4, bidirectional=False)],
+        ["line", lambda: CouplingMap.from_line(4)],
+        ["line_unidirectional", lambda: CouplingMap.from_line(4, bidirectional=False)],
+        ["ring", lambda: CouplingMap.from_ring(4)],
+        ["ring_unidirectional", lambda: CouplingMap.from_ring(4, bidirectional=False)],
+        ["grid", lambda: CouplingMap.from_grid(2, 3)],
+        ["grid_unidirectional", lambda: CouplingMap.from_grid(2, 3, bidirectional=False)],
+        ["heavy_hex", lambda: CouplingMap.from_heavy_hex(3)],
+        ["heavy_square", lambda: CouplingMap.from_heavy_square(3)],
+        ["hexagonal_lattice", lambda: CouplingMap.from_hexagonal_lattice(2, 2)],
+        ["reduce", lambda: CouplingMap.from_line(4).reduce([0, 1, 2, 3])],
+        ["connected_components", lambda: CouplingMap.from_line(4).connected_components()[0]],
+    )
+    def test_no_parallel_edges(self, constructor):
+        """However a coupling map was built, it contains no parallel edges, and `add_edge` cannot
+        introduce one.  Regression test of gh-16987."""
+        coupling = constructor()
+
+        edges = coupling.get_edges()
+        self.assertEqual(len(edges), len(set(edges)))
+
+        # Re-offering every coupling it already has must leave it completely unchanged.
+        for src, dst in edges:
+            coupling.add_edge(src, dst)
+        self.assertEqual(sorted(coupling.get_edges()), sorted(edges))
 
 
 class CouplingVisualizationTest(QiskitVisualizationTestCase):

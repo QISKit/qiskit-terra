@@ -28,7 +28,7 @@ use std::marker;
 use std::num::NonZero;
 
 use hashbrown::{HashMap, hash_map::Entry};
-use indexmap::IndexMap;
+use qiskit_util::IndexMap;
 use smallvec::SmallVec;
 
 use rustworkx_core::petgraph::data::Create;
@@ -896,10 +896,7 @@ where
     ES: Semantics<N::EdgeWeight, H::EdgeWeight, Score = NS::Score>,
 {
     type Item = Result<
-        (
-            IndexMap<N::NodeId, H::NodeId, ::foldhash::fast::RandomState>,
-            NS::Score,
-        ),
+        (IndexMap<N::NodeId, H::NodeId>, NS::Score),
         IsIsomorphicError<NS::Error, ES::Error>,
     >;
     type IntoIter = Vf2IntoIter<NG, HG, N::NodeId, H::NodeId, NS, ES>;
@@ -1250,7 +1247,7 @@ where
     NS: Semantics<N::NodeWeight, H::NodeWeight>,
     ES: Semantics<N::EdgeWeight, H::EdgeWeight, Score = NS::Score>,
 {
-    fn mapping(&self) -> IndexMap<NId, HId, ::foldhash::fast::RandomState> {
+    fn mapping(&self) -> IndexMap<NId, HId> {
         self.needle
             .mapping
             .iter()
@@ -1823,10 +1820,7 @@ where
     NS: Semantics<N::NodeWeight, H::NodeWeight>,
     ES: Semantics<N::EdgeWeight, H::EdgeWeight, Score = NS::Score>,
 {
-    type Item = Result<
-        (IndexMap<NId, HId, ::foldhash::fast::RandomState>, NS::Score),
-        IsIsomorphicError<NS::Error, ES::Error>,
-    >;
+    type Item = Result<(IndexMap<NId, HId>, NS::Score), IsIsomorphicError<NS::Error, ES::Error>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // The overall strategy is a nested loop, where the "outer" loop is over unmapped nodes in

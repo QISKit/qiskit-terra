@@ -2092,6 +2092,24 @@ class TestControlFlowBuilders(QiskitTestCase):
             pass
         self.assertIs(test_parameter, parameter)
 
+    def test_for_accepts_var_input(self):
+        var = expr.Var.new("a", types.Uint(32))
+        test = QuantumCircuit(1, 1)
+        cr = ClassicalRegister(5, "cr")
+        test.add_register(cr)
+        with test.for_loop(range(3), var) as test_var:
+            test.measure(0, 0)
+            test.store(expr.index(cr, test_var), test.clbits[0])
+        self.assertEqual(var, test_var)
+
+        expected = QuantumCircuit(1, 1)
+        expected.add_register(cr)
+        body = QuantumCircuit(expected.qubits, expected.clbits, cr, inputs=(var,))
+        body.measure(0, 0)
+        body.store(expr.index(cr, var), body.clbits[0])
+        expected.for_loop(range(3), var, body, expected.qubits, expected.clbits)
+        self.assertEqual(test, expected)
+
     def test_for_binds_parameter_to_op(self):
         """Test that the ``for`` manager binds a parameter to the resulting :obj:`.ForLoopOp` if a
         user-generated one is given, or if a generated parameter is used.  Generated parameters that

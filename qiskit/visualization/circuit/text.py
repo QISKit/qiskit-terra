@@ -1380,7 +1380,7 @@ class TextDrawing:
             if circ_num > 0:
                 # Draw a middle box such as Else and Case
                 flow_layer = self.draw_flow_box(
-                    node, flow_wire_map, CF_MID, circ_num - 1, conditional=False
+                    node, wire_map, CF_MID, circ_num - 1, conditional=False
                 )
                 layers.append(flow_layer.full_layer)
 

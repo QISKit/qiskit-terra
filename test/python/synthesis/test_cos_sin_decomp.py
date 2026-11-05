@@ -17,7 +17,7 @@ import math
 from ddt import ddt
 import numpy as np
 
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.quantum_info.operators.predicates import is_unitary_matrix
 from qiskit.circuit._utils import _compute_control_matrix
 from qiskit._accelerate.cos_sin_decomp import cossin

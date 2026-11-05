@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Fixed a stack overflow when destructing very deeply nested trees of
+    :class:`.ParameterExpression`.

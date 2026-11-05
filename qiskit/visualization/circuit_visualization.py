@@ -16,4 +16,4 @@ Module for the primary interface to the circuit drawers.
 
 # Temporary import from 0.22.0 to be deprecated in future
 
-from .circuit.circuit_visualization import circuit_drawer
+from .circuit.circuit_visualization import circuit_drawer  # noqa: F401

@@ -31,7 +31,7 @@ from qiskit.circuit.parameterexpression import (
     OpCode,
     op_code_to_method,
 )
-from qiskit.circuit.parametervector import ParameterVector, ParameterVectorElement
+from qiskit.circuit.parametervector import ParameterVector
 from qiskit.qpy import common, formats, exceptions, type_keys
 from qiskit.qpy.binary_io.parse_sympy_repr import parse_sympy_repr
 
@@ -56,7 +56,7 @@ def _write_parameter(file_obj, obj):
 
 
 def _write_parameter_vec(file_obj, obj):
-    name_bytes = obj.vector._name.encode(common.ENCODE)
+    name_bytes = obj.vector.name.encode(common.ENCODE)
     file_obj.write(
         struct.pack(
             formats.PARAMETER_VECTOR_ELEMENT_PACK,
@@ -458,11 +458,8 @@ def _read_parameter_vec(file_obj, vectors):
     root_uuid_int = uuid.UUID(bytes=data.uuid).int - data.index
     root_uuid = uuid.UUID(int=root_uuid_int)
     name = file_obj.read(data.vector_name_size).decode(common.ENCODE)
-
-    if root_uuid not in vectors:
-        vectors[root_uuid] = (ParameterVector(name, data.vector_size, uuid=root_uuid), set())
-    vector = vectors[root_uuid][0]
-    vectors[root_uuid][1].add(data.index)
+    if (vector := vectors.get(root_uuid, None)) is None:
+        vector = vectors[root_uuid] = ParameterVector(name, data.vector_size, uuid=root_uuid)
     return vector[data.index]
 
 
@@ -472,7 +469,6 @@ def _read_parameter_expression(file_obj):
     )
 
     sympy_str = file_obj.read(data.expr_size).decode(common.ENCODE)
-    expr_ = parse_sympy_repr(sympy_str)
     name_map = {}
     for _ in range(data.map_elements):
         elem_data = formats.PARAM_EXPR_MAP_ELEM(
@@ -498,8 +494,8 @@ def _read_parameter_expression(file_obj):
         else:
             raise exceptions.QpyError(f"Invalid parameter expression map type: {elem_key}")
         name_map[symbol.name] = value
-
-    return ParameterExpression(name_map, str(expr_))
+    expr_ = parse_sympy_repr(sympy_str, name_map)
+    return expr_
 
 
 def _read_parameter_expression_v3(file_obj, vectors, use_symengine):
@@ -512,7 +508,6 @@ def _read_parameter_expression_v3(file_obj, vectors, use_symengine):
         expr_ = common.load_symengine_payload(payload)
     else:
         sympy_str = payload.decode(common.ENCODE)
-        expr_ = parse_sympy_repr(sympy_str)
 
     name_map = {}
     for _ in range(data.map_elements):
@@ -551,8 +546,11 @@ def _read_parameter_expression_v3(file_obj, vectors, use_symengine):
         else:
             raise exceptions.QpyError(f"Invalid parameter expression map type: {elem_key}")
         name_map[symbol.name] = value
-
-    return ParameterExpression(name_map, str(expr_))
+    if use_symengine:
+        return ParameterExpression(name_map, str(expr_))
+    else:
+        expr_ = parse_sympy_repr(sympy_str, name_map)
+        return expr_
 
 
 def _read_parameter_expression_v13(file_obj, vectors, version):

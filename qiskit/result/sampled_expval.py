@@ -37,7 +37,7 @@ OPERS = {"Z", "I", "0", "1"}
 def sampled_expectation_value(
     dist: dict | result.Counts | QuasiDistribution | ProbDistribution,
     oper: str | quantum_info.Pauli | quantum_info.SparsePauliOp | quantum_info.SparseObservable,
-) -> float:
+) -> float | complex:
     """Computes expectation value from a sampled distribution
 
     Note that passing a raw dict requires bit-string keys.
@@ -47,7 +47,8 @@ def sampled_expectation_value(
         oper: The operator for the observable.
 
     Returns:
-        The expectation value.
+        The expectation value. Returns ``complex`` when the operator has
+        complex-valued coefficients, ``float`` otherwise.
     Raises:
         QiskitError: if the input distribution or operator is an invalid type
     """
@@ -70,7 +71,7 @@ def sampled_expectation_value(
         oper_strs = oper.paulis.to_labels()
         coeffs = np.asarray(oper.coeffs)
     elif isinstance(oper, SparseObservable):
-        return sampled_expval_sparse_observable(oper, dist)
+        return np.real_if_close(sampled_expval_sparse_observable(oper, dist))
     else:
         raise QiskitError("Invalid operator type")
 
@@ -85,6 +86,6 @@ def sampled_expectation_value(
             raise QiskitError(f"Input operator {op} is not diagonal")
     # Dispatch to Rust routines
     if coeffs.dtype == np.dtype(complex).type:
-        return sampled_expval_complex(oper_strs, coeffs, dist)
+        return np.real_if_close(sampled_expval_complex(oper_strs, coeffs, dist))
     else:
         return sampled_expval_float(oper_strs, coeffs, dist)

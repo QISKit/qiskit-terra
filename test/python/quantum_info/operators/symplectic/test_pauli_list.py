@@ -57,7 +57,7 @@ from qiskit.quantum_info.operators import (
     Pauli,
     PauliList,
 )
-from qiskit.quantum_info.random import random_clifford, random_pauli_list
+from qiskit.quantum_info import random_clifford, random_pauli_list
 from test import combine
 from test import QiskitTestCase
 

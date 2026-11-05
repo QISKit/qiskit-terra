@@ -24,7 +24,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from qiskit import _numpy_compat
 from qiskit.circuit.instruction import Instruction
 from qiskit.circuit.library.standard_gates import HGate, IGate, SGate, TGate, XGate, YGate, ZGate
 from qiskit.circuit.operation import Operation
@@ -145,7 +144,7 @@ class Operator(LinearOp):
             shape=self._data.shape,
         )
 
-    def __array__(self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+    def __array__(self, dtype=None, copy=None):
         dtype = self.data.dtype if dtype is None else dtype
         return np.array(self.data, dtype=dtype, copy=copy)
 
@@ -187,6 +186,13 @@ class Operator(LinearOp):
         **latex**: An IPython Latex object for displaying in Jupyter Notebooks.
 
         **latex_source**: Raw, uncompiled ASCII source to generate array using LaTeX.
+
+        .. warning::
+
+           Using this method with ``"latex"`` or ``"latex_source"`` output modes
+           relies on SymPy internally which is inherently unsafe as SymPy heavily
+           relies on Python's :func:`.eval` function. This method is not safe to
+           use with untrusted input.
 
         Args:
             output (str): Select the output method to use for drawing the
@@ -389,7 +395,7 @@ class Operator(LinearOp):
     ) -> Operator:
         """Create a new Operator object from a :class:`.QuantumCircuit`
 
-        While a :class:`~.QuantumCircuit` object can passed directly as ``data``
+        While a :class:`~.QuantumCircuit` object can be passed directly as ``data``
         to the class constructor this provides no options on how the circuit
         is used to create an :class:`.Operator`. This constructor method lets
         you control how the :class:`.Operator` is created so it can be adjusted
@@ -435,7 +441,7 @@ class Operator(LinearOp):
             if not ignore_set_layout and layout is not None:
                 final_layout = getattr(layout, "final_layout", None)
 
-        from qiskit.synthesis.permutation.permutation_utils import _inverse_pattern
+        from qiskit.synthesis.permutation import _inverse_pattern
 
         op = Operator(circuit)
 

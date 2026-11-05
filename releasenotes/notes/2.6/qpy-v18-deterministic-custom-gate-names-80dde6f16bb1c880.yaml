@@ -1,0 +1,10 @@
+---
+upgrade_qpy:
+  - |
+    QPY version 18 changes the suffix appended to ``CUSTOM_INSTRUCTION`` block names.
+    From version 11 through 17, each name was suffixed with a random UUID
+    (e.g. ``"my_gate_b3ecab5b4d6a4eb6bc2b2dbf18d83e1e"``), which caused repeated
+    calls to :func:`qiskit.qpy.dump` on the same circuit to produce different dumps.
+    From version 18 the UUID is replaced by a counter that resets
+    to zero at the start of each :func:`qiskit.qpy.dump` call (e.g. ``"my_gate_0"``),
+    making QPY output reproducible.

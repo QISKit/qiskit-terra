@@ -32,7 +32,7 @@ from qiskit.circuit.library import (
     iqp,
 )
 from qiskit.circuit import Parameter, Qubit, Clbit
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.utils import optionals
 from .visualization import QiskitVisualizationTestCase
 from ..legacy_cmaps import YORKTOWN_CMAP

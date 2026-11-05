@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from qiskit import _numpy_compat
 from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit.instruction import Instruction
 from qiskit.exceptions import QiskitError
@@ -113,7 +112,7 @@ class DensityMatrix(QuantumState, TolerancesMixin):
             raise QiskitError("Invalid DensityMatrix input: not a square matrix.")
         super().__init__(op_shape=OpShape.auto(shape=self._data.shape, dims_l=dims, dims_r=dims))
 
-    def __array__(self, dtype=None, copy=_numpy_compat.COPY_ONLY_IF_NEEDED):
+    def __array__(self, dtype=None, copy=None):
         dtype = self.data.dtype if dtype is None else dtype
         return np.array(self.data, dtype=dtype, copy=copy)
 
@@ -152,6 +151,13 @@ class DensityMatrix(QuantumState, TolerancesMixin):
 
         **bloch**: Matplotlib figure, rendering of density matrix using `plot_bloch_multivector()`.
 
+        .. warning::
+
+           Using this method with ``"latex"`` or ``"latex_source"`` output modes
+           relies on SymPy internally which is inherently unsafe as SymPy heavily
+           relies on Python's :func:`.eval` function. This method is not safe to
+           use with untrusted input.
+
         Args:
             output (str): Select the output method to use for drawing the
                 state. Valid choices are `repr`, `text`, `latex`, `latex_source`,
@@ -159,10 +165,18 @@ class DensityMatrix(QuantumState, TolerancesMixin):
                 be changed by adding the line ``state_drawer = <default>`` to
                 ``~/.qiskit/settings.conf`` under ``[default]``.
             drawer_args: Arguments to be passed directly to the relevant drawing
-                function or constructor (`TextMatrix()`, `array_to_latex()`,
-                `plot_state_qsphere()`, `plot_state_hinton()` or `plot_bloch_multivector()`).
-                See the relevant function under `qiskit.visualization` for that function's
-                documentation.
+                function or constructor:
+
+                * For ``'latex'`` and ``'latex_source'``: see
+                  :func:`~qiskit.visualization.state_to_latex` (which forwards to
+                  :func:`~qiskit.visualization.array_to_latex`).
+                * For ``'text'``: arguments such as ``max_size`` to control the
+                  summarization threshold.
+                * For Matplotlib figures (``'qsphere'``, ``'hinton'``, or ``'bloch'``):
+                  see the corresponding plotting functions in :mod:`qiskit.visualization`
+                  (such as :func:`~qiskit.visualization.plot_state_qsphere`,
+                  :func:`~qiskit.visualization.plot_state_hinton`, or
+                  :func:`~qiskit.visualization.plot_bloch_multivector`).
 
         Returns:
             :class:`matplotlib.Figure` or :class:`str` or
@@ -212,7 +226,8 @@ class DensityMatrix(QuantumState, TolerancesMixin):
         return Operator(self.data, input_dims=dims, output_dims=dims)
 
     def conjugate(self):
-        """Return the conjugate of the density matrix."""
+        """Return the complex conjugate of the density matrix with respect to the basis
+        of the vector components returned by :meth:`~DensityMatrix.data`."""
         return DensityMatrix(np.conj(self.data), dims=self.dims())
 
     def trace(self):

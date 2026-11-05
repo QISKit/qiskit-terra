@@ -32,7 +32,6 @@ jobs:
 
   build-others:
     name: Build others
-    needs: ["upload-core"]
     uses: ./.github/workflows/wheels-build.yml
     with:
       artifact-prefix: "deploy-others-"
@@ -41,7 +40,11 @@ jobs:
       sdist: "skip"
   upload-others:
     name: Deploy other
-    needs: ["build-others"]
+    # The tier 2/3 wheels mustn't block the tier 1 ones on build failures, nor
+    # can they deploy before the tier 1 ones (and sdist) have succeeded, because
+    # we never want to be in a situation where the newest version doesn't have
+    # the top-tier wheels available.
+    needs: ["build-others", "upload-core"]
     runs-on: ubuntu-latest
     environment: release
     permissions:

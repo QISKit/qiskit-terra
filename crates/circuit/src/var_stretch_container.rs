@@ -13,7 +13,7 @@
 use crate::classical::expr;
 use crate::object_registry::ObjectRegistry;
 use crate::{Stretch, Var};
-use indexmap::IndexMap;
+use qiskit_util::IndexMap;
 use thiserror::Error;
 
 use pyo3::exceptions::PyValueError;
@@ -103,7 +103,10 @@ impl VarStretchContainer {
         VarStretchContainer {
             vars: ObjectRegistry::with_capacity(num_vars),
             stretches: ObjectRegistry::with_capacity(num_stretches),
-            identifier_info: IndexMap::with_capacity(num_vars + num_stretches),
+            identifier_info: IndexMap::with_capacity_and_hasher(
+                num_vars + num_stretches,
+                foldhash::fast::RandomState::default(),
+            ),
             var_indices: [Vec::new(), Vec::new(), Vec::new()],
             stretch_indices: [Vec::new(), Vec::new()],
         }
@@ -114,7 +117,10 @@ impl VarStretchContainer {
         let mut res = VarStretchContainer {
             vars: ObjectRegistry::with_capacity(self.vars.len()),
             stretches: ObjectRegistry::with_capacity(self.stretches.len()),
-            identifier_info: IndexMap::with_capacity(self.identifier_info.len()),
+            identifier_info: IndexMap::with_capacity_and_hasher(
+                self.identifier_info.len(),
+                foldhash::fast::RandomState::default(),
+            ),
             var_indices: [Vec::new(), Vec::with_capacity(self.vars.len()), Vec::new()],
             stretch_indices: [Vec::with_capacity(self.stretches.len()), Vec::new()],
         };
@@ -228,10 +234,10 @@ impl VarStretchContainer {
             _ => {}
         }
 
-        if let StretchType::Capture = stretch_type {
-            if self.num_vars(VarType::Input) > 0 {
-                return Err(VarStretchContainerError::CaptureWithInputVars);
-            }
+        if let StretchType::Capture = stretch_type
+            && self.num_vars(VarType::Input) > 0
+        {
+            return Err(VarStretchContainerError::CaptureWithInputVars);
         }
 
         let name = stretch.name.clone();

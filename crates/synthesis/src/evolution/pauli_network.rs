@@ -10,11 +10,9 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::QiskitError;
 use crate::clifford::greedy_synthesis::resynthesize_clifford_circuit;
+use crate::evolution::EvolutionSynthesisError;
 
-use pyo3::prelude::*;
-use pyo3::types::{PyList, PyString, PyTuple};
 use smallvec::{SmallVec, smallvec};
 
 use qiskit_circuit::Qubit;
@@ -34,18 +32,6 @@ use rustworkx_core::petgraph::prelude::StableDiGraph;
 /// A Qiskit gate. The quantum circuit data returned by the pauli network
 /// synthesis algorithm will consist of clifford and rotation gates.
 type QiskitGate = (StandardGate, SmallVec<[Param; 3]>, SmallVec<[Qubit; 2]>);
-
-/// Expands the sparse pauli string representation to the full representation.
-///
-/// For example: for the input `sparse_pauli = "XY", qubits = [1, 3], num_qubits = 6`,
-/// the function returns `"IXIYII"`.
-fn expand_pauli(sparse_pauli: String, qubits: &[u32], num_qubits: usize) -> String {
-    let mut v: Vec<char> = vec!['I'; num_qubits];
-    for (q, p) in qubits.iter().zip(sparse_pauli.chars()) {
-        v[*q as usize] = p;
-    }
-    v.into_iter().collect()
-}
 
 /// Return the Qiskit's gate corresponding to the given Rustiq's Clifford gate.
 fn to_qiskit_clifford_gate(rustiq_gate: &CliffordGate) -> QiskitGate {
@@ -299,37 +285,14 @@ fn synthesize_final_clifford(
 #[allow(clippy::too_many_arguments)]
 pub fn pauli_network_synthesis_inner(
     num_qubits: usize,
-    pauli_network: &Bound<PyList>,
+    paulis: Vec<String>,
+    angles: Vec<Param>,
     optimize_count: bool,
     preserve_order: bool,
     upto_clifford: bool,
     upto_phase: bool,
     resynth_clifford_method: usize,
-) -> PyResult<CircuitData> {
-    let mut paulis: Vec<String> = Vec::with_capacity(pauli_network.len());
-    let mut angles: Vec<Param> = Vec::with_capacity(pauli_network.len());
-
-    let allowed_chars = ['I', 'X', 'Y', 'Z'];
-
-    // go over the input pauli network and extract a list of pauli rotations and
-    // the corresponding rotation angles
-    for item in pauli_network {
-        let tuple = item.cast::<PyTuple>()?;
-
-        let sparse_pauli: String = tuple.get_item(0)?.cast::<PyString>()?.extract()?;
-        let qubits: Vec<u32> = tuple.get_item(1)?.extract()?;
-        let angle: Param = tuple.get_item(2)?.extract()?;
-
-        if sparse_pauli.chars().any(|c| !allowed_chars.contains(&c)) {
-            return Err(QiskitError::new_err(format!(
-                "Pauli network contains invalid Pauli string {sparse_pauli}"
-            )));
-        }
-
-        paulis.push(expand_pauli(sparse_pauli, &qubits, num_qubits));
-        angles.push(angle);
-    }
-
+) -> Result<CircuitData, EvolutionSynthesisError> {
     let paulis = PauliSet::from_slice(&paulis);
     let metric = match optimize_count {
         true => Metric::COUNT,

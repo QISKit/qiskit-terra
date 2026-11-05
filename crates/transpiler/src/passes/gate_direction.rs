@@ -19,8 +19,12 @@ use qiskit_circuit::dag_circuit::DAGError;
 use qiskit_circuit::instruction::Parameters;
 use qiskit_circuit::operations::{OperationRef, StandardGate};
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
-use qiskit_circuit::{Block, PhysicalQubit};
-use qiskit_circuit::{Qubit, dag_circuit::DAGCircuit, operations::Operation, operations::Param};
+use qiskit_circuit::{
+    Block, PhysicalQubit, Qubit,
+    dag_circuit::{DAGCircuit, PyDAGCircuit},
+    operations::Operation,
+    operations::Param,
+};
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 use smallvec::SmallVec;
 use std::f64::consts::PI;
@@ -84,11 +88,13 @@ impl From<GateDirectionError> for PyErr {
 #[pyfunction]
 #[pyo3(name = "check_gate_direction_coupling")]
 fn py_check_direction_coupling_map(
-    dag: &DAGCircuit,
+    dag: &PyDAGCircuit,
     coupling_edges: HashSet<[Qubit; 2]>,
 ) -> PyResult<bool> {
-    check_direction_coupling_map(dag, coupling_edges)
-        .map_err(|e| TranspilerError::new_err(e.to_string()))
+    Ok(check_direction_coupling_map(
+        dag.try_read()?,
+        coupling_edges,
+    )?)
 }
 
 pub fn check_direction_coupling_map(
@@ -112,19 +118,17 @@ pub fn check_direction_coupling_map(
 ///     true iff all two-qubit gates comply with the target's coupling constraints
 #[pyfunction]
 #[pyo3(name = "check_gate_direction_target")]
-fn py_check_direction_target(dag: &DAGCircuit, target: &Target) -> PyResult<bool> {
-    check_direction_target(dag, target).map_err(|e| TranspilerError::new_err(e.to_string()))
+fn py_check_direction_target(dag: &PyDAGCircuit, target: &Target) -> PyResult<bool> {
+    Ok(check_direction_target(dag.try_read()?, target)?)
 }
 
 /// Check if the two-qubit gates follow the right direction with respect to instructions supported in the given target.
 ///
 /// # Arguments:
-///
-/// * `dag` - the [`DAGCircuit`] to analyze.
-/// * `target` the [`Target`] against which gate directionality compliance is checked.
+/// * `dag` - the [`DAGCircuit`] to analyze
+/// * `target` - the [`Target`] against which gate directionality compliance is checked
 ///
 /// # Returns:
-///
 /// `true` iff all two-qubit gates comply with the target's coupling constraints
 pub fn check_direction_target(
     dag: &DAGCircuit,
@@ -217,13 +221,23 @@ where
 ///     the transformed DAGCircuit
 #[pyfunction]
 #[pyo3(name = "fix_gate_direction_coupling")]
-pub fn py_fix_direction_coupling_map(
-    dag: &mut DAGCircuit,
+fn py_fix_direction_coupling_map(
+    dag: &mut PyDAGCircuit,
     coupling_edges: HashSet<[Qubit; 2]>,
 ) -> PyResult<()> {
-    fix_direction_coupling_map(dag, coupling_edges).map_err(Into::into)
+    Ok(fix_direction_coupling_map(
+        dag.try_write()?,
+        coupling_edges,
+    )?)
 }
-
+/// Try to swap two-qubit gate directions using pre-defined mapping to follow the right direction with respect to the coupling map.
+///
+/// # Arguments:
+/// * `dag` - the DAGCircuit to analyze
+/// * `coupling_edges` - set of edge pairs representing a directed coupling map, against which gate directionality is checked
+///
+/// # Returns:
+/// The transformed DAGCircuit
 pub fn fix_direction_coupling_map(
     dag: &mut DAGCircuit,
     coupling_edges: HashSet<[Qubit; 2]>,
@@ -249,19 +263,16 @@ pub fn fix_direction_coupling_map(
 ///     the transformed DAGCircuit
 #[pyfunction]
 #[pyo3(name = "fix_gate_direction_target")]
-pub fn py_fix_direction_target(dag: &mut DAGCircuit, target: &Target) -> PyResult<()> {
-    fix_direction_target(dag, target).map_err(Into::into)
+fn py_fix_direction_target(dag: &mut PyDAGCircuit, target: &Target) -> PyResult<()> {
+    Ok(fix_direction_target(dag.try_write()?, target)?)
 }
-
 /// Try to swap two-qubit gate directions using pre-defined mapping to follow the right direction with respect to the given target.
 ///
 /// # Arguments:
-///
 /// * `dag` - the [`DAGCircuit`] to analyze
-/// * `target` - the [`Target`] against which gate directionality is checked
+/// * `coupling_edges` - set of edge pairs representing a directed coupling map, against which gate directionality is checked
 ///
-/// ## Returns:
-///     
+/// # Returns:
 /// The transformed [`DAGCircuit`]
 pub fn fix_direction_target(
     dag: &mut DAGCircuit,

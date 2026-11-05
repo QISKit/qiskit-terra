@@ -31,9 +31,6 @@ from qiskit.result import Counts, sampled_expectation_value
 from .observables_array import ObservablesArray, ObservablesArrayLike
 from .shape import ShapedMixin, ShapeInput, shape_tuple
 
-# this lookup table tells you how many bits are 1 in each uint8 value
-_WEIGHT_LOOKUP = np.unpackbits(np.arange(256, dtype=np.uint8).reshape(-1, 1), axis=1).sum(axis=1)
-
 
 def _min_num_bytes(num_bits: int) -> int:
     """Return the minimum number of bytes needed to store ``num_bits``."""
@@ -207,7 +204,11 @@ class BitArray(ShapedMixin):
         Returns:
             A ``numpy.uint64``-array with shape ``(*shape, num_shots)``.
         """
-        return _WEIGHT_LOOKUP[self._array].sum(axis=-1)
+        result = np.bitwise_count(self._array).sum(axis=-1)
+        excess = self.num_bits % 8
+        if excess > 0:
+            result -= np.bitwise_count(self._array[..., 0] >> np.uint8(excess))
+        return result
 
     @staticmethod
     def from_bool_array(
@@ -267,6 +268,7 @@ class BitArray(ShapedMixin):
         Raises:
             ValueError: If different mappings have different numbers of shots.
             ValueError: If no counts dictionaries are supplied.
+            ValueError: If a key is negative or does not fit in ``num_bits`` bits.
         """
         if singleton := isinstance(counts, Mapping):
             counts = [counts]
@@ -309,6 +311,7 @@ class BitArray(ShapedMixin):
 
         Raises:
             ValueError: If no strings are given.
+            ValueError: If a sample is negative or does not fit in ``num_bits`` bits.
         """
         samples = iter(samples)
         try:
@@ -330,7 +333,12 @@ class BitArray(ShapedMixin):
                 num_bits = 1
 
         num_bytes = _min_num_bytes(num_bits)
-        data = b"".join(val.to_bytes(num_bytes, "big") for val in ints)
+        try:
+            data = b"".join(val.to_bytes(num_bytes, "big") for val in ints)
+        except OverflowError as ex:
+            raise ValueError(
+                f"All samples must be non-negative integers that fit in num_bits={num_bits} bits."
+            ) from ex
         array = np.frombuffer(data, dtype=np.uint8, count=len(data))
         return BitArray(array.reshape(-1, num_bytes), num_bits)
 

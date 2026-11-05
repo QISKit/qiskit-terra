@@ -21,3 +21,18 @@ from .ross_selinger_plugin import RossSelingerSynthesis
 from .clifford_unitary_synth_plugin import CliffordUnitarySynthesis
 from .aqc_plugin import AQCSynthesisPlugin
 from .synthesize_rz_rotations import SynthesizeRZRotations
+
+__all__ = [
+    "AQCSynthesisPlugin",
+    "CliffordUnitarySynthesis",
+    "HLSConfig",
+    "HighLevelSynthesis",
+    "LinearFunctionsToPermutations",
+    "RossSelingerSynthesis",
+    "SolovayKitaev",
+    "SolovayKitaevSynthesis",
+    "SynthesizeRZRotations",
+    "UnitarySynthesis",
+    "high_level_synthesis_plugin_names",
+    "unitary_synthesis_plugin_names",
+]

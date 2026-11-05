@@ -50,8 +50,8 @@ class CollectCliffords(CollectAndCollapse):
                 over disjoint qubit subsets.
             min_block_size (int): specifies the minimum number of gates in the block
                 for the block to be collected.
-            split_layers (bool): if True, splits collected blocks into sub-blocks
-                over disjoint qubit subsets.
+            split_layers (bool): if True, splits collected blocks into layers of
+                non-overlapping instructions (depth-1 sub-blocks).
             collect_from_back (bool): specifies if blocks should be collected started
                 from the end of the circuit.
             matrix_based (bool): specifies whether to collect unitary gates

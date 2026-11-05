@@ -47,13 +47,13 @@ pub type Instruction = (
 ///
 /// Returns:
 ///     A pointer to an iterator over standard instructions.
-pub fn sparse_term_evolution<'a>(
-    pauli: &'a str,
+pub fn sparse_term_evolution(
+    pauli: &str,
     indices: Vec<u32>,
     time: Param,
     phase_gate_for_paulis: bool,
     do_fountain: bool,
-) -> Box<dyn Iterator<Item = Instruction> + 'a> {
+) -> Box<dyn Iterator<Item = Instruction>> {
     // ensure the Pauli has no identity terms
     let binding = pauli.to_lowercase(); // lowercase for convenience
     let active = binding

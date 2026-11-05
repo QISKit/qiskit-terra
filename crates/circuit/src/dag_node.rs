@@ -17,9 +17,7 @@ use std::sync::OnceLock;
 use crate::TupleLikeArg;
 use crate::circuit_data::CircuitData;
 use crate::circuit_instruction::{CircuitInstruction, OperationFromPython, extract_params};
-use crate::operations::{
-    Operation, OperationRef, Param, PauliBased, PyOperationTypes, PythonOperation,
-};
+use crate::operations::{Operation, OperationRef, Param};
 
 use ahash::AHasher;
 use approx::relative_eq;
@@ -36,7 +34,7 @@ use pyo3::types::PyTuple;
 use pyo3::{PyResult, intern};
 
 /// Parent class for DAGOpNode, DAGInNode, and DAGOutNode.
-#[pyclass(module = "qiskit._accelerate.circuit", subclass, skip_from_py_object)]
+#[pyclass(module = "qiskit._accelerate.circuit", subclass)]
 #[derive(Clone, Debug)]
 pub struct DAGNode {
     pub node: Option<NodeIndex>,
@@ -199,7 +197,17 @@ impl DAGOpNode {
                         [Param::Obj(param_a), Param::Obj(param_b)] => {
                             param_a.bind(py).eq(param_b)?
                         }
-                        _ => false,
+                        [Param::Int(param_a), Param::Int(param_b)] => param_a == param_b,
+                        [Param::ParameterExpression(_), Param::Int(_)]
+                        | [Param::Int(_), Param::ParameterExpression(_)] => false,
+                        [Param::ParameterExpression(_), Param::Float(_)]
+                        | [Param::Float(_), Param::ParameterExpression(_)] => false,
+                        [Param::Int(_), Param::Float(_)] | [Param::Float(_), Param::Int(_)] => {
+                            false
+                        }
+                        [Param::Obj(obj_a), param_a] | [param_a, Param::Obj(obj_a)] => {
+                            obj_a.bind(py).eq(param_a)?
+                        }
                     };
                     if !res {
                         params_eq = false;
@@ -255,27 +263,7 @@ impl DAGOpNode {
         deepcopy: bool,
     ) -> PyResult<Py<PyAny>> {
         if deepcopy {
-            instruction.operation = match instruction.operation.view() {
-                OperationRef::ControlFlow(cf) => cf.clone().into(),
-                OperationRef::Gate(gate) => {
-                    PyOperationTypes::Gate(gate.py_deepcopy(py, None)?).into()
-                }
-                OperationRef::Instruction(instruction) => {
-                    PyOperationTypes::Instruction(instruction.py_deepcopy(py, None)?).into()
-                }
-                OperationRef::Operation(operation) => {
-                    PyOperationTypes::Operation(operation.py_deepcopy(py, None)?).into()
-                }
-                OperationRef::StandardGate(gate) => gate.into(),
-                OperationRef::StandardInstruction(instruction) => instruction.into(),
-                OperationRef::Unitary(unitary) => unitary.clone().into(),
-                OperationRef::PauliProductMeasurement(ppm) => {
-                    PauliBased::PauliProductMeasurement(ppm.clone()).into()
-                }
-                OperationRef::PauliProductRotation(rotation) => {
-                    PauliBased::PauliProductRotation(rotation.clone()).into()
-                }
-            };
+            instruction.operation = instruction.operation.py_deepcopy(py, None)?;
             #[cfg(feature = "cache_pygates")]
             {
                 instruction.py_op = OnceLock::new();
@@ -313,27 +301,7 @@ impl DAGOpNode {
     fn _to_circuit_instruction(&self, py: Python, deepcopy: bool) -> PyResult<CircuitInstruction> {
         Ok(CircuitInstruction {
             operation: if deepcopy {
-                match self.instruction.operation.view() {
-                    OperationRef::Gate(gate) => {
-                        PyOperationTypes::Gate(gate.py_deepcopy(py, None)?).into()
-                    }
-                    OperationRef::Instruction(instruction) => {
-                        PyOperationTypes::Instruction(instruction.py_deepcopy(py, None)?).into()
-                    }
-                    OperationRef::Operation(operation) => {
-                        PyOperationTypes::Operation(operation.py_deepcopy(py, None)?).into()
-                    }
-                    OperationRef::ControlFlow(cf) => cf.clone().into(),
-                    OperationRef::StandardGate(gate) => gate.into(),
-                    OperationRef::StandardInstruction(instruction) => instruction.into(),
-                    OperationRef::Unitary(unitary) => unitary.clone().into(),
-                    OperationRef::PauliProductMeasurement(ppm) => {
-                        PauliBased::PauliProductMeasurement(ppm.clone()).into()
-                    }
-                    OperationRef::PauliProductRotation(rotation) => {
-                        PauliBased::PauliProductRotation(rotation.clone()).into()
-                    }
-                }
+                self.instruction.operation.py_deepcopy(py, None)?
             } else {
                 self.instruction.operation.clone()
             },
@@ -457,8 +425,7 @@ impl DAGOpNode {
     fn definition<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
         let definition = match self.instruction.operation.view() {
             OperationRef::StandardGate(g) => g.definition(self.instruction.params_view()),
-            OperationRef::Gate(g) => g.definition(),
-            OperationRef::Instruction(i) => i.definition(),
+            OperationRef::PyCustom(i) => i.definition(),
             _ => None,
         };
         definition
@@ -502,8 +469,8 @@ impl DAGInNode {
 #[pymethods]
 impl DAGInNode {
     #[new]
-    fn py_new(wire: Py<PyAny>) -> PyResult<(Self, DAGNode)> {
-        Ok((DAGInNode { wire }, DAGNode { node: None }))
+    fn py_new(wire: Py<PyAny>) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(DAGNode { node: None }).add_subclass(Self { wire })
     }
 
     fn __reduce__<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
@@ -560,8 +527,8 @@ impl DAGOutNode {
 #[pymethods]
 impl DAGOutNode {
     #[new]
-    fn py_new(wire: Py<PyAny>) -> PyResult<(Self, DAGNode)> {
-        Ok((DAGOutNode { wire }, DAGNode { node: None }))
+    fn py_new(wire: Py<PyAny>) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(DAGNode { node: None }).add_subclass(Self { wire })
     }
 
     fn __reduce__(slf: PyRef<Self>, py: Python) -> PyResult<Py<PyAny>> {

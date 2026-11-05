@@ -1,0 +1,5 @@
+---
+performance:
+  - |
+    :meth:`.Pauli.evolve` and :meth:`.PauliList.evolve` are faster in many cases where ``other`` is
+    a :class:`.Clifford` and ``frame`` is ``'h'`` (Heisenberg).

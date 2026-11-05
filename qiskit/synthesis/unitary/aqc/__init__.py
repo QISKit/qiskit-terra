@@ -175,3 +175,14 @@ from .cnot_structures import make_cnot_network
 from .cnot_unit_circuit import CNOTUnitCircuit
 from .cnot_unit_objective import CNOTUnitObjective, DefaultCNOTUnitObjective
 from .fast_gradient.fast_gradient import FastCNOTUnitObjective
+
+__all__ = [
+    "AQC",
+    "ApproximateCircuit",
+    "ApproximatingObjective",
+    "CNOTUnitCircuit",
+    "CNOTUnitObjective",
+    "DefaultCNOTUnitObjective",
+    "FastCNOTUnitObjective",
+    "make_cnot_network",
+]

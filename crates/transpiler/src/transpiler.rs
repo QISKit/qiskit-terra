@@ -71,6 +71,7 @@ fn unroll_3q_or_more(
         &physical_qubits,
         synthesis_state,
         target.into(),
+        false,
     )? {
         *dag = out;
     }
@@ -316,6 +317,7 @@ pub fn translation_stage(
         &physical_qubits,
         synthesis_state,
         target.into(),
+        false,
     )? {
         *dag = out;
     }
@@ -324,12 +326,11 @@ pub fn translation_stage(
     }
     if !check_direction_target(dag, target)? {
         fix_direction_target(dag, target)?;
-        if gates_missing_from_target(dag, target)? {
-            if let Some(out_dag) =
+        if gates_missing_from_target(dag, target)?
+            && let Some(out_dag) =
                 run_basis_translator(dag, equiv_lib, 0, Some(target), None).unwrap()
-            {
-                *dag = out_dag;
-            }
+        {
+            *dag = out_dag;
         }
     }
     Ok(())
@@ -357,10 +358,12 @@ pub fn optimization_stage(
     if optimization_level == OptimizationLevel::Level1 {
         new_depth = Some(dag.depth(false)?);
         new_size = Some(dag.size(false)?);
+        let optimize_1q_state =
+            Optimize1qGatesDecompositionState::new(target.num_qubits.unwrap_or(0) as usize);
         while new_depth != depth || new_size != size {
             depth = new_depth;
             size = new_size;
-            run_optimize_1q_gates_decomposition(dag, Some(target), None, None)?;
+            run_optimize_1q_gates_decomposition(dag, &optimize_1q_state, Some(target), None, None)?;
             run_inverse_cancellation_standard_gates(dag);
             if gates_missing_from_target(dag, target)? {
                 translation_stage(dag, target, synthesis_state, equivalence_library)?;
@@ -377,16 +380,19 @@ pub fn optimization_stage(
             &physical_qubits,
             synthesis_state,
             target.into(),
+            false,
         )? {
             *dag = out;
         }
         new_depth = Some(dag.depth(false)?);
         new_size = Some(dag.size(false)?);
+        let optimize_1q_state =
+            Optimize1qGatesDecompositionState::new(target.num_qubits.unwrap_or(0) as usize);
         while new_depth != depth || new_size != size {
             depth = new_depth;
             size = new_size;
             run_remove_identity_equiv(dag, approximation_degree, Some(target))?;
-            run_optimize_1q_gates_decomposition(dag, Some(target), None, None)?;
+            run_optimize_1q_gates_decomposition(dag, &optimize_1q_state, Some(target), None, None)?;
             cancel_commutations(dag, commutation_checker, None, 1.0)?;
             if gates_missing_from_target(dag, target)? {
                 translation_stage(dag, target, synthesis_state, equivalence_library)?;
@@ -397,7 +403,8 @@ pub fn optimization_stage(
     } else if optimization_level == OptimizationLevel::Level3 {
         let mut continue_loop: bool = true;
         let mut min_state = MinPointState::new(dag);
-
+        let optimize_1q_state =
+            Optimize1qGatesDecompositionState::new(target.num_qubits.unwrap_or(0) as usize);
         while continue_loop {
             run_consolidate_blocks(dag, false, approximation_degree, Some(target))?;
             if let Some(out) = run_unitary_synthesis(
@@ -407,11 +414,12 @@ pub fn optimization_stage(
                 &physical_qubits,
                 synthesis_state,
                 target.into(),
+                false,
             )? {
                 *dag = out
             }
             run_remove_identity_equiv(dag, approximation_degree, Some(target))?;
-            run_optimize_1q_gates_decomposition(dag, Some(target), None, None)?;
+            run_optimize_1q_gates_decomposition(dag, &optimize_1q_state, Some(target), None, None)?;
             cancel_commutations(dag, commutation_checker, None, 1.0)?;
             if gates_missing_from_target(dag, target)? {
                 translation_stage(dag, target, synthesis_state, equivalence_library)?;
@@ -476,7 +484,7 @@ pub fn transpile(
     approximation_degree: Option<f64>,
     seed: Option<u64>,
 ) -> Result<(CircuitData, TranspileLayout)> {
-    let mut dag = DAGCircuit::from_circuit_data(circuit, false, None, None, None, None)?;
+    let mut dag = DAGCircuit::from_circuit_data(circuit, false, None, None)?;
     let mut commutation_checker = get_standard_commutation_checker();
     let mut equivalence_library = generate_standard_equivalence_library();
     let sabre_heuristic = get_sabre_heuristic(target)?;
@@ -627,15 +635,15 @@ mod tests {
     fn build_universal_star_target() -> Target {
         let mut target = Target::default();
         let u_params = Some(Parameters::Params(smallvec![
-            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(Symbol::new(
-                "a", None, None,
-            )))),
-            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(Symbol::new(
-                "b", None, None,
-            )))),
-            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(Symbol::new(
-                "c", None, None,
-            )))),
+            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(
+                Symbol::standalone("a".to_owned(), None)
+            ))),
+            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(
+                Symbol::standalone("b".to_owned(), None)
+            ))),
+            Param::ParameterExpression(Arc::new(ParameterExpression::from_symbol(
+                Symbol::standalone("c".to_owned(), None)
+            ))),
         ]));
 
         let props = (0..5)
@@ -876,9 +884,9 @@ mod tests {
         )
         .unwrap();
 
-        let dag1 = DAGCircuit::from_circuit_data(&circuit1, false, None, None, None, None).unwrap();
+        let dag1 = DAGCircuit::from_circuit_data(&circuit1, false, None, None).unwrap();
         let circuit2 = CircuitData::from_packed_operations(1, 1, vec![], Param::Float(0.)).unwrap();
-        let dag2 = DAGCircuit::from_circuit_data(&circuit2, false, None, None, None, None).unwrap();
+        let dag2 = DAGCircuit::from_circuit_data(&circuit2, false, None, None).unwrap();
 
         let mut state = MinPointState::new(&dag1);
         assert!(state.update_with(&dag1));
@@ -898,7 +906,7 @@ mod tests {
     #[test]
     fn test_backtrack_limit_stops_loop() {
         let circuit1 = CircuitData::from_packed_operations(1, 1, vec![], Param::Float(0.)).unwrap();
-        let dag1 = DAGCircuit::from_circuit_data(&circuit1, false, None, None, None, None).unwrap();
+        let dag1 = DAGCircuit::from_circuit_data(&circuit1, false, None, None).unwrap();
         let circuit2 = CircuitData::from_packed_operations(
             1,
             1,
@@ -912,7 +920,7 @@ mod tests {
         )
         .unwrap();
 
-        let dag2 = DAGCircuit::from_circuit_data(&circuit2, false, None, None, None, None).unwrap();
+        let dag2 = DAGCircuit::from_circuit_data(&circuit2, false, None, None).unwrap();
         let mut state = MinPointState::new(&dag1);
 
         state.update_with(&dag1);
@@ -938,8 +946,7 @@ mod tests {
             Param::Float(0.),
         )
         .unwrap();
-        let dag_worst =
-            DAGCircuit::from_circuit_data(&circuit1, false, None, None, None, None).unwrap();
+        let dag_worst = DAGCircuit::from_circuit_data(&circuit1, false, None, None).unwrap();
         let circuit2 = CircuitData::from_packed_operations(
             1,
             1,
@@ -952,11 +959,9 @@ mod tests {
             Param::Float(0.),
         )
         .unwrap();
-        let dag_better =
-            DAGCircuit::from_circuit_data(&circuit2, false, None, None, None, None).unwrap();
+        let dag_better = DAGCircuit::from_circuit_data(&circuit2, false, None, None).unwrap();
         let circuit3 = CircuitData::from_packed_operations(1, 1, vec![], Param::Float(0.)).unwrap();
-        let dag_best =
-            DAGCircuit::from_circuit_data(&circuit3, false, None, None, None, None).unwrap();
+        let dag_best = DAGCircuit::from_circuit_data(&circuit3, false, None, None).unwrap();
         let mut state = MinPointState::new(&dag_worst);
 
         state.update_with(&dag_worst);

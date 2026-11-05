@@ -18,12 +18,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import numpy as np
+
 from qiskit.circuit import QuantumCircuit
 from qiskit.exceptions import QiskitError
-from qiskit.quantum_info.states import StabilizerState
-from qiskit.synthesis.linear.linear_matrix_utils import (
-    calc_inverse_matrix,
-)
+from qiskit.quantum_info import StabilizerState, Clifford, Pauli
+from qiskit.synthesis.linear import calc_inverse_matrix
 from qiskit.synthesis.linear_phase import synth_cz_depth_line_mr
 from qiskit.synthesis.clifford.clifford_decompose_layers import (
     _default_cz_synth_func,
@@ -111,8 +110,6 @@ def synth_stabilizer_layers(
 
     # Add Pauli layer to fix the Clifford phase signs
 
-    from qiskit.quantum_info.operators.symplectic import Clifford
-
     clifford_target = Clifford(layeredCircuit)
     pauli_circ = _calc_pauli_diff_stabilizer(cliff, clifford_target)
     layeredCircuit.append(pauli_circ, qubit_list)
@@ -122,8 +119,6 @@ def synth_stabilizer_layers(
 
 def _calc_pauli_diff_stabilizer(cliff, cliff_target):
     """Given two Cliffords whose stabilizers differ by a Pauli, we find this Pauli."""
-
-    from qiskit.quantum_info.operators.symplectic import Pauli
 
     num_qubits = cliff.num_qubits
     if cliff.num_qubits != cliff_target.num_qubits:

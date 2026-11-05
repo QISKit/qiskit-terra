@@ -42,9 +42,6 @@ from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.transpiler.instruction_durations import InstructionDurations
 from qiskit.transpiler.timing_constraints import TimingConstraints
 
-# import QubitProperties here to provide convenience alias for building a
-# full target
-from qiskit.providers.backend import QubitProperties
 
 logger = logging.getLogger(__name__)
 
@@ -540,7 +537,7 @@ class Target(BaseTarget):
         is globally defined.
         """
         return [
-            (self._gate_name_map[op], qarg)
+            (self.operation_from_name(op), qarg)
             for op, qargs in self._gate_map.items()
             for qarg in qargs
         ]
@@ -591,7 +588,7 @@ class Target(BaseTarget):
             self._coupling_graph.add_nodes_from([{} for _ in range(self.num_qubits)])
         for gate, qarg_map in self._gate_map.items():
             if qarg_map is None:
-                if self._gate_name_map[gate].num_qubits == 2:
+                if self.operation_from_name(gate).num_qubits == 2:
                     self._coupling_graph = None
                     return
                 continue
@@ -805,11 +802,9 @@ class Target(BaseTarget):
 
         This constructor will use the input from ``basis_gates``, ``num_qubits``,
         and ``coupling_map`` to build a base model of the backend and the
-        ``instruction_durations``, ``backend_properties``, and ``inst_map`` inputs
-        are then queried (in that order) based on that model to look up the properties
+        ``instruction_durations`` input is then queried based on that model to look up the properties
         of each instruction and qubit. If there is an inconsistency between the inputs
-        any extra or conflicting information present in ``instruction_durations``,
-        ``backend_properties``, or ``inst_map`` will be ignored.
+        any extra or conflicting information present in ``instruction_durations`` will be ignored.
 
         Args:
             basis_gates: The list of basis gate names for the backend. For the
@@ -875,7 +870,6 @@ class Target(BaseTarget):
         # in legacy transpiler usage
         # the coupling map is used to define connectivity constraints and
         # the properties is only used for error rate and duration population.
-        # If coupling map is not specified we ignore the backend_properties
         if coupling_map is None:
             for gate in basis_gates:
                 if gate not in name_mapping:

@@ -10,15 +10,14 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use foldhash::fast::RandomState;
 use hashbrown::HashSet;
-use indexmap::IndexMap;
 use pyo3::prelude::*;
+use qiskit_util::IndexMap;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 
 use qiskit_circuit::NoBlocks;
 use qiskit_circuit::circuit_instruction::OperationFromPython;
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::instruction::Instruction;
 use qiskit_circuit::operations::{Operation, OperationRef, StandardGate};
 use qiskit_circuit::packed_instruction::PackedInstruction;
@@ -44,7 +43,7 @@ fn gate_eq(gate_a: &PackedInstruction, gate_b: &OperationFromPython<NoBlocks>) -
 
 fn run_on_self_inverse(
     dag: &mut DAGCircuit,
-    op_counts: &IndexMap<String, usize, RandomState>,
+    op_counts: &IndexMap<String, usize>,
     self_inverse_gate_names: HashSet<String>,
     self_inverse_gates: Vec<OperationFromPython<NoBlocks>>,
 ) -> PyResult<()> {
@@ -108,7 +107,7 @@ fn run_on_self_inverse(
 }
 fn run_on_inverse_pairs(
     dag: &mut DAGCircuit,
-    op_counts: &IndexMap<String, usize, RandomState>,
+    op_counts: &IndexMap<String, usize>,
     inverse_gate_names: HashSet<String>,
     inverse_gates: Vec<[OperationFromPython<NoBlocks>; 2]>,
 ) -> PyResult<()> {
@@ -315,7 +314,12 @@ fn std_inverse_pairs(dag: &mut DAGCircuit) {
     }
 }
 
-#[pyfunction]
+#[pyfunction(name = "run_inverse_cancellation_standard_gates")]
+pub fn py_run_inverse_cancellation_standard_gates(dag: &mut PyDAGCircuit) -> PyResult<()> {
+    run_inverse_cancellation_standard_gates(dag.try_write()?);
+    Ok(())
+}
+
 pub fn run_inverse_cancellation_standard_gates(dag: &mut DAGCircuit) {
     std_self_inverse(dag);
     std_inverse_pairs(dag);
@@ -324,13 +328,14 @@ pub fn run_inverse_cancellation_standard_gates(dag: &mut DAGCircuit) {
 #[pyfunction]
 #[pyo3(name = "inverse_cancellation")]
 pub fn py_run_inverse_cancellation(
-    dag: &mut DAGCircuit,
+    dag: &mut PyDAGCircuit,
     inverse_gates: Vec<[OperationFromPython<NoBlocks>; 2]>,
     self_inverse_gates: Vec<OperationFromPython<NoBlocks>>,
     inverse_gate_names: HashSet<String>,
     self_inverse_gate_names: HashSet<String>,
     run_defaults: bool,
 ) -> PyResult<()> {
+    let dag = dag.try_write()?;
     if self_inverse_gate_names.is_empty() && inverse_gate_names.is_empty() {
         return Ok(());
     }
@@ -350,6 +355,6 @@ pub fn py_run_inverse_cancellation(
 
 pub fn inverse_cancellation_mod(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(py_run_inverse_cancellation))?;
-    m.add_wrapped(wrap_pyfunction!(run_inverse_cancellation_standard_gates))?;
+    m.add_wrapped(wrap_pyfunction!(py_run_inverse_cancellation_standard_gates))?;
     Ok(())
 }

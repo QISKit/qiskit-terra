@@ -16,8 +16,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
-from qiskit.circuit.quantumcircuit import QuantumCircuit
-from qiskit.quantum_info.operators import SparsePauliOp
+
+from qiskit.circuit import QuantumCircuit
+from qiskit.quantum_info import SparsePauliOp
 import qiskit.quantum_info
 
 from .suzuki_trotter import SuzukiTrotter

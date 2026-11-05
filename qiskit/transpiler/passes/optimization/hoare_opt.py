@@ -36,7 +36,7 @@ class HoareOptimizer(TransformationPass):
             MissingOptionalLibraryError: if unable to import z3 solver
         """
         # This module is just a script that adds several post conditions onto existing classes.
-        from . import _gate_extension
+        from . import _gate_extension  # noqa: F401
 
         super().__init__()
         self.solver = None

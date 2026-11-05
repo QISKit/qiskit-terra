@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from typing import SupportsFloat
 import numpy as np
 
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+from qiskit.circuit import QuantumCircuit
 
 
 class ApproximateCircuit(QuantumCircuit, ABC):

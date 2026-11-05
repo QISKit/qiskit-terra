@@ -14,12 +14,35 @@
 
 from .cnot_synth import synth_cnot_count_full_pmh
 from .linear_depth_lnn import synth_cnot_depth_line_kms
-from .linear_matrix_utils import (
-    random_invertible_binary_matrix,
+
+from qiskit._accelerate.synthesis.linear import (
+    gauss_elimination,
+    gauss_elimination_with_perm,
+    compute_rank_after_gauss_elim,
+    compute_rank,
     calc_inverse_matrix,
-    check_invertible_binary_matrix,
     binary_matmul,
+    random_invertible_binary_matrix,
+    check_invertible_binary_matrix,
+    row_op,
+    col_op,
 )
 
 # This re-import is kept for compatibility with Terra 0.23. Eligible for deprecation in 0.25+.
 from qiskit.synthesis.linear_phase import synth_cnot_phase_aam as graysynth
+
+__all__ = [
+    "binary_matmul",
+    "calc_inverse_matrix",
+    "check_invertible_binary_matrix",
+    "col_op",
+    "compute_rank",
+    "compute_rank_after_gauss_elim",
+    "gauss_elimination",
+    "gauss_elimination_with_perm",
+    "graysynth",
+    "random_invertible_binary_matrix",
+    "row_op",
+    "synth_cnot_count_full_pmh",
+    "synth_cnot_depth_line_kms",
+]

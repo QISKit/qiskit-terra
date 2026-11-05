@@ -1,0 +1,18 @@
+---
+features_circuits:
+  - |
+    :meth:`.QuantumCircuit.for_loop` now accepts an :class:`.expr.Var` of :class:`.types.Uint`
+    type as the ``loop_parameter`` argument.  When used in context-manager form, the loop variable
+    is automatically declared as an ``input`` variable of the loop body and is available for use
+    within the loop scope.  For example::
+
+        from qiskit.circuit import QuantumCircuit, ClassicalRegister
+        from qiskit.circuit.classical import expr, types
+
+        qc = QuantumCircuit(1, 1)
+        cr = ClassicalRegister(5, "reps")
+        qc.add_register(cr)
+
+        with qc.for_loop(range(5), expr.Var.new("a", types.Uint(32))) as v:
+            qc.measure(0, 0)
+            qc.store(expr.index(cr, v), qc.clbits[0])

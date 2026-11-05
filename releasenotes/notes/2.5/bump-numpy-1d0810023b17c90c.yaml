@@ -1,0 +1,4 @@
+---
+upgrade_misc:
+  - The minimum required version of NumPy is now 2.0, consistent with `SPEC 0
+    recommendations <https://scientific-python.org/specs/spec-0000/>`__.

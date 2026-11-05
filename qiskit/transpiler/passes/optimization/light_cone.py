@@ -11,8 +11,8 @@
 # that they have been altered from the originals.
 
 """Cancel the redundant (self-adjoint) gates through commutation relations."""
+
 from __future__ import annotations
-import warnings
 from qiskit.circuit import Gate, Qubit
 from qiskit.circuit.commutation_library import SessionCommutationChecker as scc
 from qiskit.circuit.library import PauliGate, ZGate

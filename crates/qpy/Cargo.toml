@@ -13,9 +13,8 @@ doctest = false
 workspace = true
 
 [dependencies]
-indexmap.workspace = true
+qiskit-util.workspace = true
 hashbrown.workspace = true
-foldhash.workspace = true
 qiskit-circuit.workspace = true
 qiskit-quantum-info.workspace = true
 num-bigint.workspace = true
@@ -23,6 +22,8 @@ num-complex.workspace = true
 num-traits.workspace = true
 bytemuck.workspace = true
 binrw.workspace = true
+npyz.workspace = true
+ndarray.workspace = true
 uuid = {version = "1", features = ["v4"]}
 thiserror.workspace = true
 

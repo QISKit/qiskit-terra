@@ -11,18 +11,24 @@
 // that they have been altered from the originals.
 
 use approx::relative_eq;
-use qiskit_quantum_info::sparse_pauli_op::MatrixCompressedPaulis;
+use qiskit_quantum_info::matrix_compressed_pauli::MatrixCompressedPaulis;
+use std::any::Any;
 use std::fmt::Debug;
 use std::num::NonZero;
+use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{fmt, vec};
+use std::{error, fmt, vec};
 
+use crate::annotation::{Annotation, create_py_annotation};
 use crate::bit::{ClassicalRegister, ShareableClbit};
 use crate::circuit_data::{CircuitData, PyCircuitData};
 use crate::classical::expr;
+use crate::classical::expr::Var;
+use crate::converters::QuantumCircuitData;
 use crate::duration::Duration;
-use crate::packed_instruction::PackedInstruction;
+use crate::operations::custom_traits::{ClonableOp, ComparableOp};
+use crate::packed_instruction::{PackedInstruction, PackedOperation};
 use crate::parameter::parameter_expression::{
     ParameterExpression, PyParameter, PyParameterExpression,
 };
@@ -36,19 +42,44 @@ use num_complex::{Complex64, c64};
 use smallvec::SmallVec;
 
 use numpy::{PyArray1, PyReadonlyArray2, ToPyArray};
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyFloat, PyTuple};
+use pyo3::types::{IntoPyDict, PyDict, PyFloat, PyInt, PyTuple, PyType};
 use pyo3::{IntoPyObjectExt, Python, intern};
 
 // This is a convenience re-export, since basically everywhere in Qiskit expects all the
 // `StandardGate` definitions to be in this file.
 pub use crate::standard_gate::*;
 
+/// Represent all possible parameters that can be used on an operation
+/// for Qiskit.
+///
+/// This enumeration has 3(+1) variants:
+/// - [`Param::ParameterExpression`]: Representing an unbound parameter.
+/// - [`Param::Float`]: Represents a bound parameter with a real value
+///   associated with it.
+/// - [`Param::Int`]: Used exclusively to represent a duration in terms of
+///   `Dt` for a [`StandardInstruction::Delay`].
+/// - [`Param::Obj`]: (only used when python is involved). Represents
+///   parameters that are historically not representable in Rust.
 #[derive(Clone, Debug)]
 pub enum Param {
+    /// Represents an unbound parameter as either a symbol or an expression
+    /// comprised of a mix of symbols and numbers. This is used for when a
+    /// certain value is shared between operations in a circuit, and will
+    /// accept a value right before the circuit runs.
     ParameterExpression(Arc<ParameterExpression>),
+    /// Used for parameters that must only be integers.  For example, the
+    /// `Delay::DT` unit requires this, but gate angles must use `Float`.
+    Int(i64),
+    /// Represents a bound parameter with a real value associated with it.
+    /// This, alongside [`Param::ParameterExpression`], is the most common
+    /// way a parameter is associated with a [`StandardGate`] in Qiskit,
+    /// since it usually represents a rotation in terms of radians and as
+    /// these are irrational numbers they are best represented by a
+    /// floating point number.
     Float(f64),
+    /// Represents Python parameters with no special Rust handling.
     Obj(Py<PyAny>),
 }
 
@@ -65,6 +96,7 @@ impl<'py> IntoPyObject<'py> for &Param {
                 let py_expr = PyParameterExpression::from(expr.as_ref().clone());
                 py_expr.coerce_into_py(py)?.into_bound_py_any(py)
             }
+            Param::Int(value) => value.into_bound_py_any(py),
         }
     }
 }
@@ -86,9 +118,9 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Param {
         Ok(if let Ok(py_expr) = b.extract::<PyParameterExpression>() {
             Param::ParameterExpression(Arc::new(py_expr.inner))
         } else if b.is_instance_of::<PyArray1<i32>>() {
+            // TODO: remove this branch when we raise the NumPy version to 2.4.
             Param::Obj(b.to_owned().unbind())
         } else if let Ok(val) = b.extract::<f64>() {
-            // TODO: remove this branch when we raise the NumPy version to 2.4.
             Param::Float(val)
         } else {
             Param::Obj(b.to_owned().unbind())
@@ -119,6 +151,18 @@ impl Param {
             [Self::Float(_), Self::Obj(_)] => Ok(false),
             [Self::Obj(_a), Self::ParameterExpression(_b)] => Ok(false),
             [Self::ParameterExpression(_a), Self::Obj(_b)] => Ok(false),
+            [Self::Int(int), Self::Int(other_int)] => Ok(int == other_int),
+            [Self::Int(int), Self::Float(float)] | [Self::Float(float), Self::Int(int)] => {
+                Ok(float == &(*int as f64))
+            }
+            [Self::Int(int), Self::ParameterExpression(expr)]
+            | [Self::ParameterExpression(expr), Self::Int(int)] => {
+                let int_as_val: Value = (*int).into();
+                Ok(ParameterExpression::from(int_as_val) == **expr)
+            }
+            [Self::Int(int), Self::Obj(obj)] | [Self::Obj(obj), Self::Int(int)] => {
+                Python::attach(|py| obj.bind(py).eq(int))
+            }
         }
     }
 
@@ -134,7 +178,7 @@ impl Param {
     /// Get an iterator over any `Symbol` instances tracked within this `Param`.
     pub fn iter_parameters(&self) -> PyResult<Box<dyn Iterator<Item = Symbol> + '_>> {
         match self {
-            Param::Float(_) => Ok(Box::new(::std::iter::empty())),
+            Param::Float(_) | Param::Int(_) => Ok(Box::new(::std::iter::empty())),
             Param::ParameterExpression(expr) => Ok(Box::new(expr.iter_symbols().cloned())),
             Param::Obj(obj) => {
                 Python::attach(|py| -> PyResult<Box<dyn Iterator<Item = Symbol>>> {
@@ -146,11 +190,7 @@ impl Param {
                             .getattr(parameters_attr)?
                             .try_iter()?
                             .map(|elem| {
-                                let elem = elem?;
-                                let py_param_bound = elem.cast::<PyParameter>()?;
-                                let py_param = py_param_bound.borrow();
-                                let symbol = py_param.symbol();
-                                Ok(symbol.clone())
+                                Ok(Symbol::clone(&elem?.cast_into::<PyParameter>()?.borrow().0))
                             })
                             .collect::<PyResult<_>>()?;
                         Ok(Box::new(collected.into_iter()))
@@ -181,9 +221,7 @@ impl Param {
                     if coerce_to_float {
                         Ok(Self::Float(i as f64)) // coerce integer to float
                     } else {
-                        // Int is not a param type and only comes from Python so dump it in
-                        // there until we support DT unit delay from C
-                        Python::attach(|py| Ok(Self::Obj(i.into_py_any(py)?)))
+                        Ok(Self::Int(i))
                     }
                 }
                 Value::Real(f) => Ok(Self::Float(f)),
@@ -208,10 +246,25 @@ impl Param {
     pub fn extract_no_coerce(ob: Borrowed<PyAny>) -> PyResult<Self> {
         Ok(if ob.is_instance_of::<PyFloat>() {
             Param::Float(ob.extract()?)
+        } else if ob.is_instance_of::<PyInt>() {
+            if let Ok(int) = ob.extract() {
+                Param::Int(int)
+            } else {
+                // This catch leaves bigints as Python objects, rather than coercing them. We may
+                // decide to change this, and have tighter limits once we have specialized uses of
+                // `extract_no_coerce` so we can be more sure of the context.
+                Param::Obj(ob.to_owned().unbind())
+            }
         } else if let Ok(py_expr) = PyParameterExpression::extract_coerce(ob) {
+            if Some(true) == py_expr.inner.is_int() {
+                let Value::Int(int) = py_expr.inner.try_to_value(true)? else {
+                    return Ok(Param::Obj(ob.to_owned().unbind()));
+                };
+                Param::Int(int)
+            }
             // don't get confused by the `coerce` name here -- we promise to not coerce to
-            // Param::Float. But if it's an int or complex we need to store it as an Obj.
-            if Some(true) == py_expr.inner.is_int() || Some(true) == py_expr.inner.is_complex() {
+            // Param::Float. But if it's complex we need to store it as an Obj.
+            else if Some(true) == py_expr.inner.is_complex() {
                 Param::Obj(ob.to_owned().unbind())
             } else {
                 Param::ParameterExpression(Arc::new(py_expr.inner))
@@ -221,12 +274,40 @@ impl Param {
         })
     }
 
+    /// Extracts a duration value based on its unit.
+    pub fn extract_duration(ob: Borrowed<PyAny>, unit: &DelayUnit) -> PyResult<Self> {
+        if let Ok(par_expr) = PyParameterExpression::extract(ob) {
+            if matches!(unit, DelayUnit::EXPR) {
+                return Err(PyTypeError::new_err(format!(
+                    "Expected an 'Expr' for '{}' duration unit, got {}",
+                    unit,
+                    ob.get_type().repr()?
+                )));
+            }
+            if par_expr.inner.is_int() == Some(true) && matches!(unit, DelayUnit::DT) {
+                return Err(PyTypeError::new_err(format!(
+                    "Expected an 'Int' for '{}' duration unit, got {}",
+                    unit,
+                    ob.get_type().repr()?
+                )));
+            }
+            Ok(Param::ParameterExpression(Arc::new(par_expr.inner)))
+        } else {
+            match unit {
+                DelayUnit::DT => Ok(Param::Int(ob.extract()?)),
+                DelayUnit::EXPR => Ok(Param::Obj(ob.as_any().clone().unbind())),
+                _ => Ok(Param::Float(ob.extract()?)),
+            }
+        }
+    }
+
     /// Clones the [Param] object safely by reference count or copying.
     pub fn clone_ref(&self, py: Python) -> Self {
         match self {
             Param::ParameterExpression(exp) => Param::ParameterExpression(exp.clone()),
             Param::Float(float) => Param::Float(*float),
             Param::Obj(obj) => Param::Obj(obj.clone_ref(py)),
+            Param::Int(int) => Param::Int(*int),
         }
     }
 
@@ -237,12 +318,12 @@ impl Param {
     ) -> PyResult<Self> {
         match self {
             Param::Float(f) => Ok(Param::Float(*f)),
-            _ => imports::DEEPCOPY
-                .get_bound(py)
-                .call1((self.clone(), memo))?
-                .extract()
-                // The extraction is infallible.
-                .map_err(|x| match x {}),
+            _ => Self::extract_no_coerce(
+                imports::DEEPCOPY
+                    .get_bound(py)
+                    .call1((self.clone(), memo))?
+                    .as_borrowed(),
+            ),
         }
     }
 }
@@ -282,12 +363,12 @@ pub enum OperationRef<'a> {
     ControlFlow(&'a ControlFlowInstruction),
     StandardGate(StandardGate),
     StandardInstruction(StandardInstruction),
-    Gate(&'a PyInstruction),
-    Instruction(&'a PyInstruction),
-    Operation(&'a PyInstruction),
+    PyCustom(&'a PyInstruction),
     Unitary(&'a UnitaryGate),
     PauliProductMeasurement(&'a PauliProductMeasurement),
     PauliProductRotation(&'a PauliProductRotation),
+    CustomOperation(&'a dyn CustomOperation),
+    Store(&'a Store),
 }
 
 impl Operation for OperationRef<'_> {
@@ -297,12 +378,12 @@ impl Operation for OperationRef<'_> {
             Self::ControlFlow(op) => op.name(),
             Self::StandardGate(standard) => standard.name(),
             Self::StandardInstruction(instruction) => instruction.name(),
-            Self::Gate(gate) => gate.name(),
-            Self::Instruction(instruction) => instruction.name(),
-            Self::Operation(operation) => operation.name(),
+            Self::PyCustom(inst) => inst.name(),
             Self::Unitary(unitary) => unitary.name(),
             Self::PauliProductMeasurement(ppm) => ppm.name(),
             Self::PauliProductRotation(rotation) => rotation.name(),
+            Self::CustomOperation(operation) => operation.name(),
+            Self::Store(store) => store.name(),
         }
     }
     #[inline]
@@ -311,12 +392,12 @@ impl Operation for OperationRef<'_> {
             Self::ControlFlow(op) => op.num_qubits(),
             Self::StandardGate(standard) => standard.num_qubits(),
             Self::StandardInstruction(instruction) => instruction.num_qubits(),
-            Self::Gate(gate) => gate.num_qubits(),
-            Self::Instruction(instruction) => instruction.num_qubits(),
-            Self::Operation(operation) => operation.num_qubits(),
+            Self::PyCustom(inst) => inst.num_qubits(),
             Self::Unitary(unitary) => unitary.num_qubits(),
             Self::PauliProductMeasurement(ppm) => ppm.num_qubits(),
             Self::PauliProductRotation(rotation) => rotation.num_qubits(),
+            Self::CustomOperation(operation) => operation.num_qubits(),
+            Self::Store(store) => store.num_qubits(),
         }
     }
     #[inline]
@@ -325,12 +406,12 @@ impl Operation for OperationRef<'_> {
             Self::ControlFlow(op) => op.num_clbits(),
             Self::StandardGate(standard) => standard.num_clbits(),
             Self::StandardInstruction(instruction) => instruction.num_clbits(),
-            Self::Gate(gate) => gate.num_clbits(),
-            Self::Instruction(instruction) => instruction.num_clbits(),
-            Self::Operation(operation) => operation.num_clbits(),
+            Self::PyCustom(inst) => inst.num_clbits(),
             Self::Unitary(unitary) => unitary.num_clbits(),
             Self::PauliProductMeasurement(ppm) => ppm.num_clbits(),
             Self::PauliProductRotation(rotation) => rotation.num_clbits(),
+            Self::CustomOperation(operation) => operation.num_clbits(),
+            Self::Store(store) => store.num_clbits(),
         }
     }
     #[inline]
@@ -339,12 +420,12 @@ impl Operation for OperationRef<'_> {
             Self::ControlFlow(op) => op.num_params(),
             Self::StandardGate(standard) => standard.num_params(),
             Self::StandardInstruction(instruction) => instruction.num_params(),
-            Self::Gate(gate) => gate.num_params(),
-            Self::Instruction(instruction) => instruction.num_params(),
-            Self::Operation(operation) => operation.num_params(),
+            Self::PyCustom(inst) => inst.num_params(),
             Self::Unitary(unitary) => unitary.num_params(),
             Self::PauliProductMeasurement(ppm) => ppm.num_params(),
             Self::PauliProductRotation(rotation) => rotation.num_params(),
+            Self::CustomOperation(operation) => operation.num_params(),
+            Self::Store(store) => store.num_params(),
         }
     }
     #[inline]
@@ -353,12 +434,12 @@ impl Operation for OperationRef<'_> {
             Self::ControlFlow(op) => op.directive(),
             Self::StandardGate(standard) => standard.directive(),
             Self::StandardInstruction(instruction) => instruction.directive(),
-            Self::Gate(gate) => gate.directive(),
-            Self::Instruction(instruction) => instruction.directive(),
-            Self::Operation(operation) => operation.directive(),
+            Self::PyCustom(inst) => inst.directive(),
             Self::Unitary(unitary) => unitary.directive(),
             Self::PauliProductMeasurement(ppm) => ppm.directive(),
             Self::PauliProductRotation(rotation) => rotation.directive(),
+            Self::CustomOperation(operation) => operation.directive(),
+            Self::Store(store) => store.directive(),
         }
     }
 }
@@ -483,7 +564,7 @@ pub enum ForCollection {
     /// A literal Python `range` object extracted to Rust.
     PyRange(PyRange),
     /// Some ordered collection of integers.
-    List(Vec<usize>),
+    List(Vec<isize>),
 }
 impl ForCollection {
     pub fn is_empty(&self) -> bool {
@@ -507,18 +588,51 @@ pub struct ControlFlowInstruction {
     pub num_clbits: u32,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum LoopParam {
+    Parameter(Symbol),
+    Variable(Var),
+}
+
+impl<'a, 'py> FromPyObject<'a, 'py> for LoopParam {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
+        if let Ok(parameter) = ob.extract::<Symbol>() {
+            Ok(LoopParam::Parameter(parameter))
+        } else {
+            ob.extract::<Var>()
+                .map(LoopParam::Variable)
+                .map_err(PyErr::from)
+        }
+    }
+}
+
+impl<'py> IntoPyObject<'py> for LoopParam {
+    type Target = PyAny;
+    type Output = Bound<'py, Self::Target>;
+    type Error = PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        match self {
+            LoopParam::Parameter(symbol) => symbol.into_pyobject(py),
+            LoopParam::Variable(var) => var.into_pyobject(py),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 #[repr(align(8))]
 pub enum ControlFlow {
     Box {
         duration: Option<BoxDuration>,
-        annotations: Vec<Py<PyAny>>,
+        annotations: Vec<Arc<dyn Annotation>>,
     },
     BreakLoop,
     ContinueLoop,
     ForLoop {
         collection: ForCollection,
-        loop_param: Option<Symbol>,
+        loop_param: Option<LoopParam>,
     },
     IfElse {
         condition: Condition,
@@ -534,88 +648,6 @@ pub enum ControlFlow {
 }
 
 impl ControlFlowInstruction {
-    /// Check if another control flow operations is equivalent to this one.
-    ///
-    /// This can be removed and [ControlFlowInstruction] can be made to implement [PartialEq]
-    /// instead once `annotations` gets moved to the instruction.
-    pub fn py_eq(&self, py: Python, other: &ControlFlowInstruction) -> PyResult<bool> {
-        if self.num_qubits != other.num_qubits || self.num_clbits != other.num_clbits {
-            return Ok(false);
-        }
-        match &self.control_flow {
-            ControlFlow::Box {
-                duration: self_duration,
-                annotations: self_annotations,
-            } => match &other.control_flow {
-                ControlFlow::Box {
-                    duration: other_duration,
-                    annotations: other_annotations,
-                } => {
-                    if self_duration != other_duration
-                        || self_annotations.len() != other_annotations.len()
-                    {
-                        return Ok(false);
-                    }
-                    for (a, b) in self_annotations.iter().zip(other_annotations) {
-                        if !a.bind(py).eq(b)? {
-                            return Ok(false);
-                        }
-                    }
-                    Ok(true)
-                }
-                _ => Ok(false),
-            },
-            ControlFlow::BreakLoop => match &other.control_flow {
-                ControlFlow::BreakLoop => Ok(true),
-                _ => Ok(false),
-            },
-            ControlFlow::ContinueLoop => match &other.control_flow {
-                ControlFlow::ContinueLoop => Ok(true),
-                _ => Ok(false),
-            },
-            ControlFlow::ForLoop {
-                collection: self_collection,
-                loop_param: self_loop_param,
-            } => match &other.control_flow {
-                ControlFlow::ForLoop {
-                    collection: other_collection,
-                    loop_param: other_loop_param,
-                } => Ok(self_collection == other_collection && self_loop_param == other_loop_param),
-                _ => Ok(false),
-            },
-            ControlFlow::IfElse {
-                condition: self_condition,
-            } => match &other.control_flow {
-                ControlFlow::IfElse {
-                    condition: other_condition,
-                } => Ok(self_condition == other_condition),
-                _ => Ok(false),
-            },
-            ControlFlow::Switch {
-                target: self_target,
-                label_spec: self_label_spec,
-                cases: self_cases,
-            } => match &other.control_flow {
-                ControlFlow::Switch {
-                    target: other_target,
-                    label_spec: other_label_spec,
-                    cases: other_cases,
-                } => Ok(self_cases == other_cases
-                    && self_target == other_target
-                    && self_label_spec == other_label_spec),
-                _ => Ok(false),
-            },
-            ControlFlow::While {
-                condition: self_condition,
-            } => match &other.control_flow {
-                ControlFlow::While {
-                    condition: other_condition,
-                } => Ok(self_condition == other_condition),
-                _ => Ok(false),
-            },
-        }
-    }
-
     pub fn create_py_op(
         &self,
         py: Python,
@@ -652,7 +684,13 @@ impl ControlFlowInstruction {
                         duration,
                         unit,
                         label,
-                        PyTuple::new(py, annotations)?,
+                        PyTuple::new(
+                            py,
+                            annotations
+                                .iter()
+                                .map(|a| create_py_annotation(a, py))
+                                .collect::<PyResult<Vec<_>>>()?,
+                        )?,
                     ),
                 )
             }
@@ -729,6 +767,83 @@ impl ControlFlowInstruction {
     }
 }
 
+impl PartialEq for ControlFlowInstruction {
+    /// Check if another control flow operations is equivalent to this one.
+    fn eq(&self, other: &ControlFlowInstruction) -> bool {
+        if self.num_qubits != other.num_qubits || self.num_clbits != other.num_clbits {
+            return false;
+        }
+        match &self.control_flow {
+            ControlFlow::Box {
+                duration: self_duration,
+                annotations: self_annotations,
+            } => match &other.control_flow {
+                ControlFlow::Box {
+                    duration: other_duration,
+                    annotations: other_annotations,
+                } => {
+                    if self_duration != other_duration
+                        || self_annotations.len() != other_annotations.len()
+                    {
+                        return false;
+                    }
+                    for (a, b) in self_annotations.iter().zip(other_annotations) {
+                        if a != b {
+                            return false;
+                        }
+                    }
+                    true
+                }
+                _ => false,
+            },
+            ControlFlow::BreakLoop => matches!(&other.control_flow, ControlFlow::BreakLoop),
+            ControlFlow::ContinueLoop => matches!(&other.control_flow, ControlFlow::ContinueLoop),
+            ControlFlow::ForLoop {
+                collection: self_collection,
+                loop_param: self_loop_param,
+            } => match &other.control_flow {
+                ControlFlow::ForLoop {
+                    collection: other_collection,
+                    loop_param: other_loop_param,
+                } => self_collection == other_collection && self_loop_param == other_loop_param,
+                _ => false,
+            },
+            ControlFlow::IfElse {
+                condition: self_condition,
+            } => match &other.control_flow {
+                ControlFlow::IfElse {
+                    condition: other_condition,
+                } => self_condition == other_condition,
+                _ => false,
+            },
+            ControlFlow::Switch {
+                target: self_target,
+                label_spec: self_label_spec,
+                cases: self_cases,
+            } => match &other.control_flow {
+                ControlFlow::Switch {
+                    target: other_target,
+                    label_spec: other_label_spec,
+                    cases: other_cases,
+                } => {
+                    self_cases == other_cases
+                        && self_target == other_target
+                        && self_label_spec == other_label_spec
+                }
+                _ => false,
+            },
+            ControlFlow::While {
+                condition: self_condition,
+            } => match &other.control_flow {
+                ControlFlow::While {
+                    condition: other_condition,
+                } => self_condition == other_condition,
+                _ => false,
+            },
+        }
+    }
+}
+
 impl Operation for ControlFlowInstruction {
     fn name(&self) -> &str {
         match &self.control_flow {
@@ -772,13 +887,14 @@ impl Operation for ControlFlowInstruction {
 pub enum ControlFlowView<'a, T> {
     Box {
         duration: Option<&'a BoxDuration>,
+        annotations: &'a [Arc<dyn Annotation>],
         body: &'a T,
     },
     BreakLoop,
     ContinueLoop,
     ForLoop {
         collection: &'a ForCollection,
-        loop_param: Option<&'a Symbol>,
+        loop_param: Option<&'a LoopParam>,
         body: &'a T,
     },
     IfElse {
@@ -817,9 +933,10 @@ impl<'a, T> ControlFlowView<'a, T> {
         let view = match &cf.control_flow {
             ControlFlow::Box {
                 duration,
-                annotations: _,
+                annotations,
             } => Self::Box {
                 duration: duration.as_ref(),
+                annotations: annotations.as_slice(),
                 body: &blocks[block_ids[0]],
             },
             ControlFlow::BreakLoop => Self::BreakLoop,
@@ -1167,10 +1284,18 @@ pub fn clone_param(param: &Param) -> Param {
         Param::Float(theta) => Param::Float(*theta),
         Param::ParameterExpression(theta) => Param::ParameterExpression(theta.clone()),
         Param::Obj(_) => unreachable!(),
+        Param::Int(int) => Param::Int(*int),
     }
 }
 
-/// Multiply a ``Param`` with a float.
+/// Multiply a [`Param`] with a float.
+///
+/// Multiplying is only supported between variants [`Param::Float`] and
+/// [`Param::ParameterExpression`]. [`Param::Int`] is not currently supported.
+///
+/// # Panics
+///
+/// The operation will panic if any of the parameters is [`Param::Int`] or [`Param::Obj`].
 pub fn multiply_param(param: &Param, mult: f64) -> Param {
     match param {
         Param::Float(theta) => Param::Float(theta * mult),
@@ -1180,11 +1305,22 @@ pub fn multiply_param(param: &Param, mult: f64) -> Param {
                 theta.mul(&ParameterExpression::from_f64(mult)).unwrap(),
             ))
         }
-        Param::Obj(_) => unreachable!("Unsupported multiplication of a Param::Obj."),
+        Param::Obj(_) | Param::Int(_) => {
+            panic!("Unsupported multiplication of a Param::Obj.")
+        }
     }
 }
 
 /// Multiply two ``Param``s.
+///
+/// Multiplication is supported between variants [`Param::Float`] and
+/// [`Param::ParameterExpression`]. Multiplying [`Param::Int`] by anything
+/// other than another [`Param::Int`] instance will result in a panic.
+///
+/// # Panics
+///
+/// The operation will panic if any of the parameters is [`Param::Obj`] or
+/// if a [`Param::Int`] instance is multiplied by a different variant.
 pub fn multiply_params(param1: Param, param2: Param) -> Param {
     match (&param1, &param2) {
         (Param::Float(theta), Param::Float(lambda)) => Param::Float(theta * lambda),
@@ -1194,10 +1330,19 @@ pub fn multiply_params(param1: Param, param2: Param) -> Param {
             // TODO we could properly propagate the error here
             Param::ParameterExpression(Arc::new(p1.mul(p2).expect("Name conflict during mul.")))
         }
-        _ => unreachable!("Unsupported multiplication."),
+        (Param::Int(left), Param::Int(right)) => Param::Int(left * right),
+        _ => panic!("Unsupported multiplication."),
     }
 }
 
+/// Adda a [`Param`] with a float.
+///
+/// Addition is only supported between variants [`Param::Float`] and
+/// [`Param::ParameterExpression`]. [`Param::Int`] is not currently supported.
+///
+/// # Panics
+///
+/// The operation will panic if any of the parameters is [`Param::Int`] or [`Param::Obj`].
 pub fn add_param(param: &Param, summand: f64) -> Param {
     match param {
         Param::Float(theta) => Param::Float(*theta + summand),
@@ -1205,15 +1350,25 @@ pub fn add_param(param: &Param, summand: f64) -> Param {
             // safe to unwrap as addition with float does not have name conflicts
             Arc::new(theta.add(&ParameterExpression::from_f64(summand)).unwrap()),
         ),
-        Param::Obj(_) => unreachable!("Unsupported addition of a Param::Obj."),
+        Param::Obj(_) | Param::Int(_) => {
+            panic!("Unsupported addition of a Param::Obj or Param::Int.")
+        }
     }
 }
 
+/// Adds two [`Param`] instances.
+///
+/// Addition is only supported between variants [`Param::Float`] and
+/// [`Param::ParameterExpression`]. Adding [`Param::Int`] with anything
+/// other than another [`Param::Int`] instance will result in a panic.
+///
+/// # Panics
+///
+/// The operation will panic if any of the parameters is [`Param::Obj`] or
+/// if a [`Param::Int`] instance is added to a different variant.
 pub fn radd_param(param1: Param, param2: Param) -> Param {
     match [&param1, &param2] {
-        [Param::Float(theta), Param::Float(lambda)] => Param::Float(theta + lambda),
-        [Param::Float(theta), Param::ParameterExpression(_lambda)] => add_param(&param2, *theta),
-        [Param::ParameterExpression(_theta), Param::Float(lambda)] => add_param(&param1, *lambda),
+        [param, Param::Float(float)] | [Param::Float(float), param] => add_param(param, *float),
         [
             Param::ParameterExpression(theta),
             Param::ParameterExpression(lambda),
@@ -1223,6 +1378,7 @@ pub fn radd_param(param1: Param, param2: Param) -> Param {
                 theta.add(lambda).expect("Name conflict during add."),
             ))
         }
+        [Param::Int(left), Param::Int(right)] => Param::Int(*left + right),
         _ => unreachable!("Unsupported addition."),
     }
 }
@@ -1237,46 +1393,75 @@ pub trait PythonOperation: Sized {
     fn py_copy(&self, py: Python) -> PyResult<Self>;
 }
 
-#[derive(Clone, Debug)]
-#[repr(align(8))]
-pub enum PyOperationTypes {
-    Operation(PyInstruction),
-    Instruction(PyInstruction),
-    Gate(PyInstruction),
+/// Which Python subclass a [`PyInstruction`] is associated with.
+///
+/// This is the same as the `Operation`/`Instruction`/`Gate` split that Python-space has.  `Gate`
+/// incorporates all of `Instruction`, which in turn incorporates all of `Operation`.  `Gate` means
+/// the operation represents a unitary action, `Instruction` is general and (usually) has a built-in
+/// hierarchical definition, while `Operation` is nearly entirely opaque.
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+pub enum PyOpKind {
+    /// The instruction implements only `Operation`.
+    Operation,
+    /// The instruction is a subclass of `Instruction`.
+    Instruction,
+    /// The instruction is a subclass of `Gate`.
+    Gate,
+}
+impl PyOpKind {
+    /// Get the operation kind from a Python type.
+    ///
+    /// The `Err` variant is only for the propagation of Python errors during `issubclass` checks.
+    /// The function returns `Ok(None)` if the type is not in the `Operation` hierarchy.
+    pub fn from_type(ob: Borrowed<PyType>) -> PyResult<Option<Self>> {
+        let py = ob.py();
+        if ob.is_subclass(imports::GATE.get_bound(py))? {
+            Ok(Some(Self::Gate))
+        } else if ob.is_subclass(imports::INSTRUCTION.get_bound(py))? {
+            Ok(Some(Self::Instruction))
+        } else {
+            ob.is_subclass(imports::OPERATION.get_bound(py))
+                .map(|ok| ok.then_some(Self::Operation))
+        }
+    }
 }
 
-/// This class is used to wrap a Python side Instruction that is not in the standard library
+/// A custom operation from Python space.
+///
+/// These could be backed by "generalized" instructions from Qiskit's Python code, or completely
+/// arbitrary user code.  Rust code, in general, can only understand these objects through use of
+/// `Operation` trait and similar methods.
+///
+/// If you find yourself deeply inspecting or traversing the internal Python object manually,
+/// something is probably not right; there is likely either something missing from Rust space, or
+/// the Rust-space code is too tightly coupled to a custom Python object.
 #[derive(Clone, Debug)]
-// We bit-pack pointers to this, so having a known alignment even on 32-bit systems is good.
-#[repr(align(8))]
+#[repr(align(8))] // This is a `PackedOperation` packed pointer, so needs a fixed alignment.
 pub struct PyInstruction {
+    /// What Python-space subclass the operation is associated with.  This field represents the same
+    /// `Operation`/`Instruction`/`Gate` split that Python space has.
+    pub kind: PyOpKind,
     pub qubits: u32,
     pub clbits: u32,
     pub params: u32,
     pub op_name: String,
-    pub instruction: Py<PyAny>,
+    pub ob: Py<PyAny>,
 }
 
 impl PythonOperation for PyInstruction {
     fn py_deepcopy(&self, py: Python, memo: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
         let deepcopy = imports::DEEPCOPY.get_bound(py);
         Ok(PyInstruction {
-            instruction: deepcopy.call1((&self.instruction, memo))?.unbind(),
-            qubits: self.qubits,
-            clbits: self.clbits,
-            params: self.params,
-            op_name: self.op_name.clone(),
+            ob: deepcopy.call1((&self.ob, memo))?.unbind(),
+            ..self.clone()
         })
     }
 
     fn py_copy(&self, py: Python) -> PyResult<Self> {
         let copy_attr = intern!(py, "copy");
         Ok(PyInstruction {
-            instruction: self.instruction.call_method0(py, copy_attr)?,
-            qubits: self.qubits,
-            clbits: self.clbits,
-            params: self.params,
-            op_name: self.op_name.clone(),
+            ob: self.ob.call_method0(py, copy_attr)?,
+            ..self.clone()
         })
     }
 }
@@ -1297,7 +1482,7 @@ impl Operation for PyInstruction {
 
     fn directive(&self) -> bool {
         Python::attach(|py| -> bool {
-            match self.instruction.getattr(py, intern!(py, "_directive")) {
+            match self.ob.getattr(py, intern!(py, "_directive")) {
                 Ok(directive) => {
                     let res: bool = directive.extract(py).unwrap();
                     res
@@ -1309,40 +1494,46 @@ impl Operation for PyInstruction {
 }
 
 impl PyInstruction {
-    /// returns the number of control qubits in the instruction
-    /// returns 0 if the instruction is not controlled
-    pub fn num_ctrl_qubits(&self) -> u32 {
+    /// returns the number of control qubits in the instruction, if any.
+    pub fn num_ctrl_qubits(&self) -> Option<u32> {
+        if self.kind != PyOpKind::Gate {
+            return None;
+        }
         Python::attach(|py| {
-            self.instruction
+            self.ob
                 .getattr(py, "num_ctrl_qubits")
                 .and_then(|py_num_ctrl_qubits| py_num_ctrl_qubits.extract::<u32>(py))
-                .unwrap_or(0)
+                .ok()
         })
     }
 
-    /// returns the control state of the gate as a decimal number
-    /// returns 2^num_ctrl_bits-1 (the '11...1' state) if the gate has not control state data
-    pub fn ctrl_state(&self) -> u32 {
+    /// returns the control state of the gate as a decimal number, if any.
+    pub fn ctrl_state(&self) -> Option<u32> {
+        if self.kind != PyOpKind::Gate {
+            return None;
+        }
         Python::attach(|py| {
-            self.instruction
+            self.ob
                 .getattr(py, "ctrl_state")
                 .and_then(|py_ctrl_state| py_ctrl_state.extract::<u32>(py))
-                .unwrap_or((1 << self.num_ctrl_qubits()) - 1)
+                .ok()
         })
     }
     /// returns the class name of the python gate
-    pub fn class_name(&self) -> PyResult<String> {
-        Python::attach(|py| -> PyResult<String> {
-            self.instruction
-                .getattr(py, intern!(py, "__class__"))?
-                .getattr(py, intern!(py, "__name__"))?
-                .extract::<String>(py)
-        })
+    pub fn class_name(&self, py: Python) -> PyResult<String> {
+        self.ob
+            .bind(py)
+            .getattr(intern!(py, "__class__"))?
+            .getattr(intern!(py, "__name__"))?
+            .extract::<String>()
     }
 
     pub fn matrix(&self) -> Option<Array2<Complex64>> {
+        if self.kind != PyOpKind::Gate {
+            return None;
+        }
         Python::attach(|py| -> Option<Array2<Complex64>> {
-            match self.instruction.getattr(py, intern!(py, "to_matrix")) {
+            match self.ob.getattr(py, intern!(py, "to_matrix")) {
                 Ok(to_matrix) => {
                     let res: Option<Py<PyAny>> = to_matrix.call0(py).ok()?.extract(py).ok();
                     match res {
@@ -1358,9 +1549,25 @@ impl PyInstruction {
         })
     }
 
+    /// Get the complete definition field, if it exists.
+    pub fn py_definition<'py>(&self, py: Python<'py>) -> PyResult<Option<QuantumCircuitData<'py>>> {
+        if self.kind == PyOpKind::Operation {
+            return Ok(None);
+        }
+        self.ob
+            .bind(py)
+            .getattr(intern!(py, "definition"))
+            .and_then(|ob| ob.extract())
+    }
+
     pub fn definition(&self) -> Option<CircuitData> {
+        // The `definition` attribute isn't part of the `Operation` interface, so it's invalid for
+        // us to access it.
+        if self.kind == PyOpKind::Operation {
+            return None;
+        }
         Python::attach(|py| -> Option<CircuitData> {
-            match self.instruction.getattr(py, intern!(py, "definition")) {
+            match self.ob.getattr(py, intern!(py, "definition")) {
                 Ok(definition) => definition
                     .bind(py)
                     .getattr(intern!(py, "_data"))
@@ -1374,12 +1581,12 @@ impl PyInstruction {
     }
 
     pub fn matrix_as_static_1q(&self) -> Option<[[Complex64; 2]; 2]> {
-        if self.num_qubits() != 1 {
+        if self.kind != PyOpKind::Gate || self.num_qubits() != 1 {
             return None;
         }
         Python::attach(|py| -> Option<[[Complex64; 2]; 2]> {
             let array = self
-                .instruction
+                .ob
                 .call_method0(py, intern!(py, "to_matrix"))
                 .ok()?
                 .extract::<PyReadonlyArray2<Complex64>>(py)
@@ -1390,12 +1597,12 @@ impl PyInstruction {
     }
 
     pub fn matrix_as_static_2q(&self) -> Option<[[Complex64; 4]; 4]> {
-        if self.num_qubits() != 2 {
+        if self.kind != PyOpKind::Gate || self.num_qubits() != 2 {
             return None;
         }
         Python::attach(|py| -> Option<[[Complex64; 4]; 4]> {
             let array = self
-                .instruction
+                .ob
                 .call_method0(py, intern!(py, "to_matrix"))
                 .ok()?
                 .extract::<PyReadonlyArray2<Complex64>>(py)
@@ -1408,6 +1615,11 @@ impl PyInstruction {
                 [arr[[3, 0]], arr[[3, 1]], arr[[3, 2]], arr[[3, 3]]],
             ])
         })
+    }
+
+    /// Reference the Python object backing this object, if it is a gate.
+    pub fn gate_object(&self) -> Option<&Py<PyAny>> {
+        (self.kind == PyOpKind::Gate).then_some(&self.ob)
     }
 }
 
@@ -1694,7 +1906,7 @@ impl PauliProductRotation {
             .zip(self.x.iter())
             .filter(|(z, x)| **z || **x)
             .count();
-        let dim = 2u32.pow(num_qubits as u32);
+        let dim = (num_qubits as f64).exp2();
         let tr_over_dim = if num_qubits == 0 {
             // This is an identity Pauli rotation.
             (Complex64::new(0.0, -angle / 2.)).exp()
@@ -1702,7 +1914,7 @@ impl PauliProductRotation {
             Complex64::new((angle / 2.).cos(), 0.)
         };
 
-        Some((tr_over_dim, dim as f64))
+        Some((tr_over_dim, dim))
     }
 
     /// Return a dense matrix representation of the matrix.
@@ -1833,6 +2045,257 @@ impl PartialEq for PauliProductMeasurement {
 
 impl Eq for PauliProductMeasurement {}
 
+/// A manual storage of some classical value to a classical memory location
+#[derive(Debug, Clone, PartialEq)]
+pub struct Store {
+    lvalue: expr::Expr,
+    rvalue: expr::Expr,
+}
+
+impl Store {
+    pub fn create_py_op(&self, py: Python, label: Option<&str>) -> PyResult<Py<PyAny>> {
+        if let Some(label) = label {
+            Ok(imports::STORE
+                .get_bound(py)
+                .call1((self.lvalue.clone(), self.rvalue.clone(), label))?
+                .unbind())
+        } else {
+            Ok(imports::STORE
+                .get_bound(py)
+                .call1((self.lvalue.clone(), self.rvalue.clone()))?
+                .unbind())
+        }
+    }
+
+    /// Get an immutable borrow to the lvalue of this Store operation
+    pub fn lvalue(&self) -> &expr::Expr {
+        &self.lvalue
+    }
+
+    /// Get an immutable borrow to the rvalue of this Store operation
+    pub fn rvalue(&self) -> &expr::Expr {
+        &self.rvalue
+    }
+
+    /// Create a new Store operation
+    ///
+    /// The `lvalue` argument must be a valid lvalue (typically a var)
+    /// and the `rvalue` argument must be a valid value for that
+    /// storage location. This is a raw interface that has no input
+    /// checking done by this function to validate these constraints.
+    /// If they are violated you will create an invalid Store operation
+    /// that will potentially corrupt the [`CircuitData`] or [`DAGCircuit`]
+    /// objects when they are added. This is primarily intended to be used
+    /// when created the rust source of truth from a user created object
+    /// in Python (which has the input validation).
+    pub fn new(lvalue: expr::Expr, rvalue: expr::Expr) -> Self {
+        Self { lvalue, rvalue }
+    }
+}
+
+impl Operation for Store {
+    fn name(&self) -> &str {
+        "store"
+    }
+
+    fn num_qubits(&self) -> u32 {
+        0
+    }
+
+    fn num_clbits(&self) -> u32 {
+        0
+    }
+
+    fn num_params(&self) -> u32 {
+        0
+    }
+
+    fn directive(&self) -> bool {
+        true
+    }
+}
+
+/// Private module with especific traits that allow for the implementation
+/// of non dyn-compatible traits for [`CustomOperation`]. Namely [`PartialEq`]
+/// and [`Clone`].
+mod custom_traits {
+    use crate::operations::CustomOperation;
+
+    /// A trait which implements comparisons between [`CustomOperation`] instances.
+    /// If the operation implements [`PartialEq`], this trait will be automatically implemented.
+    /// Otherwise, the user is responsible for implementing this trait.
+    #[diagnostic::on_unimplemented(
+        message = "PartialEq is required to correctly implement CustomOperation on {Self}.",
+        label = "This type needs an implementation of PartialEq",
+        note = "Consider annotating {Self} with `#[derive(PartialEq)]`"
+    )]
+    pub trait ComparableOp {
+        fn rich_eq(&self, other: &dyn CustomOperation) -> bool;
+    }
+
+    impl<Op: PartialEq + CustomOperation> ComparableOp for Op {
+        fn rich_eq(&self, other: &dyn CustomOperation) -> bool {
+            let Some(other) = other.downcast_ref() else {
+                return false;
+            };
+            self.eq(other)
+        }
+    }
+
+    /// A trait which implements dynamically cloning [`CustomOperation`] dyn objects.
+    /// If the operation implements [`Clone`], this trait will be automatically implemented.
+    /// Otherwise, the user is responsible for implementing [`Clone`].
+    #[diagnostic::on_unimplemented(
+        message = "Clone is required to correctly implement CustomOperation on {Self}.",
+        label = "This type needs an implementation of Clone",
+        note = "Consider annotating {Self} with `#[derive(Clone)]`"
+    )]
+    pub trait ClonableOp {
+        fn clone_dyn(&self) -> Box<dyn CustomOperation>;
+    }
+
+    impl<Op: Clone + CustomOperation> ClonableOp for Op {
+        fn clone_dyn(&self) -> Box<dyn CustomOperation> {
+            Box::new(self.clone())
+        }
+    }
+}
+
+/// Trait that implements common methods found in operations that, in conjunction with
+/// the [Operation] trait, allows a struct to operate in a circuit.
+///
+/// Unlike [Operation] alone, this trait focuses on the specific functions that are
+/// typically available for the two main Qiskit operation types: Gate and Instruction.
+///
+/// To classify an operation, you must implement the [`CustomOperation::is_unitary`] method,
+/// which returns a [`bool`] object with two variants:
+/// - [`true`]: For unitary instructions.
+///     - In addition to this, the implementor should define required methods for
+///       the `Gate` to function properly:
+///       - [`CustomOperation::matrix`]
+///       - [`CustomOperation::num_ctrl_qubits`]
+///       - [`CustomOperation::is_controlled_gate`]
+/// - [`false`]: For non-unitary instruction.
+///
+/// This trait has an implicit requirement to [`PartialEq`] and [`Clone`] to allow for
+/// comparison between opaque gates and dynamic cloning.
+pub trait CustomOperation:
+    Operation + Any + Debug + Send + Sync + ComparableOp + ClonableOp
+{
+    /// Return the custom label assigned to this instruction.
+    fn label(&self) -> Option<&str> {
+        None
+    }
+
+    /// Returns an inverted version of this instruction and the computed parameters.
+    fn inverse(&self, _params: &[Param]) -> Option<(PackedOperation, SmallVec<[Param; 3]>)> {
+        None
+    }
+
+    /// Returns a circuit representing the possible list of instructions that
+    /// this operation is composed of.
+    fn definition(&self, _params: &[Param]) -> Option<CircuitData> {
+        None
+    }
+
+    /// Returns the dense unitary matrix for the operation or `None` by default
+    /// if not applicable or unimplemented.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there was a problem creating the matrix.
+    fn matrix(
+        &self,
+        _params: &[Param],
+    ) -> Result<Option<Array2<Complex64>>, Box<dyn error::Error>> {
+        Ok(None)
+    }
+
+    /// If the instance is a gate, returns the number of control qubits.
+    fn num_ctrl_qubits(&self) -> Option<NonZero<u32>> {
+        None
+    }
+
+    /// If the instance is a gate, checks if it contains any control Qubits.
+    fn is_controlled_gate(&self) -> bool {
+        self.num_ctrl_qubits().is_some()
+    }
+
+    /// Returns whether the operation is based on a unitary matrix.
+    fn is_unitary(&self) -> bool;
+}
+
+impl PartialEq for dyn CustomOperation {
+    fn eq(&self, other: &Self) -> bool {
+        ComparableOp::rich_eq(self, other)
+    }
+}
+
+impl Clone for Box<dyn CustomOperation> {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
+    }
+}
+
+impl ToOwned for dyn CustomOperation {
+    type Owned = Box<dyn CustomOperation>;
+
+    fn to_owned(&self) -> Self::Owned {
+        self.clone_dyn()
+    }
+}
+
+impl dyn CustomOperation + 'static {
+    /// Casts a reference to a CustomOperation to its original type if the correct
+    /// type is specified.
+    pub fn downcast_ref<T: CustomOperation + 'static>(&self) -> Option<&T> {
+        let self_as_any: &dyn Any = self;
+        self_as_any.downcast_ref()
+    }
+}
+
+/// Internal representation of a custom operation within a Circuit.
+///
+/// It acts as a wrapper for a CustomOperation which ensures that
+/// the operation is wrapped within a [`Box`] pointer and is aligned
+/// to 8 bytes, which enables it to be safely represented as a
+/// [`PackedOperation`].
+#[derive(Debug)]
+#[repr(align(8))]
+pub struct BoxedCustomOperation(Box<dyn CustomOperation>);
+
+impl Deref for BoxedCustomOperation {
+    type Target = dyn CustomOperation;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl DerefMut for BoxedCustomOperation {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.as_mut()
+    }
+}
+
+impl Clone for BoxedCustomOperation {
+    fn clone(&self) -> Self {
+        Self(self.0.clone_dyn())
+    }
+}
+
+impl<T: CustomOperation> From<T> for BoxedCustomOperation {
+    fn from(value: T) -> Self {
+        Self(value.clone_dyn())
+    }
+}
+
+impl From<Box<dyn CustomOperation>> for BoxedCustomOperation {
+    fn from(value: Box<dyn CustomOperation>) -> Self {
+        Self(value)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use approx::assert_abs_diff_eq;
@@ -1872,6 +2335,459 @@ mod test {
             for j in 0..dim {
                 assert_abs_diff_eq!(expected_matrix[(i, j)], matrix[(i, j)], epsilon = epsilon);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_custom_operations {
+    use crate::circuit_data::CircuitData;
+    use crate::gate_matrix::{H_GATE, rz_gate};
+    use crate::instruction::Parameters;
+    use crate::operations::{CustomOperation, Operation, OperationRef, Param, StandardGate};
+    use crate::packed_instruction::PackedOperation;
+    use crate::{Clbit, Qubit};
+    use ndarray::aview2;
+    use smallvec::smallvec;
+    use std::f64::consts::PI;
+
+    use super::*;
+
+    macro_rules! impl_static_operation {
+        ($ty:ident; $name:expr, $qubits:expr, $clbits:expr, $params:expr, $directive:expr) => {
+            impl $crate::operations::Operation for $ty {
+                fn name(&self) -> &str {
+                    $name
+                }
+                fn num_qubits(&self) -> u32 {
+                    $qubits
+                }
+                fn num_clbits(&self) -> u32 {
+                    $clbits
+                }
+                fn num_params(&self) -> u32 {
+                    $params
+                }
+                fn directive(&self) -> bool {
+                    $directive
+                }
+            }
+        };
+    }
+
+    /// HGate-like implementor
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+    struct CustomH;
+    impl_static_operation!(CustomH; "h", 1, 0, 0, false);
+
+    impl CustomOperation for CustomH {
+        fn definition(&self, _params: &[Param]) -> Option<CircuitData> {
+            CircuitData::from_standard_gates(
+                1,
+                [(StandardGate::H, smallvec![], smallvec![Qubit(0)])],
+                0.0.into(),
+            )
+            .ok()
+        }
+
+        fn matrix(
+            &self,
+            params: &[Param],
+        ) -> Result<Option<Array2<Complex64>>, Box<dyn error::Error>> {
+            Ok(params.is_empty().then_some(aview2(&H_GATE).to_owned()))
+        }
+
+        fn is_unitary(&self) -> bool {
+            true
+        }
+    }
+
+    /// Parameterized Z gate
+    #[derive(Debug, Clone, PartialEq, Default)]
+    struct ParametrizedAndLabeled {
+        label: Option<String>,
+    }
+    impl_static_operation!(ParametrizedAndLabeled; "custom_rz", 1, 0, 1, false);
+    impl ParametrizedAndLabeled {
+        pub fn new<T: Into<String>>(label: Option<T>) -> Self {
+            Self {
+                label: label.map(Into::into),
+            }
+        }
+    }
+    impl CustomOperation for ParametrizedAndLabeled {
+        fn is_unitary(&self) -> bool {
+            true
+        }
+
+        fn matrix(
+            &self,
+            params: &[Param],
+        ) -> Result<Option<Array2<Complex64>>, Box<dyn error::Error>> {
+            match params {
+                [Param::Float(theta)] => Ok(Some(aview2(&rz_gate(*theta)).to_owned())),
+                _ => Ok(None),
+            }
+        }
+
+        fn definition(&self, params: &[Param]) -> Option<CircuitData> {
+            match params {
+                [Param::Float(theta)] => CircuitData::from_standard_gates(
+                    1,
+                    [(
+                        StandardGate::RZ,
+                        smallvec![(*theta).into()],
+                        smallvec![Qubit(0)],
+                    )],
+                    0.0.into(),
+                )
+                .ok(),
+                _ => None,
+            }
+        }
+
+        fn label(&self) -> Option<&str> {
+            self.label.as_deref()
+        }
+    }
+
+    /// Custom controlled gate
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    struct Controlled;
+    impl_static_operation!(Controlled; "controlled", 1, 0, 0, false);
+    impl CustomOperation for Controlled {
+        fn is_unitary(&self) -> bool {
+            false
+        }
+
+        fn num_ctrl_qubits(&self) -> Option<std::num::NonZero<u32>> {
+            std::num::NonZero::new(1)
+        }
+    }
+    /// Custom implementation of measure
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    struct Measure2;
+    impl_static_operation!(Measure2; "measure", 2, 2, 0, false);
+    impl CustomOperation for Measure2 {
+        fn is_unitary(&self) -> bool {
+            false
+        }
+    }
+
+    /// Operation that can be reversed
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    struct Reversible;
+    impl_static_operation!(Reversible; "rev", 1, 0, 0, false);
+    impl CustomOperation for Reversible {
+        fn is_unitary(&self) -> bool {
+            false
+        }
+
+        fn inverse(
+            &self,
+            params: &[Param],
+        ) -> Option<(
+            crate::packed_instruction::PackedOperation,
+            smallvec::SmallVec<[Param; 3]>,
+        )> {
+            match params {
+                [] => Some((
+                    PackedOperation::from_custom_operation(Box::new(Self)),
+                    smallvec![],
+                )),
+                _ => None,
+            }
+        }
+    }
+
+    /// Fully opaque gate with no matrix
+    #[derive(Debug, Clone, PartialEq)]
+    struct OpaqueGate;
+    impl_static_operation!(OpaqueGate; "foo", 1, 0, 0, false);
+    impl CustomOperation for OpaqueGate {
+        fn is_unitary(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn try_custom_h_gate() {
+        let gate: Box<dyn CustomOperation> = Box::new(CustomH);
+
+        // Try downcasting
+        let gate = gate
+            .downcast_ref::<CustomH>()
+            .expect("Should downcast to an H gate");
+
+        assert_eq!(gate.name(), "h");
+        assert_eq!(gate.num_qubits(), 1);
+        assert_eq!(gate.num_params(), 0);
+        assert_eq!(gate.label(), None);
+
+        assert!(gate.is_unitary());
+
+        let matrix_res = gate.matrix(&[]);
+        let matrix_exp = aview2(&H_GATE);
+        assert!(matches!(matrix_res, Ok(Some(matrix)) if matrix == matrix_exp));
+
+        let matrix_res = gate.matrix(&[Param::Float(PI)]);
+        assert!(matches!(matrix_res, Ok(None)));
+
+        let circuit = gate.definition(&[]).expect("Circuit should exist.");
+        assert_eq!(circuit.len(), 1);
+
+        let hgate = circuit.iter().next().expect("Should be H gate");
+        assert_eq!(hgate.op.standard_gate(), StandardGate::H);
+    }
+
+    #[test]
+    fn try_add_to_circuit() {
+        let mut circuit = CircuitData::with_capacity(1, 0, 1, 0.0.into())
+            .expect("Circuit with small capacity should be built.");
+        let as_operation = PackedOperation::from_custom_operation(Box::new(CustomH));
+        circuit
+            .push_packed_operation(as_operation, None, &[Qubit(0)], &[])
+            .expect("Instruction should be added to the circuit.");
+
+        // Retrieve operation
+        let retrieved_gate = &circuit.data()[0];
+
+        let OperationRef::CustomOperation(gate_as_h) = retrieved_gate.op.view() else {
+            panic!("Gate should be a custom gate of type CustomH");
+        };
+
+        let Some(downcast_gate) = gate_as_h.downcast_ref::<CustomH>() else {
+            panic!("Gate should be a custom gate of type CustomH");
+        };
+
+        // Check that the retreived gate is still valid.
+        assert_eq!(gate_as_h.num_qubits(), 1);
+        assert!(gate_as_h.is_unitary());
+        assert!(matches!(
+            gate_as_h.matrix(&[]),
+            Ok(Some(matrix)) if matrix == aview2(&H_GATE).to_owned()
+        ));
+
+        // Final instance equality check.
+        assert_eq!(Some(&CustomH), Some(downcast_gate))
+    }
+
+    // Test a custom gate with varying labels.
+    #[test]
+    fn test_custom_gate_with_label() {
+        let no_label = ParametrizedAndLabeled::default();
+        let labeled = ParametrizedAndLabeled::new(Some("label"));
+
+        // Make into boxed
+        let boxed_no_label: Box<dyn CustomOperation> = Box::new(no_label.clone());
+        let boxed_labeled: Box<dyn CustomOperation> = Box::new(labeled.clone());
+
+        assert_ne!(&boxed_labeled, &boxed_no_label);
+        assert_eq!(boxed_labeled.label(), labeled.label());
+        assert_eq!(boxed_no_label.label(), no_label.label());
+
+        // Try adding to circuit
+        let mut circuit =
+            CircuitData::with_capacity(2, 0, 2, 0.0.into()).expect("Empty circuit should work");
+        circuit
+            .push_packed_operation(
+                PackedOperation::from_custom_operation(boxed_no_label),
+                None,
+                &[Qubit(0)],
+                &[],
+            )
+            .expect("Operation should be added successfully");
+        circuit
+            .push_packed_operation(
+                PackedOperation::from_custom_operation(boxed_labeled),
+                None,
+                &[Qubit(0)],
+                &[],
+            )
+            .expect("Operation should be added successfully");
+
+        // Test roundtrip
+        let ops_ordered: [&dyn CustomOperation; 2] = [&no_label, &labeled];
+        for (idx, op) in circuit.data().iter().enumerate() {
+            let OperationRef::CustomOperation(op_ref) = op.op.view() else {
+                panic!("Incorrect operation variant found in circuit!");
+            };
+            assert_eq!(op_ref, ops_ordered[idx]);
+        }
+    }
+
+    /// Test comparison between custom operations
+    #[test]
+    fn test_gate_equality() {
+        let custom_h = CustomH;
+        let custom_h_as_dyn: Box<dyn CustomOperation> = Box::new(CustomH);
+        let labeled = ParametrizedAndLabeled::new(Some("fee"));
+        let labeled_fee = ParametrizedAndLabeled::new(Some("fee"));
+        let labeled_fi = ParametrizedAndLabeled::new(Some("fi"));
+
+        // identicals as opaques
+        assert_eq!(&custom_h as &dyn CustomOperation, custom_h_as_dyn.as_ref());
+        // two identicals
+        assert_eq!(labeled, labeled_fee);
+        // two non-identical
+        assert_ne!(labeled, labeled_fi);
+        // two different instances
+        assert_ne!(
+            custom_h_as_dyn.as_ref(),
+            &labeled_fi as &dyn CustomOperation
+        );
+    }
+
+    // Test dynamic cloning of operations with data within.
+    #[test]
+    fn test_clone_dyn() {
+        let labeled_fee = ParametrizedAndLabeled::new(Some("fee"));
+        let labeled_fi = ParametrizedAndLabeled::new(Some("fi"));
+
+        // Try cloning as dyn refs using `ToOwned`
+        let cloned_fee: Box<dyn CustomOperation> =
+            (&labeled_fee as &dyn CustomOperation).to_owned();
+        let cloned_fi: Box<dyn CustomOperation> = (&labeled_fi as &dyn CustomOperation).to_owned();
+
+        assert_eq!(cloned_fee.as_ref(), &labeled_fee as &dyn CustomOperation);
+        assert_eq!(cloned_fi.as_ref(), &labeled_fi as &dyn CustomOperation);
+
+        // Check if label data is still the same.
+        assert_eq!(cloned_fee.label(), labeled_fee.label());
+        assert_eq!(cloned_fi.label(), labeled_fi.label());
+    }
+
+    // Test downcasting
+    #[test]
+    fn test_downcast() {
+        let measure_boxed: Box<dyn CustomOperation> = Box::new(Measure2);
+        let control_boxed: Box<dyn CustomOperation> = Box::new(Controlled);
+
+        // Check if downcasting to the right type works
+        assert_eq!(measure_boxed.downcast_ref::<Measure2>(), Some(&Measure2));
+        assert_eq!(
+            control_boxed.downcast_ref::<Controlled>(),
+            Some(&Controlled)
+        );
+
+        // Check if downcasting to the wrong type doesn't work
+        assert!(measure_boxed.downcast_ref::<Controlled>().is_none());
+        assert!(control_boxed.downcast_ref::<Measure2>().is_none());
+    }
+
+    // Test parametrized matrix
+    #[test]
+    fn parameterized_gate_matrix() {
+        let labeled_rz = ParametrizedAndLabeled::new(Some("rz"));
+        let theta: Param = (PI / 4.0).into();
+
+        let Ok(Some(matrix)) = labeled_rz.matrix(&[theta]) else {
+            panic!("Matrix should exist");
+        };
+        // Compare matrices
+        assert!(approx::abs_diff_eq!(
+            matrix,
+            aview2(&rz_gate(PI / 4.0)),
+            epsilon = 1e-12
+        ));
+
+        // Compare null case
+        assert!(matches!(labeled_rz.matrix(&[]), Ok(None)));
+    }
+
+    // Test inversed gate
+    #[test]
+    fn test_inverse() {
+        let reversible = Reversible;
+
+        // Retrieve the reverse, should be itself
+        let Some((reversed, params)) = reversible.inverse(&[]) else {
+            panic!("A reverse was not obtained")
+        };
+
+        // Parameters should be empty
+        assert!(params.is_empty());
+
+        let OperationRef::CustomOperation(roundtrip) = reversed.view() else {
+            panic!("Obtained operation is not custom")
+        };
+
+        // Compare matrices
+        assert_eq!(roundtrip.downcast_ref::<Reversible>(), Some(&Reversible));
+
+        // Try with invalid params
+        assert!(roundtrip.inverse(&[0.0.into()]).is_none());
+    }
+
+    // Adds all custom instructions to a Circuit
+    #[test]
+    fn test_multiple_custom_ops_in_circuit() {
+        let h = CustomH;
+        let rz = ParametrizedAndLabeled::new(Some("rz"));
+        let reversible = Reversible;
+        let meas = Measure2;
+        let opaque = OpaqueGate;
+
+        let ops: [&dyn CustomOperation; 5] = [&h, &rz, &reversible, &meas, &opaque];
+        let params: [_; 5] = [
+            None,
+            Some(Parameters::Params(smallvec![Param::from(PI)])),
+            None,
+            None,
+            None,
+        ];
+
+        let mut circuit = CircuitData::with_capacity(2, 2, 5, 0.0.into())
+            .expect("Circuit creation should succeed.");
+        for (op, params) in ops.iter().zip(params) {
+            let qubits: Vec<Qubit> = (0..op.num_qubits()).map(Qubit).collect();
+            let clbits: Vec<Clbit> = (0..op.num_clbits()).map(Clbit).collect();
+            circuit
+                .push_packed_operation(
+                    PackedOperation::from_custom_operation((*op).to_owned()),
+                    params,
+                    &qubits,
+                    &clbits,
+                )
+                .expect("Operation should be added to circuit.");
+        }
+
+        for (idx, op) in (0..circuit.len())
+            .map(|idx| &circuit.data()[idx])
+            .enumerate()
+        {
+            let OperationRef::CustomOperation(comparison) = op.op.view() else {
+                panic!("Non-custom operation found")
+            };
+
+            // Check that each instance is the same.
+            assert_eq!(comparison, ops[idx]);
+        }
+    }
+
+    // Tests that `OperationRef` delegates each function call correctly for
+    // the `Operation` trait when it refers to a custom operation.
+    #[test]
+    fn test_operation_ref_delegates_correctly() {
+        let h = CustomH;
+        let rz = ParametrizedAndLabeled::new(Some("rz"));
+        let reversible = Reversible;
+        let meas = Measure2;
+        let opaque = OpaqueGate;
+
+        let ops: [&dyn CustomOperation; 5] = [&h, &rz, &reversible, &meas, &opaque];
+        let packed_ops: Vec<PackedOperation> = ops
+            .iter()
+            .map(|op| PackedOperation::from_custom_operation((*op).to_owned()))
+            .collect();
+
+        for (op, packed) in ops.iter().zip(&packed_ops) {
+            let view = packed.view();
+            assert_eq!(op.name(), view.name());
+            assert_eq!(op.num_qubits(), view.num_qubits());
+            assert_eq!(op.num_clbits(), view.num_clbits());
+            assert_eq!(op.num_params(), view.num_params());
+            assert_eq!(op.directive(), view.directive());
         }
     }
 }

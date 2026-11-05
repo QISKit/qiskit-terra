@@ -25,7 +25,7 @@ from qiskit.circuit.annotated_operation import AnnotatedOperation
 from qiskit.circuit.singleton import SingletonControlledGate, _SingletonControlledGateOverrides
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.quantum_info.operators.predicates import matrix_equal, is_unitary_matrix
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.quantum_info.states import Statevector
 from qiskit.transpiler.passes import UnrollCustomDefinitions, BasisTranslator
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
@@ -58,6 +58,7 @@ from qiskit.circuit.library import (
     CSwapGate,
     UGate,
     U3Gate,
+    U4Gate,
     CHGate,
     CRZGate,
     CU3Gate,
@@ -251,9 +252,7 @@ class TestControlledGate(QiskitTestCase):
             (CHGate(), 1),
             (CU1Gate(np.pi / 7), 1),
             (MCU1Gate(np.pi / 7, 2), 2),
-            # `CUGate` takes an extra "global" phase parameter compared to `UGate`, and consequently
-            # is only equal to `base_gate.control()` when this extra phase is 0.
-            (CUGate(np.pi / 7, np.pi / 5, np.pi / 3, 0), 1),
+            (CUGate(np.pi / 7, np.pi / 5, np.pi / 3, np.pi / 11), 1),
             (CU3Gate(np.pi / 7, np.pi / 5, np.pi / 3), 1),
             (CRXGate(np.pi / 7), 1),
             (CRYGate(np.pi / 7), 1),
@@ -693,7 +692,7 @@ class TestControlledGate(QiskitTestCase):
         if num_controls <= 2:
             num_ancillas = 0
         else:
-            num_ancillas = num_controls - 2
+            num_ancillas = (num_controls - 1) // 2
 
         q_controls = QuantumRegister(num_controls)
         q_target = QuantumRegister(1)
@@ -738,10 +737,10 @@ class TestControlledGate(QiskitTestCase):
 
     def test_mcry_defaults_to_vchain(self):
         """Test mcry defaults to the v-chain mode if sufficient work qubits are provided."""
-        circuit = QuantumCircuit(5)
-        control_qubits = circuit.qubits[:3]
-        target_qubit = circuit.qubits[3]
-        additional_qubits = circuit.qubits[4:]
+        circuit = QuantumCircuit(6)
+        control_qubits = circuit.qubits[:4]
+        target_qubit = circuit.qubits[4]
+        additional_qubits = circuit.qubits[5:]
         circuit.mcry(0.2, control_qubits, target_qubit, additional_qubits)
 
         # If the v-chain mode is selected, all qubits are used. If the noancilla mode would be
@@ -749,7 +748,9 @@ class TestControlledGate(QiskitTestCase):
         dag = circuit_to_dag(circuit)
         self.assertEqual(len(list(dag.idle_wires())), 0)
 
-    @combine(num_controls=[1, 2, 3], base_gate=[RXGate, RYGate, RZGate, CPhaseGate])
+    @combine(
+        num_controls=[1, 2, 3, 4, 5, 6], base_gate=[RXGate, RYGate, RZGate, PhaseGate, CPhaseGate]
+    )
     def test_multi_controlled_rotation_gate_with_parameter(self, num_controls, base_gate):
         """Test multi-controlled rotation gates and MCPhase gate with Parameter synthesis."""
         theta = Parameter("theta")
@@ -1207,12 +1208,7 @@ class TestControlledGate(QiskitTestCase):
 
         base_gate = gate_class(*free_params)
         cgate = base_gate.control(annotated=False)
-
-        # the base gate of CU is U (3 params), the base gate of CCU is CU (4 params)
-        if gate_class == CUGate:
-            self.assertListEqual(cgate.base_gate.params[:3], base_gate.base_gate.params[:3])
-        else:
-            self.assertEqual(base_gate.base_gate, cgate.base_gate)
+        self.assertEqual(base_gate.base_gate, cgate.base_gate)
 
     @combine(
         gate=[cls for cls in allGates.__dict__.values() if isinstance(cls, type)],
@@ -1302,6 +1298,26 @@ class TestControlledGate(QiskitTestCase):
 
         # compare simulated matrix with the matrix representation provided by the class
         self.assertTrue(matrix_equal(simulated_mat, repr_mat))
+
+    @data(
+        (0, {"x": 2, "rcccx": 1, "csdg": 1}),
+        (1, {"rcccx": 1, "csdg": 1}),
+    )
+    @unpack
+    def test_controlled_rccx(self, ctrl_state, expected_ops):
+        """Test the compact controlled-RCCX decomposition."""
+        controlled = RCCXGate().control(ctrl_state=ctrl_state, annotated=False)
+        target = _compute_control_matrix(RCCXGate().to_matrix(), 1, ctrl_state=ctrl_state)
+
+        self.assertIsInstance(controlled, ControlledGate)
+        self.assertEqual(controlled.base_gate, RCCXGate())
+        self.assertEqual(Operator(controlled), Operator(target))
+        decomposition = controlled.definition.decompose(gates_to_decompose="crccx")
+        self.assertEqual(decomposition.count_ops(), expected_ops)
+
+    def test_multiple_controlled_rccx_annotated(self):
+        """Test multiple controls retain the generic annotated representation."""
+        self.assertIsInstance(RCCXGate().control(2, annotated=True), AnnotatedOperation)
 
     def test_open_controlled_gate(self):
         """
@@ -1404,30 +1420,34 @@ class TestControlledGate(QiskitTestCase):
         self.assertEqual(assigned.data[0].operation.base_gate, expected.data[0].operation.base_gate)
         self.assertEqual(assigned, expected)
 
-    def test_modify_cugate_params_slice(self):
-        """Test that CUGate.params can be modified by a standard slice (without changing the number
-        of elements) and changes propagate to the base gate.  This is only needed for as long as
-        CUGate's `base_gate` is `UGate`, which has the "wrong" number of parameters."""
-        cu = CUGate(0.1, 0.2, 0.3, 0.4)
-        self.assertEqual(cu.params, [0.1, 0.2, 0.3, 0.4])
-        self.assertEqual(cu.base_gate.params, [0.1, 0.2, 0.3])
+    def test_cugate_base_gate_is_phased_u(self):
+        """Test that the base gate of CUGate is a U4Gate that carries the phase, and that
+        the parameters of CUGate are shared with the base gate."""
+        cu = CUGate(0.3, 0.4, 0.5, 0.6)
+        self.assertIsInstance(cu.base_gate, U4Gate)
+        self.assertEqual(cu.base_gate.params, [0.3, 0.4, 0.5, 0.6])
+        self.assertIs(cu.params, cu.base_gate.params)
 
-        cu.params[0:4] = [0.5, 0.4, 0.3, 0.2]
-        self.assertEqual(cu.params, [0.5, 0.4, 0.3, 0.2])
-        self.assertEqual(cu.base_gate.params, [0.5, 0.4, 0.3])
+        cu.params[1:3] = [0.7, 0.8]
+        self.assertEqual(cu.base_gate.params, [0.3, 0.7, 0.8, 0.6])
 
-        cu.params[:] = [0.1, 0.2, 0.3, 0.4]
-        self.assertEqual(cu.params, [0.1, 0.2, 0.3, 0.4])
-        self.assertEqual(cu.base_gate.params, [0.1, 0.2, 0.3])
+    @data(None, 0, 1)
+    def test_cugate_equals_controlled_base_gate(self, ctrl_state):
+        """Test that CUGate is equal to the controlled version of its base gate."""
+        cu = CUGate(0.3, 0.4, 0.5, 0.6, ctrl_state=ctrl_state)
+        controlled_base_gate = cu.base_gate.control(cu.num_ctrl_qubits, ctrl_state=cu.ctrl_state)
+        self.assertEqual(cu, controlled_base_gate)
 
-        cu.params[:3] = [0.5, 0.4, 0.3]
-        self.assertEqual(cu.params, [0.5, 0.4, 0.3, 0.4])
-        self.assertEqual(cu.base_gate.params, [0.5, 0.4, 0.3])
+    @data(None, 0, 1)
+    def test_controlled_cugate_inverse(self, ctrl_state):
+        """Test that the inverse of a multiply-controlled CUGate keeps the phase parameter
+        and is the exact adjoint."""
+        ccu = CUGate(0.3, 0.4, 0.5, 0.6).control(1, ctrl_state=ctrl_state, annotated=False)
+        self.assertEqual(ccu.base_gate.params, [0.3, 0.4, 0.5, 0.6])
 
-        # indices (3, 2, 1, 0), note that the assignment is in reverse.
-        cu.params[-1::-1] = [0.1, 0.2, 0.3, 0.4]
-        self.assertEqual(cu.params, [0.4, 0.3, 0.2, 0.1])
-        self.assertEqual(cu.base_gate.params, [0.4, 0.3, 0.2])
+        inverse = ccu.inverse()
+        self.assertEqual(inverse.base_gate.params, [-0.3, -0.5, -0.4, -0.6])
+        self.assertEqual(Operator(inverse), Operator(ccu).adjoint())
 
     def test_assign_nested_controlled_cu(self):
         """Test assignment of an arbitrary controlled parametrized gate that appears through the
@@ -1665,9 +1685,6 @@ class TestOpenControlledToMatrix(QiskitTestCase):
         cgate.ctrl_state = ctrl_state
 
         base_mat = Operator(cgate.base_gate).data
-        if gate_class == CUGate:  # account for global phase
-            base_mat = np.array(base_mat) * np.exp(1j * cgate.params[3])
-
         target = _compute_control_matrix(base_mat, cgate.num_ctrl_qubits, ctrl_state=ctrl_state)
         try:
             actual = cgate.to_matrix()

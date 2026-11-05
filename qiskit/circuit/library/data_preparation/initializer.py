@@ -21,7 +21,6 @@ import typing
 from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.circuit import QuantumRegister
 from qiskit.circuit.instruction import Instruction
-from qiskit.circuit.library.generalized_gates import Isometry
 from .state_preparation import StatePreparation
 from qiskit.circuit.exceptions import CircuitError
 
@@ -92,8 +91,7 @@ class Initialize(Instruction):
             QuantumCircuit: circuit to take ``self.params`` vector to :math:`|{00\\ldots0}\\rangle`
         """
 
-        isom = Isometry(self.params, 0, 0)
-        return isom._gates_to_uncompute()
+        return self._stateprep.definition.inverse()
 
     @property
     def params(self):

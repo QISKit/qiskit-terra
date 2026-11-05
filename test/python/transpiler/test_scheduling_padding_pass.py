@@ -23,7 +23,9 @@ from qiskit.transpiler.instruction_durations import InstructionDurations
 from qiskit.transpiler.passes import (
     ASAPScheduleAnalysis,
     ALAPScheduleAnalysis,
+    ConstrainedReschedule,
     PadDelay,
+    TimeUnitConversion,
 )
 from qiskit.transpiler.passmanager import PassManager
 from qiskit.transpiler.exceptions import TranspilerError
@@ -310,6 +312,25 @@ class TestSchedulingAndPaddingPass(QiskitTestCase):
         asap_expected.measure(1, 1)
 
         self.assertEqual(qc_asap, asap_expected)
+
+    def test_constrained_reschedule_accepts_barrier(self):
+        """Test that ConstrainedReschedule allows compiler directives."""
+        qc = QuantumCircuit(2)
+        qc.cx(0, 1)
+        qc.barrier(0)
+
+        target = Target(num_qubits=2, dt=1, pulse_alignment=1, acquire_alignment=1)
+        target.add_instruction(CXGate(), {(0, 1): InstructionProperties(duration=100)})
+
+        pm = PassManager(
+            [
+                TimeUnitConversion(target.durations()),
+                ALAPScheduleAnalysis(target=target),
+                ConstrainedReschedule(target=target),
+            ]
+        )
+
+        self.assertEqual(qc, pm.run(qc))
 
     def test_padding_not_working_without_scheduling(self):
         """Test padding fails when un-scheduled DAG is input."""

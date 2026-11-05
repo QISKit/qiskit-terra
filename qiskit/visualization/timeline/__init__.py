@@ -19,3 +19,10 @@ from qiskit.visualization.timeline.interface import draw
 
 # stylesheets
 from qiskit.visualization.timeline.stylesheet import IQXStandard, IQXSimple, IQXDebugging
+
+__all__ = [
+    "IQXDebugging",
+    "IQXSimple",
+    "IQXStandard",
+    "draw",
+]

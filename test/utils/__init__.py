@@ -11,5 +11,3 @@
 # that they have been altered from the originals.
 
 """Functionality and helpers for testing Qiskit."""
-
-from .decorators import slow_test

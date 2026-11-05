@@ -19,3 +19,5 @@ workspace = true
 num-complex.workspace = true
 pyo3 = { workspace = true, optional = true }
 thiserror.workspace = true
+indexmap.workspace = true
+foldhash.workspace = true

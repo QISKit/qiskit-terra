@@ -63,7 +63,7 @@ from qiskit.exceptions import QiskitError
 from qiskit.primitives import BackendEstimatorV2
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.quantum_info.operators import Operator, Pauli, SparsePauliOp
-from qiskit.quantum_info.random import random_clifford, random_pauli
+from qiskit.quantum_info import random_clifford, random_pauli
 from qiskit.utils import optionals
 
 LABEL_REGEX = re.compile(r"(?P<coeff>[+-]?1?[ij]?)(?P<pauli>[IXYZ]*)")

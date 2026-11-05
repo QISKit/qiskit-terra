@@ -32,7 +32,6 @@ from qiskit.circuit.library import (
     RZXGate,
     CZGate,
     UnitaryGate,
-    Barrier,
 )
 from qiskit.circuit import IfElseOp, ForLoopOp, WhileLoopOp, SwitchCaseOp
 from qiskit.circuit.measure import Measure
@@ -1204,26 +1203,6 @@ Instructions:
 
         # Check that the Target num_qubit attribute matches the length of qubit properties
         self.assertEqual(target.num_qubits, len(qubit_properties))
-
-    def test_gate_reconstruction_rust(self):
-        standard_gate = RXGate(3.14)
-        barrier = Barrier(5)
-        unitary = UnitaryGate([[0, 1], [1, 0]])
-
-        # Create Target and add rest of instructions.
-        target = Target()
-        target.add_instruction(standard_gate)
-        target.add_instruction(barrier)
-        target.add_instruction(unitary)
-
-        # Check the gate instances are working as expected
-        self.assertEqual(target.operation_from_name("rx"), target._raw_operation_from_name("rx"))
-        self.assertEqual(
-            target.operation_from_name("barrier"), target._raw_operation_from_name("barrier")
-        )
-        self.assertEqual(
-            target.operation_from_name("unitary"), target._raw_operation_from_name("unitary")
-        )
 
     def test_num_qubits_inference_with_globals(self):
         """If explicitly overriding `num_qubits` to be "any", it should persist."""

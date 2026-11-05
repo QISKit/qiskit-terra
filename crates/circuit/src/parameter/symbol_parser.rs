@@ -42,33 +42,32 @@ fn parse_imaginary_value(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str
         .parse(s)
 }
 
-fn parse_symbol_string(s: &str) -> IResult<&str, &str, VerboseError<&str>> {
-    recognize(pair(
-        alt((alpha1, tag("_"), tag("\\"), tag("$"))),
-        many0_count(alt((alphanumeric1, tag("_"), tag("\\"), tag("$")))),
-    ))
+// parse string as symbol
+// symbol starting with alphabet and can contain numbers and '_', '\', '$', '[', ']'
+fn parse_symbol<'a>(
+    s: &'a str,
+    sym_fn: &impl Fn(&'a str) -> Option<Symbol>,
+) -> IResult<&'a str, SymbolExpr, VerboseError<&'a str>> {
+    recognize(
+        pair(
+            alt((alpha1, tag("_"), tag("\\"), tag("$"))),
+            many0_count(alt((alphanumeric1, tag("_"), tag("\\"), tag("$")))),
+        )
+        .and(opt(delimited(char('['), digit1, char(']')))),
+    )
+    .map(|v: &str| {
+        let sym = sym_fn(v).unwrap_or_else(|| Symbol::standalone(v.to_owned(), None));
+        SymbolExpr::Symbol(Arc::new(sym))
+    })
     .parse(s)
 }
 
-// parse string as symbol
-// symbol starting with alphabet and can contain numbers and '_', '\', '$', '[', ']'
-fn parse_symbol(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
-    (
-        parse_symbol_string,
-        opt(delimited(char('['), digit1, char(']'))),
-    )
-        .map_res(|(v, array_idx)| -> Result<_, &str> {
-            let index = array_idx
-                .map(|i| i.parse::<u32>())
-                .transpose()
-                .map_err(|_| "index out of bounds")?;
-            Ok(SymbolExpr::Symbol(Arc::new(Symbol::new(v, None, index))))
-        })
-        .parse(s)
-}
-
 // parse unary operations
-fn parse_unary(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
+fn parse_unary<'a>(
+    s: &'a str,
+    sym_fn: &impl Fn(&'a str) -> Option<Symbol>,
+) -> IResult<&'a str, SymbolExpr, VerboseError<&'a str>> {
+    let parse_addsub = |s| parse_addsub(s, sym_fn);
     (
         delimited(multispace0, alphanumeric1, multispace0),
         delimited(
@@ -101,7 +100,13 @@ fn parse_unary(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
 }
 
 // sign is separately parsed in this function
-fn parse_sign(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
+fn parse_sign<'a>(
+    s: &'a str,
+    sym_fn: &impl Fn(&'a str) -> Option<Symbol>,
+) -> IResult<&'a str, SymbolExpr, VerboseError<&'a str>> {
+    let parse_unary = |s| parse_unary(s, sym_fn);
+    let parse_symbol = |s| parse_symbol(s, sym_fn);
+    let parse_addsub = |s| parse_addsub(s, sym_fn);
     (
         delimited(multispace0, alt((char('-'), char('+'))), multispace0),
         alt((
@@ -129,9 +134,18 @@ fn parse_sign(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
         .parse(s)
 }
 
-fn parse_expr(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
+fn parse_expr<'a>(
+    s: &'a str,
+    sym_fn: &impl Fn(&'a str) -> Option<Symbol>,
+) -> IResult<&'a str, SymbolExpr, VerboseError<&'a str>> {
+    let parse_sign = |s| parse_sign(s, sym_fn);
+    let parse_unary = |s| parse_unary(s, sym_fn);
+    let parse_symbol = |s| parse_symbol(s, sym_fn);
+    let parse_addsub = |s| parse_addsub(s, sym_fn);
     alt((
         parse_imaginary_value,
+        // Note that `parse_value` will consume a possible `-` or `+` and fold it into the value, so
+        // this ordering of `parse_value` and `parse_sign` in the alternatives can affect the parse.
         parse_value,
         parse_sign,
         parse_unary,
@@ -146,7 +160,11 @@ fn parse_expr(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
 }
 
 // parse pow
-fn parse_pow(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
+fn parse_pow<'a>(
+    s: &'a str,
+    sym_fn: &impl Fn(&'a str) -> Option<Symbol>,
+) -> IResult<&'a str, SymbolExpr, VerboseError<&'a str>> {
+    let parse_expr = |s| parse_expr(s, sym_fn);
     permutation((
         parse_expr,
         many0((multispace0, tag("**"), multispace0, parse_expr).map(|(_, _, _, rhs)| rhs)),
@@ -156,7 +174,11 @@ fn parse_pow(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
 }
 
 // parse mul and div
-fn parse_muldiv(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
+fn parse_muldiv<'a>(
+    s: &'a str,
+    sym_fn: &impl Fn(&'a str) -> Option<Symbol>,
+) -> IResult<&'a str, SymbolExpr, VerboseError<&'a str>> {
+    let parse_pow = |s| parse_pow(s, sym_fn);
     permutation((
         parse_pow,
         many0(
@@ -186,8 +208,12 @@ fn parse_muldiv(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
 }
 
 // parse add and sub
-fn parse_addsub(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
-    permutation((
+fn parse_addsub<'a>(
+    s: &'a str,
+    sym_fn: &impl Fn(&'a str) -> Option<Symbol>,
+) -> IResult<&'a str, SymbolExpr, VerboseError<&'a str>> {
+    let parse_muldiv = |s| parse_muldiv(s, sym_fn);
+    let mut parser = permutation((
         parse_muldiv,
         many0(
             (
@@ -211,11 +237,19 @@ fn parse_addsub(s: &str) -> IResult<&str, SymbolExpr, VerboseError<&str>> {
             BinaryOp::Sub => &acc - &x.1,
             _ => acc,
         })
-    })
-    .parse(s)
+    });
+    // `parse_addsub` is the "top" of the recursive expression parse; all recursive cycles have to
+    // pass through it.  Each time we reach here, check how much stack space we're using, and if
+    // it's too much, move into the heap to continue, so we can grow without overflowing, but don't
+    // need a heap allocation unless the recursion gets crazy.
+    stacker::maybe_grow(32 * 1024, 1024 * 1024, || parser.parse(s))
 }
 
-pub fn parse_expression(s: &str) -> Result<SymbolExpr, String> {
+pub fn parse_expression<'a>(
+    s: &'a str,
+    sym_fn: &impl Fn(&'a str) -> Option<Symbol>,
+) -> Result<SymbolExpr, String> {
+    let parse_addsub = |s| parse_addsub(s, sym_fn);
     match all_consuming(parse_addsub).parse(s) {
         Ok(o) => Ok(o.1),
         Err(e) => match e {

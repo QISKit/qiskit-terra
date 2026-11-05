@@ -1,7 +1,0 @@
----
-features_c:
-  - |
-    Added :c:func:`qk_transpiler_pass_basis_translator`, a DAG-based variant of the
-    BasisTranslator transpiler pass in the C API. This function operates directly on
-    a :c:struct:`QkDag` object instead of a :c:struct:`QkCircuit`, avoiding the overhead
-    of circuit-to-DAG and DAG-to-circuit conversions when chaining multiple passes together.

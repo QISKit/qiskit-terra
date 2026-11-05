@@ -340,6 +340,17 @@ real-time variables, and other tracking information about the data it acts on an
 parametrized.  It then contains a sequence of :class:`CircuitInstruction`\ s, which contain
 the particular operation (gate, measurement, etc) and its operands (the qubits and classical bits).
 
+Interoperation with C
+---------------------
+
+:class:`QuantumCircuit` in Python space is not precisely the same type that native Rust code or
+C-API code uses. The C-API type :c:type:`QkCircuit` is backed by the internal
+:attr:`.QuantumCircuit._data` object, which has type :class:`CircuitData`.  Very little about is
+public from Python space.
+
+.. autoclass:: CircuitData(<no public constructor>)
+    :class-doc-from: class
+    :no-members:
 
 Bits and registers
 ------------------
@@ -1387,15 +1398,12 @@ from qiskit._accelerate.circuit import (
 )
 
 from .exceptions import CircuitError
-from . import _utils
-from .quantumcircuit import QuantumCircuit
+from .quantumcircuit import QuantumCircuit, CircuitData
 from .gate import Gate
 
 
-from . import annotation
 from .annotation import Annotation
 from .controlledgate import ControlledGate
-from . import singleton
 from .instruction import Instruction
 from .instructionset import InstructionSet
 from .operation import Operation
@@ -1413,19 +1421,55 @@ from . import library
 from .equivalence_library import StandardEquivalenceLibrary, SessionEquivalenceLibrary
 from .commutation_checker import CommutationChecker
 
-from .controlflow import (
-    ControlFlowOp,
-    BoxOp,
-    WhileLoopOp,
-    ForLoopOp,
-    IfElseOp,
-    SwitchCaseOp,
-    CASE_DEFAULT,
-    BreakLoopOp,
-    ContinueLoopOp,
-    CONTROL_FLOW_OP_NAMES,
-    get_control_flow_name_mapping,
-)
+from .controlflow import *
 
 from .annotated_operation import AnnotatedOperation, InverseModifier, ControlModifier, PowerModifier
 from .twirling import pauli_twirl_2q_gates
+
+from . import annotation, singleton, classical, random, controlflow
+
+__all__ = [
+    "AncillaQubit",
+    "AncillaRegister",
+    "AnnotatedOperation",
+    "Annotation",
+    "Barrier",
+    "Bit",
+    "CircuitData",
+    "CircuitError",
+    "CircuitInstruction",
+    "ClassicalRegister",
+    "Clbit",
+    "CommutationChecker",
+    "ControlModifier",
+    "ControlledGate",
+    "Delay",
+    "Duration",
+    "EquivalenceLibrary",
+    "Gate",
+    "Instruction",
+    "InstructionSet",
+    "InverseModifier",
+    "Measure",
+    "Operation",
+    "Parameter",
+    "ParameterExpression",
+    "ParameterVector",
+    "ParameterVectorElement",
+    "PowerModifier",
+    "QuantumCircuit",
+    "QuantumRegister",
+    "Qubit",
+    "Register",
+    "Reset",
+    "SessionEquivalenceLibrary",
+    "StandardEquivalenceLibrary",
+    "Store",
+    "annotation",
+    "classical",
+    "library",
+    "pauli_twirl_2q_gates",
+    "random",
+    "singleton",
+]
+__all__ += controlflow.__all__

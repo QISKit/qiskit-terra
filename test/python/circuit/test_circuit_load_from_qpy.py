@@ -19,8 +19,6 @@ import json
 import random
 import tempfile
 import unittest
-import warnings
-import re
 
 import ddt
 import numpy as np
@@ -80,7 +78,7 @@ from qiskit.qpy import (
     QpyError,
 )
 from qiskit.quantum_info import Pauli, SparsePauliOp, Clifford
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.circuit.controlledgate import ControlledGate
 from qiskit.utils import optionals
 from test import QiskitTestCase
@@ -925,16 +923,7 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            new_circuit = load(qpy_file)[0]
-            for warning in w:
-                self.assertFalse(
-                    re.search(
-                        r"is not fully identical to its pre-serialization state",
-                        str(warning.message),
-                    )
-                )
+        new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
 
     def test_pauli_feature_map_new(self):
@@ -945,16 +934,7 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            new_circuit = load(qpy_file)[0]
-            for warning in w:
-                self.assertFalse(
-                    re.search(
-                        r"is not fully identical to its pre-serialization state",
-                        str(warning.message),
-                    )
-                )
+        new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
 
     def test_zz_feature_map_legacy(self):
@@ -966,16 +946,7 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            new_circuit = load(qpy_file)[0]
-            for warning in w:
-                self.assertFalse(
-                    re.search(
-                        r"is not fully identical to its pre-serialization state",
-                        str(warning.message),
-                    )
-                )
+        new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
 
     def test_zz_feature_map_new(self):
@@ -986,16 +957,7 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            new_circuit = load(qpy_file)[0]
-            for warning in w:
-                self.assertFalse(
-                    re.search(
-                        r"is not fully identical to its pre-serialization state",
-                        str(warning.message),
-                    )
-                )
+        new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
 
     def test_real_amplitudes_legacy(self):
@@ -1007,16 +969,7 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            new_circuit = load(qpy_file)[0]
-            for warning in w:
-                self.assertFalse(
-                    re.search(
-                        r"is not fully identical to its pre-serialization state",
-                        str(warning.message),
-                    )
-                )
+        new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
 
     def test_real_amplitudes_new(self):
@@ -1027,16 +980,7 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            new_circuit = load(qpy_file)[0]
-            for warning in w:
-                self.assertFalse(
-                    re.search(
-                        r"is not fully identical to its pre-serialization state",
-                        str(warning.message),
-                    )
-                )
+        new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
 
     def test_duplicated_param_name_legacy(self):
@@ -1053,16 +997,7 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            new_circuit = load(qpy_file)[0]
-            for warning in w:
-                self.assertFalse(
-                    re.search(
-                        r"is not fully identical to its pre-serialization state",
-                        str(warning.message),
-                    )
-                )
+        new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
 
     def test_duplicated_param_name_new(self):
@@ -1078,16 +1013,7 @@ class TestLoadFromQPY(QiskitTestCase):
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            new_circuit = load(qpy_file)[0]
-            for warning in w:
-                self.assertFalse(
-                    re.search(
-                        r"is not fully identical to its pre-serialization state",
-                        str(warning.message),
-                    )
-                )
+        new_circuit = load(qpy_file)[0]
         self.assertEqual(qc, new_circuit)
 
     def test_parameter_expression_global_phase(self):
@@ -1165,8 +1091,7 @@ class TestLoadFromQPY(QiskitTestCase):
             x = ParameterVector("γ", 2)
             qc = QuantumCircuit(3)
             qc.rzz(x[0], 0, 1)
-            with self.assertWarns(UserWarning):
-                params, new_params, vector, new_vector = dump_load_param_vec(qc)
+            params, new_params, vector, new_vector = dump_load_param_vec(qc)
 
             self.assertTrue(all(p == q for p, q in zip(params, new_params)))
             # vector[0] is part of the circuit
@@ -1207,19 +1132,6 @@ class TestLoadFromQPY(QiskitTestCase):
         new_circuit = load(qpy_file)[0]
         expected_params = [x.name for x in qc.parameters]
         self.assertEqual([x.name for x in new_circuit.parameters], expected_params)
-        self.assertDeprecatedBitProperties(qc, new_circuit)
-
-    def test_parameter_vector_incomplete_warns(self):
-        """Test that qpy's deserialization warns if a ParameterVector isn't fully identical."""
-        vec = ParameterVector("test", 3)
-        qc = QuantumCircuit(1, name="fun")
-        qc.rx(vec[1], 0)
-        qpy_file = io.BytesIO()
-        dump(qc, qpy_file)
-        qpy_file.seek(0)
-        with self.assertWarnsRegex(UserWarning, r"^The ParameterVector.*Elements 0, 2.*fun$"):
-            new_circuit = load(qpy_file)[0]
-        self.assertEqual(qc, new_circuit)
         self.assertDeprecatedBitProperties(qc, new_circuit)
 
     def test_parameter_vector_global_phase(self):
@@ -1362,6 +1274,37 @@ class TestLoadFromQPY(QiskitTestCase):
             qc.measure(0, 0)
             with qc.if_test((0, True)):
                 qc.break_loop()
+        qpy_file = io.BytesIO()
+        dump(qc, qpy_file)
+        qpy_file.seek(0)
+        new_circuit = load(qpy_file)[0]
+        self.assertEqual(qc, new_circuit)
+        self.assertDeprecatedBitProperties(qc, new_circuit)
+
+    def test_qpy_with_for_loop_negative_indexset(self):
+        """Test qpy serialization with a for loop containing negative integers in a list indexset."""
+        qc = QuantumCircuit(1)
+        # Passing a list with negative integers should not raise OverflowError and should roundtrip
+        qc.for_loop([-1, 0, 1], None, QuantumCircuit(1), [0], [])
+
+        qpy_file = io.BytesIO()
+        dump(qc, qpy_file)
+        qpy_file.seek(0)
+        new_circuit = load(qpy_file)[0]
+        self.assertEqual(qc, new_circuit)
+        self.assertEqual(tuple(new_circuit.data[0].operation.params[0]), (-1, 0, 1))
+        self.assertDeprecatedBitProperties(qc, new_circuit)
+
+    def test_qpy_with_for_loop_var_loop_counter(self):
+        """Test qpy serialization with a for loop that uses expr.Var as its counter."""
+        qc = QuantumCircuit(1, 1)
+        cr = ClassicalRegister(5, "reps")
+        qc.add_register(cr)
+
+        with qc.for_loop(range(5), expr.Var.new("a", types.Uint(32))) as v:
+            qc.measure(0, 0)
+            qc.store(expr.index(cr, v), qc.clbits[0])
+
         qpy_file = io.BytesIO()
         dump(qc, qpy_file)
         qpy_file.seek(0)

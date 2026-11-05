@@ -34,6 +34,7 @@ from qiskit.transpiler.passes import BarrierBeforeFinalMeasurements
 from qiskit.transpiler.passes import ElidePermutations
 from qiskit.transpiler.passes import RemoveDiagonalGatesBeforeMeasure
 from qiskit.transpiler.passes import CommutativeOptimization
+from qiskit.transpiler.passes import TwoQubitPeepholeOptimization
 from qiskit.transpiler.passes import BasisTranslator
 from qiskit.transpiler.passes import SynthesizeRZRotations
 from qiskit.transpiler.passes import OptimizeCliffordT
@@ -57,13 +58,14 @@ from qiskit.transpiler.passes.optimization import (
     ContractIdleWiresInControlFlow,
 )
 from qiskit.transpiler.optimization_metric import OptimizationMetric
-from qiskit.transpiler.passes import Depth, Size, FixedPoint, MinimumPoint
+from qiskit.transpiler.passes import Depth, Size, FixedPoint, MinimumPoint, CountOps
 from qiskit.transpiler.passes.utils.gates_basis import GatesInBasis
 from qiskit.transpiler.passes.synthesis.unitary_synthesis import UnitarySynthesis
 from qiskit.passmanager.flow_controllers import ConditionalController, DoWhileController
 from qiskit.transpiler.timing_constraints import TimingConstraints
 from qiskit.transpiler.passes.layout.vf2_layout import VF2LayoutStopReason
 from qiskit.circuit.equivalence_library import SessionEquivalenceLibrary as sel
+from qiskit.circuit.controlflow import CONTROL_FLOW_OP_NAMES
 from qiskit.quantum_info.operators.symplectic.clifford_circuits import get_clifford_gate_names
 from qiskit.utils import default_num_processes
 from qiskit import user_config
@@ -106,6 +108,7 @@ class DefaultInitPassManager(PassManagerStagePlugin):
                     pass_manager_config.hls_config,
                     pass_manager_config.qubits_initially_zero,
                     optimization_metric,
+                    optimization_level,
                 )
         elif optimization_level == 1:
             init = PassManager()
@@ -126,6 +129,7 @@ class DefaultInitPassManager(PassManagerStagePlugin):
                     pass_manager_config.hls_config,
                     pass_manager_config.qubits_initially_zero,
                     optimization_metric,
+                    optimization_level,
                 )
             init.append(
                 [
@@ -144,6 +148,7 @@ class DefaultInitPassManager(PassManagerStagePlugin):
                 pass_manager_config.hls_config,
                 pass_manager_config.qubits_initially_zero,
                 optimization_metric,
+                optimization_level,
             )
             if pass_manager_config.routing_method != "none":
                 init.append(ElidePermutations())
@@ -159,7 +164,15 @@ class DefaultInitPassManager(PassManagerStagePlugin):
                     ContractIdleWiresInControlFlow(),
                 ]
             )
-            init.append(CommutativeCancellation())
+            init.append(
+                CommutativeCancellation(
+                    approximation_degree=(
+                        pass_manager_config.approximation_degree
+                        if pass_manager_config.approximation_degree is not None
+                        else 1.0
+                    )
+                )
+            )
             init.append(ConsolidateBlocks())
 
             # If approximation degree is None that indicates a request to approximate up to the
@@ -475,6 +488,39 @@ def _optimization_check_fixed_point():
     return (setup, check)
 
 
+def _optimization_check_fixed_point_clifford_t():
+    def check(property_set):
+        return not property_set["size_and_t_count_fixed_point"]
+
+    def get_size_and_t_count(property_set):
+        return (
+            property_set["size"],
+            property_set["count_ops"].get("t", 0) + property_set["count_ops"].get("tdg", 0),
+        )
+
+    setup = [
+        CountOps(recurse=True),
+        Size(recurse=True),
+        FixedPoint("size_and_t_count", getter=get_size_and_t_count),
+    ]
+    return (setup, check)
+
+
+def _optimization_check_fixed_point_clifford_rz():
+    def check(property_set):
+        return not property_set["size_and_rz_count_fixed_point"]
+
+    def get_size_and_rz_count(property_set):
+        return (property_set["size"], property_set["count_ops"].get("rz", 0))
+
+    setup = [
+        CountOps(recurse=True),
+        Size(recurse=True),
+        FixedPoint("size_and_rz_count", getter=get_size_and_rz_count),
+    ]
+    return (setup, check)
+
+
 def _optimization_check_minimum_point(prefix: str):
     def check(property_set):
         return not property_set[f"{prefix}_minimum_point"]
@@ -506,18 +552,9 @@ class OptimizationPassManager(PassManagerStagePlugin):
                 loop_check, continue_loop = _optimization_check_fixed_point()
             case 2:
                 pre_loop = [
-                    ConsolidateBlocks(
-                        basis_gates=pass_manager_config.basis_gates,
-                        target=pass_manager_config.target,
+                    TwoQubitPeepholeOptimization(
+                        pass_manager_config.target,
                         approximation_degree=pass_manager_config.approximation_degree,
-                    ),
-                    UnitarySynthesis(
-                        pass_manager_config.basis_gates,
-                        approximation_degree=pass_manager_config.approximation_degree,
-                        coupling_map=pass_manager_config.coupling_map,
-                        method=pass_manager_config.unitary_synthesis_method,
-                        plugin_config=pass_manager_config.unitary_synthesis_plugin_config,
-                        target=pass_manager_config.target,
                     ),
                 ]
                 loop = [
@@ -528,7 +565,14 @@ class OptimizationPassManager(PassManagerStagePlugin):
                     Optimize1qGatesDecomposition(
                         basis=pass_manager_config.basis_gates, target=pass_manager_config.target
                     ),
-                    CommutativeCancellation(target=pass_manager_config.target),
+                    CommutativeCancellation(
+                        target=pass_manager_config.target,
+                        approximation_degree=(
+                            pass_manager_config.approximation_degree
+                            if pass_manager_config.approximation_degree is not None
+                            else 1.0
+                        ),
+                    ),
                     ContractIdleWiresInControlFlow(),
                 ]
                 post_loop = []
@@ -536,18 +580,9 @@ class OptimizationPassManager(PassManagerStagePlugin):
             case 3:
                 pre_loop = []
                 loop = [
-                    ConsolidateBlocks(
-                        basis_gates=pass_manager_config.basis_gates,
-                        target=pass_manager_config.target,
+                    TwoQubitPeepholeOptimization(
+                        pass_manager_config.target,
                         approximation_degree=pass_manager_config.approximation_degree,
-                    ),
-                    UnitarySynthesis(
-                        pass_manager_config.basis_gates,
-                        approximation_degree=pass_manager_config.approximation_degree,
-                        coupling_map=pass_manager_config.coupling_map,
-                        method=pass_manager_config.unitary_synthesis_method,
-                        plugin_config=pass_manager_config.unitary_synthesis_plugin_config,
-                        target=pass_manager_config.target,
                     ),
                     RemoveIdentityEquivalent(
                         approximation_degree=pass_manager_config.approximation_degree,
@@ -556,7 +591,14 @@ class OptimizationPassManager(PassManagerStagePlugin):
                     Optimize1qGatesDecomposition(
                         basis=pass_manager_config.basis_gates, target=pass_manager_config.target
                     ),
-                    CommutativeCancellation(target=pass_manager_config.target),
+                    CommutativeCancellation(
+                        target=pass_manager_config.target,
+                        approximation_degree=(
+                            pass_manager_config.approximation_degree
+                            if pass_manager_config.approximation_degree is not None
+                            else 1.0
+                        ),
+                    ),
                     ContractIdleWiresInControlFlow(),
                 ]
                 post_loop = []
@@ -972,7 +1014,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
         self, pass_manager_config: PassManagerCliffordTConfig, optimization_level: int | None = None
     ):
         optimization_metric = OptimizationMetric.COUNT_T
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
 
         if optimization_level == 0:
             init = None
@@ -993,6 +1035,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
                     pass_manager_config.hls_config,
                     pass_manager_config.qubits_initially_zero,
                     optimization_metric,
+                    optimization_level,
                 )
         elif optimization_level == 1:
             init = PassManager()
@@ -1013,6 +1056,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
                     pass_manager_config.hls_config,
                     pass_manager_config.qubits_initially_zero,
                     optimization_metric,
+                    optimization_level,
                 )
             init.append(
                 [
@@ -1031,6 +1075,7 @@ class CliffordTInitPassManager(PassManagerCliffordTStagePlugin):
                 pass_manager_config.hls_config,
                 pass_manager_config.qubits_initially_zero,
                 optimization_metric,
+                optimization_level,
             )
             if not pass_manager_config._routing_disabled:
                 init.append(ElidePermutations())
@@ -1085,7 +1130,7 @@ class TranslateToCliffordRZPassManager(PassManagerCliffordTStagePlugin):
     def pass_manager(
         self, pass_manager_config: PassManagerCliffordTConfig, optimization_level: int | None = None
     ):
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
         translate = PassManager(
             [
                 UnitarySynthesis(
@@ -1105,6 +1150,7 @@ class TranslateToCliffordRZPassManager(PassManagerCliffordTStagePlugin):
                     basis_gates=clifford_rz_gates,
                     qubits_initially_zero=pass_manager_config.qubits_initially_zero,
                     optimization_metric=OptimizationMetric.COUNT_T,
+                    optimization_level=optimization_level,
                 ),
                 # Note that HighLevelSynthesis does not translate gates in the equivalence
                 # library, which is BasisTranslator is used as well.
@@ -1124,7 +1170,7 @@ class OptimizeCliffordRZPassManager(PassManagerCliffordTStagePlugin):
     ):
         """Build pass manager for optimization stage."""
 
-        clifford_rz_gates = get_clifford_gate_names() + ["t", "tdg", "rz"]
+        clifford_rz_gates = [*get_clifford_gate_names(), "t", "tdg", "rz", *CONTROL_FLOW_OP_NAMES]
 
         match optimization_level:
             case 0:
@@ -1136,7 +1182,7 @@ class OptimizeCliffordRZPassManager(PassManagerCliffordTStagePlugin):
                     ContractIdleWiresInControlFlow(),
                 ]
                 post_loop = []
-                loop_check, continue_loop = _optimization_check_fixed_point()
+                loop_check, continue_loop = _optimization_check_fixed_point_clifford_rz()
             case 2 | 3:
                 clifford_t_gates = get_clifford_gate_names() + ["t", "tdg"]
 
@@ -1165,14 +1211,9 @@ class OptimizeCliffordRZPassManager(PassManagerCliffordTStagePlugin):
                         plugin_config=pass_manager_config.unitary_synthesis_plugin_config,
                         target=None,
                     ),
-                ]
-                # The optimization loop runs OptimizeCliffordT + CommutativeCancellation
-                # until fixpoint.
-                loop = [
-                    RemoveIdentityEquivalent(
-                        approximation_degree=pass_manager_config.approximation_degree,
-                        target=pass_manager_config.target,
-                    ),
+                    # CommutativeOptimization removes gates that are equivalent to identity, so no need
+                    # to explicitly run RemoveIdentityEquivalent before. In addition, it needs a single
+                    # run to find all possible reductions, so no need to run it in a loop.
                     CommutativeOptimization(
                         approximation_degree=(
                             pass_manager_config.approximation_degree
@@ -1182,17 +1223,19 @@ class OptimizeCliffordRZPassManager(PassManagerCliffordTStagePlugin):
                     ),
                     ContractIdleWiresInControlFlow(),
                 ]
+                loop = []
 
                 # CommutativeOptimization may produce RX gates, so we need BasisTranslator
                 # to convert them back to RZ-gates.
                 post_loop = [BasisTranslator(sel, clifford_rz_gates, None)]
-                loop_check, continue_loop = _optimization_check_fixed_point()
+                loop_check, continue_loop = _optimization_check_fixed_point_clifford_rz()
             case bad:
                 raise TranspilerError(f"Invalid optimization_level: {bad}")
 
         optimization = PassManager()
         optimization.append(pre_loop + loop_check)
-        optimization.append(DoWhileController(loop + loop_check, do_while=continue_loop))
+        if loop:
+            optimization.append(DoWhileController(loop + loop_check, do_while=continue_loop))
         optimization.append(post_loop)
         return optimization
 
@@ -1268,15 +1311,13 @@ class OptimizeCliffordTPassManager(PassManagerCliffordTStagePlugin):
             case 0:
                 return PassManager(translate_to_target)
 
-            case 1:
-                loop = [
-                    InverseCancellation(),
-                    OptimizeCliffordT(basis_gates=basis_gates),
-                    ContractIdleWiresInControlFlow(),
-                ]
-                loop_check, continue_loop = _optimization_check_fixed_point()
+            case 1 | 2:
+                pre_loop = [OptimizeCliffordT(basis_gates=basis_gates)]
+                loop = []
+                loop_check, continue_loop = _optimization_check_fixed_point_clifford_t()
                 post_loop = translate_to_target
-            case 2 | 3:
+            case 3:
+                pre_loop = []
                 loop = [
                     OptimizeCliffordT(basis_gates=basis_gates),
                     CommutativeOptimization(
@@ -1295,13 +1336,15 @@ class OptimizeCliffordTPassManager(PassManagerCliffordTStagePlugin):
                     ),
                     ContractIdleWiresInControlFlow(),
                 ]
-                loop_check, continue_loop = _optimization_check_fixed_point()
+                loop_check, continue_loop = _optimization_check_fixed_point_clifford_t()
                 post_loop = translate_to_target
             case bad:
                 raise TranspilerError(f"Invalid optimization_level: {bad}")
 
         optimization = PassManager()
+        optimization.append(pre_loop)
         optimization.append(loop_check)
-        optimization.append(DoWhileController(loop + loop_check, do_while=continue_loop))
+        if loop:
+            optimization.append(DoWhileController(loop + loop_check, do_while=continue_loop))
         optimization.append(post_loop)
         return optimization

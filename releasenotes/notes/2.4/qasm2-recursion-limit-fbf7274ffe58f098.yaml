@@ -1,0 +1,9 @@
+---
+security:
+  - |
+    The OpenQASM 2 parsers (:func:`.qasm2.load` and :func:`.qasm2.loads`) will now exit with
+    a :exc:`RecursionError` when attempting to evaluate an excessively deep expression.  The maximum allowed
+    depth is taken from Python's :func:`sys.getrecursionlimit` at the point of entry to the parsers.
+
+    Previously, the parsers could recurse arbitrarily in Rust space, eventually exceeding the
+    maximum stack space and segfaulting the process.

@@ -1,0 +1,5 @@
+---
+build:
+  - |
+    ``qiskit-bindgen-cli`` gained the ``show-slots`` command, which outputs a list of the slot
+    assignments for runtime linking to the C API (such as via the Python-space Qiskit package).

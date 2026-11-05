@@ -185,7 +185,7 @@ class PermutationGate(Gate):
     def inverse(self, annotated: bool = False) -> PermutationGate:
         """Returns the inverse of the permutation."""
 
-        from qiskit.synthesis.permutation.permutation_utils import _inverse_pattern
+        from qiskit.synthesis.permutation import _inverse_pattern
 
         return PermutationGate(pattern=_inverse_pattern(self.pattern))
 

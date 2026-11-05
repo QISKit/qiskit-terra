@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Fixed :meth:`.BitArray.bitcount` so that it ignores unused padding bits in the
+    packed byte storage. See `#16173 <https://github.com/Qiskit/qiskit/issues/16173>`__.

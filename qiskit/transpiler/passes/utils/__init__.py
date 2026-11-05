@@ -31,3 +31,23 @@ from .wrap_angles import WrapAngles
 
 # Utility functions
 from . import control_flow
+
+__all__ = [
+    "BarrierBeforeFinalMeasurements",
+    "CheckGateDirection",
+    "CheckMap",
+    "ContainsInstruction",
+    "DAGFixedPoint",
+    "Error",
+    "FilterOpNodes",
+    "FixedPoint",
+    "GateDirection",
+    "GatesInBasis",
+    "MergeAdjacentBarriers",
+    "MinimumPoint",
+    "RemoveBarriers",
+    "RemoveFinalMeasurements",
+    "UnrollForLoops",
+    "WrapAngles",
+    "control_flow",
+]

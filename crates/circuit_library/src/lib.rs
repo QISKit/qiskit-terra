@@ -13,11 +13,11 @@
 use pyo3::import_exception;
 use pyo3::prelude::*;
 
-mod blocks;
-mod entanglement;
+pub mod blocks;
+pub mod entanglement;
 pub mod iqp;
-mod multi_local;
-mod parameter_ledger;
+pub mod multi_local;
+pub mod parameter_ledger;
 pub mod pauli_evolution;
 mod pauli_feature_map;
 pub mod quantum_volume;

@@ -78,9 +78,9 @@ class ConstrainedReschedule(AnalysisPass):
         super().__init__()
         self.acquire_align = acquire_alignment
         self.pulse_align = pulse_alignment
+        self.target = target
         if target is not None:
             self.durations = target.durations()
-            self.target = target
             self.acquire_align = target.acquire_alignment
             self.pulse_align = target.pulse_alignment
 

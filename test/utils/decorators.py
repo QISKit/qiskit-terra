@@ -15,7 +15,6 @@
 
 import functools
 import os
-from typing import Union
 from collections.abc import Callable, Iterable
 import unittest
 

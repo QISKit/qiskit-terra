@@ -10,7 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::pointers::const_ptr_as_ref;
+use crate::pointers::ExposesOwnedPointers;
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit_library::suzuki_trotter::suzuki_trotter_evolution;
 use qiskit_quantum_info::sparse_observable::SparseObservable;
@@ -74,10 +74,9 @@ pub unsafe extern "C" fn qk_circuit_library_suzuki_trotter(
     insert_barriers: bool,
 ) -> *mut CircuitData {
     // SAFETY: Per documentation, the pointer is non-null and aligned.
-    let operator = unsafe { const_ptr_as_ref(op) };
+    let operator = unsafe { &*op };
 
-    match suzuki_trotter_evolution(operator, order, reps, time, preserve_order, insert_barriers) {
-        Ok(circuit) => Box::into_raw(Box::new(circuit)),
-        Err(_) => std::ptr::null_mut(),
-    }
+    suzuki_trotter_evolution(operator, order, reps, time, preserve_order, insert_barriers)
+        .map(ExposesOwnedPointers::into_leaked)
+        .unwrap_or_else(|_| std::ptr::null_mut())
 }

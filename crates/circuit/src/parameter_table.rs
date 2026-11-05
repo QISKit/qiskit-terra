@@ -75,12 +75,12 @@ impl ParameterUuid {
     pub fn from_parameter(ob: &Bound<PyAny>) -> PyResult<Self> {
         let uuid = if let Ok(param) = ob.cast::<PyParameter>() {
             // this downcast should cover both PyParameterVectorElement and PyParameter
-            param.borrow().symbol().uuid.as_u128()
+            param.borrow().0.uuid().as_u128()
         } else if let Ok(expr) = ob.cast::<PyParameterExpression>() {
             let expr_borrowed = expr.borrow();
             // We know the ParameterExpression is in fact representing a single Symbol
             let symbol = &expr_borrowed.inner.try_to_symbol()?;
-            symbol.uuid.as_u128()
+            symbol.uuid().as_u128()
         } else {
             return Err(PyTypeError::new_err(
                 "Could not downcast to Parameter or Expression (that equals a symbol)",
@@ -91,7 +91,7 @@ impl ParameterUuid {
     }
 
     pub fn from_symbol(symbol: &Symbol) -> Self {
-        Self(symbol.uuid.as_u128())
+        Self(symbol.uuid().as_u128())
     }
 }
 
@@ -216,12 +216,7 @@ impl ParameterTable {
     /// Get the sorted order of the `ParameterTable`.  This does not access the cache.
     fn sorted_order(&self) -> Vec<ParameterUuid> {
         let mut out = self.by_uuid.keys().copied().collect::<Vec<_>>();
-        out.sort_unstable_by_key(|uuid| {
-            let info = &self.by_uuid[uuid];
-            let index = info.symbol.index.unwrap_or(0);
-            let name = info.symbol.name();
-            (name, index)
-        });
+        out.sort_unstable_by_key(|uuid| self.by_uuid[uuid].symbol.ord_key());
         out
     }
 

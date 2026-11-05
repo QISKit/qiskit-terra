@@ -77,7 +77,7 @@ class PiecewiseChebyshev(BlueprintCircuit):
         r"""
         Args:
             f_x: the function to be approximated. Constant functions should be specified
-             as f_x = constant.
+                as ``f_x = constant``.
             degree: the degree of the polynomials.
                 Defaults to ``1``.
             breakpoints: the breakpoints to define the piecewise-linear function.
@@ -408,7 +408,7 @@ class PiecewiseChebyshevGate(Gate):
         r"""
         Args:
             f_x: the function to be approximated. Constant functions should be specified
-             as f_x = constant.
+                as ``f_x = constant``.
             num_state_qubits: number of qubits representing the state.
             degree: the degree of the polynomials.
                 Defaults to ``1``.

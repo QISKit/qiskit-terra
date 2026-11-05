@@ -21,11 +21,10 @@ use qiskit_circuit::instruction::Parameters;
 use smallvec::smallvec;
 
 use crate::commutation_checker::{CommutationChecker, try_matrix_with_definition};
-use crate::passes::remove_identity_equiv::{
-    MINIMUM_TOL, average_gate_fidelity_below_tol, is_identity_equiv,
-};
+use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
+use crate::passes::remove_identity_equiv::is_identity_equiv;
 use qiskit_circuit::circuit_instruction::OperationFromPython;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::operations::{
     Operation, OperationRef, Param, PauliBased, PauliProductMeasurement, PauliProductRotation,
     StandardGate, multiply_param, radd_param,
@@ -209,24 +208,24 @@ fn canonicalize(
         ));
     }
 
-    if let OperationRef::StandardGate(standard_gate) = inst.op.view() {
-        if SYMMETRIC_GATES.contains(&standard_gate) || is_special_symmetric(inst, tol) {
-            let qargs = dag.get_qargs(inst.qubits);
-            if !qargs.is_sorted() {
-                let mut sorted_qargs = qargs.to_vec();
-                sorted_qargs.sort();
-                let sorted_qubits = dag.add_qargs(&sorted_qargs);
-                let canonical_instruction = PackedInstruction {
-                    op: standard_gate.into(),
-                    qubits: sorted_qubits,
-                    clbits: Default::default(),
-                    params: inst.params.clone(),
-                    label: None,
-                    #[cfg(feature = "cache_pygates")]
-                    py_op: std::sync::OnceLock::new(),
-                };
-                return Some((canonical_instruction, Param::Float(0.)));
-            }
+    if let OperationRef::StandardGate(standard_gate) = inst.op.view()
+        && (SYMMETRIC_GATES.contains(&standard_gate) || is_special_symmetric(inst, tol))
+    {
+        let qargs = dag.get_qargs(inst.qubits);
+        if !qargs.is_sorted() {
+            let mut sorted_qargs = qargs.to_vec();
+            sorted_qargs.sort();
+            let sorted_qubits = dag.add_qargs(&sorted_qargs);
+            let canonical_instruction = PackedInstruction {
+                op: standard_gate.into(),
+                qubits: sorted_qubits,
+                clbits: Default::default(),
+                params: inst.params.clone(),
+                label: None,
+                #[cfg(feature = "cache_pygates")]
+                py_op: std::sync::OnceLock::new(),
+            };
+            return Some((canonical_instruction, Param::Float(0.)));
         }
     }
 
@@ -453,10 +452,11 @@ fn try_merge(
         (inst1.op.view(), inst2.op.view())
     {
         // Check whether the two gates are self-inverse.
-        if let Some((gate1inv, params1inv)) = gate1.inverse(params1) {
-            if (gate1inv == gate2) && compare_params(&params1inv, params2)? {
-                return Ok((true, None, 0.));
-            }
+        if let Some((gate1inv, params1inv)) = gate1.inverse(params1)
+            && (gate1inv == gate2)
+            && compare_params(&params1inv, params2)?
+        {
+            return Ok((true, None, 0.));
         }
 
         // Can merge two single-parameter standard rotation gates of the same type.
@@ -507,54 +507,53 @@ fn try_merge(
     }
 
     // Special handling for PauliEvolutionGates.
-    if inst1.op.name() == "PauliEvolution" && inst2.op.name() == "PauliEvolution" {
-        if let (OperationRef::Gate(py_gate1), OperationRef::Gate(py_gate2)) =
+    if inst1.op.name() == "PauliEvolution"
+        && inst2.op.name() == "PauliEvolution"
+        && let (OperationRef::PyCustom(py_gate1), OperationRef::PyCustom(py_gate2)) =
             (inst1.op.view(), inst2.op.view())
-        {
-            let merged_instruction = Python::attach(|py| -> PyResult<Option<PackedInstruction>> {
-                let merge_result = imports::MERGE_TWO_PAULI_EVOLUTIONS.get_bound(py).call1((
-                    py_gate1.instruction.clone_ref(py),
-                    py_gate2.instruction.clone_ref(py),
-                ))?;
+    {
+        let merged_instruction = Python::attach(|py| -> PyResult<Option<PackedInstruction>> {
+            let merge_result = imports::MERGE_TWO_PAULI_EVOLUTIONS
+                .get_bound(py)
+                .call1((py_gate1.ob.clone_ref(py), py_gate2.ob.clone_ref(py)))?;
 
-                if merge_result.is_none() {
-                    Ok(None)
-                } else {
-                    let instr: OperationFromPython<NoBlocks> = merge_result.extract()?;
-                    let merged_param = instr
-                        .params
-                        .expect("PauliEvolution gate contains a parameter")
-                        .unwrap_params()[0]
-                        .clone();
-
-                    let merged_params = Some(Box::new(Parameters::Params(smallvec![merged_param])));
-
-                    Ok(Some(PackedInstruction {
-                        op: instr.operation,
-                        qubits: inst1.qubits,
-                        clbits: inst1.clbits,
-                        params: merged_params,
-                        label: instr.label.clone(),
-                        #[cfg(feature = "cache_pygates")]
-                        py_op: std::sync::OnceLock::new(),
-                    }))
-                }
-            })?;
-
-            if let Some(merged_instruction) = merged_instruction {
-                if let Some(phase_update) = is_identity_equiv(
-                    &merged_instruction,
-                    true,
-                    Some(matrix_max_num_qubits),
-                    error_cutoff_fn,
-                )? {
-                    return Ok((true, None, phase_update));
-                } else {
-                    return Ok((true, Some(merged_instruction), 0.));
-                }
+            if merge_result.is_none() {
+                Ok(None)
             } else {
-                return Ok((false, None, 0.));
+                let instr: OperationFromPython<NoBlocks> = merge_result.extract()?;
+                let merged_param = instr
+                    .params
+                    .expect("PauliEvolution gate contains a parameter")
+                    .unwrap_params()[0]
+                    .clone();
+
+                let merged_params = Some(Box::new(Parameters::Params(smallvec![merged_param])));
+
+                Ok(Some(PackedInstruction {
+                    op: instr.operation,
+                    qubits: inst1.qubits,
+                    clbits: inst1.clbits,
+                    params: merged_params,
+                    label: instr.label.clone(),
+                    #[cfg(feature = "cache_pygates")]
+                    py_op: std::sync::OnceLock::new(),
+                }))
             }
+        })?;
+
+        if let Some(merged_instruction) = merged_instruction {
+            if let Some(phase_update) = is_identity_equiv(
+                &merged_instruction,
+                true,
+                Some(matrix_max_num_qubits),
+                error_cutoff_fn,
+            )? {
+                return Ok((true, None, phase_update));
+            } else {
+                return Ok((true, Some(merged_instruction), 0.));
+            }
+        } else {
+            return Ok((false, None, 0.));
         }
     }
 
@@ -595,21 +594,22 @@ fn disjoint_instructions(
 
 #[pyfunction]
 #[pyo3(name = "commutative_optimization")]
-#[pyo3(signature = (dag, commutation_checker, approximation_degree=1., matrix_max_num_qubits=0))]
+#[pyo3(signature = (py_dag, commutation_checker, approximation_degree=1., matrix_max_num_qubits=0))]
 pub fn run_commutative_optimization(
-    dag: &mut DAGCircuit,
+    py_dag: &PyDAGCircuit,
     commutation_checker: &mut CommutationChecker,
     approximation_degree: f64,
     matrix_max_num_qubits: u32,
-) -> PyResult<Option<DAGCircuit>> {
+) -> PyResult<Option<PyDAGCircuit>> {
     let tol = MINIMUM_TOL.max(1. - approximation_degree);
     let error_cutoff_fn = |_inst: &PackedInstruction| -> f64 { tol };
+    let dag = py_dag.try_read()?;
 
     // Create output DAG.
     // We will use it to intern qubits of canonicalized instructions.
     // (In theory, we could also change qubits when merging instructions, however
     // this does not happen right now).
-    let mut new_dag = dag.copy_empty_like_with_same_capacity(VarsMode::Alike, BlocksMode::Keep)?;
+    let mut new_dag = dag.copy_empty_like_with_same_capacity(VarsMode::Alike, BlocksMode::Keep);
 
     let node_indices = dag.topological_op_nodes(false).collect::<Vec<_>>();
     let num_nodes = node_indices.len();
@@ -732,8 +732,10 @@ pub fn run_commutative_optimization(
             }
         }
     }
-
-    Ok(Some(new_dag))
+    // Preserve metadata from original circuit
+    Ok(Some(PyDAGCircuit::from_dagcircuit_with_cloned_metadata(
+        new_dag, py_dag,
+    )))
 }
 
 pub fn commutative_optimization_mod(m: &Bound<PyModule>) -> PyResult<()> {

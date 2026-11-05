@@ -156,7 +156,7 @@ class OptimizeAnnotated(TransformationPass):
             modifiers = []
             cur = node.op
             while isinstance(cur, AnnotatedOperation):
-                modifiers.extend(cur.modifiers)
+                modifiers = cur.modifiers + modifiers
                 cur = cur.base_op
             canonical_modifiers = _canonicalize_modifiers(modifiers)
             if len(canonical_modifiers) > 0:

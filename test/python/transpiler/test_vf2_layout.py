@@ -22,8 +22,9 @@ import numpy
 import rustworkx
 
 from qiskit import QuantumRegister, QuantumCircuit, ClassicalRegister
-from qiskit.circuit import ControlFlowOp, Qubit
+from qiskit.circuit import ControlFlowOp, Qubit, library as lib, Parameter
 from qiskit.transpiler import CouplingMap, Target, TranspilerError
+from qiskit.transpiler.passes import ApplyLayout
 from qiskit.transpiler.passes.layout.vf2_layout import VF2Layout, VF2LayoutStopReason
 from qiskit._accelerate.error_map import ErrorMap
 from qiskit.converters import circuit_to_dag
@@ -655,6 +656,47 @@ class TestVF2LayoutOther(LayoutTestCase):
             vf2_pass.property_set["VF2Layout_stop_reason"], VF2LayoutStopReason.SOLUTION_FOUND
         )
 
+    def test_error_clipping(self):
+        """Out-of-range errors should clip to 0.0 and 1.0, and be safely usable."""
+        target = Target(3)
+        props_1q = {
+            # Too low.
+            (0,): InstructionProperties(error=-1e-15),
+            # Too high.
+            (1,): InstructionProperties(error=1 + 1e-15),
+            # Juuuuust right.
+            (2,): InstructionProperties(error=1e-5),
+        }
+        # Set the same 1q on both types of 1q operation because we don't want any averaging to mess
+        # with our clipping.
+        target.add_instruction(lib.SXGate(), props_1q)
+        target.add_instruction(lib.RZGate(Parameter("a")), props_1q)
+        target.add_instruction(
+            lib.CXGate(),
+            {
+                (0, 1): InstructionProperties(error=-1e-15),
+                (1, 2): InstructionProperties(error=1 + 1e-15),
+                (2, 0): InstructionProperties(error=1e-5),
+            },
+        )
+
+        # This circuit has a symmetric interaction graph, but we break the degeneracy by weighting
+        # each edge and node by different amounts, so the resulting layout will be deterministic.
+        # One qubit deliberately doesn't have any instructions so we test the zero-weighted path
+        # with all the types of clipped error too.
+        qc = QuantumCircuit(3)
+        qc.cx(1, 0)
+        qc.cx(2, 1)
+        qc.cx(2, 1)
+        qc.cx(0, 2)
+        qc.cx(0, 2)
+        qc.cx(0, 2)
+        qc.sx(1)
+        qc.sx(2)
+
+        qc = PassManager([VF2Layout(target=target), ApplyLayout()]).run(qc)
+        self.assertEqual(qc.layout.initial_index_layout(), [1, 2, 0])
+
 
 class TestMultipleTrials(QiskitTestCase):
     """Test the passes behavior with >1 trial."""
@@ -672,7 +714,6 @@ class TestMultipleTrials(QiskitTestCase):
                     (1, 3),
                     (2, 0),
                     (2, 1),
-                    (2, 2),
                     (2, 3),
                     (3, 0),
                     (3, 1),

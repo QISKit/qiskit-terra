@@ -19,8 +19,7 @@ from collections.abc import Callable
 from itertools import chain
 import numpy as np
 
-from qiskit.circuit.parameterexpression import ParameterExpression
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+from qiskit.circuit import ParameterExpression, QuantumCircuit
 from qiskit.quantum_info import SparsePauliOp
 import qiskit.quantum_info
 
@@ -28,7 +27,7 @@ from .product_formula import ProductFormula, reorder_paulis
 
 if typing.TYPE_CHECKING:
     from qiskit.circuit.quantumcircuit import ParameterValueType
-    from qiskit.circuit.library.pauli_evolution import PauliEvolutionGate
+    from qiskit.circuit.library import PauliEvolutionGate
 
 
 class SuzukiTrotter(ProductFormula):

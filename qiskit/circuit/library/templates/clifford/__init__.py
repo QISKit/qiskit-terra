@@ -31,3 +31,24 @@ from .clifford_6_5 import clifford_6_5
 from .clifford_8_1 import clifford_8_1
 from .clifford_8_2 import clifford_8_2
 from .clifford_8_3 import clifford_8_3
+
+__all__ = [
+    "clifford_2_1",
+    "clifford_2_2",
+    "clifford_2_3",
+    "clifford_2_4",
+    "clifford_3_1",
+    "clifford_4_1",
+    "clifford_4_2",
+    "clifford_4_3",
+    "clifford_4_4",
+    "clifford_5_1",
+    "clifford_6_1",
+    "clifford_6_2",
+    "clifford_6_3",
+    "clifford_6_4",
+    "clifford_6_5",
+    "clifford_8_1",
+    "clifford_8_2",
+    "clifford_8_3",
+]

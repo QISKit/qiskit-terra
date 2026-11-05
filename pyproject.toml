@@ -1,18 +1,17 @@
 [build-system]
 # This is duplicated as `dependency-groups.build` for convenience.
 requires = [
+    # Minimum is for PEP 639 / SPDX licence metadata.
     "setuptools>=77.0",
-    # This is hard-pinned to permit the awful monkeypatching in `setup.py`.
-    # It should be removed when we can use a released version of
-    # https://github.com/PyO3/setuptools-rust/pull/574
-    "setuptools-rust==1.12.0",
+    # Minimum is for `Extension(generated_files=...)`.
+    "setuptools-rust>=1.13.0",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "qiskit"
 description = "An open-source SDK for working with quantum computers at the level of extended quantum circuits, operators, and primitives."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = [
     "LICENSE.txt",
@@ -29,19 +28,18 @@ keywords = [
     "sdk",
 ]
 classifiers = [
-    "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
+    "Intended Audience :: Information Technology",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Topic :: Scientific/Engineering",
+    "Programming Language :: C",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Quantum Computing",
+    "Topic :: Software Development :: Compilers",
+    "Development Status :: 5 - Production/Stable",
 ]
 # These are configured in the `tool.setuptools.dynamic` table.
 dynamic = ["version", "readme", "dependencies"]
@@ -73,7 +71,6 @@ csp-layout-pass = [
 ]
 qpy-compat = [
     "symengine>=0.11,<0.14",
-    "sympy>1.3"
 ]
 # This will make the resolution work for installers from PyPI, but `pip install .[all]` will be
 # unreliable because `qiskit` will resolve to the PyPI version, so local changes in the
@@ -106,6 +103,7 @@ clifford = "qiskit.transpiler.passes.synthesis.clifford_unitary_synth_plugin:Cli
 "linear_function.kms" = "qiskit.transpiler.passes.synthesis.hls_plugins:KMSSynthesisLinearFunction"
 "linear_function.pmh" = "qiskit.transpiler.passes.synthesis.hls_plugins:PMHSynthesisLinearFunction"
 "mcx.n_dirty_i15" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesisNDirtyI15"
+"mcx.n_dirty_m15" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesisNDirtyM15"
 "mcx.n_clean_m15" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesisNCleanM15"
 "mcx.2_clean_kg24" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesis2CleanKG24"
 "mcx.2_dirty_kg24" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesis2DirtyKG24"
@@ -115,6 +113,7 @@ clifford = "qiskit.transpiler.passes.synthesis.clifford_unitary_synth_plugin:Cli
 "mcx.gray_code" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesisGrayCode"
 "mcx.noaux_v24" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesisNoAuxV24"
 "mcx.noaux_hp24" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesisNoAuxHP24"
+"mcx.noaux_sp22" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesisNoAuxSP22"
 "mcx.default" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCXSynthesisDefault"
 "mcmt.default" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCMTSynthesisDefault"
 "mcmt.noaux" = "qiskit.transpiler.passes.synthesis.hls_plugins:MCMTSynthesisNoAux"
@@ -149,7 +148,9 @@ clifford = "qiskit.transpiler.passes.synthesis.clifford_unitary_synth_plugin:Cli
 "Multiplier.qft_r17" = "qiskit.transpiler.passes.synthesis.hls_plugins:MultiplierSynthesisR17"
 "Multiplier.cumulative_h18" = "qiskit.transpiler.passes.synthesis.hls_plugins:MultiplierSynthesisH18"
 "PauliEvolution.default" = "qiskit.transpiler.passes.synthesis.hls_plugins:PauliEvolutionSynthesisDefault"
+"PauliEvolution.basic" = "qiskit.transpiler.passes.synthesis.hls_plugins:PauliEvolutionSynthesisBasic"
 "PauliEvolution.rustiq" = "qiskit.transpiler.passes.synthesis.hls_plugins:PauliEvolutionSynthesisRustiq"
+"PauliEvolution.mcts" = "qiskit.transpiler.passes.synthesis.hls_plugins:PauliEvolutionSynthesisMcts"
 "annotated.default" = "qiskit.transpiler.passes.synthesis.hls_plugins:AnnotatedSynthesisDefault"
 
 [project.entry-points."qiskit.transpiler.init"]
@@ -188,7 +189,7 @@ default = "qiskit.transpiler.preset_passmanagers.builtin_plugins:DefaultScheduli
 # process.  If you intended that, use `project.optional-dependencies` instead.
 [dependency-groups]
 # Sync with `build-system.requires`.
-build = ["setuptools>=77.0", "setuptools-rust==1.12.0"]
+build = ["setuptools>=77.0", "setuptools-rust>=1.13.0"]
 # We use quite tight pins on pylint and astroid because they have a habit of adding new
 # on-by-default lints that are harder to deal with.
 lint = [
@@ -199,7 +200,7 @@ lint = [
 # Dependencies to run the test suite.  This group needs to be installable on all Python versions
 # that Qiskit supports.
 test = [
-    "stestr>=2.0",
+    "stestr>=3.2.0",
     "ddt>=1.2.0",
     "coverage>=4.4.0",
     "threadpoolctl",  # More detail from Numpy/Scipy BLAS-usage reports.
@@ -281,7 +282,7 @@ include = ["qiskit", "qiskit.*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310', 'py311', 'py312', 'py313']
+target-version = ['py311', 'py312', 'py313', 'py314']
 
 [tool.cibuildwheel]
 manylinux-x86_64-image = "manylinux_2_28"
@@ -292,6 +293,7 @@ build = ["cp3??-*"]
 skip = ["*-win32", "*_i686", "*_universal2", "*-musllinux_*"]
 test-command = "cp -r {project}/test . && QISKIT_PARALLEL=FALSE stestr --test-path test/python run --abbreviate"
 test-groups = ["test"]
+test-skip = ["*ppc64le", "*s390x"]
 # We need to use pre-built versions of Numpy and Scipy in the tests; we don't configure
 # the CI machines to succeed at a source build, but the latest versions of these packages
 # don't support the same range of Python versions as we do.
@@ -303,7 +305,7 @@ before-test = "pip install --only-binary=numpy,scipy numpy scipy -c constraints.
 environment = 'RUSTUP_TOOLCHAIN="stable" QISKIT_BUILD_WITH_MIMALLOC=1'
 
 [tool.cibuildwheel.linux]
-before-all = "yum install -y wget && {package}/tools/install_rust.sh"
+before-all = "dnf install -y wget && {package}/tools/install_rust.sh"
 environment = 'PATH="$PATH:$HOME/.cargo/bin" CARGO_NET_GIT_FETCH_WITH_CLI="true" RUSTUP_TOOLCHAIN="stable" QISKIT_BUILD_WITH_MIMALLOC=1'
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} && pipx run abi3audit --strict --report {wheel}"
 
@@ -357,7 +359,6 @@ select = [
 ]
 ignore = [
     "E402",  # module-import-not-at-top-of-file false positives with module docs
-    "F401",  # unused-import false triggers on init re-exports with __all__
     "E501",  # line-too-long rely on black for formatting
     "PLR2004",  # magic-value-comparison overly pedantic especially in tests
     "PLR0911",  # too-many-return-statements
@@ -383,6 +384,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F403"]  # allow star imports in init files for re-export
 "*.ipynb" = ["F821"]
 # Security rules from bandit don't apply to tests and utils
 "tools/*" = [
@@ -502,9 +504,9 @@ ignore = [
 
 [tool.coverage.report]
 exclude_also = [
-    "def __repr__",               # Printable epresentational string does not typically execute during testing
+    "def __repr__",               # Printable representational string does not typically execute during testing
     "raise NotImplementedError",  # Abstract methods are not testable
-    "raise RuntimeError",         # Exceptions for defensive programming that cannot be tested a head
+    "raise RuntimeError",         # Exceptions for defensive programming that cannot be tested ahead
     "if TYPE_CHECKING:",          # Code that only runs during type checks
     "@abstractmethod",            # Abstract methods are not testable
     ]

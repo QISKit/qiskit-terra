@@ -25,7 +25,7 @@ from math import pi
 import numpy
 
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
-from qiskit.circuit import Gate, Parameter, Qubit, Clbit, Instruction, IfElseOp
+from qiskit.circuit import Gate, Parameter, Qubit, Clbit, Instruction, IfElseOp, BoxOp
 from qiskit.circuit.annotated_operation import (
     AnnotatedOperation,
     InverseModifier,
@@ -34,7 +34,7 @@ from qiskit.circuit.annotated_operation import (
 )
 from qiskit.quantum_info import random_clifford
 from qiskit.quantum_info.operators import SuperOp
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit.transpiler.layout import Layout, TranspileLayout
 from qiskit.visualization.circuit.circuit_visualization import _text_circuit_drawer
 from qiskit.visualization import circuit_drawer
@@ -495,6 +495,31 @@ q_3: ───────────────────────┤ Bo
 q_4: ───────────────────────┤        ┤ Box-1    End-1 ├─────        ├─
                             └─────── └───────  ───────┘      ───────┘
 """.rstrip()
+        self.assertEqual(actual, expected)
+
+    def test_box_permuted_qubits(self):
+        """A box body whose qubits are permuted relative to the outer circuit must not collide.
+        See https://github.com/Qiskit/qiskit/issues/16510.
+        """
+        qc = QuantumCircuit(3, 1)
+        body = QuantumCircuit(3)
+        body.cz(0, 1)
+        body.h(2)
+        qc.append(BoxOp(body), [0, 2, 1])
+        qc.append(IfElseOp((qc.clbits[0], 0), body, body), [0, 2, 1])
+
+        actual = "\n".join(line.rstrip() for line in str(qc.draw("text", fold=80)).splitlines())
+        expected = """\
+     ┌───────          ───────┐   ┌──────          ┌────────          ───────┐
+q_0: ┤        ─■──────        ├───┤       ──■──────┤         ─■──────        ├─
+     │         │ ┌───┐        │   │         │ ┌───┐│          │ ┌───┐        │
+q_1: ┤ Box-0  ─┼─┤ H ├  End-0 ├───┤ If-0  ──┼─┤ H ├┤ Else-0  ─┼─┤ H ├  End-0 ├─
+     │         │ └───┘        │   │         │ └───┘│          │ └───┘        │
+q_2: ┤        ─■──────        ├───┤       ──■──────┤         ─■──────        ├─
+     └───────          ───────┘   └──╥───          └────────          ───────┘
+                                ┌────╨────┐
+c: 1/═══════════════════════════╡ c_0=0x0 ╞════════════════════════════════════
+                                └─────────┘""".rstrip()
         self.assertEqual(actual, expected)
 
     def test_text_swap(self):
@@ -1960,11 +1985,11 @@ class TestTextDrawerParams(QiskitTestCase):
         """cu3 drawing with parameters"""
         expected = "\n".join(
             [
-                "                            ",
-                "q_0: |0>─────────■──────────",
-                "        ┌────────┴─────────┐",
-                "q_1: |0>┤ U(π/2,theta,π,0) ├",
-                "        └──────────────────┘",
+                "                             ",
+                "q_0: |0>──────────■──────────",
+                "        ┌─────────┴─────────┐",
+                "q_1: |0>┤ U4(π/2,theta,π,0) ├",
+                "        └───────────────────┘",
             ]
         )
 

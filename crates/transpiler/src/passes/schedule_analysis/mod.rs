@@ -17,9 +17,7 @@ use std::ops::{
     Add, AddAssign, Deref, DerefMut, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign,
 };
 
-use foldhash::fast::RandomState;
 use hashbrown::HashMap;
-use indexmap::IndexMap;
 use pyo3::{
     IntoPyObjectExt,
     exceptions::{PyKeyError, PyTypeError},
@@ -30,6 +28,7 @@ use qiskit_circuit::{
     dag_circuit::DAGCircuit,
     dag_node::{DAGNode, DAGOpNode},
 };
+use qiskit_util::IndexMap;
 use rustworkx_core::petgraph::graph::NodeIndex;
 
 use crate::TranspilerError;
@@ -403,8 +402,8 @@ impl PyNodeDurations {
 /// representing by an `f64`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeDurations {
-    Dt(IndexMap<NodeIndex<u32>, u64, RandomState>),
-    Seconds(IndexMap<NodeIndex<u32>, f64, RandomState>),
+    Dt(IndexMap<NodeIndex<u32>, u64>),
+    Seconds(IndexMap<NodeIndex<u32>, f64>),
 }
 
 impl NodeDurations {
@@ -424,14 +423,14 @@ impl NodeDurations {
     }
 }
 
-impl From<IndexMap<NodeIndex<u32>, u64, RandomState>> for NodeDurations {
-    fn from(value: IndexMap<NodeIndex<u32>, u64, RandomState>) -> Self {
+impl From<IndexMap<NodeIndex<u32>, u64>> for NodeDurations {
+    fn from(value: IndexMap<NodeIndex<u32>, u64>) -> Self {
         Self::Dt(value)
     }
 }
 
-impl From<IndexMap<NodeIndex<u32>, f64, RandomState>> for NodeDurations {
-    fn from(value: IndexMap<NodeIndex<u32>, f64, RandomState>) -> Self {
+impl From<IndexMap<NodeIndex<u32>, f64>> for NodeDurations {
+    fn from(value: IndexMap<NodeIndex<u32>, f64>) -> Self {
         Self::Seconds(value)
     }
 }

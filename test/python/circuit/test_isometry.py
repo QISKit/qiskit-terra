@@ -16,7 +16,7 @@ import unittest
 import numpy as np
 from ddt import ddt, data
 
-from qiskit.quantum_info.random import random_unitary
+from qiskit.quantum_info import random_unitary
 from qiskit import QuantumCircuit
 from qiskit import QuantumRegister
 from qiskit.compiler import transpile

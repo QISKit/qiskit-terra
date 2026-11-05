@@ -13,7 +13,6 @@
 
 """Tests for Clifford class."""
 
-from collections import OrderedDict
 import os
 import subprocess
 import sys

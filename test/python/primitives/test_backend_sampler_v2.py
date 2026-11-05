@@ -38,14 +38,35 @@ from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit.utils import optionals
 from ..legacy_cmaps import LAGOS_CMAP
 
-BACKENDS = [
-    BasicSimulator(),
-    GenericBackendV2(
+
+def _basic_simulator():
+    return BasicSimulator()
+
+
+def _generic_backend_v2():
+    return GenericBackendV2(
         num_qubits=7,
         basis_gates=["id", "rz", "sx", "x", "cx", "reset"],
         coupling_map=LAGOS_CMAP,
         seed=42,
-    ),
+    )
+
+
+class _BackendFactory:
+    def __init__(self, name, factory):
+        self.__name__ = name
+        self._factory = factory
+
+    def __call__(self):
+        return self._factory()
+
+    def __repr__(self):
+        return self.__name__
+
+
+BACKENDS = [
+    _BackendFactory("basic_simulator", _basic_simulator),
+    _BackendFactory("generic_backend_v2", _generic_backend_v2),
 ]
 
 
@@ -159,6 +180,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_sampler_run(self, backend):
         """Test run()."""
+        backend = backend()
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
 
         with self.subTest("single"):
@@ -210,6 +232,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_sampler_run_multiple_times(self, backend):
         """Test run() returns the same results if the same input is given."""
+        backend = backend()
         bell, _, _ = self._cases[1]
         sampler = BackendSamplerV2(backend=backend, options=self._options)
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
@@ -223,6 +246,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_sample_run_multiple_circuits(self, backend):
         """Test run() with multiple circuits."""
+        backend = backend()
         bell, _, target = self._cases[1]
         sampler = BackendSamplerV2(backend=backend, options=self._options)
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
@@ -236,6 +260,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_1qubit(self, backend):
         """test for 1-qubit cases"""
+        backend = backend()
         qc = QuantumCircuit(1)
         qc.measure_all()
         qc2 = QuantumCircuit(1)
@@ -253,6 +278,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_2qubit(self, backend):
         """test for 2-qubit cases"""
+        backend = backend()
         qc0 = QuantumCircuit(2)
         qc0.measure_all()
         qc1 = QuantumCircuit(2)
@@ -276,6 +302,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_single_circuit(self, backend):
         """Test for single circuit case."""
+        backend = backend()
         sampler = BackendSamplerV2(backend=backend, options=self._options)
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
 
@@ -334,6 +361,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_reverse_meas_order(self, backend):
         """test for sampler with reverse measurement order"""
+        backend = backend()
         x = Parameter("x")
         y = Parameter("y")
 
@@ -361,6 +389,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_errors(self, backend):
         """Test for errors with run method"""
+        backend = backend()
         qc1 = QuantumCircuit(1)
         qc1.measure_all()
         qc2 = QuantumCircuit(2)
@@ -414,6 +443,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_empty_parameter(self, backend):
         """Test for empty parameter"""
+        backend = backend()
         n = 5
         qc = QuantumCircuit(n, n - 1)
         qc.measure(range(n - 1), range(n - 1))
@@ -434,6 +464,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_numpy_params(self, backend):
         """Test for numpy array as parameter values"""
+        backend = backend()
         qc = QuantumCircuit(2)
         qc.append(real_amplitudes(num_qubits=2, reps=2), [0, 1])
         qc.measure_all()
@@ -465,6 +496,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_with_shots_option(self, backend):
         """test with shots option."""
+        backend = backend()
         bell, _, _ = self._cases[1]
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
         bell = pm.run(bell)
@@ -529,6 +561,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_run_shots_result_size(self, backend):
         """test with shots option to validate the result size"""
+        backend = backend()
         n = 7  # should be less than or equal to the number of qubits of backend
         qc = QuantumCircuit(n)
         qc.h(range(n))
@@ -593,6 +626,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_primitive_job_status_done(self, backend):
         """test primitive job's status"""
+        backend = backend()
         bell, _, _ = self._cases[1]
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
         bell = pm.run(bell)
@@ -604,6 +638,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_circuit_with_unitary(self, backend):
         """Test for circuit with unitary gate."""
+        backend = backend()
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
 
         with self.subTest("identity"):
@@ -635,6 +670,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_circuit_with_multiple_cregs(self, backend):
         """Test for circuit with multiple classical registers."""
+        backend = backend()
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
         cases = []
 
@@ -760,6 +796,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_no_cregs(self, backend):
         """Test that the sampler works when there are no classical register in the circuit."""
+        backend = backend()
         qc = QuantumCircuit(2)
         sampler = BackendSamplerV2(backend=backend, options=self._options)
         with self.assertWarns(UserWarning):
@@ -771,6 +808,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_empty_creg(self, backend):
         """Test that the sampler works if provided a classical register with no bits."""
+        backend = backend()
         # Test case for issue #12043
         q = QuantumRegister(1, "q")
         c1 = ClassicalRegister(0, "c1")
@@ -786,6 +824,7 @@ class TestBackendSamplerV2(QiskitTestCase):
     @combine(backend=BACKENDS)
     def test_diff_shots(self, backend):
         """Test of pubs with different shots"""
+        backend = backend()
         pm = generate_preset_pass_manager(optimization_level=0, backend=backend)
 
         bell, _, target = self._cases[1]

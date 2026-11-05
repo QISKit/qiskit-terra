@@ -184,7 +184,7 @@ impl DecayHeuristic {
 ///     available options and configuration of it may change without warning in minor versions of
 ///     Qiskit.  If you are doing research using this, be sure to pin the version of Qiskit in your
 ///     requirements.
-#[pyclass(module = "qiskit._accelerate.sabre", frozen, eq, skip_from_py_object)]
+#[pyclass(module = "qiskit._accelerate.sabre", frozen, eq)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Heuristic {
     pub basic: Option<BasicHeuristic>,

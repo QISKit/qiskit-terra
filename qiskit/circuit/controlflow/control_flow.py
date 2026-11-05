@@ -33,12 +33,6 @@ class ControlFlowOp(Instruction, ABC):
     of the control flow.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for block in self.blocks:
-            if block.num_input_vars:
-                raise CircuitError("control-flow blocks cannot contain input variables")
-
     @property
     @abstractmethod
     def blocks(self) -> tuple[QuantumCircuit, ...]:
@@ -92,3 +86,8 @@ class ControlFlowOp(Instruction, ABC):
                 if stretch not in seen:
                     seen.add(stretch)
                     yield stretch
+
+    @staticmethod
+    def _unexpected_input_var_error() -> Exception:
+        """Create a suitable exception to raise when a block has unexpected input variables."""
+        return CircuitError("Only for-loop blocks can contain input variables")

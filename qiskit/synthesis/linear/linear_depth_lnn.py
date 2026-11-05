@@ -25,8 +25,10 @@ from __future__ import annotations
 import numpy as np
 from qiskit.exceptions import QiskitError
 from qiskit.circuit import QuantumCircuit
-from qiskit.synthesis.linear.linear_matrix_utils import check_invertible_binary_matrix
-from qiskit._accelerate.synthesis.linear import py_synth_cnot_depth_line_kms as fast_kms
+from qiskit._accelerate.synthesis.linear import (
+    py_synth_cnot_depth_line_kms as fast_kms,
+    check_invertible_binary_matrix,
+)
 
 
 def synth_cnot_depth_line_kms(mat: np.ndarray[bool]) -> QuantumCircuit:

@@ -23,7 +23,7 @@ use qiskit_circuit::Qubit;
 use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_circuit::imports::QI_OPERATOR;
 use qiskit_circuit::interner::Interner;
-use qiskit_circuit::operations::{ArrayType, OperationRef};
+use qiskit_circuit::operations::{ArrayType, OperationRef, PyInstruction};
 use qiskit_circuit::packed_instruction::PackedInstruction;
 use qiskit_quantum_info::versor_u2::{VersorSU2, VersorU2, VersorU2Error};
 
@@ -71,7 +71,7 @@ pub fn get_matrix_from_inst(inst: &PackedInstruction) -> PyResult<Array2<Complex
             "Parameterized gates can't be consolidated",
         ));
     }
-    let OperationRef::Gate(gate) = inst.op.view() else {
+    let Some(ob) = inst.op.try_py_custom().and_then(PyInstruction::gate_object) else {
         return Err(QiskitError::new_err(
             "Can't compute matrix of non-unitary op",
         ));
@@ -82,7 +82,7 @@ pub fn get_matrix_from_inst(inst: &PackedInstruction) -> PyResult<Array2<Complex
     Python::attach(|py| {
         Ok(QI_OPERATOR
             .get_bound(py)
-            .call1((gate.instruction.clone_ref(py),))?
+            .call1((ob,))?
             .getattr(intern!(py, "data"))?
             .extract::<PyReadonlyArray2<Complex64>>()?
             .as_array()
@@ -100,7 +100,7 @@ pub fn get_2q_matrix_from_inst(inst: &PackedInstruction) -> PyResult<Matrix4<Com
             "Parameterized gates can't be consolidated",
         ));
     }
-    let OperationRef::Gate(gate) = inst.op.view() else {
+    let Some(ob) = inst.op.try_py_custom().and_then(PyInstruction::gate_object) else {
         return Err(QiskitError::new_err(
             "Can't compute matrix of non-unitary op",
         ));
@@ -111,7 +111,7 @@ pub fn get_2q_matrix_from_inst(inst: &PackedInstruction) -> PyResult<Matrix4<Com
     Python::attach(|py| {
         let res = QI_OPERATOR
             .get_bound(py)
-            .call1((gate.instruction.clone_ref(py),))?
+            .call1((ob.clone_ref(py),))?
             .getattr(intern!(py, "data"))?
             .extract()?;
         Ok(matrix4_from_pyreadonly(&res))
@@ -128,7 +128,7 @@ pub fn get_1q_matrix_from_inst(inst: &PackedInstruction) -> PyResult<Matrix2<Com
             "Parameterized gates can't be consolidated",
         ));
     }
-    let OperationRef::Gate(gate) = inst.op.view() else {
+    let Some(ob) = inst.op.try_py_custom().and_then(PyInstruction::gate_object) else {
         return Err(QiskitError::new_err(
             "Can't compute matrix of non-unitary op",
         ));
@@ -139,7 +139,7 @@ pub fn get_1q_matrix_from_inst(inst: &PackedInstruction) -> PyResult<Matrix2<Com
     Python::attach(|py| {
         let res = QI_OPERATOR
             .get_bound(py)
-            .call1((gate.instruction.clone_ref(py),))?
+            .call1((ob.clone_ref(py),))?
             .getattr(intern!(py, "data"))?
             .extract()?;
         Ok(matrix2_from_pyreadonly(&res))

@@ -1,3 +1,5 @@
+.. _capi-vf2-layout:
+
 =========================
 VF2 compiler-pass objects
 =========================

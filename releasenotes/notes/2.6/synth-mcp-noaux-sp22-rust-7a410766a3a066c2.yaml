@@ -1,0 +1,6 @@
+---
+performance:
+  - |
+    Improved runtime of :func:`~qiskit.synthesis.synth_mcp_noaux_sp22` synthesis function by migrating implementation to Rust,
+    resulting in approximately 25-34x speedup across circuit sizes (n=50 to n=1000).   
+    See `#16755 <https://github.com/Qiskit/qiskit/pull/16755>`__ for more details.

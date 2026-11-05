@@ -76,7 +76,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Var {
 /// construction of variables for use in programs should use :meth:`Var.new` or
 /// :meth:`.QuantumCircuit.add_var`.
 ///
-/// Variables are immutable after construction, so they can be used as dictionary keys."""
+/// Variables are immutable after construction, so they can be used as dictionary keys.
 #[pyclass(
     eq,
     hash,
@@ -144,7 +144,7 @@ impl PyVar {
     /// this is exactly the :class:`.Clbit` or :class:`.ClassicalRegister`.  If the variable is a
     /// new-style classical variable (one that owns its own storage separate to the old
     /// :class:`.Clbit`/:class:`.ClassicalRegister` model), this field will be a :class:`~uuid.UUID`
-    /// to uniquely identify it."""
+    /// to uniquely identify it.
     #[getter]
     fn get_var(&self, py: Python) -> PyResult<Py<PyAny>> {
         match &self.0 {
@@ -159,7 +159,7 @@ impl PyVar {
 
     /// The name of the variable.  This is required to exist if the backing :attr:`var` attribute
     /// is a :class:`~uuid.UUID`, i.e. if it is a new-style variable, and must be ``None`` if it is
-    /// an old-style variable."""
+    /// an old-style variable.
     #[getter]
     fn get_name(&self, py: Python) -> PyResult<Py<PyAny>> {
         match &self.0 {
@@ -171,7 +171,7 @@ impl PyVar {
 
     /// Whether this :class:`Var` is a standalone variable that owns its storage
     /// location, if applicable. If false, this is a wrapper :class:`Var` around a
-    /// pre-existing circuit object."""
+    /// pre-existing circuit object.
     #[getter]
     fn get_standalone(&self) -> bool {
         match self.0 {

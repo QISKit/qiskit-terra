@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    Fixed :class:`.Kraus` construction to avoid modifying an input
+    :class:`.Choi` object. See `#17095 <https://github.com/Qiskit/qiskit/issues/17095>`__.

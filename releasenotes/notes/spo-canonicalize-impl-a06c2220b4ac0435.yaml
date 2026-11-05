@@ -1,0 +1,6 @@
+features_quantum_info:
+  - |
+    The internal algorithm used by :func:`.SparseObservable.canonicalize` changed to use hash-maps
+    and a subsequent sort, instead of on-the-fly B-tree based sorting during the mapping.  The
+    scaling of the algorithm and the results should be unchanged, but the practical performance,
+    especially for very large observables, has improved.

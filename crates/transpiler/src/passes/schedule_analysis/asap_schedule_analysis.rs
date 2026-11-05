@@ -12,27 +12,26 @@
 
 use crate::TranspilerError;
 use crate::passes::schedule_analysis::{NodeDurations, PyNodeDurations, TimeOps};
-use foldhash::fast::RandomState;
 use hashbrown::HashMap;
-use indexmap::IndexMap;
 use pyo3::prelude::*;
-use qiskit_circuit::dag_circuit::{DAGCircuit, Wire};
-use qiskit_circuit::operations::{OperationRef, StandardInstruction};
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit, Wire};
+use qiskit_circuit::operations::{OperationRef, PyInstruction, PyOpKind, StandardInstruction};
 use qiskit_circuit::{Clbit, Qubit};
+use qiskit_util::IndexMap;
 use rustworkx_core::petgraph::prelude::NodeIndex;
 
 pub fn run_asap_schedule_analysis<T: TimeOps>(
     dag: &DAGCircuit,
     clbit_write_latency: T,
-    node_durations: &IndexMap<NodeIndex, T, RandomState>,
-) -> PyResult<IndexMap<NodeIndex, T, RandomState>> {
+    node_durations: &IndexMap<NodeIndex, T>,
+) -> PyResult<IndexMap<NodeIndex, T>> {
     if dag.qregs().len() != 1 || !dag.qregs_data().contains_key("q") {
         return Err(TranspilerError::new_err(
             "ASAP schedule runs on physical circuits only",
         ));
     }
 
-    let mut node_start_time: IndexMap<NodeIndex, T, RandomState> = IndexMap::default();
+    let mut node_start_time: IndexMap<NodeIndex, T> = IndexMap::default();
     let mut idle_after: HashMap<Wire, T> = HashMap::new();
 
     let zero = T::zero();
@@ -70,8 +69,10 @@ pub fn run_asap_schedule_analysis<T: TimeOps>(
         let op_view = op.op.view();
         let is_gate_or_delay = matches!(
             op_view,
-            OperationRef::Gate(_)
-                | OperationRef::StandardGate(_)
+            OperationRef::PyCustom(PyInstruction {
+                kind: PyOpKind::Gate,
+                ..
+            }) | OperationRef::StandardGate(_)
                 | OperationRef::StandardInstruction(StandardInstruction::Delay(_))
         );
 
@@ -158,7 +159,7 @@ pub fn run_asap_schedule_analysis<T: TimeOps>(
 ///
 #[pyo3(name = "asap_schedule_analysis", signature= (dag, clbit_write_latency, node_durations))]
 pub fn py_run_asap_schedule_analysis(
-    dag: &DAGCircuit,
+    dag: &PyDAGCircuit,
     clbit_write_latency: u64,
     mut node_durations: PyNodeDurations,
 ) -> PyResult<PyNodeDurations> {
@@ -166,12 +167,14 @@ pub fn py_run_asap_schedule_analysis(
     // Get the first duration type
     let new_durations: NodeDurations = match &*node_durations {
         NodeDurations::Dt(node_durations) => {
-            run_asap_schedule_analysis(dag, clbit_write_latency, node_durations)?.into()
+            run_asap_schedule_analysis(dag.try_read()?, clbit_write_latency, node_durations)?.into()
         }
-        NodeDurations::Seconds(node_durations) => {
-            run_asap_schedule_analysis::<f64>(dag, clbit_write_latency as f64, node_durations)?
-                .into()
-        }
+        NodeDurations::Seconds(node_durations) => run_asap_schedule_analysis::<f64>(
+            dag.try_read()?,
+            clbit_write_latency as f64,
+            node_durations,
+        )?
+        .into(),
     };
     node_durations.update_durations(new_durations)?;
     Ok(node_durations)

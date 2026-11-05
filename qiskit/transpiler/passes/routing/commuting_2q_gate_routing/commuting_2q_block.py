@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from qiskit.exceptions import QiskitError
-from qiskit.circuit import Gate, Qubit, Clbit
+from qiskit.circuit import Clbit, Gate, Parameter, ParameterExpression, Qubit
 from qiskit.dagcircuit import DAGOpNode
 
 
@@ -25,6 +25,9 @@ class Commuting2qBlock(Gate):
 
     This gate is intended for use with commuting swap strategies to make it convenient
     for the swap strategy router to identify which blocks of operations commute.
+
+    Note that :attr:`params` of this gate reports the free parameters the nodes contain.
+    There is no guaranteed order they are stored in.
     """
 
     def __init__(self, node_block: Iterable[DAGOpNode]) -> None:
@@ -37,6 +40,8 @@ class Commuting2qBlock(Gate):
         """
         qubits: set[Qubit] = set()
         cbits: set[Clbit] = set()
+        params_set: set[Parameter] = set()
+
         for node in node_block:
             if len(node.qargs) != 2:
                 raise QiskitError(f"Node {node.name} does not apply to two-qubits.")
@@ -44,13 +49,21 @@ class Commuting2qBlock(Gate):
             qubits.update(node.qargs)
             cbits.update(node.cargs)
 
+            for param in node.op.params:
+                if isinstance(param, ParameterExpression):
+                    params_set.update(param.parameters)
+        params_list = list(params_set)
+
         if cbits:
             raise QiskitError(
                 f"{self.__class__.__name__} does not accept nodes with classical bits."
             )
 
         super().__init__(
-            "commuting_2q_block", num_qubits=len(qubits), params=[], label="Commuting 2q gates"
+            "commuting_2q_block",
+            num_qubits=len(qubits),
+            params=params_list,
+            label="Commuting 2q gates",
         )
         self.node_block = node_block
         self.qubits = qubits

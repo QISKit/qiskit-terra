@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    :meth:`.PassManager.run` no longer clobbers the ``original_qubit_indices`` or 
+    ``num_input_qubits`` keys if they are set in a given ``property_set`` argument.
+    See `#8622 <https://github.com/Qiskit/qiskit/issues/8622>`__.

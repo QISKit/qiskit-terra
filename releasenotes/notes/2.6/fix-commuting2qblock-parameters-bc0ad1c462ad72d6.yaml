@@ -1,0 +1,8 @@
+---
+fixes:
+  - Fixed parameter loss in :class:`~.Commuting2qBlock` where the ``params``
+    attribute was hardcoded to an empty list, causing all parameters from
+    input parametric gates to be lost. 
+    The fix properly extracts and preserves parameters from gate operations,
+    including those in :class:`~.ParameterExpression` objects.
+    Fixed `#16456 <https://github.com/Qiskit/qiskit/issues/16456>`__.

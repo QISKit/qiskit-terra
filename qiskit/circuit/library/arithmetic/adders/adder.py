@@ -79,7 +79,11 @@ class HalfAdderGate(Gate):
 
     .. math::
 
-        |a\rangle_n |b\rangle_n \mapsto |a\rangle_n |a + b\rangle_{n + 1}.
+        |a\rangle_n |b\rangle_n |0\rangle \mapsto |a\rangle_n |a + b\rangle_{n + 1}.
+
+    The final input qubit is a clean qubit initialized to :math:`|0\rangle`.
+    It stores the carry-out bit, which is why the output sum register has
+    :math:`n + 1` qubits.
 
     The quantum register :math:`|a\rangle_n` (and analogously :math:`|b\rangle_n`)
 
@@ -99,7 +103,6 @@ class HalfAdderGate(Gate):
         """
         Args:
             num_state_qubits: The number of qubits in each of the registers.
-            name: The name of the circuit.
             label: An optional label for identifying the instruction.
         """
         if num_state_qubits < 1:
@@ -155,7 +158,6 @@ class ModularAdderGate(Gate):
         """
         Args:
             num_state_qubits: The number of qubits in each of the registers.
-            name: The name of the circuit.
             label: An optional label for identifying the instruction.
         """
         if num_state_qubits < 1:
@@ -212,7 +214,6 @@ class FullAdderGate(Gate):
         """
         Args:
             num_state_qubits: The number of qubits in each of the registers.
-            name: The name of the circuit.
             label: An optional label for identifying the instruction.
         """
         if num_state_qubits < 1:

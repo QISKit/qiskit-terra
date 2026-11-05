@@ -67,6 +67,9 @@ class Delay(Instruction):
             unit = "dt"
         elif unit not in {"s", "ms", "us", "ns", "ps", "dt"}:
             raise CircuitError(f"Unknown unit {unit} is specified.")
+        if isinstance(duration, int) and unit != "dt":
+            # Integer durations should only exist when using dt units
+            duration = float(duration)
         return duration, unit
 
     broadcast_arguments = Gate.broadcast_arguments
