@@ -465,14 +465,18 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
             raise CircuitError(self._forbidden_message)
         if not self._allow_jumps:
             data.foreach_op(self._raise_on_jump)
-        mapped_qubits = [
+        # add_clbit's binding returns None, so resolve indices via the index maps instead,
+        # the same way find_bit looks bits up on CircuitData.
+        source_qubits = data.qubits if qubits is None else qubits
+        source_clbits = data.clbits if clbits is None else clbits
+        for b in source_qubits:
             self.instructions.add_qubit(b, strict=False)
-            for b in (data.qubits if qubits is None else qubits)
-        ]
-        mapped_clbits = [
+        for b in source_clbits:
             self.instructions.add_clbit(b, strict=False)
-            for b in (data.clbits if clbits is None else clbits)
-        ]
+        qubit_indices = self.instructions._qubit_indices
+        clbit_indices = self.instructions._clbit_indices
+        mapped_qubits = [qubit_indices[b].index for b in source_qubits]
+        mapped_clbits = [clbit_indices[b].index for b in source_clbits]
         self.instructions.native_extend(data, qubits=mapped_qubits, clbits=mapped_clbits)
 
     def resolve_classical_resource(self, specifier):

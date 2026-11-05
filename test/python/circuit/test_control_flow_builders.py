@@ -2699,6 +2699,64 @@ class TestControlFlowBuilders(QiskitTestCase):
 
             self.assertEqual(canonicalize_control_flow(outer), canonicalize_control_flow(expected))
 
+    def test_inplace_compose_within_builder_with_clbits(self):
+        """Test that in-place compose works within control-flow scopes when the circuit
+        being composed in itself contains classical bits.  Regression test of gh-16461."""
+        inner = QuantumCircuit(1, 1)
+        inner.x(0)
+        inner.measure(0, 0)
+
+        base = QuantumCircuit(1, 1)
+        base.h(0)
+
+        with self.subTest("if"):
+            outer = base.copy()
+            with outer.if_test((outer.clbits[0], 1)):
+                outer.compose(inner, inplace=True)
+
+            expected = base.copy()
+            with expected.if_test((expected.clbits[0], 1)):
+                expected.x(0)
+                expected.measure(0, 0)
+
+            self.assertEqual(canonicalize_control_flow(outer), canonicalize_control_flow(expected))
+
+        with self.subTest("for"):
+            outer = base.copy()
+            with outer.for_loop(range(3)):
+                outer.compose(inner, inplace=True)
+
+            expected = base.copy()
+            with expected.for_loop(range(3)):
+                expected.x(0)
+                expected.measure(0, 0)
+
+            self.assertEqual(canonicalize_control_flow(outer), canonicalize_control_flow(expected))
+
+        with self.subTest("while"):
+            outer = base.copy()
+            with outer.while_loop((outer.clbits[0], 0)):
+                outer.compose(inner, inplace=True)
+
+            expected = base.copy()
+            with expected.while_loop((expected.clbits[0], 0)):
+                expected.x(0)
+                expected.measure(0, 0)
+
+            self.assertEqual(canonicalize_control_flow(outer), canonicalize_control_flow(expected))
+
+        with self.subTest("switch"):
+            outer = base.copy()
+            with outer.switch(outer.clbits[0]) as case, case(False):
+                outer.compose(inner, inplace=True)
+
+            expected = base.copy()
+            with expected.switch(expected.clbits[0]) as case, case(False):
+                expected.x(0)
+                expected.measure(0, 0)
+
+            self.assertEqual(canonicalize_control_flow(outer), canonicalize_control_flow(expected))
+
     def test_global_phase_of_blocks(self):
         """It should be possible to set a global phase of a scope independently of the containing
         scope and other sibling scopes."""

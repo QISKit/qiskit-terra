@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a bug where :meth:`.QuantumCircuit.compose` with ``inplace=True`` raised a
+    ``TypeError`` when called inside a control-flow builder scope (such as
+    :meth:`~.QuantumCircuit.for_loop`, :meth:`~.QuantumCircuit.if_test`,
+    :meth:`~.QuantumCircuit.while_loop`, :meth:`~.QuantumCircuit.switch`, or
+    :meth:`~.QuantumCircuit.box`) if the circuit being composed contained classical bits.
