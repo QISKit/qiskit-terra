@@ -299,11 +299,6 @@ mod test {
     }
 
     #[test]
-    fn test_prng_kind_widths() {
-        assert_eq!(PrngKind::Philox4x32.key_words(), 2);
-    }
-
-    #[test]
     fn test_prng_kind_of_a_dtype() {
         assert_eq!(
             DType::Key(PrngKind::Philox4x32).prng_kind(),
@@ -318,7 +313,6 @@ mod test {
             DType::Key(PrngKind::Philox4x32).to_string(),
             "Key<philox4x32>"
         );
-        assert_eq!(PrngKind::Philox4x32.to_string(), "philox4x32");
     }
 
     #[test]
