@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    :class:`.OptimizeSwapBeforeMeasure` no longer recurses into control-flow blocks.  A swap at
+    the end of a block (or followed only by measurements inside the block) was previously removed,
+    even though the swapped qubits remain live after the block, so measurements outside the block
+    observed the wrong state.  The pass now leaves control-flow blocks untouched and only removes
+    swaps at the top level of the circuit.
+    Fixes `#16853 <https://github.com/Qiskit/qiskit/issues/16853>`__.

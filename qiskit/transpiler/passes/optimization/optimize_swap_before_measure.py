@@ -16,7 +16,6 @@
 from qiskit.circuit import Measure
 from qiskit.circuit.library.standard_gates import SwapGate
 from qiskit.transpiler.basepasses import TransformationPass
-from qiskit.transpiler.passes.utils import control_flow
 from qiskit.dagcircuit import DAGCircuit, DAGOpNode, DAGOutNode
 
 
@@ -25,9 +24,12 @@ class OptimizeSwapBeforeMeasure(TransformationPass):
 
     Transpiler pass to remove swaps in front of measurements by re-targeting
     the classical bit of the measure instruction.
+
+    The pass only acts on the top level of the circuit.  Control-flow blocks are left untouched,
+    because a swap at the end of a block is still observable by the rest of the program after
+    the block, even if it is followed only by measurements within the block.
     """
 
-    @control_flow.trivial_recurse
     def run(self, dag):
         """Run the OptimizeSwapBeforeMeasure pass on `dag`.
 

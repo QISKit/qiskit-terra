@@ -233,59 +233,72 @@ class TestOptimizeSwapBeforeMeasure(QiskitTestCase):
 
         self.assertEqual(circuit_to_dag(circuit), after)
 
-    def test_if_else(self):
-        """Test that the pass recurses into a simple if-else."""
+    def test_if_else_not_recursed(self):
+        """A swap inside a control-flow block is not removed: the block's output nodes are not
+        the end of the program, so the swap is observable by measurements outside the block.
+        See #16853."""
         pass_ = OptimizeSwapBeforeMeasure()
 
-        base_test = QuantumCircuit(2, 1)
-        base_test.swap(0, 1)
-        base_test.measure(0, 0)
-
-        base_expected = QuantumCircuit(2, 1)
-        base_expected.measure(1, 0)
+        body = QuantumCircuit(2, 1)
+        body.swap(0, 1)
+        body.measure(0, 0)
 
         test = QuantumCircuit(2, 1)
-        test.if_else(
-            (test.clbits[0], True), base_test.copy(), base_test.copy(), test.qubits, test.clbits
-        )
+        test.if_else((test.clbits[0], True), body.copy(), body.copy(), test.qubits, test.clbits)
 
-        expected = QuantumCircuit(2, 1)
-        expected.if_else(
-            (expected.clbits[0], True),
-            base_expected.copy(),
-            base_expected.copy(),
-            expected.qubits,
-            expected.clbits,
-        )
+        self.assertEqual(pass_(test.copy()), test)
 
-        self.assertEqual(pass_(test), expected)
+    def test_for_loop_terminal_swap_observed_after_block(self):
+        """Regression test of #16853: a terminal swap inside a ``for`` loop must not be removed,
+        because the measurements after the loop observe the swapped state.
 
-    def test_nested_control_flow(self):
-        """Test that the pass recurses into nested control flow."""
+        qr0:--X--[for: X]--m-----       (unchanged)
+                     |     |
+        qr1:---------[for: X]--|--m--
+                           |  |
+        cr:  ==============.==.==
+        """
         pass_ = OptimizeSwapBeforeMeasure()
 
-        base_test = QuantumCircuit(2, 1)
-        base_test.swap(0, 1)
-        base_test.measure(0, 0)
+        test = QuantumCircuit(2, 2)
+        test.x(0)
+        with test.for_loop(range(1)):
+            test.swap(0, 1)
+        test.measure(0, 0)
+        test.measure(1, 1)
 
-        base_expected = QuantumCircuit(2, 1)
-        base_expected.measure(1, 0)
+        self.assertEqual(pass_(test.copy()), test)
 
-        body_test = QuantumCircuit(2, 1)
-        body_test.for_loop((0,), None, base_expected.copy(), body_test.qubits, body_test.clbits)
+    def test_swap_before_measure_inside_block_observed_after_block(self):
+        """A swap followed only by measurements inside a block is still observable outside the
+        block, because the qubits remain live after the block."""
+        pass_ = OptimizeSwapBeforeMeasure()
 
-        body_expected = QuantumCircuit(2, 1)
-        body_expected.for_loop(
-            (0,), None, base_expected.copy(), body_expected.qubits, body_expected.clbits
-        )
+        test = QuantumCircuit(2, 2)
+        test.x(0)
+        with test.for_loop(range(1)):
+            test.swap(0, 1)
+            test.measure(0, 0)
+            test.measure(1, 1)
+        test.measure(0, 1)
+
+        self.assertEqual(pass_(test.copy()), test)
+
+    def test_swap_after_control_flow_is_optimized(self):
+        """A top-level swap after a control-flow block is still optimized as usual."""
+        pass_ = OptimizeSwapBeforeMeasure()
+
+        body = QuantumCircuit(2, 1)
+        body.x(0)
 
         test = QuantumCircuit(2, 1)
-        test.while_loop((test.clbits[0], True), body_test, test.qubits, test.clbits)
+        test.if_test((test.clbits[0], True), body, test.qubits, test.clbits)
+        test.swap(0, 1)
+        test.measure(0, 0)
 
         expected = QuantumCircuit(2, 1)
-        expected.while_loop(
-            (expected.clbits[0], True), body_expected, expected.qubits, expected.clbits
-        )
+        expected.if_test((expected.clbits[0], True), body, expected.qubits, expected.clbits)
+        expected.measure(1, 0)
 
         self.assertEqual(pass_(test), expected)
 
