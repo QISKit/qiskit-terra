@@ -11,7 +11,7 @@
 // that they have been altered from the originals.
 
 use super::error::{MathOpError, check_axis};
-use super::inference::{any, reduce};
+use super::inference::{promotable, reduce};
 use super::{ProgramOp, QISKIT};
 use crate::tensor::{DType, Tensor, TensorType};
 use ndarray::{ArrayBase, ArrayD, Axis, Data, IxDyn, NdFloat, Zip};
@@ -141,7 +141,7 @@ macro_rules! reduction_op {
                 inputs: &[TensorType],
             ) -> Result<Vec<TensorType>, Self::Error> {
                 crate::unpack_operands!(self, inputs, [x]);
-                Ok(vec![reduce(x, self.axis, any, $result_dtype)?])
+                Ok(vec![reduce(x, self.axis, promotable, $result_dtype)?])
             }
             fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
                 crate::unpack_operands!(self, args, [x]);
@@ -893,5 +893,30 @@ mod tests {
             Std::new(1, 0.0).eval(&[x]).unwrap_err(),
             MathOpError::InvalidAxis { axis: 1, ndim: 1 }
         ));
+    }
+
+    #[test]
+    fn test_reducing_a_key_is_refused_at_inference() {
+        // Without this, the result dtype map's catch-all arm would claim a key reduces to F64 and
+        // eval would be reached with a tensor it cannot average.
+        let key = DType::Key(crate::tensor::PrngKind::Philox4x32);
+        let key_type = TensorType {
+            dtype: key,
+            shape: vec![crate::tensor::Dim::Fixed(3)],
+        };
+        for op in [
+            &Mean::new(0) as &dyn ProgramOp<Error = MathOpError>,
+            &Variance::new(0, 0.0),
+            &Std::new(0, 0.0),
+        ] {
+            assert!(
+                matches!(
+                    op.infer_output_types(std::slice::from_ref(&key_type)).unwrap_err(),
+                    MathOpError::UnsupportedDType { operand: 0, dtype } if dtype == key
+                ),
+                "for {}",
+                op.full_name()
+            );
+        }
     }
 }

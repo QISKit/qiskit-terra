@@ -38,6 +38,9 @@ pub enum MathOpError {
         rhs: DType,
         dtype: DType,
     },
+    /// Two operands have no common dtype to promote to.
+    #[error("operands of dtype {lhs} and {rhs} have no common dtype")]
+    NoPromotion { lhs: DType, rhs: DType },
     /// Complex dtypes cannot be cast to real dtypes.
     #[error("cannot cast {from} to {to}")]
     UnsupportedCast { from: DType, to: DType },

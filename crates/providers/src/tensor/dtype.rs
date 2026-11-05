@@ -14,6 +14,8 @@
 
 use std::fmt;
 
+use super::PrngKind;
+
 /// The possible data types for a Tensor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DType {
@@ -29,7 +31,18 @@ pub enum DType {
     U32,
     U16,
     U8,
-    Bit, // bool
+    Bit,           // bool
+    Key(PrngKind), // prng key
+}
+
+impl DType {
+    /// Return the generator kind if this is a key dtype.
+    pub fn prng_kind(self) -> Option<PrngKind> {
+        match self {
+            DType::Key(kind) => Some(kind),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for DType {
@@ -48,6 +61,7 @@ impl fmt::Display for DType {
             DType::U16 => "U16",
             DType::U8 => "U8",
             DType::Bit => "Bit",
+            DType::Key(kind) => return write!(f, "Key<{kind}>"),
         };
         write!(f, "{string_repr}")
     }
@@ -60,10 +74,18 @@ impl fmt::Display for DType {
 /// <https://numpy.org/doc/stable/reference/arrays.promotion.html#numerical-promotion>
 /// In short, if you view the linked diagram as a DAG, this function hard-codes the
 /// least-common-descendant algorithm.
-pub fn promotion(lhs: DType, rhs: DType) -> DType {
+///
+/// Returns `None` for dtypes outside of the promotion lattice, such as [`DType::Key`].
+pub fn promotion(lhs: DType, rhs: DType) -> Option<DType> {
     use DType::*;
 
-    match lhs {
+    if let Key(_) = rhs {
+        return None;
+    }
+
+    Some(match lhs {
+        Key(_) => return None,
+
         C128 => C128,
 
         C64 => match rhs {
@@ -140,13 +162,14 @@ pub fn promotion(lhs: DType, rhs: DType) -> DType {
         },
 
         Bit => rhs,
-    }
+    })
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
+    /// Every dtype in the promotion lattice.
     const ALL_DTYPES: [DType; 13] = [
         DType::Bit,
         DType::U8,
@@ -233,7 +256,7 @@ mod test {
             for &b in &ALL_DTYPES {
                 assert_eq!(
                     promotion(a, b),
-                    least_common_descendant(&a, &b),
+                    Some(least_common_descendant(&a, &b)),
                     "For promotion ({a}, {b})"
                 )
             }
@@ -243,7 +266,7 @@ mod test {
     #[test]
     fn test_promotion_idempotence() {
         for &a in &ALL_DTYPES {
-            assert_eq!(promotion(a, a), a, "For promotion ({a}, {a})")
+            assert_eq!(promotion(a, a), Some(a), "For promotion ({a}, {a})")
         }
     }
 
@@ -254,6 +277,42 @@ mod test {
                 assert_eq!(promotion(a, b), promotion(b, a), "For promotion ({a}, {b})")
             }
         }
+    }
+
+    #[test]
+    fn test_promotion_of_a_key_has_no_answer() {
+        let key = DType::Key(PrngKind::Philox4x32);
+
+        assert_eq!(promotion(key, key), None);
+        for &other in &ALL_DTYPES {
+            assert_eq!(
+                promotion(key, other),
+                None,
+                "for promotion ({key}, {other})"
+            );
+            assert_eq!(
+                promotion(other, key),
+                None,
+                "for promotion ({other}, {key})"
+            );
+        }
+    }
+
+    #[test]
+    fn test_prng_kind_of_a_dtype() {
+        assert_eq!(
+            DType::Key(PrngKind::Philox4x32).prng_kind(),
+            Some(PrngKind::Philox4x32)
+        );
+        assert_eq!(DType::U32.prng_kind(), None);
+    }
+
+    #[test]
+    fn test_key_dtype_display() {
+        assert_eq!(
+            DType::Key(PrngKind::Philox4x32).to_string(),
+            "Key<philox4x32>"
+        );
     }
 
     #[test]
