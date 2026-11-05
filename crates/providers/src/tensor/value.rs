@@ -267,18 +267,17 @@ impl Tensor {
     ///
     /// # Panics
     ///
-    /// Panics if either dtype is a [`DType::Key`], since a key is opaque and arithmetic on one is
-    /// not defined. The cast op's type inference refuses the same pair, so this is unreachable for
-    /// a tensor flowing through a program.
+    /// Panics if either dtype is a [`DType::Key`] which does not support arithmetic and has an opaque
+    /// value type.
     pub fn cast(self, target: DType) -> Tensor {
-        if self.dtype() == target {
-            return self;
-        }
         assert!(
             self.dtype().prng_kind().is_none() && target.prng_kind().is_none(),
             "cannot cast {} to {target}",
             self.dtype()
         );
+        if self.dtype() == target {
+            return self;
+        }
         match &self {
             Tensor::Key(_) => unreachable!("a key dtype is refused above"),
             Tensor::Bit(a) | Tensor::U8(a) => cast_real!(a, u8, target),
@@ -1396,5 +1395,11 @@ mod test {
     #[should_panic(expected = "cannot cast U32 to Key<philox4x32>")]
     fn test_cast_to_a_key_panics() {
         let _ = Tensor::from([1u32, 2]).cast(DType::Key(PrngKind::Philox4x32));
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot cast Key<philox4x32> to Key<philox4x32>")]
+    fn test_cast_of_a_key_to_its_own_dtype_panics() {
+        let _ = key_tensor(&[3]).cast(DType::Key(PrngKind::Philox4x32));
     }
 }

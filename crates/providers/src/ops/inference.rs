@@ -263,8 +263,8 @@ mod test {
             MathOpError::UnsupportedDType { operand: 0, dtype } if dtype == key
         ));
 
-        // A cast is refused in both directions, so a key cannot be reinterpreted as its words.
-        for (from, to) in [(key, DType::U32), (DType::U32, key)] {
+        // Casting is refused.
+        for (from, to) in [(key, DType::U32), (DType::U32, key), (key, key)] {
             assert!(matches!(
                 cast_dtype(from, to).unwrap_err(),
                 MathOpError::UnsupportedCast { .. }
