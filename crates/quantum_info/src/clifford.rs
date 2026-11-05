@@ -985,9 +985,26 @@ impl Clifford {
         self.tableau.append_ppr(pauli_z, pauli_x, indices, multiple);
     }
 
-    /// Evolving a (dense) Pauli gate by the Clifford.
-    /// This is done by appending PPR (PPM) initial and final gates to the Clifford tableau in-place,
-    /// and evolving the internal RZ gate.
+    /// Evolve a Pauli gate by the Clifford.
+    ///
+    /// The evolution is in the Heisenberg frame: if `C` is the unitary of the Clifford
+    /// and `P` is the input Pauli, the output is `C^dagger P C`.
+    ///
+    /// The Pauli gate is given in the sparse ZX format, however may include I-terms.
+    /// This is done by appending the initial and final parts of the PPR (PPM) to the
+    /// Clifford tableau in-place, and evolving the internal RZ gate.
+    ///
+    /// # Arguments
+    ///
+    /// * `in_z`: The Z components of the sparse Pauli.
+    /// * `in_x`: The X components of the sparse Pauli.
+    /// * `indices_in`: The qubit indices the sparse Pauli acts on.
+    ///
+    /// # Returns
+    ///
+    /// The evolved Pauli in the sparse ZX format `(sign, z, x, indices)`, without I-terms
+    /// and with sorted indices, where `sign` is `true` if the evolved Pauli has a negative
+    /// phase.
     pub fn evolve_pauli(
         &mut self,
         in_z: &[bool],
@@ -1017,12 +1034,26 @@ impl Clifford {
 
             return (sign, z, x, indices);
         }
-        (false, in_z.to_vec(), in_x.to_vec(), indices_in.to_vec())
+
+        // There are no active indices
+        (false, vec![], vec![], vec![])
     }
 
-    /// Evolving a single qubit pauli on qubit qbit by the Clifford.
-    /// The pauli (X, Y or Z) is given as (pauli_z, pauli_x)
-    /// Returns the evolved Pauli in the a sparse ZX format: (sign, z, x, indices).
+    /// Evolve a single-qubit X, Y or Z Pauli by the Clifford.
+    ///
+    /// The evolution is in the Heisenberg frame: if `C` is the unitary of the Clifford
+    /// and `P` is the input Pauli, the output is `C^dagger P C`.
+    ///
+    /// # Arguments
+    ///
+    /// * `pauli`: The single-qubit Pauli ([`Pauli1q`]).
+    /// * `qbit`: The qubit the Pauli acts on.
+    ///
+    /// # Returns
+    ///
+    /// The evolved Pauli in the sparse ZX format `(sign, z, x, indices)`, without I-terms
+    /// and with sorted indices, where `sign` is `true` if the evolved Pauli has a negative
+    /// phase.
     pub fn evolve_single_qubit_pauli(
         &self,
         pauli: Pauli1q,
@@ -1127,7 +1158,7 @@ impl fmt::Debug for Clifford {
 
 #[cfg(test)]
 mod tests {
-    use crate::clifford::{PauliLabelOrder, PauliList, PauliListError};
+    use crate::clifford::{Clifford, Pauli1q, PauliLabelOrder, PauliList, PauliListError};
 
     #[test]
     fn test_from_labels_and_back_with_left_to_right() {
@@ -1211,5 +1242,105 @@ mod tests {
         assert!(!pauli_list.commute(1, 2));
         assert!(pauli_list.commute(2, 2));
         assert!(pauli_list.commute(2, 3));
+    }
+
+    #[test]
+    fn test_evolve_all_identity_pauli() {
+        // A non-trivial Clifford on 4 qubits
+        let mut cliff = Clifford::identity(4);
+        cliff.append_h(0);
+        cliff.append_cx(0, 2);
+        cliff.append_s(3);
+        cliff.append_cz(1, 3);
+
+        // All-identity sparse Pauli "III" on qubits [0, 2, 3]
+        let (sign, z, x, indices) =
+            cliff.evolve_pauli(&[false, false, false], &[false, false, false], &[0, 2, 3]);
+        assert!(!sign);
+        assert!(z.is_empty());
+        assert!(x.is_empty());
+        assert!(indices.is_empty());
+
+        // Empty sparse Pauli
+        let (sign, z, x, indices) = cliff.evolve_pauli(&[], &[], &[]);
+        assert!(!sign);
+        assert!(z.is_empty());
+        assert!(x.is_empty());
+        assert!(indices.is_empty());
+    }
+
+    #[test]
+    fn test_evolve_single_qubit_pauli() {
+        // The Clifford CX(2, 0) * Z(1) on 3 qubits.
+        let mut cliff = Clifford::identity(3);
+        cliff.append_cx(2, 0);
+        cliff.append_z(1);
+
+        // Z0 -> Z0 Z2
+        let (sign, z, x, indices) = cliff.evolve_single_qubit_pauli(Pauli1q::Z, 0);
+        assert_eq!(
+            (sign, z, x, indices),
+            (false, vec![true, true], vec![false, false], vec![0, 2])
+        );
+
+        // X2 -> X0 X2
+        let (sign, z, x, indices) = cliff.evolve_single_qubit_pauli(Pauli1q::X, 2);
+        assert_eq!(
+            (sign, z, x, indices),
+            (false, vec![false, false], vec![true, true], vec![0, 2])
+        );
+
+        // X1 -> -X1
+        let (sign, z, x, indices) = cliff.evolve_single_qubit_pauli(Pauli1q::X, 1);
+        assert_eq!(
+            (sign, z, x, indices),
+            (true, vec![false], vec![true], vec![1])
+        );
+
+        // Z1 -> Z1
+        let (sign, z, x, indices) = cliff.evolve_single_qubit_pauli(Pauli1q::Z, 1);
+        assert_eq!(
+            (sign, z, x, indices),
+            (false, vec![true], vec![false], vec![1])
+        );
+    }
+
+    #[test]
+    fn test_evolve_pauli() {
+        // The Clifford CX(3, 0) * Z(1) on 4 qubits.
+        let mut cliff = Clifford::identity(4);
+        cliff.append_cx(3, 0);
+        cliff.append_z(1);
+
+        // "XIX" on (unsorted) qubits [3, 2, 1]
+        // X3 X1 -> -X0 X1 X3
+        let (sign, z, x, indices) =
+            cliff.evolve_pauli(&[false, false, false], &[true, false, true], &[3, 2, 1]);
+        assert_eq!(
+            (sign, z, x, indices),
+            (
+                true,
+                vec![false, false, false],
+                vec![true, true, true],
+                vec![0, 1, 3]
+            )
+        );
+
+        // "XIXZ" on (unsorted) qubits [3, 2, 1, 0]:
+        // X3 X1 Z0 -> (X0 X3)(-X1)(Z0 Z3) = Y0 X1 Y3
+        let (sign, z, x, indices) = cliff.evolve_pauli(
+            &[false, false, false, true],
+            &[true, false, true, false],
+            &[3, 2, 1, 0],
+        );
+        assert_eq!(
+            (sign, z, x, indices),
+            (
+                false,
+                vec![true, false, true],
+                vec![true, true, true],
+                vec![0, 1, 3]
+            )
+        );
     }
 }

@@ -15,15 +15,17 @@ use pyo3::prelude::*;
 use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::imports::PAULI_EVOLUTION_GATE;
 use qiskit_circuit::instruction::Parameters;
+use qiskit_circuit::interner::Interned;
 use qiskit_circuit::operations::{
     Operation, OperationRef, Param, PauliBased, PauliProductMeasurement, PauliProductRotation,
     PyInstruction, PyOpKind, StandardGate, StandardInstruction, multiply_param, radd_param,
 };
-use qiskit_circuit::packed_instruction::PackedInstruction;
-use qiskit_circuit::{BlocksMode, Qubit, VarsMode};
+use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
+use qiskit_circuit::{BlocksMode, Clbit, Qubit, VarsMode};
 
 use super::common::{
     MINIMUM_TOL, average_gate_fidelity_below_tol, is_angle_close_to_multiple_of_pi_k,
+    sparse_paulis_commute,
 };
 use crate::TranspilerError;
 use num_complex::Complex64;
@@ -79,13 +81,21 @@ static HANDLED_INSTRUCTION_NAMES: [&str; 10] = [
     "pauli_product_measurement",
 ];
 
+// A Pauli product rotation or a Pauli product measurement produced by the pass, together with its
+// qubit indices and its (interned) clbits. Qubit indices are assumed to be sorted.
+// The last flag indicates whether a Pauli product rotation should be implemented
+// as a PauliEvolutionGate (legacy path) rather than as a PauliProductRotation.
+// An entry is set to `None` when the operation is removed (e.g. when it cancels with another one).
+type PauliBasedEntry = Option<(PackedOperation, Vec<u32>, Interned<[Clbit]>, bool)>;
+
 #[pyfunction(name = "run_litinski_transformation")]
-#[pyo3(signature = (dag, fix_clifford=true, insert_barrier=false, use_ppr=false, approximation_degree=1.0))]
+#[pyo3(signature = (dag, fix_clifford=true, insert_barrier=false, use_ppr=false, combine_paulis=false, approximation_degree=1.0))]
 pub fn py_run_litinski_transformation(
     dag: &PyDAGCircuit,
     fix_clifford: bool,
     insert_barrier: bool,
     use_ppr: bool,
+    combine_paulis: bool,
     approximation_degree: f64,
 ) -> PyResult<Option<PyDAGCircuit>> {
     Ok(run_litinski_transformation(
@@ -93,6 +103,7 @@ pub fn py_run_litinski_transformation(
         fix_clifford,
         insert_barrier,
         use_ppr,
+        combine_paulis,
         approximation_degree,
     )?
     .map(|out_dag| {
@@ -106,6 +117,7 @@ pub fn run_litinski_transformation(
     fix_clifford: bool,
     insert_barrier: bool,
     use_ppr: bool,
+    combine_paulis: bool,
     approximation_degree: f64,
 ) -> PyResult<Option<DAGCircuit>> {
     let op_counts = dag.get_op_counts();
@@ -148,14 +160,17 @@ pub fn run_litinski_transformation(
     let num_qubits = dag.num_qubits();
     let mut clifford = Clifford::identity(num_qubits);
 
-    let mut qargs = Vec::new();
-
     // Keep track of the update to the global phase (produced when converting T/Tdg gates
     // to RZ-rotations).
     let mut global_phase_update = Param::Float(0.);
 
+    // Keep track of the Pauli product rotations and measurements produced by the pass. These are
+    // only added to the output circuit at the end.
+    let mut pauli_based_ops: Vec<PauliBasedEntry> = Vec::with_capacity(non_clifford_handled_count);
+
     // Keep track of the clifford operations in the circuit.
-    let mut clifford_ops: Vec<&PackedInstruction> = Vec::with_capacity(clifford_count);
+    let mut clifford_ops: Vec<PackedInstruction> = Vec::with_capacity(clifford_count);
+
     // Apply the Litinski transformation: that is, express a given circuit as a sequence of Pauli
     // product rotations and Pauli product measurements, followed by a final Clifford operator.
     for node_index in dag.topological_op_nodes(false) {
@@ -326,56 +341,41 @@ pub fn run_litinski_transformation(
                             pauli,
                             dag.get_qargs(inst.qubits)[0].index(),
                         );
-                        qargs.clear();
-                        qargs.extend(bytemuck::cast_slice(&indices));
-
-                        // In the legacy path, we add PauliEvolutionGate as rotation gates, otherwise
-                        // we add PauliProductRotation. The new path should not call Python at any
-                        // point.
-                        let (packed_op, param) = if use_ppr {
-                            let angle = if sign {
-                                multiply_param(&angle, -1.0)
-                            } else {
-                                angle
-                            };
-                            let ppr = PauliProductRotation {
-                                z,
-                                x,
-                                angle: angle.clone(),
-                            };
-                            (PauliBased::PauliProductRotation(ppr).into(), angle)
+                        let angle = if sign {
+                            multiply_param(&angle, -1.0)
                         } else {
-                            let time = if sign {
-                                multiply_param(&angle, -0.5)
-                            } else {
-                                multiply_param(&angle, 0.5)
-                            };
-                            let obs = sparse_obs_from_zx(&z, &x);
-                            let py_gate = Python::attach(|py| -> PyResult<_> {
-                                let py_evo = PAULI_EVOLUTION_GATE
-                                    .get_bound(py)
-                                    .call1((obs, time.clone()))?;
-                                Ok(PyInstruction {
-                                    qubits: indices.len() as u32,
-                                    clbits: 0,
-                                    params: 1,
-                                    op_name: "PauliEvolution".to_string(),
-                                    ob: py_evo.into(),
-                                    kind: PyOpKind::Gate,
-                                })
-                            })?;
-                            (py_gate.into(), time)
+                            angle
                         };
+                        let ppr = PauliProductRotation { z, x, angle };
 
-                        new_dag.apply_operation_back(
-                            packed_op,
-                            &qargs,
-                            &[],
-                            Some(Parameters::Params(smallvec![param])),
-                            None,
-                            #[cfg(feature = "cache_pygates")]
-                            None,
-                        )?;
+                        if combine_paulis {
+                            let (orig_z, orig_x) = match pauli {
+                                Pauli1q::Z => (true, false),
+                                Pauli1q::X => (false, true),
+                                Pauli1q::Y => (true, true),
+                            };
+
+                            add_ppr(
+                                &mut pauli_based_ops,
+                                fix_clifford.then_some(&mut clifford_ops),
+                                &mut clifford,
+                                &mut global_phase_update,
+                                ppr,
+                                indices,
+                                sign,
+                                (&[orig_z], &[orig_x], &[qubit as u32]),
+                                inst.qubits,
+                                !use_ppr,
+                                tol,
+                            );
+                        } else {
+                            pauli_based_ops.push(Some((
+                                PauliBased::PauliProductRotation(ppr).into(),
+                                indices,
+                                Interned::default(),
+                                !use_ppr,
+                            )));
+                        }
                     }
                 }
                 OperationRef::PauliProductRotation(rotation) => {
@@ -404,23 +404,30 @@ pub fn run_litinski_transformation(
 
                         let out_sign = if sign { -1.0 } else { 1.0 };
                         let angle = multiply_param(angle, out_sign);
-                        let ppr = PauliProductRotation {
-                            z,
-                            x,
-                            angle: angle.clone(),
-                        };
-                        qargs.clear();
-                        qargs.extend(bytemuck::cast_slice(&indices));
+                        let ppr = PauliProductRotation { z, x, angle };
 
-                        new_dag.apply_operation_back(
-                            PauliBased::PauliProductRotation(ppr).into(),
-                            &qargs,
-                            &[],
-                            Some(Parameters::Params(smallvec![angle])),
-                            None,
-                            #[cfg(feature = "cache_pygates")]
-                            None,
-                        )?;
+                        if combine_paulis {
+                            add_ppr(
+                                &mut pauli_based_ops,
+                                fix_clifford.then_some(&mut clifford_ops),
+                                &mut clifford,
+                                &mut global_phase_update,
+                                ppr,
+                                indices,
+                                sign,
+                                (in_z, in_x, &indices_in),
+                                inst.qubits,
+                                false,
+                                tol,
+                            );
+                        } else {
+                            pauli_based_ops.push(Some((
+                                PauliBased::PauliProductRotation(ppr).into(),
+                                indices,
+                                Interned::default(),
+                                !use_ppr,
+                            )));
+                        }
                     }
                 }
                 OperationRef::StandardInstruction(StandardInstruction::Measure) => {
@@ -431,22 +438,14 @@ pub fn run_litinski_transformation(
                         Pauli1q::Z,
                         dag.get_qargs(inst.qubits)[0].index(),
                     );
-                    qargs.clear();
-                    qargs.extend(bytemuck::cast_slice(&indices));
-
                     let ppm = PauliProductMeasurement { z, x, neg: sign };
 
-                    let ppm_clbits = dag.get_cargs(inst.clbits);
-
-                    new_dag.apply_operation_back(
+                    pauli_based_ops.push(Some((
                         PauliBased::PauliProductMeasurement(ppm).into(),
-                        &qargs,
-                        ppm_clbits,
-                        None,
-                        None,
-                        #[cfg(feature = "cache_pygates")]
-                        None,
-                    )?;
+                        indices,
+                        inst.clbits,
+                        false,
+                    )));
                 }
                 OperationRef::PauliProductMeasurement(pp_meas) => {
                     // Evolve PPM by the clifford
@@ -464,20 +463,13 @@ pub fn run_litinski_transformation(
                         x,
                         neg: pp_meas.neg ^ sign,
                     };
-                    qargs.clear();
-                    qargs.extend(bytemuck::cast_slice(&indices));
 
-                    let ppm_clbits = dag.get_cargs(inst.clbits);
-
-                    new_dag.apply_operation_back(
+                    pauli_based_ops.push(Some((
                         PauliBased::PauliProductMeasurement(ppm).into(),
-                        &qargs,
-                        ppm_clbits,
-                        None,
-                        None,
-                        #[cfg(feature = "cache_pygates")]
-                        None,
-                    )?;
+                        indices,
+                        inst.clbits,
+                        false,
+                    )));
                 }
                 _ => unreachable!(
                     "We cannot have unsupported names at this step of Litinski Transformation: {}",
@@ -485,12 +477,42 @@ pub fn run_litinski_transformation(
                 ),
             }
             if is_clifford && fix_clifford {
-                clifford_ops.push(inst);
+                clifford_ops.push(inst.clone());
             }
         }
     }
 
     new_dag.add_global_phase(&global_phase_update)?;
+
+    // Add the collected Pauli product rotations and measurements to the output circuit.
+    for (packed_op, qubits, clbits, use_pauli_evo) in pauli_based_ops.into_iter().flatten() {
+        let (new_op, params) = match packed_op.view() {
+            OperationRef::PauliProductRotation(ppr) => {
+                if use_pauli_evo {
+                    // Legacy path: implement the rotation as a PauliEvolutionGate.
+                    let time = multiply_param(&ppr.angle, 0.5);
+                    let py_gate = pauli_evolution_gate(&ppr.z, &ppr.x, &time)?;
+                    (Some(py_gate.into()), Some(time))
+                } else {
+                    (None, Some(ppr.angle.clone()))
+                }
+            }
+            OperationRef::PauliProductMeasurement(_) => (None, None),
+            _ => unreachable!(
+                "Only PPRs and PPMs are collected by the Litinski transformation pass."
+            ),
+        };
+
+        new_dag.apply_operation_back(
+            new_op.unwrap_or(packed_op),
+            bytemuck::cast_slice(&qubits),
+            dag.get_cargs(clbits),
+            params.map(|param| Parameters::Params(smallvec![param])),
+            None,
+            #[cfg(feature = "cache_pygates")]
+            None,
+        )?;
+    }
 
     // Add Clifford gates to the Qiskit circuit (when required).
     // Since we aim to preserve the global phase of the circuit, we add the Clifford operations from
@@ -511,11 +533,168 @@ pub fn run_litinski_transformation(
             )?;
         }
         for inst in clifford_ops.into_iter() {
-            new_dag.push_back(inst.clone())?;
+            new_dag.push_back(inst)?;
         }
     }
 
     Ok(Some(new_dag.build()))
+}
+
+/// Add a Pauli product rotation to the collected Pauli-based operations, merging it with an
+/// earlier Pauli product rotation when possible.
+///
+/// The collected operations are scanned backwards. If an earlier rotation acts on the same qubits
+/// with the same Pauli, the two rotations are merged into the earlier entry. Otherwise, the scan
+/// stops at the first operation that does not commute with the new rotation, and the new rotation
+/// is appended to the collected operations.
+///
+/// If the merged rotation is equivalent to the identity (up to a global phase), the entry is
+/// removed altogether.
+///
+/// If the merged rotation `M` is a Clifford, the entry is removed and `M` is absorbed into the
+/// Clifford. The rotation `M` has the same Pauli as the new rotation, which commutes with all
+/// the later collected operations, so `M` can be moved to the end of the collected operations.
+/// If `C` is the current Clifford, the circuit is now of the form `(rotations) -- M -- C`.
+/// However, instead of prepending `M` to the list of Clifford gates and the current Clifford C,
+/// we can append the original Pauli rotation (with the summed angle).
+///
+/// # Arguments
+///
+/// * `pauli_based_ops`: The collected Pauli-based operations.
+/// * `clifford_ops`: The Clifford operations, or `None` if these are not added to the output
+///   circuit.
+/// * `clifford`: The current Clifford.
+/// * `global_phase_update`: The update to the global phase, which is modified in-place when
+///   the two rotations cancel out.
+/// * `ppr`: The new Pauli product rotation, without I-terms.
+/// * `qubits`: The sorted qubit indices of the new rotation.
+/// * `sign`: The sign obtained when evolving the original Pauli of the new rotation.
+/// * `orig_pauli`: The original Pauli `(z, x, indices)` of the new rotation, before evolving it
+///   by the Clifford.
+/// * `orig_qubits`: The interned qubits of the original instruction.
+/// * `use_pauli_evo`: Whether the new rotation should be implemented as a PauliEvolutionGate.
+///   A merged rotation is always implemented as a PauliProductRotation.
+/// * `tol`: The tolerance to check whether the merged rotation is equivalent to the identity
+///   or is a Clifford.
+#[allow(clippy::too_many_arguments)]
+fn add_ppr(
+    pauli_based_ops: &mut Vec<PauliBasedEntry>,
+    clifford_ops: Option<&mut Vec<PackedInstruction>>,
+    clifford: &mut Clifford,
+    global_phase_update: &mut Param,
+    ppr: PauliProductRotation,
+    qubits: Vec<u32>,
+    sign: bool,
+    orig_pauli: (&[bool], &[bool], &[u32]),
+    orig_qubits: Interned<[Qubit]>,
+    use_pauli_evo: bool,
+    tol: f64,
+) {
+    for entry in pauli_based_ops.iter_mut().rev() {
+        let Some((packed_op, entry_qubits, _, _)) = entry.as_ref() else {
+            // The entry has already been removed.
+            continue;
+        };
+
+        let (entry_z, entry_x, merged) = match packed_op.view() {
+            OperationRef::PauliProductRotation(entry_ppr) => {
+                let merged = if *entry_qubits == qubits {
+                    entry_ppr.merge_with(&ppr)
+                } else {
+                    None
+                };
+                (&entry_ppr.z, &entry_ppr.x, merged)
+            }
+            OperationRef::PauliProductMeasurement(entry_ppm) => (&entry_ppm.z, &entry_ppm.x, None),
+            _ => unreachable!(
+                "Only PPRs and PPMs are collected by the Litinski transformation pass."
+            ),
+        };
+
+        if let Some(merged) = merged {
+            // Check whether the merged rotation is equivalent to the identity.
+            if let Some(phase_update) =
+                merged
+                    .rotation_trace_and_dim()
+                    .and_then(|(tr_over_dim, dim)| {
+                        average_gate_fidelity_below_tol(tr_over_dim, dim, tol)
+                    })
+            {
+                *entry = None;
+                *global_phase_update = radd_param(
+                    std::mem::replace(global_phase_update, Param::Float(0.)),
+                    Param::Float(phase_update),
+                );
+                return;
+            }
+            // Check whether the merged rotation is a Clifford, and if so absorb it into
+            // the Clifford.
+            if let Param::Float(angle) = merged.angle
+                && let Some(multiple) =
+                    is_ppr_angle_close_to_multiple_of_pi2(&merged.z, &merged.x, angle, tol)
+            {
+                *entry = None;
+                let (orig_z, orig_x, orig_indices) = orig_pauli;
+                let orig_multiple = if sign { (4 - multiple) % 4 } else { multiple };
+                clifford.append_ppr(orig_z, orig_x, orig_indices, orig_multiple);
+                if let Some(clifford_ops) = clifford_ops {
+                    let orig_angle = Param::Float(if sign { -angle } else { angle });
+                    let orig_ppr = PauliProductRotation {
+                        z: orig_z.to_vec(),
+                        x: orig_x.to_vec(),
+                        angle: orig_angle.clone(),
+                    };
+                    clifford_ops.push(PackedInstruction {
+                        op: PauliBased::PauliProductRotation(orig_ppr).into(),
+                        qubits: orig_qubits,
+                        clbits: Interned::default(),
+                        params: Some(Box::new(Parameters::Params(smallvec![orig_angle]))),
+                        label: None,
+                        #[cfg(feature = "cache_pygates")]
+                        py_op: std::sync::OnceLock::new(),
+                    });
+                }
+                return;
+            }
+            *entry = Some((
+                PauliBased::PauliProductRotation(merged).into(),
+                qubits,
+                Interned::default(),
+                false,
+            ));
+            return;
+        }
+
+        if !sparse_paulis_commute(&ppr.z, &ppr.x, &qubits, entry_z, entry_x, entry_qubits) {
+            break;
+        }
+    }
+
+    pauli_based_ops.push(Some((
+        PauliBased::PauliProductRotation(ppr).into(),
+        qubits,
+        Interned::default(),
+        use_pauli_evo,
+    )));
+}
+
+/// Create a PauliEvolutionGate for the Pauli given in the sparse ZX format (without I-terms),
+/// and the evolution time.
+fn pauli_evolution_gate(z: &[bool], x: &[bool], time: &Param) -> PyResult<PyInstruction> {
+    let obs = sparse_obs_from_zx(z, x);
+    Python::attach(|py| -> PyResult<_> {
+        let py_evo = PAULI_EVOLUTION_GATE
+            .get_bound(py)
+            .call1((obs, time.clone()))?;
+        Ok(PyInstruction {
+            qubits: z.len() as u32,
+            clbits: 0,
+            params: 1,
+            op_name: "PauliEvolution".to_string(),
+            ob: py_evo.into(),
+            kind: PyOpKind::Gate,
+        })
+    })
 }
 
 fn sparse_obs_from_zx(z: &[bool], x: &[bool]) -> SparseObservable {

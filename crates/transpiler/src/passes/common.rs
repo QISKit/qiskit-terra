@@ -73,3 +73,35 @@ pub fn is_angle_close_to_multiple_of_pi_k(
         None
     }
 }
+
+/// Check whether two sparse Paulis commute.
+///
+/// Each Pauli is given in the sparse ZX format, that is by its Z and X components and the
+/// indices of the qubits it acts on.
+///
+/// The qubit indices of each Pauli must be sorted. This allows to check commutation in
+/// linear time, by computing the parity of anti-commuting terms on the common qubits.
+pub fn sparse_paulis_commute<T: Ord>(
+    z1: &[bool],
+    x1: &[bool],
+    qargs1: &[T],
+    z2: &[bool],
+    x2: &[bool],
+    qargs2: &[T],
+) -> bool {
+    let mut parity = false;
+    let (n1, n2) = (qargs1.len(), qargs2.len());
+    let (mut i1, mut i2) = (0, 0);
+    while i1 < n1 && i2 < n2 {
+        match qargs1[i1].cmp(&qargs2[i2]) {
+            std::cmp::Ordering::Less => i1 += 1,
+            std::cmp::Ordering::Greater => i2 += 1,
+            std::cmp::Ordering::Equal => {
+                parity ^= (x1[i1] && z2[i2]) ^ (z1[i1] && x2[i2]);
+                i1 += 1;
+                i2 += 1;
+            }
+        }
+    }
+    !parity
+}

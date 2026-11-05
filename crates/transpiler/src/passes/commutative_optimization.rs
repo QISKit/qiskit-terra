@@ -21,7 +21,7 @@ use qiskit_circuit::instruction::Parameters;
 use smallvec::smallvec;
 
 use crate::commutation_checker::{CommutationChecker, try_matrix_with_definition};
-use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol};
+use crate::passes::common::{MINIMUM_TOL, average_gate_fidelity_below_tol, sparse_paulis_commute};
 use crate::passes::remove_identity_equiv::is_identity_equiv;
 use qiskit_circuit::circuit_instruction::OperationFromPython;
 use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
@@ -339,21 +339,7 @@ fn try_commute_pauli_based_with_sorted_qargs(
         }
     };
 
-    let mut parity = false;
-    let (n1, n2) = (qargs1.len(), qargs2.len());
-    let (mut i1, mut i2) = (0, 0);
-    while i1 < n1 && i2 < n2 {
-        match qargs1[i1].cmp(&qargs2[i2]) {
-            std::cmp::Ordering::Less => i1 += 1,
-            std::cmp::Ordering::Greater => i2 += 1,
-            std::cmp::Ordering::Equal => {
-                parity ^= (x1[i1] && z2[i2]) ^ (z1[i1] && x2[i2]);
-                i1 += 1;
-                i2 += 1;
-            }
-        }
-    }
-    Some(!parity)
+    Some(sparse_paulis_commute(z1, x1, qargs1, z2, x2, qargs2))
 }
 
 /// Return `true` if two instructions commute (up to the specified tolerance).

@@ -1,0 +1,7 @@
+---
+features_transpiler:
+  - |
+    Added a new ``combine_paulis`` option to the :class:`.LitinskiTransformation` pass.
+    When set to ``True`` (non-default), the pass additionally attempts to merge or cancel
+    :class:`.PauliProductRotationGate` objects that share the same rotation axis, leveraging
+    commutativity between Pauli product rotations.
