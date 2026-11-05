@@ -45,6 +45,34 @@ specially; it is always found before looking in the include path, and contains e
 of the `paper describing the OpenQASM 2 language <https://arxiv.org/abs/1707.03429>`__.  The gates
 in this include file are mapped to circuit-library gate objects defined by Qiskit.
 
+.. _qasm2-security-import:
+
+Security policy
+---------------
+
+The OpenQASM 2 importer is intended to allow use on untrusted data, with some limitations.  The full
+security policy is:
+
+* Given sufficient system memory and runtime, loading an OpenQASM 2 program will either succeed
+  and produce a valid :class:`.QuantumCircuit`, or return an error state that can be recovered from
+  without leaking resources (an :exc:`Exception`, in Python space).
+* Loading an OpenQASM 2 program *may* read arbitrary files from the file system, while resolving
+  ``include`` statements.
+* Loading an OpenQASM 2 program  will not read out-of-bounds memory, including via stack overflow.
+* Loading an OpenQASM 2 program will only execute code defined in Qiskit, one of its dependencies,
+  or user code explicitly passed as part of a :class:`.CustomClassical` or
+  :class:`.CustomInstruction` object.
+
+.. note::
+    Qiskit does not guarantee how much memory or runtime an arbitrary deserialization will take.
+    Callers on untrusted data should be prepared to recover from the deserialization process taking
+    excessive time or exhausting all system resources (though this is not expected to be likely,
+    with OpenQASM 2).
+
+If you discover a violation of this contract, please **do not** open a bug report on Qiskit.
+Instead, follow the [repository's security-vulnerability reporting
+policy](https://github.com/Qiskit/qiskit?tab=security-ov-file).
+
 .. _qasm2-custom-instructions:
 
 Specifying custom instructions

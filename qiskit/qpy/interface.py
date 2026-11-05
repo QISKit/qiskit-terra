@@ -279,7 +279,12 @@ def load(
     metadata_deserializer: type[JSONDecoder] | None = None,
     annotation_factories: Mapping[str, Callable[[], annotation.QPYSerializer]] | None = None,
 ) -> list[QPY_SUPPORTED_TYPES]:
-    """Load a QPY binary file
+    """Load a QPY binary file.
+
+    .. note::
+
+        This function is intended to be used on untrusted data, but you must still ensure you comply
+        with the security assumptions.  See :ref:`qpy-security` for the full security details.
 
     This function is used to load a serialized QPY Qiskit program file and create
     :class:`~qiskit.circuit.QuantumCircuit` objects from its contents.

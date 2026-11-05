@@ -1,5 +1,42 @@
 # Security Policy
 
+## Safe Usage Policy
+
+> [!IMPORTANT]
+> Nothing in this section, nor any Qiskit API documentation, should be taken to imply any legal guarantee.
+> These safety policies are not a waiver of the "AS IS" basis of the software with respect to warranty and liability set out in sections 7 and 8 of Qiskit's Apache-2.0 license.
+
+This section is the general policy of the library, and may be superseded by individual function or
+module documentation.  For example, the deserialization functions for QPY, OpenQASM 2 and OpenQASM 3
+all have specific security policies that modify those listed here.
+
+In all cases, unless otherwise noted:
+
+* Qiskit makes no guarantees how much memory or runtime any given function
+  call will take. All users should be prepared to recover from process memory exhaustion or
+  excessive runtime.  In particular, memory exhaustion _may_ cause process termination, regardless
+  of further security guarantees.
+* Interfaces marked "experimental" provide no security guarantees.
+* Interfaces that have marked "safety" contracts provide no security guarantees if the caller does
+  not fulfil the specified contract (for example, setting the `check=False` argument to
+  `SparseObservable.from_raw_parts` has no security guarantees on untrusted input).
+* Functions that are not part of the public interface have no security guarantees.
+
+If these criteria are met, the programming intention is that, for any user input:
+
+* Qiskit will not read out-of-bounds memory, including via stack overflows.
+* Calling Qiskit functions will not abort the process.  This rule does not yet apply to the C API.
+
+If you find a violation of this contract, please *do not* open a public bug report, but instead
+follow the vulnerability process described below.
+
+The following are best-effort intentions (except where overridden by specific policies).  Violations
+of these, subject to the same preconditions as the guarantees, are considered non-critical bugs and
+should be opened on the public issue tracker:
+
+* Qiskit will not cause Rust-space panics and will not raise `PanicException` to Python space.
+* Qiskit will not leak unbounded amounts of memory.
+
 ## Supported Versions
 
 Qiskit supports the most recent major release with new features, which will only appear in minor releases of that series.

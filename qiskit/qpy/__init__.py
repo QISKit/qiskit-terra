@@ -93,6 +93,34 @@ and then loading that file will return a list with all the circuits
     with open('twenty_bells.qpy', 'rb') as fd:
         twenty_new_bells = qpy.load(fd)
 
+.. _qpy-security:
+
+Security policy
+===============
+
+It is expected that server-side deployments of Qiskit may use QPY deserialization to deserialize
+incoming :class:`.QuantumCircuit` objects.  Qiskit is intended to be safe in these contexts, though
+callers must still take care, as unforeseen errors and resource exhaustion can still cause process
+termination.
+
+In particular, QPY deserialization has the following security contract:
+
+* Given sufficient system memory and runtime, deserialization of a QPY payload will either succeed
+  and produce a valid Qiskit object, or return an error state that can be recovered from without
+  leaking resources (an :exc:`Exception`, in Python space).
+* Deserialization will not cause panics within Rust, except in cases of memory exhaustion.
+* Deserialization will not read out-of-bounds memory, including via stack overflow.
+* Deserialization will only execute code that is part of the Qiskit library, its dependencies, or
+  explicitly passed handlers for JSON and :class:`.Annotation` deserialization.
+
+.. note::
+    Qiskit does not guarantee how much memory or runtime an arbitrary deserialization will take.
+    Callers on untrusted data should be prepared to recover from the deserialization process taking
+    excessive time or exhausting all system resources.
+
+If you discover a violation of this contract, please **do not** open a bug report on Qiskit.
+Instead, follow the [repository's security-vulnerability reporting
+policy](https://github.com/Qiskit/qiskit?tab=security-ov-file).
 
 API documentation
 =================

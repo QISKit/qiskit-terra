@@ -224,6 +224,25 @@ available on this module, if you wish to build on top of it:
 
     A tuple of :class:`CustomGate` objects specifying the Qiskit constructors to use for the
     ``stdgates.inc`` include file.
+
+
+.. _qasm3-security-import:
+
+Security policy
+---------------
+
+Users may desire to use the OpenQASM 3 loaders on untrusted data.  However, due to the
+complexities of parsing a complex language such as OpenQASM 3, Qiskit relies heavily on external
+libraries, so does not yet have complete control over the loading process. Its security is a best
+effort only, though as the primary interface is still written in pure Python (including the
+:mod:`qiskit_qasm3_import` dependency and its ANTLR runtime), it is likely that errors will all be
+recoverable from Python space.
+
+.. note::
+
+    In general, Qiskit does not treat any bug in the OpenQASM 3 loaders as security related.
+
+The experimental import interfaces have no security guarantees at all.
 """
 
 from __future__ import annotations
@@ -334,6 +353,9 @@ def load(
 ) -> QuantumCircuit:
     """Load an OpenQASM 3 program from the file ``filename``.
 
+    .. note::
+        See :ref:`qasm3-security-import` for details on the security policy of this function.
+
     Args:
         filename: the filename to load the program from.
         num_qubits: keyword argument which provides number of physical/virtual qubits.
@@ -363,6 +385,9 @@ def loads(
     annotation_handlers: dict[str, annotation.OpenQASM3Serializer] | None = None,
 ) -> QuantumCircuit:
     """Load an OpenQASM 3 program from the given string.
+
+    .. note::
+        See :ref:`qasm3-security-import` for details on the security policy of this function.
 
     Examples:
 
