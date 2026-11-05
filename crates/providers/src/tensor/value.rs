@@ -16,7 +16,7 @@ use ndarray::{ArcArrayD, ArrayD, IxDyn};
 use num_complex::{Complex32, Complex64};
 
 use super::broadcast::{broadcast_elementwise, broadcast_shape};
-use super::{BitTensor, DType, Dim, TensorError, TensorType};
+use super::{BitStorage, BitTensor, DType, Dim, Layout, TensorError, TensorType};
 
 /// A tensor of one of the supported dtypes.
 #[derive(Debug, Clone, PartialEq)]
@@ -33,7 +33,7 @@ pub enum Tensor {
     U16(ArcArrayD<u16>),
     U32(ArcArrayD<u32>),
     U64(ArcArrayD<u64>),
-    Bit(BitTensor), // bool
+    Bit(BitStorage), // bool
 }
 
 /// Return the error raised when an `op` has no implementation for some type(s).
@@ -54,7 +54,7 @@ fn dtype_error(op: &'static str, lhs: DType, rhs: DType) -> TensorError {
 macro_rules! cast_real {
     ($arr:expr, $src:ty, $target:expr) => {
         match $target {
-            DType::Bit => Tensor::Bit(
+            DType::Bit => Tensor::bit(
                 BitTensor::from_bools($arr.iter().map(|&x: &$src| x != 0 as $src), $arr.shape())
                     .expect("one bit per element of the array's own shape"),
             ),
@@ -78,6 +78,11 @@ macro_rules! cast_real {
             ),
         }
     };
+}
+
+/// Return the dense bits of `storage`, or [`TensorError::RaggedOperand`] if it is ragged.
+fn dense_bits<'a>(storage: &'a BitStorage, op: &'static str) -> Result<&'a BitTensor, TensorError> {
+    storage.dense().ok_or(TensorError::RaggedOperand { op })
 }
 
 /// Return the bits of `tensor` as one byte per bit, each either `0` or `1`.
@@ -109,6 +114,11 @@ macro_rules! cast_complex {
 }
 
 impl Tensor {
+    /// Construct a `Bit` tensor over dense bits.
+    pub fn bit(bits: BitTensor) -> Self {
+        Tensor::Bit(BitStorage::Dense(bits))
+    }
+
     /// Return the dtype of this tensor.
     pub fn dtype(&self) -> DType {
         match self {
@@ -129,6 +139,9 @@ impl Tensor {
     }
 
     /// Return the shape of this tensor as a slice of dimension sizes.
+    ///
+    /// For a ragged tensor this is the bounding box, so the ragged axis reports its bound rather
+    /// than a true extent; a caller needing the latter must check [`is_ragged`](Self::is_ragged).
     pub fn shape(&self) -> &[usize] {
         match self {
             Tensor::C128(a) => a.shape(),
@@ -147,12 +160,41 @@ impl Tensor {
         }
     }
 
-    /// Return the [`TensorType`] that describes this tensor's dtype and concrete shape.
+    /// Return whether every position this tensor's shape describes holds an entry.
+    pub fn layout(&self) -> Layout {
+        match self {
+            Tensor::Bit(storage) => storage.layout(),
+            _ => Layout::Dense,
+        }
+    }
+
+    /// Return whether this tensor's entries vary in number along some axis.
+    pub fn is_ragged(&self) -> bool {
+        self.layout().ragged_axis().is_some()
+    }
+
+    /// Return the [`TensorType`] that describes this tensor's dtype, shape and layout.
+    ///
+    /// A ragged tensor's ragged axis becomes a [`Dim::Bounded`] at the bound its bounding box
+    /// gives, since that axis has no single length; every other axis is [`Dim::Fixed`].
     pub fn tensor_type(&self) -> TensorType {
+        let layout = self.layout();
+        let ragged = layout.ragged_axis();
         TensorType {
             dtype: self.dtype(),
-            shape: self.shape().iter().map(|&n| Dim::Fixed(n)).collect(),
-            ..Default::default()
+            shape: self
+                .shape()
+                .iter()
+                .enumerate()
+                .map(|(axis, &n)| {
+                    if ragged == Some(axis) {
+                        Dim::Bounded { max: n }
+                    } else {
+                        Dim::Fixed(n)
+                    }
+                })
+                .collect(),
+            layout,
         }
     }
 
@@ -161,7 +203,8 @@ impl Tensor {
     /// A [`Dim::Fixed`] axis admits exactly its size and a [`Dim::Bounded`] axis admits any
     /// size up to and including its bound.
     ///
-    /// Every `Tensor` variant is dense, so a ragged type is satisfied by no value of this type.
+    /// Layouts are not yet compared: a ragged type is satisfied by no value, and a ragged value
+    /// satisfies no type, so a ragged argument is rejected wherever arguments are type-checked.
     pub fn matches(&self, ty: &TensorType) -> bool {
         !ty.is_ragged()
             && self.dtype() == ty.dtype
@@ -230,6 +273,9 @@ impl Tensor {
     /// any size. Returns [`TensorError::ShapeMismatch`] if `shape` cannot be reached that way. This
     /// is the value-level counterpart of [`broadcast_dims_to`](super::broadcast_dims_to).
     pub fn broadcast_to(&self, shape: &[usize]) -> Result<Tensor, TensorError> {
+        if self.is_ragged() {
+            return Err(TensorError::RaggedOperand { op: "broadcast_to" });
+        }
         if self.shape() == shape {
             return Ok(self.clone());
         }
@@ -253,7 +299,10 @@ impl Tensor {
             Tensor::U32(a) => broadcast!(U32, a),
             Tensor::U16(a) => broadcast!(U16, a),
             Tensor::U8(a) => broadcast!(U8, a),
-            Tensor::Bit(a) => a.broadcast_to(shape).ok().map(Tensor::Bit),
+            Tensor::Bit(a) => a
+                .dense()
+                .and_then(|bits| bits.broadcast_to(shape).ok())
+                .map(Tensor::bit),
         }
         .ok_or_else(|| TensorError::ShapeMismatch {
             lhs: self.shape().to_vec(),
@@ -262,13 +311,21 @@ impl Tensor {
     }
 
     /// Cast this tensor to `target`, consuming it. Returns `self` unchanged if already that dtype.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this tensor is ragged. Casting a ragged array of bits would have to densify it,
+    /// undoing the reduction post-selection exists to achieve
     pub fn cast(self, target: DType) -> Tensor {
         if self.dtype() == target {
             return self;
         }
         match &self {
             Tensor::Bit(a) => {
-                let unpacked = unpack(a);
+                let unpacked = unpack(
+                    a.dense()
+                        .expect("a ragged tensor cannot be cast"),
+                );
                 cast_real!(&unpacked, u8, target)
             }
             Tensor::U8(a) => cast_real!(a, u8, target),
@@ -498,7 +555,9 @@ macro_rules! impl_tensor_bitop {
             )]
             pub fn $method(&self, rhs: &Tensor) -> Result<Tensor, TensorError> {
                 match (self, rhs) {
-                    (Tensor::Bit(a), Tensor::Bit(b)) => a.$kernel(b).map(Tensor::Bit),
+                    (Tensor::Bit(a), Tensor::Bit(b)) => dense_bits(a, $op_name)?
+                        .$kernel(dense_bits(b, $op_name)?)
+                        .map(Tensor::bit),
                     _ => Err(TensorError::DTypeMismatch {
                         op: $op_name,
                         lhs: self.dtype(),
@@ -521,7 +580,7 @@ mod test {
 
     /// Return a `Bit` tensor of logical shape `shape` over `values`, taken in row-major order.
     fn bit(values: &[bool], shape: &[usize]) -> Tensor {
-        Tensor::Bit(BitTensor::from_bools(values.iter().copied(), shape).unwrap())
+        Tensor::bit(BitTensor::from_bools(values.iter().copied(), shape).unwrap())
     }
 
     #[test]
@@ -668,7 +727,7 @@ mod test {
         let dims = vec![Dim::Fixed(2), Dim::Fixed(3), Dim::Fixed(2)];
         let ragged = TensorType::ragged(DType::Bit, dims.clone(), 1, 3).unwrap();
         let value =
-            Tensor::Bit(BitTensor::from_bools(std::iter::repeat_n(false, 12), &[2, 3, 2]).unwrap());
+            Tensor::bit(BitTensor::from_bools(std::iter::repeat_n(false, 12), &[2, 3, 2]).unwrap());
         assert!(
             value.matches(&TensorType::dense(DType::Bit, dims)),
             "the same value satisfies the dense type"

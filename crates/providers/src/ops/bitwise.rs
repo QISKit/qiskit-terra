@@ -93,10 +93,14 @@ impl ProgramOp for BitwiseNot {
     fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
         crate::unpack_operands!(self, args, [x]);
         check_dtype(0, x.dtype(), DType::Bit)?;
-        let Tensor::Bit(arr) = x else {
+        let Tensor::Bit(storage) = x else {
             unreachable!("dtype checked above")
         };
-        Ok(vec![Tensor::Bit(arr.not())])
+        let arr = storage.dense().ok_or_else(|| MathOpError::RaggedOperand {
+            operand: 0,
+            ty: x.tensor_type(),
+        })?;
+        Ok(vec![Tensor::bit(arr.not())])
     }
 }
 
@@ -136,10 +140,14 @@ impl ProgramOp for Parity {
         crate::unpack_operands!(self, args, [x]);
         check_dtype(0, x.dtype(), DType::Bit)?;
         check_axis(self.axis, x.shape().len())?;
-        let Tensor::Bit(arr) = x else {
+        let Tensor::Bit(storage) = x else {
             unreachable!("dtype checked above")
         };
-        Ok(vec![Tensor::Bit(arr.parity(self.axis))])
+        let arr = storage.dense().ok_or_else(|| MathOpError::RaggedOperand {
+            operand: 0,
+            ty: x.tensor_type(),
+        })?;
+        Ok(vec![Tensor::bit(arr.parity(self.axis))])
     }
 }
 
@@ -150,7 +158,7 @@ mod tests {
 
     /// Return a `Bit` tensor of logical shape `shape` over `values`, taken in row-major order.
     fn bits(values: &[u8], shape: &[usize]) -> Tensor {
-        Tensor::Bit(BitTensor::from_bools(values.iter().map(|&v| v == 1), shape).unwrap())
+        Tensor::bit(BitTensor::from_bools(values.iter().map(|&v| v == 1), shape).unwrap())
     }
 
     /// Return a one-dimensional `Bit` tensor over `values`.

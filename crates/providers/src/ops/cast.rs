@@ -138,7 +138,7 @@ mod test {
             Cast::new(DType::Bit)
                 .eval(&[Tensor::from([0.0_f64, 2.5, -1.0])])
                 .unwrap(),
-            vec![Tensor::Bit(
+            vec![Tensor::bit(
                 BitTensor::from_bools([false, true, true], &[3]).unwrap()
             )]
         );

@@ -69,6 +69,9 @@ pub enum TensorError {
     /// A ragged array's offsets do not describe runs over its bounds.
     #[error("invalid offsets for a ragged array: {reason}")]
     CsrOffsets { reason: String },
+    /// An operand is ragged, and the operation is defined only over dense tensors.
+    #[error("Tensor::{op} is defined only over dense tensors, and an operand is ragged")]
+    RaggedOperand { op: &'static str },
     /// A ragged array's values do not match the runs its offsets describe.
     #[error("a ragged array's values should have shape {expected:?}, got {actual:?}")]
     CsrValues {
