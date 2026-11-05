@@ -21,10 +21,14 @@ from qiskit.circuit import (
     Parameter,
     QuantumCircuit,
 )
-from qiskit.circuit.library import real_amplitudes
+from qiskit.circuit.library import (
+    real_amplitudes,
+    PauliProductRotationGate,
+    PauliProductMeasurement,
+)
 from qiskit.circuit.library.n_local.efficient_su2 import efficient_su2
 from qiskit.converters import circuit_to_dag
-from qiskit.quantum_info import SparsePauliOp, SparseObservable
+from qiskit.quantum_info import SparsePauliOp, SparseObservable, Pauli
 from qiskit.transpiler.passes.optimization.light_cone import LightCone
 from qiskit.transpiler.passmanager import PassManager
 
@@ -353,6 +357,68 @@ class TestLightConePass(QiskitTestCase):
             ValueError, msg="The circuit contains measurements and an observable has been given"
         ):
             light_cone.run(dag)
+
+    def test_mid_circuit_measurement_not_empty(self):
+        """Test that LightCone does not return an empty circuit when
+        mid-circuit measurements are present."""
+        light_cone = LightCone()
+        pm = PassManager([light_cone])
+
+        qc = QuantumCircuit(2, 1)
+        qc.cx(0, 1)
+        qc.z(0)
+        qc.measure(0, 0)
+        qc.h(0)
+
+        new_circuit = pm.run(qc)
+
+        expected = QuantumCircuit(2, 1)
+        expected.measure(0, 0)
+
+        self.assertEqual(expected, new_circuit)
+
+    def test_pauli_product_measurement_circuit(self):
+        """Test LightCone on a circuit containing only PauliProductRotationGates
+        and PauliProductMeasurements. The XZ rotation does not commute with the
+        ZZ measurement observable and must be kept."""
+        light_cone = LightCone()
+        pm = PassManager([light_cone])
+
+        qc = QuantumCircuit(2, 1)
+        qc.append(PauliProductRotationGate(Pauli("XZ"), 0.5), [0, 1])
+        qc.append(PauliProductMeasurement(Pauli("ZZ")), [0, 1], [0])
+
+        new_circuit = pm.run(qc)
+
+        expected = QuantumCircuit(2, 1)
+        expected.append(PauliProductRotationGate(Pauli("XZ"), 0.5), [0, 1])
+        expected.append(PauliProductMeasurement(Pauli("ZZ")), [0, 1], [0])
+
+        self.assertEqual(expected, new_circuit)
+
+    def test_mid_circuit_and_final_measurements(self):
+        """Test LightCone on a circuit with both mid-circuit and final measurements.
+        Both measurements must be kept along with the gates in their light cones.
+        The X gate after the mid-circuit measurement is irrelevant and must be removed."""
+        light_cone = LightCone()
+        pm = PassManager([light_cone])
+
+        qc = QuantumCircuit(2, 2)
+        qc.h(0)
+        qc.cx(0, 1)
+        qc.measure(0, 0)
+        qc.x(0)
+        qc.measure(1, 1)
+
+        new_circuit = pm.run(qc)
+
+        expected = QuantumCircuit(2, 2)
+        expected.h(0)
+        expected.cx(0, 1)
+        expected.measure(0, 0)
+        expected.measure(1, 1)
+
+        self.assertEqual(expected, new_circuit)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    Fixed :class:`.LightCone` transpiler pass incorrectly returning an empty
+    circuit when mid-circuit measurements are present. The pass was using
+    ``calc_final_ops`` to find measured qubits, which only detects measurements
+    in final position in the DAG. Measurements are now discovered dynamically
+    during the reverse-topological review, handling mid-circuit measurements.
+    
+    See `#15937 <https://github.com/Qiskit/qiskit/issues/15937>`__.

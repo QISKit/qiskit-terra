@@ -15,10 +15,10 @@
 from __future__ import annotations
 from qiskit.circuit import Gate, Qubit
 from qiskit.circuit.commutation_library import SessionCommutationChecker as scc
-from qiskit.circuit.library import PauliGate, ZGate
+from qiskit.circuit.library import PauliGate, ZGate, PauliProductMeasurement
 from qiskit.dagcircuit import DAGCircuit
 from qiskit.transpiler.basepasses import TransformationPass
-from qiskit.transpiler.passes.utils.remove_final_measurements import calc_final_ops
+from qiskit.quantum_info import Pauli
 
 translation_table = str.maketrans({"+": "X", "-": "X", "l": "Y", "r": "Y", "0": "Z", "1": "Z"})
 
@@ -54,12 +54,18 @@ class LightCone(TransformationPass):
         self.indices = indices
 
     @staticmethod
-    def _find_measurement_qubits(dag: DAGCircuit) -> set[Qubit]:
-        final_nodes = calc_final_ops(dag, {"measure"})
-        qubits_measured = set()
-        for node in final_nodes:
-            qubits_measured |= set(node.qargs)
-        return qubits_measured
+    def _measurement_commutation_ops(node) -> list[tuple]:
+        """Return the list of (measurement_gate, qubits) for a measurement node.
+        For a standard measure, we use one ZGate per qubit.
+        For a PauliProductMeasurement, we use a PauliGate.
+        """
+        if node.op.name == "measure":
+            return [(ZGate(), [qubit]) for qubit in node.qargs]
+        elif isinstance(node.op, PauliProductMeasurement):
+            pauli_label = Pauli((node.op._pauli_z, node.op._pauli_x, 0)).to_label()
+            return [(PauliGate(pauli_label), list(node.qargs))]
+
+        raise ValueError("_measurement_commutation_ops called with unexpected operation")
 
     def _get_initial_lightcone(
         self, dag: DAGCircuit
@@ -69,14 +75,18 @@ class LightCone(TransformationPass):
         If a `bit_terms` is provided, the qubits corresponding to the
         non-trivial Paulis define the light-cone.
         """
-        lightcone_qubits = self._find_measurement_qubits(dag)
         if self.bit_terms is None:
-            lightcone_operations = [(ZGate(), [qubit_index]) for qubit_index in lightcone_qubits]
+            # will be discovered dynamically during the reverse traversal in run()
+            return set(), []
         else:
             # Having both measurements and an observable is not allowed
+            all_measured_qubits = set()
+            for node in dag.topological_op_nodes():
+                if node.op.name == "measure" or isinstance(node.op, PauliProductMeasurement):
+                    all_measured_qubits.update(node.qargs)
             if len(dag.qubits) < max(self.indices) + 1:
                 raise ValueError("`indices` contains values outside the qubit range.")
-            if lightcone_qubits:
+            if all_measured_qubits:
                 raise ValueError(
                     "The circuit contains measurements and an observable has been given: "
                     "remove the observable or the measurements."
@@ -105,6 +115,15 @@ class LightCone(TransformationPass):
 
         # Iterate over the nodes in reverse topological order
         for node in dag.topological_op_nodes(reverse=True):
+            # Each time we encounter a measurement, extend the cone with its
+            # qubits and add the appropriate measurement gate.
+            if node.op.name in ("measure", "pauli_product_measurement"):
+                new_qubits = set(node.qargs) - lightcone_qubits
+                if new_qubits:
+                    lightcone_qubits.update(new_qubits)
+                    lightcone_operations.extend(self._measurement_commutation_ops(node))
+                new_dag.apply_operation_front(node.op, node.qargs, node.cargs)
+                continue
             # Check if the node belongs to the light-cone
             if lightcone_qubits.intersection(node.qargs):
                 # Check commutation with all previous operations
