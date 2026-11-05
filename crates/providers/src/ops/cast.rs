@@ -39,6 +39,9 @@ impl ProgramOp for Cast {
     fn namespace(&self) -> &str {
         QISKIT
     }
+    fn describe(&self) -> Option<String> {
+        Some(format!("target={}", self.target))
+    }
     fn arity(&self) -> usize {
         1
     }

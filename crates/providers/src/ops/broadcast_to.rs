@@ -15,7 +15,7 @@
 use super::error::MathOpError;
 use super::inference::broadcast_to;
 use super::{ProgramOp, QISKIT};
-use crate::tensor::{Dim, Tensor, TensorError, TensorType};
+use crate::tensor::{Dim, Tensor, TensorError, TensorType, fmt_shape};
 
 /// Broadcast a tensor to a target shape, right-aligning the two.
 #[derive(Clone)]
@@ -64,6 +64,9 @@ impl ProgramOp for BroadcastTo {
     }
     fn namespace(&self) -> &str {
         QISKIT
+    }
+    fn describe(&self) -> Option<String> {
+        Some(format!("target={}", fmt_shape(&self.target)))
     }
     fn arity(&self) -> usize {
         1

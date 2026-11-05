@@ -67,6 +67,11 @@ pub trait ProgramOp {
         format!("{}.{}", self.namespace(), self.name())
     }
 
+    /// Return a short summary of the content of this op, `axis=0` for instance.
+    fn describe(&self) -> Option<String> {
+        None
+    }
+
     /// Return the number of operand tensors this op consumes.
     fn arity(&self) -> usize;
 
@@ -109,6 +114,7 @@ pub trait ErasedProgramOp: std::any::Any + Send + Sync + sealed::Clonable {
     fn name(&self) -> &str;
     fn namespace(&self) -> &str;
     fn full_name(&self) -> String;
+    fn describe(&self) -> Option<String>;
     fn arity(&self) -> usize;
     fn has_builtin_eval(&self) -> bool;
     fn infer_output_types(&self, inputs: &[TensorType]) -> Result<Vec<TensorType>, BoxedOpError>;
@@ -129,6 +135,10 @@ where
 
     fn full_name(&self) -> String {
         ProgramOp::full_name(self)
+    }
+
+    fn describe(&self) -> Option<String> {
+        ProgramOp::describe(self)
     }
 
     fn arity(&self) -> usize {
