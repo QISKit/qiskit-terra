@@ -12,6 +12,7 @@
 
 use std::ffi::{CStr, c_char};
 use std::fs;
+use std::io::Cursor;
 use std::slice;
 
 use qiskit_circuit::circuit_data::CircuitData;
@@ -68,12 +69,21 @@ fn return_error(error: *mut *mut c_char, value: QpyCError) -> ExitCode {
     }
 }
 
-fn dump_circuits(circuits: &[&CircuitData], version: Option<u8>) -> Result<Vec<u8>, QpyCError> {
-    qiskit_qpy::native_dump_qpy(circuits, version)
-        .map_err(|err| QpyCError::Diagnostic(err.to_string()))
+fn load(payload: &[u8]) -> Result<Vec<CircuitData>, QpyCError> {
+    qiskit_qpy::native_load_qpy(payload).map_err(|err| QpyCError::Diagnostic(err.to_string()))
 }
 
-/// Generate a QPY payload from an array of QkCircuit pointers
+/// Dump a QPY payload into a newly created file
+///
+/// @param circuits A valid, non-null pointer to an array of ``num_circuits`` circuit pointers.
+/// @param num_circuits The number of circuit pointers in ``circuits``.
+/// @param filename A valid, non-null, nul-terminated UTF-8 path.
+/// @param version The QPY format version. It must be at least the value returned by
+/// ``qk_qpy_write_min_version``.
+/// @param error Optional output location for an error description. Free a returned string with
+/// ``qk_str_free``.
+/// @return ``QkExitCode_Success`` on success, ``QkExitCode_NullPointerError`` for a null
+/// pointer, or ``QkExitCode_QpyError`` for an invalid path, unsupported QPY data, or I/O failure.
 ///
 /// # Safety
 ///
@@ -81,20 +91,6 @@ fn dump_circuits(circuits: &[&CircuitData], version: Option<u8>) -> Result<Vec<u
 /// aligned, non-null pointer the behavior is undefined. ``filename`` must point to a valid
 /// nul-terminated string for the duration of this call. ``error`` must be null or valid
 /// writeable pointer to a char pointer.
-unsafe fn dump(
-    circuits: *const *const CircuitData,
-    num_circuits: usize,
-    version: Option<u8>,
-) -> Result<Vec<u8>, QpyCError> {
-    // SAFETY: this function's caller upholds the circuit-array contract.
-    let circuits = unsafe { slice::from_raw_parts(circuits as *const &CircuitData, num_circuits) };
-    dump_circuits(circuits, version)
-}
-
-fn load(payload: &[u8]) -> Result<Vec<CircuitData>, QpyCError> {
-    qiskit_qpy::native_load_qpy(payload).map_err(|err| QpyCError::Diagnostic(err.to_string()))
-}
-
 unsafe fn dump_file_impl(
     circuits: *const *const CircuitData,
     num_circuits: usize,
@@ -112,16 +108,40 @@ unsafe fn dump_file_impl(
             QpyCError::Diagnostic("filename is not valid UTF-8".into()),
         );
     };
+    // SAFETY: this function's caller upholds the circuit-array contract.
+    let circuits = unsafe { slice::from_raw_parts(circuits as *const &CircuitData, num_circuits) };
+    let output = match fs::File::create(filename) {
+        Ok(output) => output,
+        Err(e) => return return_error(error, QpyCError::Diagnostic(e.to_string())),
+    };
     // SAFETY: upheld by the caller contract and checked for alignment/null above.
-    let result = unsafe { dump(circuits, num_circuits, version) };
-    match result.and_then(|payload| {
-        fs::write(filename, payload).map_err(|err| QpyCError::Diagnostic(err.to_string()))
-    }) {
+    match qiskit_qpy::native_dump_qpy(circuits.iter().copied(), output, version)
+        .map_err(|err| QpyCError::Diagnostic(err.to_string()))
+    {
         Ok(()) => ExitCode::Success,
         Err(value) => return_error(error, value),
     }
 }
 
+/// Serialize circuits into a newly allocated QPY buffer.
+///
+/// @param circuits A valid, non-null pointer to an array of ``num_circuits`` circuit pointers.
+/// @param num_circuits The number of circuit pointers in ``circuits``.
+/// @param buffer Output location for the newly allocated buffer. It is unchanged on failure.
+/// @param size Output location for the buffer size in bytes. It is unchanged on failure.
+/// @param version The QPY format version. It must be at least the value returned by
+/// ``qk_qpy_write_min_version``.
+/// @param error Optional output location for an error description. Free a returned string with
+/// ``qk_str_free``.
+/// @return ``QkExitCode_Success`` on success, ``QkExitCode_NullPointerError`` for a null
+/// pointer, or ``QkExitCode_QpyError`` if serialization fails. The returned buffer must be
+/// released with ``qk_qpy_free_buffer``.
+///
+/// # Safety
+///
+/// Every element of ``circuits`` must point to a valid ``QkCircuit``. ``buffer`` and ``size`` must
+/// each be valid for one pointer-sized write for the duration of this call. ``error`` must be null
+/// or valid for one pointer write.
 unsafe fn dump_buffer_impl(
     circuits: *const *const CircuitData,
     num_circuits: usize,
@@ -136,10 +156,15 @@ unsafe fn dump_buffer_impl(
     if let Err(error) = check_ptr(size) {
         return error.into();
     }
-    // SAFETY: upheld by the caller contract and checked for alignment/null above.
-    match unsafe { dump(circuits, num_circuits, version) } {
-        Ok(payload) => {
-            let payload = payload.into_boxed_slice();
+    // File header takes 20 bytes so this is the min size of a qpy buffer
+    let mut output: Vec<u8> = Vec::with_capacity(20);
+    // SAFETY: this function's caller upholds the circuit-array contract.
+    let circuits = unsafe { slice::from_raw_parts(circuits as *const &CircuitData, num_circuits) };
+    match qiskit_qpy::native_dump_qpy(circuits.iter().copied(), Cursor::new(&mut output), version)
+        .map_err(|err| QpyCError::Diagnostic(err.to_string()))
+    {
+        Ok(_) => {
+            let payload = output.into_boxed_slice();
             let payload_size = payload.len();
             // SAFETY: the caller guarantees both output locations are writable.
             unsafe {

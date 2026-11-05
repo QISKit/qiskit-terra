@@ -49,7 +49,7 @@ C, and we use various static-analysis tools.
   separately, such as with `pipx` or `uv tool run`/`uvx`.  Use your preferred tool to install `tox`,
   then you can run the test suite with `tox -e py`.
 
-- **Rust**: Use the standard `cargo test` machinery.
+- **Rust**: Use the standard `cargo test` machinery.  Use `tools/miri.bash` to run Miri.
 
 - **C**: You need CMake and GNU Make.  Run `make ctest`.
 

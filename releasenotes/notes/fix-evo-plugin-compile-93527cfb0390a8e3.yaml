@@ -1,0 +1,12 @@
+---
+
+fixes:
+  - |
+    Fixed a bug with compiling a :class:`.PauliEvolutionGate` with a synthesis
+    method that was _not_ a :class:`.ProductFormula`, such as the :class:`.MatrixExponential`
+    or custom synthesis methods deriving :class:`.EvolutionSynthesis`. Previously calling
+    :func:`.transpile` or a preset pass manager would crash in the high-level synthesis.
+    This behavior is now fixed and the gate is synthesized as specified.
+
+    Fixed `#17421 <https://github.com/Qiskit/qiskit/issues/17421>`__.
+
