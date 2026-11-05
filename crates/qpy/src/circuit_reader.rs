@@ -290,26 +290,35 @@ pub fn instruction_values_to_params(
     // treat `values` as a vector of blocks
     // Null values represent missing else blocks in if-else statements and should be filtered out
 
-    // Filter out Null values and check if remaining values are all circuits
-    let non_null_values: Vec<&GenericValue> = values
+    // Check that all non-null values are all circuits and there is at least one
+    let mut non_empty: bool = false;
+    let all_circuit_values: bool = values
         .iter()
         .filter(|val| !matches!(val, GenericValue::Null))
-        .collect();
-
-    if !non_null_values.is_empty()
-        && non_null_values
-            .iter()
-            .all(|val| matches!(val, GenericValue::CircuitData(_)))
-    {
+        .all(|val| {
+            if matches!(val, GenericValue::CircuitData(_)) {
+                non_empty = true;
+                true
+            } else {
+                false
+            }
+        });
+    if all_circuit_values && non_empty {
         // blocks
-        let inst_blocks: Vec<CircuitData> = values
-            .iter()
-            .filter_map(|value| value.as_circuit_data())
+        let out: Vec<Block> = values
+            .into_iter()
+            .filter_map(|value| match value {
+                GenericValue::CircuitData(block_circuit) => {
+                    Some(qpy_data.circuit_data.add_block(*block_circuit))
+                }
+                _ => None,
+            })
             .collect();
-        let params = Parameters::Blocks(inst_blocks);
-        Ok(qpy_data
-            .circuit_data
-            .extract_blocks_from_circuit_parameters(Some(&params)))
+        if out.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(Box::new(Parameters::Blocks(out))))
+        }
     } else {
         // params
         let inst_params: Vec<Param> = values

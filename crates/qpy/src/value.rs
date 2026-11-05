@@ -535,12 +535,6 @@ impl GenericValue {
             self.clone()
         }
     }
-    pub(crate) fn as_circuit_data(&self) -> Option<CircuitData> {
-        match self {
-            GenericValue::CircuitData(circuit_data) => Some(circuit_data.as_ref().clone()),
-            _ => None,
-        }
-    }
     // return the inner GenericValue slice when the GenericData is a Tuple
     pub(crate) fn as_slice(&self) -> Option<&[GenericValue]> {
         match self {
