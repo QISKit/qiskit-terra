@@ -12,13 +12,13 @@
 
 use std::cmp::{Ordering, PartialOrd};
 use std::convert::From;
-use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::fmt;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 use num_complex::Complex64;
 use pyo3::prelude::*;
 
-use super::{SYMEXPR_EPSILON, SymbolExpr, UnaryOp, BinaryOp, _mul, _div, _neg};
+use super::{_div, _mul, _neg, BinaryOp, SYMEXPR_EPSILON, SymbolExpr, UnaryOp};
 
 /// Value type, can be integer, real or complex number
 #[derive(Debug, Clone, Copy, IntoPyObject, IntoPyObjectRef)]
