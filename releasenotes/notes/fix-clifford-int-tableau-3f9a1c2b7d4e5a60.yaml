@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    :meth:`.Clifford.from_permutation` and :meth:`.Clifford.from_linear_function`
+    (and so ``Clifford(PermutationGate(...))`` and ``Clifford(LinearFunction(...))``)
+    now build a boolean tableau instead of an integer one. Previously, composing
+    such a :class:`.Clifford` with another could give an incorrect result.
+    Fixed `#17402 <https://github.com/Qiskit/qiskit/issues/17402>`__.
