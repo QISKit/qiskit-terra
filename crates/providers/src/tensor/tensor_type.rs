@@ -54,7 +54,7 @@ impl fmt::Display for Dim {
 }
 
 /// Render a shape as `[4000, <=2]`.
-pub(super) fn fmt_shape(shape: &[Dim]) -> String {
+pub(crate) fn fmt_shape(shape: &[Dim]) -> String {
     let dims: Vec<String> = shape.iter().map(Dim::to_string).collect();
     format!("[{}]", dims.join(", "))
 }

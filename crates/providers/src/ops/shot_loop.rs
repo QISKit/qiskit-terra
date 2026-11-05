@@ -60,6 +60,13 @@ impl ProgramOp for ShotLoop {
     fn namespace(&self) -> &str {
         QISKIT
     }
+    fn describe(&self) -> Option<String> {
+        Some(format!(
+            "circuits={}, shots={}",
+            self.circuits.len(),
+            self.shots
+        ))
+    }
     fn arity(&self) -> usize {
         self.circuits.len()
     }
