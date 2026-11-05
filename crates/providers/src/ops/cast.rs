@@ -59,7 +59,7 @@ impl ProgramOp for Cast {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::tensor::Dim;
+    use crate::tensor::{BitTensor, Dim};
     use num_complex::Complex64;
 
     /// Return the type of a 1-D tensor of `len` elements.
@@ -67,6 +67,7 @@ mod test {
         TensorType {
             dtype,
             shape: vec![Dim::Fixed(len)],
+            ..Default::default()
         }
     }
 
@@ -89,6 +90,7 @@ mod test {
         let bounded = |dtype| TensorType {
             dtype,
             shape: vec![Dim::Bounded { max: 4000 }, Dim::Fixed(2)],
+            ..Default::default()
         };
         assert_eq!(
             Cast::new(DType::F64)
@@ -136,8 +138,8 @@ mod test {
             Cast::new(DType::Bit)
                 .eval(&[Tensor::from([0.0_f64, 2.5, -1.0])])
                 .unwrap(),
-            vec![Tensor::Bit(
-                ndarray::arr1(&[0u8, 1, 1]).into_dyn().into_shared()
+            vec![Tensor::bit(
+                BitTensor::from_bools([false, true, true], &[3]).unwrap()
             )]
         );
     }

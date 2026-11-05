@@ -14,7 +14,6 @@ use super::error::{MathOpError, check_axis, check_dtype};
 use super::inference::{elementwise_binary, elementwise_unary, reduce};
 use super::{ProgramOp, QISKIT};
 use crate::tensor::{DType, Tensor, TensorType};
-use ndarray::Axis;
 
 /// Return whether a dtype is `Bit`.
 #[inline]
@@ -94,10 +93,14 @@ impl ProgramOp for BitwiseNot {
     fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
         crate::unpack_operands!(self, args, [x]);
         check_dtype(0, x.dtype(), DType::Bit)?;
-        let Tensor::Bit(arr) = x else {
+        let Tensor::Bit(storage) = x else {
             unreachable!("dtype checked above")
         };
-        Ok(vec![Tensor::Bit(arr.mapv(|b| b ^ 1).into_shared())])
+        let arr = storage.dense().ok_or_else(|| MathOpError::RaggedOperand {
+            operand: 0,
+            ty: x.tensor_type(),
+        })?;
+        Ok(vec![Tensor::bit(arr.not())])
     }
 }
 
@@ -137,30 +140,37 @@ impl ProgramOp for Parity {
         crate::unpack_operands!(self, args, [x]);
         check_dtype(0, x.dtype(), DType::Bit)?;
         check_axis(self.axis, x.shape().len())?;
-        let Tensor::Bit(arr) = x else {
+        let Tensor::Bit(storage) = x else {
             unreachable!("dtype checked above")
         };
-        Ok(vec![Tensor::Bit(
-            arr.fold_axis(Axis(self.axis), 0u8, |&acc, &b| acc ^ b)
-                .into_shared(),
-        )])
+        let arr = storage.dense().ok_or_else(|| MathOpError::RaggedOperand {
+            operand: 0,
+            ty: x.tensor_type(),
+        })?;
+        Ok(vec![Tensor::bit(arr.parity(self.axis))])
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor::{Dim, TensorError};
-    use ndarray::{arr1, arr2};
+    use crate::tensor::{BitTensor, Dim, TensorError};
 
-    fn bit(data: &[u8]) -> Tensor {
-        Tensor::Bit(arr1(data).into_dyn().into_shared())
+    /// Return a `Bit` tensor of logical shape `shape` over `values`, taken in row-major order.
+    fn bits(values: &[u8], shape: &[usize]) -> Tensor {
+        Tensor::bit(BitTensor::from_bools(values.iter().map(|&v| v == 1), shape).unwrap())
+    }
+
+    /// Return a one-dimensional `Bit` tensor over `values`.
+    fn bit(values: &[u8]) -> Tensor {
+        bits(values, &[values.len()])
     }
 
     fn bit_1d(len: usize) -> TensorType {
         TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Fixed(len)],
+            ..Default::default()
         }
     }
 
@@ -197,10 +207,13 @@ mod tests {
     #[test]
     fn test_parity_axis0() {
         // [[1,0,1],[0,1,1],[0,0,0]] axis 0 → [1, 1, 0]
-        let x = Tensor::Bit(
-            arr2(&[[1u8, 0, 1], [0, 1, 1], [0, 0, 0]])
-                .into_dyn()
-                .into_shared(),
+        let x = bits(
+            &[
+                1, 0, 1, //
+                0, 1, 1, //
+                0, 0, 0,
+            ],
+            &[3, 3],
         );
         let result = Parity::new(0).eval(&[x]).unwrap();
         assert_eq!(result, vec![bit(&[1, 1, 0])]);
@@ -225,6 +238,7 @@ mod tests {
         let bounded = TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Bounded { max: 8 }],
+            ..Default::default()
         };
         assert_eq!(
             BitwiseNot
@@ -239,6 +253,7 @@ mod tests {
         let ty = TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Bounded { max: 4000 }, Dim::Fixed(3)],
+            ..Default::default()
         };
         assert_eq!(
             Parity::new(0).infer_output_types(&[ty]).unwrap(),
@@ -251,6 +266,7 @@ mod tests {
         let f64_1 = TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Fixed(1)],
+            ..Default::default()
         };
         assert!(matches!(
             BitwiseAnd
@@ -269,6 +285,7 @@ mod tests {
         let f64_1 = TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Fixed(1)],
+            ..Default::default()
         };
         assert!(matches!(
             BitwiseNot.infer_output_types(&[f64_1]).unwrap_err(),

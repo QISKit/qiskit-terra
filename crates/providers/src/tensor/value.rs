@@ -16,11 +16,9 @@ use ndarray::{ArcArrayD, ArrayD, IxDyn};
 use num_complex::{Complex32, Complex64};
 
 use super::broadcast::{broadcast_elementwise, broadcast_shape};
-use super::{DType, Dim, TensorError, TensorType};
+use super::{BitStorage, BitTensor, DType, Dim, Layout, TensorError, TensorType};
 
 /// A tensor of one of the supported dtypes.
-///
-/// Each variant wraps a reference-counted  copy-on-write dynamic ndarray (`ArcArrayD`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tensor {
     C64(ArcArrayD<Complex32>), // complex
@@ -35,7 +33,7 @@ pub enum Tensor {
     U16(ArcArrayD<u16>),
     U32(ArcArrayD<u32>),
     U64(ArcArrayD<u64>),
-    Bit(ArcArrayD<u8>), // bool
+    Bit(BitStorage), // bool
 }
 
 /// Return the error raised when an `op` has no implementation for some type(s).
@@ -52,12 +50,14 @@ fn dtype_error(op: &'static str, lhs: DType, rhs: DType) -> TensorError {
 
 /// Cast an array of a real numeric type to any supported dtype.
 ///
-/// A cast to `Bit` compares against zero, like NumPy's cast to `bool`. A `Bit` tensor holds only 0
-/// or 1, and truncating `2.5` to `2` would leave a value the bitwise operations cannot read.
+/// A cast to `Bit` compares against zero, like NumPy's cast to `bool`.
 macro_rules! cast_real {
     ($arr:expr, $src:ty, $target:expr) => {
         match $target {
-            DType::Bit => Tensor::Bit($arr.mapv(|x: $src| u8::from(x != 0 as $src)).into_shared()),
+            DType::Bit => Tensor::bit(
+                BitTensor::from_bools($arr.iter().map(|&x: &$src| x != 0 as $src), $arr.shape())
+                    .expect("one bit per element of the array's own shape"),
+            ),
             DType::U8 => Tensor::U8($arr.mapv(|x: $src| x as u8).into_shared()),
             DType::U16 => Tensor::U16($arr.mapv(|x: $src| x as u16).into_shared()),
             DType::U32 => Tensor::U32($arr.mapv(|x: $src| x as u32).into_shared()),
@@ -78,6 +78,18 @@ macro_rules! cast_real {
             ),
         }
     };
+}
+
+/// Return the dense bits of `storage`, or [`TensorError::RaggedOperand`] if it is ragged.
+fn dense_bits<'a>(storage: &'a BitStorage, op: &'static str) -> Result<&'a BitTensor, TensorError> {
+    storage.dense().ok_or(TensorError::RaggedOperand { op })
+}
+
+/// Return the bits of `tensor` as one byte per bit, each either `0` or `1`.
+fn unpack(tensor: &BitTensor) -> ArrayD<u8> {
+    let bytes: Vec<u8> = tensor.to_bool_vec().into_iter().map(u8::from).collect();
+    ArrayD::from_shape_vec(IxDyn(tensor.shape()), bytes)
+        .expect("one byte per element of the tensor's own shape")
 }
 
 /// Cast an array of a complex type to a complex dtype.
@@ -102,6 +114,11 @@ macro_rules! cast_complex {
 }
 
 impl Tensor {
+    /// Construct a `Bit` tensor over dense bits.
+    pub fn bit(bits: BitTensor) -> Self {
+        Tensor::Bit(BitStorage::Dense(bits))
+    }
+
     /// Return the dtype of this tensor.
     pub fn dtype(&self) -> DType {
         match self {
@@ -122,6 +139,9 @@ impl Tensor {
     }
 
     /// Return the shape of this tensor as a slice of dimension sizes.
+    ///
+    /// For a ragged tensor this is the bounding box, so the ragged axis reports its bound rather
+    /// than a true extent; a caller needing the latter must check [`is_ragged`](Self::is_ragged).
     pub fn shape(&self) -> &[usize] {
         match self {
             Tensor::C128(a) => a.shape(),
@@ -140,11 +160,41 @@ impl Tensor {
         }
     }
 
-    /// Return the [`TensorType`] that describes this tensor's dtype and concrete shape.
+    /// Return whether every position this tensor's shape describes holds an entry.
+    pub fn layout(&self) -> Layout {
+        match self {
+            Tensor::Bit(storage) => storage.layout(),
+            _ => Layout::Dense,
+        }
+    }
+
+    /// Return whether this tensor's entries vary in number along some axis.
+    pub fn is_ragged(&self) -> bool {
+        self.layout().ragged_axis().is_some()
+    }
+
+    /// Return the [`TensorType`] that describes this tensor's dtype, shape and layout.
+    ///
+    /// A ragged tensor's ragged axis becomes a [`Dim::Bounded`] at the bound its bounding box
+    /// gives, since that axis has no single length; every other axis is [`Dim::Fixed`].
     pub fn tensor_type(&self) -> TensorType {
+        let layout = self.layout();
+        let ragged = layout.ragged_axis();
         TensorType {
             dtype: self.dtype(),
-            shape: self.shape().iter().map(|&n| Dim::Fixed(n)).collect(),
+            shape: self
+                .shape()
+                .iter()
+                .enumerate()
+                .map(|(axis, &n)| {
+                    if ragged == Some(axis) {
+                        Dim::Bounded { max: n }
+                    } else {
+                        Dim::Fixed(n)
+                    }
+                })
+                .collect(),
+            layout,
         }
     }
 
@@ -152,8 +202,12 @@ impl Tensor {
     ///
     /// A [`Dim::Fixed`] axis admits exactly its size and a [`Dim::Bounded`] axis admits any
     /// size up to and including its bound.
+    ///
+    /// Layouts are not yet compared: a ragged type is satisfied by no value, and a ragged value
+    /// satisfies no type, so a ragged argument is rejected wherever arguments are type-checked.
     pub fn matches(&self, ty: &TensorType) -> bool {
-        self.dtype() == ty.dtype
+        !ty.is_ragged()
+            && self.dtype() == ty.dtype
             && self.shape().len() == ty.shape.len()
             && self
                 .shape()
@@ -219,6 +273,9 @@ impl Tensor {
     /// any size. Returns [`TensorError::ShapeMismatch`] if `shape` cannot be reached that way. This
     /// is the value-level counterpart of [`broadcast_dims_to`](super::broadcast_dims_to).
     pub fn broadcast_to(&self, shape: &[usize]) -> Result<Tensor, TensorError> {
+        if self.is_ragged() {
+            return Err(TensorError::RaggedOperand { op: "broadcast_to" });
+        }
         if self.shape() == shape {
             return Ok(self.clone());
         }
@@ -242,7 +299,10 @@ impl Tensor {
             Tensor::U32(a) => broadcast!(U32, a),
             Tensor::U16(a) => broadcast!(U16, a),
             Tensor::U8(a) => broadcast!(U8, a),
-            Tensor::Bit(a) => broadcast!(Bit, a),
+            Tensor::Bit(a) => a
+                .dense()
+                .and_then(|bits| bits.broadcast_to(shape).ok())
+                .map(Tensor::bit),
         }
         .ok_or_else(|| TensorError::ShapeMismatch {
             lhs: self.shape().to_vec(),
@@ -251,12 +311,24 @@ impl Tensor {
     }
 
     /// Cast this tensor to `target`, consuming it. Returns `self` unchanged if already that dtype.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this tensor is ragged. Casting a ragged array of bits would have to densify it,
+    /// undoing the reduction post-selection exists to achieve
     pub fn cast(self, target: DType) -> Tensor {
         if self.dtype() == target {
             return self;
         }
         match &self {
-            Tensor::Bit(a) | Tensor::U8(a) => cast_real!(a, u8, target),
+            Tensor::Bit(a) => {
+                let unpacked = unpack(
+                    a.dense()
+                        .expect("a ragged tensor cannot be cast"),
+                );
+                cast_real!(&unpacked, u8, target)
+            }
+            Tensor::U8(a) => cast_real!(a, u8, target),
             Tensor::U16(a) => cast_real!(a, u16, target),
             Tensor::U32(a) => cast_real!(a, u32, target),
             Tensor::U64(a) => cast_real!(a, u64, target),
@@ -469,11 +541,10 @@ impl std::ops::Rem for Tensor {
 /// Define an element-wise bitwise method on [`Tensor`] over `Bit` operands.
 ///
 /// Bitwise operations are defined for `Bit` alone, so these are separate from
-/// [`impl_tensor_binop`], whose arms cover the numeric dtypes and not `Bit`. As there, the operand
-/// shapes are pre-validated with [`broadcast_shape`] so that the underlying ndarray operator, which
-/// broadcasts but panics on a shape mismatch, cannot panic.
+/// [`impl_tensor_binop`], whose arms cover the numeric dtypes and not `Bit`. Each delegates to a
+/// [`BitTensor`] "kernel".
 macro_rules! impl_tensor_bitop {
-    ($method:ident, $op:tt, $op_name:literal) => {
+    ($method:ident, $kernel:ident, $op_name:literal) => {
         impl Tensor {
             #[doc = concat!(
                 "Element-wise `",
@@ -483,9 +554,10 @@ macro_rules! impl_tensor_bitop {
                 "[`TensorError::ShapeMismatch`] if the shapes are not broadcast-compatible."
             )]
             pub fn $method(&self, rhs: &Tensor) -> Result<Tensor, TensorError> {
-                broadcast_shape(self.shape(), rhs.shape())?;
                 match (self, rhs) {
-                    (Tensor::Bit(a), Tensor::Bit(b)) => Ok(Tensor::Bit((a $op b).into_shared())),
+                    (Tensor::Bit(a), Tensor::Bit(b)) => dense_bits(a, $op_name)?
+                        .$kernel(dense_bits(b, $op_name)?)
+                        .map(Tensor::bit),
                     _ => Err(TensorError::DTypeMismatch {
                         op: $op_name,
                         lhs: self.dtype(),
@@ -497,23 +569,27 @@ macro_rules! impl_tensor_bitop {
     };
 }
 
-impl_tensor_bitop!(bitand_tensor, &, "bitand");
-impl_tensor_bitop!(bitor_tensor, |, "bitor");
-impl_tensor_bitop!(bitxor_tensor, ^, "bitxor");
+impl_tensor_bitop!(bitand_tensor, and, "bitand");
+impl_tensor_bitop!(bitor_tensor, or, "bitor");
+impl_tensor_bitop!(bitxor_tensor, xor, "bitxor");
 
 #[cfg(test)]
 mod test {
     use super::*;
     use ndarray::IxDyn;
 
+    /// Return a `Bit` tensor of logical shape `shape` over `values`, taken in row-major order.
+    fn bit(values: &[bool], shape: &[usize]) -> Tensor {
+        Tensor::bit(BitTensor::from_bools(values.iter().copied(), shape).unwrap())
+    }
+
     #[test]
     fn test_tensor_equality() {
         assert_eq!(Tensor::from([1.0_f64, 2.0]), Tensor::from([1.0_f64, 2.0]));
         assert_ne!(Tensor::from([1.0_f64, 2.0]), Tensor::from([1.0_f64, 3.0]));
 
-        // Bit and U8 share a storage type but are distinct dtypes.
-        let bits = ndarray::ArrayD::from_elem(IxDyn(&[2]), 1u8).into_shared();
-        assert_ne!(Tensor::Bit(bits.clone()), Tensor::U8(bits));
+        // A `Bit` tensor is unequal to the `U8` tensor of the same values.
+        assert_ne!(bit(&[true, true], &[2]), Tensor::from([1_u8, 1]));
     }
 
     // Construction, dtype, shape.
@@ -585,6 +661,7 @@ mod test {
             TensorType {
                 dtype: DType::F64,
                 shape: vec![Dim::Fixed(3)],
+                ..Default::default()
             }
         );
 
@@ -595,6 +672,7 @@ mod test {
             TensorType {
                 dtype: DType::I16,
                 shape: vec![Dim::Fixed(2), Dim::Fixed(4)],
+                ..Default::default()
             }
         );
     }
@@ -617,6 +695,7 @@ mod test {
                 !t.matches(&TensorType {
                     dtype: DType::F64,
                     shape: shape.clone(),
+                    ..Default::default()
                 }),
                 "for shape {shape:?}"
             );
@@ -624,6 +703,7 @@ mod test {
         assert!(!t.matches(&TensorType {
             dtype: DType::F32,
             shape: vec![Dim::Fixed(3)],
+            ..Default::default()
         }));
     }
 
@@ -632,11 +712,27 @@ mod test {
         let bounded = |max| TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Bounded { max }],
+            ..Default::default()
         };
         let t = Tensor::from([1.0f64, 2.0, 3.0]);
         assert!(t.matches(&bounded(4)));
         assert!(t.matches(&bounded(3)));
         assert!(!t.matches(&bounded(2)));
+    }
+
+    #[test]
+    fn test_matches_rejects_a_ragged_type() {
+        // Every `Tensor` variant is dense, so no value satisfies a ragged type -- not even one
+        // whose dtype and shape line up exactly.
+        let dims = vec![Dim::Fixed(2), Dim::Fixed(3), Dim::Fixed(2)];
+        let ragged = TensorType::ragged(DType::Bit, dims.clone(), 1, 3).unwrap();
+        let value =
+            Tensor::bit(BitTensor::from_bools(std::iter::repeat_n(false, 12), &[2, 3, 2]).unwrap());
+        assert!(
+            value.matches(&TensorType::dense(DType::Bit, dims)),
+            "the same value satisfies the dense type"
+        );
+        assert!(!value.matches(&ragged));
     }
 
     // The cast method.
@@ -704,17 +800,16 @@ mod test {
 
     #[test]
     fn test_cast_to_bit_tests_against_zero() {
-        // Any non-zero value becomes 1, so a Bit tensor never holds anything else.
+        // Any non-zero value becomes a true bit.
         let t = Tensor::from([0.0_f64, 0.5, 1.0, 2.5, -3.0]);
-        let Tensor::Bit(bits) = t.cast(DType::Bit) else {
-            panic!("expected Bit tensor")
-        };
-        assert_eq!(bits.as_slice().unwrap(), &[0, 1, 1, 1, 1]);
-
-        let Tensor::Bit(bits) = Tensor::from([0_i32, 7, -7]).cast(DType::Bit) else {
-            panic!("expected Bit tensor")
-        };
-        assert_eq!(bits.as_slice().unwrap(), &[0, 1, 1]);
+        assert_eq!(
+            t.cast(DType::Bit),
+            bit(&[false, true, true, true, true], &[5])
+        );
+        assert_eq!(
+            Tensor::from([0_i32, 7, -7]).cast(DType::Bit),
+            bit(&[false, true, true], &[3])
+        );
     }
 
     #[test]
@@ -737,14 +832,10 @@ mod test {
         assert_eq!(arr.as_slice().unwrap(), &[1.0, 2.0, 3.0, 1.0, 2.0, 3.0]);
 
         // A single element reaches any shape.
-        let Tensor::Bit(arr) =
-            Tensor::Bit(ndarray::ArrayD::from_elem(IxDyn(&[1]), 1u8).into_shared())
-                .broadcast_to(&[2, 2])
-                .unwrap()
-        else {
-            panic!("expected Bit tensor")
-        };
-        assert_eq!(arr.as_slice().unwrap(), &[1, 1, 1, 1]);
+        assert_eq!(
+            bit(&[true], &[1]).broadcast_to(&[2, 2]).unwrap(),
+            bit(&[true; 4], &[2, 2])
+        );
     }
 
     #[test]
@@ -1266,7 +1357,7 @@ mod test {
             DType::C128,
         ];
         let sources = [
-            Tensor::Bit(ndarray::ArrayD::from_elem(IxDyn(&[2]), 1u8).into_shared()),
+            bit(&[true; 2], &[2]),
             Tensor::U8(ndarray::ArrayD::from_elem(IxDyn(&[2]), 1u8).into_shared()),
             Tensor::U16(ndarray::ArrayD::from_elem(IxDyn(&[2]), 1u16).into_shared()),
             Tensor::U32(ndarray::ArrayD::from_elem(IxDyn(&[2]), 1u32).into_shared()),
@@ -1300,9 +1391,8 @@ mod test {
             assert!(approx::abs_diff_eq!(arr[0].im, 2.0_f64, epsilon = 1e-6));
         }
 
-        // Spot-check a numeric value (Bit(1) -> F64 -> 1.0).
-        let bit_to_f64 = Tensor::Bit(ndarray::ArrayD::from_elem(IxDyn(&[2]), 1u8).into_shared())
-            .cast(DType::F64);
+        // Spot-check a numeric value (true -> F64 -> 1.0).
+        let bit_to_f64 = bit(&[true; 2], &[2]).cast(DType::F64);
         if let Tensor::F64(arr) = bit_to_f64 {
             assert_eq!(arr.as_slice().unwrap(), &[1.0_f64, 1.0]);
         } else {

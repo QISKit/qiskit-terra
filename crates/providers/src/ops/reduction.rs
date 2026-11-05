@@ -296,6 +296,7 @@ mod tests {
         TensorType {
             dtype,
             shape: vec![rows, cols],
+            ..Default::default()
         }
     }
 
@@ -778,6 +779,7 @@ mod tests {
             vec![TensorType {
                 dtype: DType::F64,
                 shape: vec![Dim::Fixed(3)],
+                ..Default::default()
             }]
         );
     }
@@ -794,6 +796,7 @@ mod tests {
             vec![TensorType {
                 dtype: DType::F64,
                 shape: vec![bounded],
+                ..Default::default()
             }]
         );
     }
@@ -857,6 +860,7 @@ mod tests {
         let ty = TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Fixed(3)],
+            ..Default::default()
         };
         assert!(matches!(
             Mean::new(1).infer_output_types(&[ty]).unwrap_err(),

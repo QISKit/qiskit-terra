@@ -12,7 +12,7 @@
 
 //! Errors raised by ops.
 
-use crate::tensor::{DType, Dim, TensorError};
+use crate::tensor::{DType, Dim, TensorError, TensorType};
 use thiserror::Error;
 
 /// Errors returned by the [`ProgramOp`](super::ProgramOp) implementations Qiskit defines.
@@ -47,6 +47,29 @@ pub enum MathOpError {
     /// The requested axis was out of bounds for the tensor's number of dimensions.
     #[error("axis {axis} is out of bounds for tensor with {ndim} dimension(s)")]
     InvalidAxis { axis: usize, ndim: usize },
+    /// An operand is ragged, and this op is only defined over dense tensors.
+    ///
+    /// An op gains ragged support by handling the layout in its own
+    /// [`infer_output_types`](super::ProgramOp::infer_output_types); until it does, a ragged
+    /// operand is refused here, as the program is built, rather than at run time.
+    #[error("operand {operand}: {ty} is ragged, and this operation requires a dense tensor")]
+    RaggedOperand { operand: usize, ty: TensorType },
+}
+
+/// Validate that an operand is dense, naming the offending operand by its position.
+///
+/// Every inference rule that has no ragged behaviour of its own calls this, so that an op meeting
+/// a ragged operand fails as the program is built. This is the type-level gate: an op that *can*
+/// handle raggedness inspects [`TensorType::layout`](crate::tensor::TensorType) itself instead of
+/// calling this.
+pub(super) fn check_dense(operand: usize, ty: &TensorType) -> Result<(), MathOpError> {
+    if ty.is_ragged() {
+        return Err(MathOpError::RaggedOperand {
+            operand,
+            ty: ty.clone(),
+        });
+    }
+    Ok(())
 }
 
 /// Validate that an operand's dtype is `expected`, naming the offending operand by its position.

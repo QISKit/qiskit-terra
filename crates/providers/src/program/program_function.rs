@@ -818,6 +818,7 @@ mod test {
         TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Fixed(len)],
+            ..Default::default()
         }
     }
 
@@ -860,6 +861,7 @@ mod test {
                 outputs: vec![TensorType {
                     dtype: DType::F64,
                     shape: vec![],
+                    ..Default::default()
                 }],
             }
         );
@@ -1186,6 +1188,7 @@ mod test {
         let bounded = TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Bounded { max: 4 }],
+            ..Default::default()
         };
         let callee = FunctionId::from_index(0);
         let mut function = ProgramFunction::new();
@@ -1321,6 +1324,7 @@ mod test {
         let bit = function.add_parameter(TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Fixed(2)],
+            ..Default::default()
         });
 
         let Err(err) = function.add_op(Add, &[bit, bit]) else {
@@ -1367,6 +1371,7 @@ mod test {
         let y = function.add_parameter(TensorType {
             dtype: DType::F32,
             shape: vec![Dim::Fixed(3)],
+            ..Default::default()
         });
         let sum = function.add_op(Add, &[x, y]).unwrap()[0];
         function.add_result(sum).unwrap();
@@ -1410,6 +1415,7 @@ mod test {
         let shots = function.add_parameter(TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Fixed(4)],
+            ..Default::default()
         });
         let mean = function.add_op(Mean::new(0), &[shots]).unwrap()[0];
         function.add_result(mean).unwrap();
@@ -1419,6 +1425,7 @@ mod test {
             Some(&TensorType {
                 dtype: DType::F64,
                 shape: vec![],
+                ..Default::default()
             })
         );
         let results = function
@@ -1437,6 +1444,7 @@ mod test {
         let shots = function.add_parameter(TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Fixed(4), Dim::Fixed(2)],
+            ..Default::default()
         });
         let mean = function.add_op(Mean::new(0), &[shots]).unwrap()[0];
         let whole = function.add_op(Cast::new(DType::I64), &[mean]).unwrap()[0];
@@ -1453,6 +1461,7 @@ mod test {
             Some(&TensorType {
                 dtype: DType::I64,
                 shape: vec![Dim::Fixed(4), Dim::Fixed(2)],
+                ..Default::default()
             })
         );
 
@@ -1476,6 +1485,7 @@ mod test {
         let bounded = TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Bounded { max: 8 }],
+            ..Default::default()
         };
         let mut function = ProgramFunction::new();
         let x = function.add_parameter(bounded.clone());
@@ -1500,6 +1510,7 @@ mod test {
         let x = function.add_parameter(TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Bounded { max: 8 }, Dim::Fixed(2)],
+            ..Default::default()
         });
         let y = function.add_parameter(f64_1d(2));
         let scaled = function.add_op(Add, &[x, y]).unwrap()[0];
@@ -1509,6 +1520,7 @@ mod test {
             Some(&TensorType {
                 dtype: DType::F64,
                 shape: vec![Dim::Bounded { max: 8 }, Dim::Fixed(2)],
+                ..Default::default()
             })
         );
     }
@@ -1562,6 +1574,7 @@ mod test {
         let x = function.add_parameter(TensorType {
             dtype: DType::F64,
             shape: vec![Dim::Bounded { max: 4 }],
+            ..Default::default()
         });
         let doubled = function.add_op(Elsewhere, &[x]).unwrap()[0];
         function.add_result(doubled).unwrap();

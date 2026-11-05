@@ -125,6 +125,35 @@ pub fn broadcast_dims_to(shape: &[Dim], target: &[Dim]) -> Result<Vec<Dim>, Tens
         .collect()
 }
 
+/// How a tensor's entries are laid out under its shape.
+///
+/// A shape says how large a tensor is; a layout says whether every position it describes actually
+/// holds an entry. The two are independent: raggedness is not a property of an element type, and
+/// not a property of a single axis either, since it is a *relationship* between axes -- how many
+/// entries an axis holds varies with the indices of the axes before it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Layout {
+    /// Every position the shape describes holds an entry.
+    #[default]
+    Dense,
+    /// The entries along `axis` vary in number with the indices of the axes before it.
+    ///
+    /// The shape's `axis` entry is then a bound rather than a length, so it is a [`Dim::Bounded`];
+    /// a ragged axis of known length would be dense. This is what post-selection produces, and
+    /// [`CsrBits`](super::CsrBits) is the value it describes.
+    Ragged { axis: usize },
+}
+
+impl Layout {
+    /// Return the ragged axis, or `None` for a dense layout.
+    pub fn ragged_axis(self) -> Option<usize> {
+        match self {
+            Layout::Dense => None,
+            Layout::Ragged { axis } => Some(axis),
+        }
+    }
+}
+
 /// A specification of a tensor without any data.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TensorType {
@@ -132,9 +161,70 @@ pub struct TensorType {
     pub dtype: DType,
     /// The dimension of each tensor axis.
     pub shape: Vec<Dim>,
+    /// Whether every position the shape describes holds an entry.
+    ///
+    /// Defaults to [`Layout::Dense`], so a dense type can be written with
+    /// `..Default::default()` in place of naming the layout.
+    pub layout: Layout,
+}
+
+impl Default for TensorType {
+    /// A dense scalar of dtype `Bit`.
+    ///
+    /// This exists for the `..Default::default()` form above; the dtype and shape are always given
+    /// explicitly in practice.
+    fn default() -> Self {
+        Self {
+            dtype: DType::Bit,
+            shape: Vec::new(),
+            layout: Layout::Dense,
+        }
+    }
 }
 
 impl TensorType {
+    /// Construct a dense tensor type.
+    pub fn dense(dtype: DType, shape: Vec<Dim>) -> Self {
+        Self {
+            dtype,
+            shape,
+            layout: Layout::Dense,
+        }
+    }
+
+    /// Construct a tensor type whose entries along `axis` vary in number.
+    ///
+    /// The axis becomes [`Dim::Bounded`] at `max`, since a ragged axis has no single length.
+    ///
+    /// # Errors
+    ///
+    /// [`TensorError::CsrAxis`] if `axis` is not an axis of `shape`, or is its last axis: that is
+    /// the axis a [`BitTensor`](super::BitTensor) packs along, so it cannot also be ragged.
+    pub fn ragged(
+        dtype: DType,
+        mut shape: Vec<Dim>,
+        axis: usize,
+        max: usize,
+    ) -> Result<Self, TensorError> {
+        if shape.is_empty() || axis >= shape.len() - 1 {
+            return Err(TensorError::CsrAxis {
+                axis,
+                ndim: shape.len(),
+            });
+        }
+        shape[axis] = Dim::Bounded { max };
+        Ok(Self {
+            dtype,
+            shape,
+            layout: Layout::Ragged { axis },
+        })
+    }
+
+    /// Return whether this type's entries vary in number along some axis.
+    pub fn is_ragged(&self) -> bool {
+        self.layout.ragged_axis().is_some()
+    }
+
     /// Return the dimension of every axis, or `None` if any is only bounded above.
     pub fn concrete_shape(&self) -> Option<Vec<usize>> {
         require_static(&self.shape).ok()
@@ -145,6 +235,7 @@ impl TensorType {
     /// This is the type-level counterpart of [`Tensor::matches`](super::Tensor::matches).
     pub fn admits(&self, other: &TensorType) -> bool {
         self.dtype == other.dtype
+            && self.layout == other.layout
             && self.shape.len() == other.shape.len()
             && self
                 .shape
@@ -154,10 +245,25 @@ impl TensorType {
     }
 }
 
-/// Render as `F64[4000, <=2]`.
+/// Render as `F64[4000, <=2]`, with a ragged axis marked: `Bit[4, *<=5, 2]`.
 impl fmt::Display for TensorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.dtype, fmt_shape(&self.shape))
+        let Some(axis) = self.layout.ragged_axis() else {
+            return write!(f, "{}{}", self.dtype, fmt_shape(&self.shape));
+        };
+        let dims: Vec<String> = self
+            .shape
+            .iter()
+            .enumerate()
+            .map(|(index, dim)| {
+                if index == axis {
+                    format!("*{dim}")
+                } else {
+                    dim.to_string()
+                }
+            })
+            .collect();
+        write!(f, "{}[{}]", self.dtype, dims.join(", "))
     }
 }
 
@@ -169,6 +275,7 @@ mod test {
         TensorType {
             dtype: DType::Bit,
             shape,
+            ..Default::default()
         }
     }
 
@@ -226,6 +333,7 @@ mod test {
             !TensorType {
                 dtype: DType::F64,
                 shape: vec![Dim::Fixed(3)],
+                ..Default::default()
             }
             .admits(&fixed)
         );
@@ -403,5 +511,106 @@ mod test {
             "Bit[4000, <=2]"
         );
         assert_eq!(bit_type(vec![]).to_string(), "Bit[]");
+    }
+
+    #[test]
+    fn test_ragged_bounds_the_axis_and_leaves_the_others() {
+        // The post-selection shape: shots are ragged, the sweep and bit axes are not.
+        let ty = TensorType::ragged(
+            DType::Bit,
+            vec![Dim::Fixed(4), Dim::Fixed(5), Dim::Fixed(2)],
+            1,
+            5,
+        )
+        .unwrap();
+        assert_eq!(
+            ty.shape,
+            vec![Dim::Fixed(4), Dim::Bounded { max: 5 }, Dim::Fixed(2)],
+            "only the ragged axis loses its true length"
+        );
+        assert_eq!(ty.layout, Layout::Ragged { axis: 1 });
+        assert!(ty.is_ragged());
+        assert_eq!(ty.layout.ragged_axis(), Some(1));
+
+        // A ragged axis has no single length, so the shape is never concrete.
+        assert_eq!(ty.concrete_shape(), None);
+    }
+
+    #[test]
+    fn test_dense_is_the_default_layout() {
+        let shape = vec![Dim::Fixed(3)];
+        let dense = TensorType::dense(DType::F64, shape.clone());
+        assert_eq!(dense.layout, Layout::Dense);
+        assert!(!dense.is_ragged());
+        assert_eq!(dense.layout.ragged_axis(), None);
+        assert_eq!(
+            dense,
+            TensorType {
+                dtype: DType::F64,
+                shape,
+                ..Default::default()
+            },
+            "`..Default::default()` and `dense` agree"
+        );
+    }
+
+    #[test]
+    fn test_ragged_rejects_an_axis_the_shape_does_not_have() {
+        assert!(matches!(
+            TensorType::ragged(DType::Bit, vec![Dim::Fixed(4), Dim::Fixed(5)], 2, 5).unwrap_err(),
+            TensorError::CsrAxis { axis: 2, ndim: 2 }
+        ));
+    }
+
+    #[test]
+    fn test_ragged_rejects_the_last_axis() {
+        // The last axis is the one a `BitTensor` packs along, so it cannot also be ragged.
+        assert!(matches!(
+            TensorType::ragged(DType::Bit, vec![Dim::Fixed(4), Dim::Fixed(5)], 1, 5).unwrap_err(),
+            TensorError::CsrAxis { axis: 1, ndim: 2 }
+        ));
+        assert!(matches!(
+            TensorType::ragged(DType::Bit, vec![Dim::Fixed(4)], 0, 4).unwrap_err(),
+            TensorError::CsrAxis { axis: 0, ndim: 1 }
+        ));
+    }
+
+    #[test]
+    fn test_admits_separates_the_layouts() {
+        // A dense tensor does not satisfy a ragged type or the other way round, however the
+        // shapes compare: the two describe different things in the same positions.
+        // Three axes, since the last one is never the ragged one.
+        let shape = vec![Dim::Fixed(4), Dim::Fixed(5), Dim::Fixed(2)];
+        let ragged = TensorType::ragged(DType::Bit, shape.clone(), 1, 5).unwrap();
+        let dense = TensorType::dense(DType::Bit, ragged.shape.clone());
+
+        assert!(ragged.admits(&ragged));
+        assert!(!ragged.admits(&dense));
+        assert!(!dense.admits(&ragged));
+
+        // Raggedness over one axis is not raggedness over another.
+        let other = TensorType::ragged(DType::Bit, shape, 0, 4).unwrap();
+        assert!(!ragged.admits(&other));
+    }
+
+    #[test]
+    fn test_tensor_type_display_marks_the_ragged_axis() {
+        let ty = TensorType::ragged(
+            DType::Bit,
+            vec![Dim::Fixed(4), Dim::Fixed(5), Dim::Fixed(2)],
+            1,
+            5,
+        )
+        .unwrap();
+        assert_eq!(
+            ty.to_string(),
+            "Bit[4, *<=5, 2]",
+            "a listing distinguishes a ragged axis from a merely bounded one"
+        );
+        assert_eq!(
+            TensorType::dense(DType::Bit, ty.shape).to_string(),
+            "Bit[4, <=5, 2]",
+            "the same shape dense is the unmarked rendering"
+        );
     }
 }

@@ -43,10 +43,39 @@ pub enum TensorError {
     /// An exponent of an integer dtype is negative.
     #[error("an exponent of dtype {dtype} cannot be negative")]
     NegativeExponent { dtype: DType },
+    /// A sequence of bits does not hold one bit per element of its shape.
+    #[error("a Bit tensor of shape {shape:?} holds {expected} bit(s), not {actual}")]
+    BitCount {
+        shape: Vec<usize>,
+        expected: usize,
+        actual: usize,
+    },
     /// A [`Dim::Bounded`] axis reached a position that needs a true size.
     #[error(
         "shape {} has an axis whose size is only bounded above, where a true size is required",
         fmt_shape(shape)
     )]
     DynamicDim { shape: Vec<Dim> },
+    /// A ragged axis is not an axis of the shape it is ragged over, or is its last axis.
+    ///
+    /// The last axis is excluded because that is the one a [`BitTensor`](super::BitTensor) packs
+    /// along, so a ragged final axis has no byte boundary to land on.
+    #[error(
+        "axis {axis} cannot be ragged in a shape of {ndim} dimension(s): \
+         a ragged axis must be one of the first {} and not the last",
+        ndim.saturating_sub(1)
+    )]
+    CsrAxis { axis: usize, ndim: usize },
+    /// A ragged array's offsets do not describe runs over its bounds.
+    #[error("invalid offsets for a ragged array: {reason}")]
+    CsrOffsets { reason: String },
+    /// An operand is ragged, and the operation is defined only over dense tensors.
+    #[error("Tensor::{op} is defined only over dense tensors, and an operand is ragged")]
+    RaggedOperand { op: &'static str },
+    /// A ragged array's values do not match the runs its offsets describe.
+    #[error("a ragged array's values should have shape {expected:?}, got {actual:?}")]
+    CsrValues {
+        expected: Vec<usize>,
+        actual: Vec<usize>,
+    },
 }

@@ -11,8 +11,13 @@
 // that they have been altered from the originals.
 
 //! Various rules for output tensor type inference.
+//!
+//! Every rule here is defined over dense operands and refuses a ragged one through
+//! `check_dense`, so an op that has no ragged behaviour of its own fails as the program is built
+//! rather than at run time. An op that *does* handle raggedness inspects its operand's
+//! [`layout`](crate::tensor::TensorType::layout) itself instead of using these rules.
 
-use super::error::MathOpError;
+use super::error::{MathOpError, check_dense};
 use crate::tensor::{DType, Dim, TensorType, broadcast_dims, broadcast_dims_to, promotion};
 
 /// Which dtypes an op admits.
@@ -35,6 +40,8 @@ pub(super) fn elementwise_binary(
     y: &TensorType,
     accepts: Accepts,
 ) -> Result<TensorType, MathOpError> {
+    check_dense(0, x)?;
+    check_dense(1, y)?;
     let dtype = promotion(x.dtype, y.dtype);
     if !accepts(dtype) {
         return Err(MathOpError::UnsupportedPromotion {
@@ -46,6 +53,7 @@ pub(super) fn elementwise_binary(
     Ok(TensorType {
         dtype,
         shape: broadcast_dims(&x.shape, &y.shape)?,
+        ..Default::default()
     })
 }
 
@@ -56,6 +64,7 @@ pub(super) fn elementwise_unary(
     x: &TensorType,
     accepts: Accepts,
 ) -> Result<TensorType, MathOpError> {
+    check_dense(0, x)?;
     check_accepts(x.dtype, accepts)?;
     Ok(x.clone())
 }
@@ -67,26 +76,32 @@ pub(super) fn reduce(
     accepts: Accepts,
     result_dtype: ResultDType,
 ) -> Result<TensorType, MathOpError> {
+    check_dense(0, x)?;
     check_accepts(x.dtype, accepts)?;
     Ok(TensorType {
         dtype: result_dtype(x.dtype),
         shape: super::error::reduced_shape(axis, &x.shape)?,
+        ..Default::default()
     })
 }
 
 /// Return the tensor type of a dtype cast to `target`.
 pub(super) fn cast(x: &TensorType, target: DType) -> Result<TensorType, MathOpError> {
+    check_dense(0, x)?;
     Ok(TensorType {
         dtype: cast_dtype(x.dtype, target)?,
         shape: x.shape.clone(),
+        ..Default::default()
     })
 }
 
 /// Return the tensor type of a broadcast to `target`.
 pub(super) fn broadcast_to(x: &TensorType, target: &[Dim]) -> Result<TensorType, MathOpError> {
+    check_dense(0, x)?;
     Ok(TensorType {
         dtype: x.dtype,
         shape: broadcast_dims_to(&x.shape, target)?,
+        ..Default::default()
     })
 }
 
@@ -136,7 +151,14 @@ mod test {
         TensorType {
             dtype,
             shape: shape.iter().copied().map(Dim::Fixed).collect(),
+            ..Default::default()
         }
+    }
+
+    /// Return a ragged `Bit` type over fixed axes `shape`, ragged on `axis`.
+    fn ragged(shape: &[usize], axis: usize) -> TensorType {
+        let dims = shape.iter().copied().map(Dim::Fixed).collect();
+        TensorType::ragged(DType::Bit, dims, axis, shape[axis]).unwrap()
     }
 
     /// Admit only the floating-point dtypes.
@@ -191,6 +213,7 @@ mod test {
         let x = TensorType {
             dtype: DType::C64,
             shape: vec![Dim::Bounded { max: 10 }, Dim::Fixed(2)],
+            ..Default::default()
         };
         assert_eq!(elementwise_unary(&x, any).unwrap(), x);
 
@@ -208,6 +231,7 @@ mod test {
         let x = TensorType {
             dtype: DType::Bit,
             shape: vec![Dim::Fixed(4), Dim::Bounded { max: 10 }, Dim::Fixed(2)],
+            ..Default::default()
         };
         assert_eq!(
             reduce(&x, 1, any, |_| DType::F64).unwrap(),
@@ -218,6 +242,7 @@ mod test {
             TensorType {
                 dtype: DType::Bit,
                 shape: vec![Dim::Bounded { max: 10 }, Dim::Fixed(2)],
+                ..Default::default()
             },
             "an axis the reduction keeps is unchanged, bound and all"
         );
@@ -266,6 +291,7 @@ mod test {
                 &TensorType {
                     dtype: DType::Bit,
                     shape: shape.clone(),
+                    ..Default::default()
                 },
                 DType::C128
             )
@@ -273,6 +299,7 @@ mod test {
             TensorType {
                 dtype: DType::C128,
                 shape,
+                ..Default::default()
             }
         );
     }
@@ -321,5 +348,59 @@ mod test {
             MathOpError::Tensor(TensorError::DimShapeMismatch { lhs, rhs })
                 if lhs == [Dim::Fixed(2)] && rhs == target
         ));
+    }
+
+    #[test]
+    fn test_every_rule_refuses_a_ragged_operand() {
+        // an op with no ragged behaviour of its own fails as the program is built, not
+        // at run time. Each rule here is the gate for the ops that use it.
+        let r = ragged(&[4, 5, 2], 1);
+        let d = ty(DType::Bit, &[4, 5, 2]);
+
+        let refused = |result: Result<TensorType, MathOpError>, operand: usize| {
+            assert!(
+                matches!(
+                    result.unwrap_err(),
+                    MathOpError::RaggedOperand { operand: o, .. } if o == operand
+                ),
+                "a ragged operand {operand} should be refused"
+            );
+        };
+
+        refused(elementwise_binary(&r, &d, any), 0);
+        refused(elementwise_binary(&d, &r, any), 1);
+        refused(elementwise_unary(&r, any), 0);
+        refused(reduce(&r, 0, any, |dtype| dtype), 0);
+        refused(cast(&r, DType::U8), 0);
+        refused(
+            broadcast_to(&r, &[Dim::Fixed(4), Dim::Fixed(5), Dim::Fixed(2)]),
+            0,
+        );
+    }
+
+    #[test]
+    fn test_the_rules_still_admit_dense_operands() {
+        // The gate must not disturb the dense path, which is every op in the crate today.
+        let d = ty(DType::U8, &[2, 3]);
+        assert!(elementwise_binary(&d, &d, any).is_ok());
+        assert!(elementwise_unary(&d, any).is_ok());
+        assert!(reduce(&d, 0, any, |dtype| dtype).is_ok());
+        assert!(cast(&d, DType::F64).is_ok());
+        assert!(broadcast_to(&d, &[Dim::Fixed(2), Dim::Fixed(3)]).is_ok());
+    }
+
+    #[test]
+    fn test_a_bounded_axis_is_not_itself_ragged() {
+        // A bounded axis means "length unknown until run time"; ragged means "length varies per
+        // outer index". The gate must not refuse the former, which ops already handle.
+        let bounded = TensorType {
+            dtype: DType::Bit,
+            shape: vec![Dim::Fixed(4), Dim::Bounded { max: 5 }],
+            ..Default::default()
+        };
+        assert!(
+            elementwise_unary(&bounded, any).is_ok(),
+            "a merely bounded axis is still dense"
+        );
     }
 }
