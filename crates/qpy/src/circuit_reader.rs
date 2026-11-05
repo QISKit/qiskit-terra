@@ -34,8 +34,9 @@ use qiskit_circuit::instruction::Parameters;
 use qiskit_circuit::interner::Interned;
 use qiskit_circuit::operations::{
     ArrayType, BoxDuration, CaseSpecifier, Condition, ControlFlow, ControlFlowInstruction,
-    ControlFlowType, LoopParam, Param, PauliBased, PauliProductMeasurement, PauliProductRotation,
-    StandardInstruction, StandardInstructionType, Store, SwitchTarget, UnitaryGate,
+    ControlFlowType, CustomOperation, LoopParam, Operation, Param, PauliBased,
+    PauliProductMeasurement, PauliProductRotation, StandardInstruction, StandardInstructionType,
+    Store, SwitchTarget, UnitaryGate,
 };
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
 use qiskit_circuit::parameter::parameter_expression::ParameterExpression;
@@ -61,7 +62,7 @@ use crate::params::generic_value_to_param;
 use crate::py_methods::{
     PAULI_PRODUCT_MEASUREMENT_GATE_CLASS_NAME, PAULI_PRODUCT_ROTATION_GATE_CLASS_NAME,
     STORE_INSTR_CLASS_NAME, UNITARY_GATE_CLASS_NAME, deserialize_pauli_evolution_gate,
-    py_convert_from_generic_value, unpack_custom_instruction, unpack_py_instruction,
+    py_convert_from_generic_value, unpack_py_instruction,
 };
 use crate::value::{
     BitType, CircuitInstructionType, ExpressionType, ExpressionVarDeclaration, GenericValue,
@@ -83,6 +84,42 @@ pub struct CustomCircuitInstructionData {
     pub num_clbits: u32,
     pub definition_circuit: Option<Py<PyAny>>,
     pub base_gate_raw: Bytes,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct QPYCustomInstruction {
+    pub name: String,
+    pub num_qubits: u32,
+    pub num_clbits: u32,
+    pub num_params: u32,
+}
+
+impl Operation for QPYCustomInstruction {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn num_qubits(&self) -> u32 {
+        self.num_qubits
+    }
+    fn num_clbits(&self) -> u32 {
+        self.num_clbits
+    }
+    fn num_params(&self) -> u32 {
+        self.num_params
+    }
+    fn directive(&self) -> bool {
+        false
+    }
+}
+
+impl CustomOperation for QPYCustomInstruction {
+    fn is_unitary(&self) -> bool {
+        true
+    }
+
+    fn definition(&self, params: &[Param]) -> Option<CircuitData> {
+        None
+    }
 }
 
 // This is a helper enum to make the code clearer by splitting instruction reading into cases
@@ -381,15 +418,9 @@ pub fn unpack_instruction(
         InstructionType::Unitary => unpack_unitary(instruction, qpy_data)?,
         InstructionType::ControlFlow => unpack_control_flow(instruction, qpy_data)?,
         InstructionType::Store => unpack_store(instruction, qpy_data)?,
-        InstructionType::Custom => qpy_data.caller.attach("Custom instructions", |py| {
-            unpack_custom_instruction(
-                py,
-                instruction,
-                label.as_deref(),
-                qpy_data,
-                custom_instructions,
-            )
-        })?,
+        InstructionType::Custom => {
+            unpack_custom_instruction(instruction, label.as_deref(), qpy_data, custom_instructions)?
+        }
         InstructionType::Python => qpy_data
             .caller
             .attach("Python defined instructions", |py| {
@@ -1016,6 +1047,30 @@ fn read_custom_instructions(
         result.insert(operation.name.clone(), custom_instruction_data);
     }
     Ok(result)
+}
+
+pub fn unpack_custom_instruction(
+    instruction: &formats::CircuitInstructionV2Pack,
+    label: Option<&String>,
+    qpy_data: &mut QPYReadData,
+    custom_instructions_map: &HashMap<String, CustomCircuitInstructionData>,
+) -> Result<(PackedOperation, Vec<GenericValue>), QpyError> {
+    let name = instruction.gate_class_name.clone();
+    let num_qubits = instruction.num_qargs;
+    let num_clbits = instruction.num_cargs;
+    let num_params = instruction.params.len() as u32;
+    let custom_instruction = custom_instructions_map.get(&name).ok_or_else(|| {
+        QpyError::MissingData("Custom instruction data not found for {name}".to_string())
+    })?;
+
+    let custom_inst = QPYCustomInstruction {
+        name,
+        num_qubits,
+        num_params,
+        num_clbits,
+    };
+    let packed_op = PackedOperation::from_custom_operation(Box::new(custom_inst));
+    Ok((packed_op, Vec::new()))
 }
 
 fn add_standalone_vars(
