@@ -33,7 +33,7 @@ use crate::bytecode::InternalBytecode;
 use crate::error::ParseError;
 use crate::expr::{Expr, evaluate};
 use crate::ext::ClassicalEvaluator;
-use crate::parse::{ClbitId, CregId, GateId, QELIB1, QubitId};
+use crate::parse::{CregId, GateId, QELIB1};
 
 #[derive(Clone, PartialEq)]
 enum GateEntry {
@@ -71,10 +71,10 @@ enum BodyInstruction {
     Gate {
         entry: GateEntry,
         arguments: Vec<Expr>,
-        qubits: Vec<QubitId>,
+        qubits: Vec<Qubit>,
     },
     Barrier {
-        qubits: Vec<QubitId>,
+        qubits: Vec<Qubit>,
     },
 }
 
@@ -122,13 +122,13 @@ impl DefinedGateTemplate {
                             evaluate(expr, &float_params, ClassicalEvaluator::detached()).ok()
                         })
                         .collect::<Option<_>>()?;
-                    push_gate(&mut circuit, entry, &arguments, &to_qubits(qubits)).ok()?;
+                    push_gate(&mut circuit, entry, &arguments, qubits).ok()?;
                 }
                 BodyInstruction::Barrier { qubits } => {
                     push_standard_instruction(
                         &mut circuit,
                         StandardInstruction::Barrier(qubits.len() as u32),
-                        &to_qubits(qubits),
+                        qubits,
                         &[],
                     )
                     .ok()?;
@@ -244,21 +244,21 @@ pub(crate) fn build_circuit(
                 qubits,
             } => {
                 let entry = registry.get(*id)?;
-                push_gate(&mut circuit, &entry, arguments, &to_qubits(qubits))?;
+                push_gate(&mut circuit, &entry, arguments, qubits)?;
             }
             InternalBytecode::Measure { qubit, clbit } => {
                 push_standard_instruction(
                     &mut circuit,
                     StandardInstruction::Measure,
-                    &to_qubits(&[*qubit]),
-                    &to_clbits(&[*clbit]),
+                    std::slice::from_ref(qubit),
+                    std::slice::from_ref(clbit),
                 )?;
             }
             InternalBytecode::Reset { qubit } => {
                 push_standard_instruction(
                     &mut circuit,
                     StandardInstruction::Reset,
-                    &to_qubits(&[*qubit]),
+                    std::slice::from_ref(qubit),
                     &[],
                 )?;
             }
@@ -271,7 +271,7 @@ pub(crate) fn build_circuit(
                     push_standard_instruction(
                         &mut circuit,
                         StandardInstruction::Barrier(qubits.len() as u32),
-                        &to_qubits(qubits),
+                        qubits,
                         &[],
                     )?;
                 }
@@ -305,7 +305,7 @@ pub(crate) fn build_circuit(
                     &cregs,
                     *creg,
                     value,
-                    &to_qubits(qubits),
+                    qubits,
                     &[],
                     |block, _| {
                         let local_qargs: Vec<Qubit> = (0..qubits.len() as u32).map(Qubit).collect();
@@ -324,8 +324,8 @@ pub(crate) fn build_circuit(
                     &cregs,
                     *creg,
                     value,
-                    &to_qubits(&[*qubit]),
-                    &to_clbits(&[*clbit]),
+                    std::slice::from_ref(qubit),
+                    std::slice::from_ref(clbit),
                     |block, local_cargs| {
                         push_standard_instruction(
                             block,
@@ -342,7 +342,7 @@ pub(crate) fn build_circuit(
                     &cregs,
                     *creg,
                     value,
-                    &to_qubits(&[*qubit]),
+                    std::slice::from_ref(qubit),
                     &[],
                     |block, _| {
                         push_standard_instruction(
@@ -412,14 +412,6 @@ pub(crate) fn build_circuit(
     }
 
     Ok(circuit)
-}
-
-fn to_qubits(qubits: &[QubitId]) -> Vec<Qubit> {
-    qubits.iter().map(|q| Qubit(q.index() as u32)).collect()
-}
-
-fn to_clbits(clbits: &[ClbitId]) -> Vec<Clbit> {
-    clbits.iter().map(|c| Clbit(c.index() as u32)).collect()
 }
 
 fn push_gate(
