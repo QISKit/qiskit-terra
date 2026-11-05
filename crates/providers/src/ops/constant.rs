@@ -16,7 +16,7 @@ use crate::ops::ProgramOp;
 use crate::tensor::{Tensor, TensorType};
 
 /// A program op that owns one tensor and produces it unconditionally.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Constant {
     value: Tensor,
 }

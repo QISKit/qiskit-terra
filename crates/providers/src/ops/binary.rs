@@ -25,7 +25,7 @@ macro_rules! elementwise_binary_op {
                     $op_name,
                     "` of two tensors, promoting their dtypes and broadcasting their shapes."
                 )]
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
         pub struct $name;
 
         impl ProgramOp for $name {
