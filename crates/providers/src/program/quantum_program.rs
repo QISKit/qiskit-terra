@@ -199,6 +199,7 @@ pub enum ProgramEvalError {
 /// );
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
+#[derive(Clone)]
 pub struct QuantumProgram {
     /// The functions, in definition order, indexed by [`FunctionId`]. The last is the entry point.
     functions: Vec<ProgramFunction>,
@@ -337,6 +338,19 @@ impl QuantumProgram {
                     })
                     .map(|instruction| (FunctionId::from_index(index), instruction))
             })
+    }
+}
+
+impl std::fmt::Debug for QuantumProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            return write!(f, "{}", crate::render::listing(self));
+        }
+        f.debug_struct("QuantumProgram")
+            .field("num_functions", &self.functions.len())
+            .field("inputs", &self.input_types())
+            .field("outputs", &self.output_types())
+            .finish_non_exhaustive()
     }
 }
 
@@ -631,6 +645,42 @@ mod test {
         // A job holds the program it is driving, and a job is where all concurrency lives.
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<QuantumProgram>();
+    }
+
+    #[test]
+    fn a_cloned_program_evaluates_the_same_way() {
+        // Cloning a program clones the boxed op of every instruction.
+        let program = add_program();
+        let inputs = DataTree::mapping([
+            ("x", DataTree::Leaf(one_element(1.5))),
+            ("y", DataTree::Leaf(one_element(2.5))),
+        ])
+        .unwrap();
+
+        assert_eq!(
+            program.clone().eval(inputs.clone()).unwrap(),
+            program.eval(inputs).unwrap()
+        );
+    }
+
+    // ---------------------------------------------------------------------------
+    // Reading a program back
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn debug_is_one_line_of_summary() {
+        let debug = format!("{:?}", add_program());
+        assert!(!debug.contains('\n'), "got {debug}");
+        assert!(
+            debug.starts_with("QuantumProgram { num_functions: 1,"),
+            "got {debug}"
+        );
+    }
+
+    #[test]
+    fn the_alternate_debug_form_is_the_listing() {
+        let program = add_program();
+        assert_eq!(format!("{program:#?}"), crate::render::listing(&program));
     }
 
     // ---------------------------------------------------------------------------
@@ -1094,7 +1144,7 @@ mod test {
     }
 
     /// An op defined outside the crate whose `eval` always fails.
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     struct Elsewhere {
         builtin: bool,
     }

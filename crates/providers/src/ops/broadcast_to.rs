@@ -18,7 +18,7 @@ use super::{ProgramOp, QISKIT};
 use crate::tensor::{Dim, Tensor, TensorError, TensorType, fmt_shape};
 
 /// Broadcast a tensor to a target shape, right-aligning the two.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BroadcastTo {
     target: Vec<Dim>,
 }

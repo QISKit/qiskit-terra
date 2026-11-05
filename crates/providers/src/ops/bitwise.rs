@@ -29,7 +29,7 @@ fn is_bit(dtype: DType) -> bool {
 macro_rules! bitwise_binary_op {
     ($name:ident, $op_name:literal, $eval_fn:expr) => {
         #[doc = concat!("Elementwise `", $op_name, "` of two `Bit` tensors of identical shape.")]
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
         pub struct $name;
 
         impl ProgramOp for $name {
@@ -69,7 +69,7 @@ bitwise_binary_op!(BitwiseOr, "bitwise_or", Tensor::bitor_tensor);
 bitwise_binary_op!(BitwiseXor, "bitwise_xor", Tensor::bitxor_tensor);
 
 /// Elementwise bitwise NOT of a `Bit` tensor.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BitwiseNot;
 
 impl ProgramOp for BitwiseNot {
@@ -102,7 +102,7 @@ impl ProgramOp for BitwiseNot {
 }
 
 /// XOR-reduction of a `Bit` tensor along a specified axis, removing that axis.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Parity {
     axis: usize,
 }

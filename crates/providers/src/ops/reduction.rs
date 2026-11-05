@@ -156,7 +156,7 @@ macro_rules! reduction_op {
 ///
 /// An `F32` operand produces `F32` and a complex one keeps its dtype. Every other dtype produces
 /// `F64`. Averaging a zero-length axis divides by zero and gives `NaN`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Mean {
     axis: usize,
 }
@@ -200,7 +200,7 @@ reduction_op!(Mean, "mean", mean_out_dtype, [axis]);
 /// An `F32` operand produces `F32`, `C64` produces `F32` and `C128` produces `F64`. Every other
 /// dtype produces `F64`. The variance of a complex tensor is the mean squared modulus of its
 /// deviations.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Variance {
     axis: usize,
     ddof: f64,
@@ -250,7 +250,7 @@ reduction_op!(Variance, "variance", real_out_dtype, [axis, ddof]);
 /// Standard deviation of a tensor along a specified axis, removing that axis.
 ///
 /// This is the square root of [`Variance`].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Std {
     axis: usize,
     ddof: f64,
