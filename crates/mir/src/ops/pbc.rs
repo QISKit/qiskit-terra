@@ -187,24 +187,6 @@ impl fmt::Display for PauliMeasure {
     }
 }
 
-/// A trait used to identify a Quantum Operation
-pub trait QuantumOp {
-    /// Return the PauliString used by this quantum operation.
-    fn paulis(&self) -> &PauliString;
-}
-
-impl QuantumOp for PauliRotation {
-    fn paulis(&self) -> &PauliString {
-        self.paulis()
-    }
-}
-
-impl QuantumOp for PauliMeasure {
-    fn paulis(&self) -> &PauliString {
-        self.paulis()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

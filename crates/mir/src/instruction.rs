@@ -16,9 +16,9 @@ use crate::line_graph;
 use crate::ops::{
     MirOp,
     MirOp::{PauliMeasure, PauliRotation},
-    pbc::QuantumOp,
+    pbc::PauliString,
 };
-use crate::qid::{BitLayout, Qid, QidList, table::ResourceTable};
+use crate::qid::{Qid, QidList, table::ResourceTable};
 use crate::symbol_table::SymbolIdList;
 use std::fmt;
 use thiserror::Error;
@@ -70,51 +70,74 @@ impl MirInstruction {
     /// Run verification on an Mir instruction.
     ///
     /// This verification ensures that assumptions for each instruction, and its
-    /// containing operation, hold.
+    /// containing operation, hold. Currently, the following assumptions must
+    /// hold for all `MirInstruction`s:
+    ///   - All [`Qid`]s must exist in the [`ResourceTable`]
+    ///   - None of the [`Qid`]s can be aliased
+    ///
+    /// In addition to general verification for every instruction, op-specific
+    /// verification is also run. Currently this is encapsulated in
+    /// `MirInstruction::verify_pauli_op()` method, but will expand as more
+    /// operations are added.
+    ///
+    /// TODO: The following verifications need to be added:
+    ///   - All [SymbolIds](crate::symbol_table::SymbolId) in the `args` and `returns`
+    ///     list must exist in the [SymbolTable](crate::symbol_table::SymbolTable).
     pub fn verify(
         &self,
         resource_table: &ResourceTable,
     ) -> Result<(), InstructionVerificationError> {
+        // Verify all Qids exist in the ResourceTable
+        for &q in self.qids().inner().iter() {
+            if resource_table.info(q).is_none() {
+                return Err(InstructionVerificationError::QidNotFound { qid: q })?;
+            }
+        }
+
+        // Verify none of the Qids are aliased to each other
+        if resource_table.overlap(self.qids().inner().iter().copied()) {
+            return Err(InstructionVerificationError::AliasedQids);
+        }
+
+        // TODO: Verify all SymbolIds exist in the SymbolTable.
+
+        // Perform op-specific verification
         match &self.op {
             PauliRotation(pauli_rotation) => {
-                self.verify_quantum_op(pauli_rotation, resource_table)?;
+                self.verify_pauli_op(pauli_rotation.paulis(), resource_table)?;
             }
             PauliMeasure(pauli_measure) => {
-                self.verify_quantum_op(pauli_measure, resource_table)?;
+                self.verify_pauli_op(pauli_measure.paulis(), resource_table)?;
             }
         }
         Ok(())
     }
 
-    /// Perform common verifications on a Quantum operation.
+    /// Perform verification on the
+    /// [PauliMeasure](crate::ops::pbc::PauliMeasure) and
+    /// [PauliRotation](crate::ops::pbc::PauliRotation) operations.
     ///
-    /// There are several verfications that are common across all quantum
-    /// operations (defined by the [`QuantumOp`] trait). These include:
-    ///   1. The number of [`Qid`]s for the instruction match the number of
-    ///      [Pauli](crate::ops::pbc::Pauli)s in the provided [`PauliString`].
-    ///   2. The [`Qid`]s must in the [`ResourceTable`].
-    ///   3. The [`Qid`]s cannot be [`BitLayou::Abstract`] (they must have a
-    ///      known width).
-    ///   4. The [`Qid`]s must not be aliased.
-    fn verify_quantum_op<T: QuantumOp>(
+    /// For [PauliMeasure](crate::ops::pbc::PauliMeasure) and
+    /// [PauliRotation](crate::ops::pbc::PauliRotation) operations, the width of
+    /// the [`Qid`]s on the instruction must match the number of
+    /// [Pauli](crate::ops::pbc::Pauli)s in the provided [`PauliString`] on the
+    /// operation. This also prevents any [`Qid`] from having an
+    /// [`BitLayout::Abstract`] layout (i.e., the [`Qid`] must have a known
+    /// width).
+    fn verify_pauli_op(
         &self,
-        op: &T,
+        paulis: &PauliString,
         resource_table: &ResourceTable,
     ) -> Result<(), InstructionVerificationError> {
-        let paulis = op.paulis();
         // Walk the QidList and check all Qids exist in the ResourceTable, are
         // not Abstract, and collect the total number.
         let mut total_qids = 0;
         for q in self.qids().inner().iter() {
-            let qid_info = resource_table
+            total_qids += resource_table
                 .info(*q)
-                .ok_or(InstructionVerificationError::QidNotFound { qid: *q })?;
-            if *qid_info.layout() == BitLayout::Abstract {
-                return Err(InstructionVerificationError::AbstractQidNotAllowed { qid: *q })?;
-            }
-            total_qids += qid_info
+                .ok_or(InstructionVerificationError::QidNotFound { qid: *q })?
                 .width()
-                .expect("All Qids used in a quantum operation should have a valid width");
+                .ok_or(InstructionVerificationError::AbstractQidNotAllowed { qid: *q })?;
         }
 
         // Ensure total Qids match the number of Paulis
@@ -125,11 +148,6 @@ impl MirInstruction {
             });
         }
 
-        // Ensure none of the Qids are aliased with each other
-        if resource_table.overlap(self.qids().inner().iter().copied()) {
-            // TODO: It would be good if we could include the aliased Qids in the error.
-            return Err(InstructionVerificationError::AliasedQids);
-        }
         Ok(())
     }
 }
@@ -221,7 +239,6 @@ mod tests {
     fn test_instruction_list() {
         let mut mir = Mir::new();
 
-        // Borrow resource table first and add all necessary Qids
         let resource_table = mir.resource_table_mut();
         let qids = (0..8)
             .map(|_| {
@@ -231,10 +248,6 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        // Borrow instructions next.
-        // Note that resource_table is no longer needed (as mutable), so the
-        // above borrow is now essentially done, allowing this mutable borrow to
-        // occur.
         let instr_list = mir.instructions_mut();
 
         let instr1 = MirInstruction {
