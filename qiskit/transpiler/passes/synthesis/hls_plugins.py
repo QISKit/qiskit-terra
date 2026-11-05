@@ -2239,12 +2239,13 @@ class PauliEvolutionSynthesisDefault(HighLevelSynthesisPlugin):
 
         # Currently we only run the MCTS method for higher optimization levels, for all-to-all
         # connectivity, for Pauli evolution gates without projector terms, and with
-        # preserve_order=True.
+        # preserve_order=True and using a ``ProductFormula`` synthesis method.
         if (
             (options.get("optimization_level", 2) >= 2)
             and options.get("preserve_order", True)
             and (not _contains_projectors(high_level_object))
             and ((coupling_map is None) or _is_coupling_map_all_to_all(coupling_map))
+            and isinstance(high_level_object.synthesis, ProductFormula)
         ):
             synth_mcts = PauliEvolutionSynthesisMcts().run(
                 high_level_object, coupling_map, target, qubits, **options
@@ -2280,12 +2281,19 @@ class PauliEvolutionSynthesisBasic(HighLevelSynthesisPlugin):
             return None
         algo = high_level_object.synthesis
 
-        original_preserve_order = algo.preserve_order
-        if "preserve_order" in options and isinstance(algo, ProductFormula):
-            algo.preserve_order = options["preserve_order"]
+        # For product formulas we allow overwriting the `preserve_order` state
+        if isinstance(algo, ProductFormula):
+            original_preserve_order = algo.preserve_order
+            if "preserve_order" in options:
+                algo.preserve_order = options["preserve_order"]
 
-        synth_object = algo.synthesize(high_level_object)
-        algo.preserve_order = original_preserve_order
+            synth_object = algo.synthesize(high_level_object)
+            algo.preserve_order = original_preserve_order
+
+        # ... for any others, just run the synthesis
+        else:
+            synth_object = algo.synthesize(high_level_object)
+
         return synth_object
 
 
@@ -2425,6 +2433,11 @@ class PauliEvolutionSynthesisMcts(HighLevelSynthesisPlugin):
             # actual PauliEvolutionGate
             return None
 
+        # We only support MCTS for a product formula synthesis, which determines the Pauli
+        # network to be synthesized.
+        if not isinstance(high_level_object.synthesis, ProductFormula):
+            return None
+
         # The synthesis function synth_pauli_network_mcts does not support SparseObservables,
         # so we need to convert them to SparsePauliOps.
         if isinstance(high_level_object.operator, SparsePauliOp):
@@ -2450,16 +2463,8 @@ class PauliEvolutionSynthesisMcts(HighLevelSynthesisPlugin):
             label=high_level_object.label,
             synthesis=high_level_object.synthesis,
         )
+
         algo = evo.synthesis
-
-        if not isinstance(algo, ProductFormula):
-            warnings.warn(
-                "Cannot apply MCTS if the evolution synthesis does not implement ``expand``. ",
-                stacklevel=2,
-                category=RuntimeWarning,
-            )
-            return None
-
         original_preserve_order = algo.preserve_order
         if "preserve_order" in options:
             algo.preserve_order = options["preserve_order"]
@@ -2481,7 +2486,6 @@ class PauliEvolutionSynthesisMcts(HighLevelSynthesisPlugin):
             num_simulations=num_simulations,
             max_parallel_simulations=max_parallel_simulations,
         )
-        algo.preserve_order = original_preserve_order
         algo.preserve_order = original_preserve_order
         return synth_object
 
