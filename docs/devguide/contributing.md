@@ -934,22 +934,27 @@ tests, in addition to the more complete Python test suite.  In CI, we run the
 Rust test suite under [Miri](https://github.com/rust-lang/miri) as an
 undefined-behavior sanitizer.
 
-Miri is currently only available on `nightly` Rust channels, so to run it
-locally you will need to ensure you have that channel available, such as by
+Miri is only available on `nightly` Rust channels, and our CI pins to one
+specific nightly channel to avoid breakage.  You can interact with Miri in the
+same ways as CI by using the `tools/miri.bash` script.
+
+You will need to arrange for a suitable `rustup` toolchain to be installed with
+the Miri component, prior to running the script in "test" mode.  You might do
+this as:
+
 ```bash
-rustup install nightly --components miri
+rustup install "$(tools/miri.bash -t)" --components miri
 ```
 
-After this, you can run the Miri test suite with
+After the toolchain is installed, run
+
 ```bash
-MIRIFLAGS="<flags go here>" cargo +nightly miri test
+tools/miri.bash
 ```
 
-For the current set of `MIRIFLAGS` used by Qiskit's CI, see the
-[`miri.yml`](https://github.com/Qiskit/qiskit/blob/main/.github/workflows/miri.yml)
-GitHub Action file.  This same file may also include patches to dependencies to
-make them compatible with Miri, which you would need to temporarily apply as
-well.
+You can force a different toolchain by setting the `RUSTUP_TOOLCHAIN`
+environment variable in the script.  The default set of `MIRIFLAGS` are the same
+as in CI, but you can set that environment variable to add to them.
 
 ### Testing the C API
 

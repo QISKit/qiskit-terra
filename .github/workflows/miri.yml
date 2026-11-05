@@ -12,11 +12,12 @@ jobs:
   miri:
     name: Miri
     runs-on: ${{ inputs.runner }}
-    env:
-      RUSTUP_TOOLCHAIN: nightly-2025-08-11
 
     steps:
       - uses: actions/checkout@v7
+
+      - name: Select Rust version
+        run: echo "RUSTUP_TOOLCHAIN=$(tools/miri.bash -t)" >> "$GITHUB_ENV"
 
       - name: Install Rust
         run:
@@ -27,22 +28,7 @@ jobs:
             --no-self-update
 
       - name: Prepare Miri
-        run: |
-          set -e
-          # Some of our dependencies aren't Miri-safe with their current release versions.  These
-          # need overriding with known-good versions to run against until the Miri-safe versions are
-          # released and updated in our Cargo.lock.
-          cat >>Cargo.toml <<EOF
-
-          [patch.crates-io]
-          crossbeam-epoch = { git = "https://github.com/crossbeam-rs/crossbeam", rev = "9e859610" }
-          EOF
-          cargo miri setup
+        run: tools/miri.bash -p
 
       - name: Run Miri
-        run: cargo miri test
-        env:
-          # - `tree-borrows` is required for crossbeam components.
-          # - `symbolic-alignment-check` is extra checking.
-          # - `strict-provenance` is extra checking.
-          MIRIFLAGS: '-Zmiri-tree-borrows -Zmiri-symbolic-alignment-check -Zmiri-strict-provenance'
+        run: tools/miri.bash
