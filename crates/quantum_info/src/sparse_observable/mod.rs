@@ -11,11 +11,11 @@
 // that they have been altered from the originals.
 
 mod lookup;
+mod matrix;
 
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use lookup::conjugate_bitterm;
-#[cfg(feature = "python")]
 use ndarray::Array2;
 use num_complex::Complex64;
 #[cfg(feature = "python")]
@@ -36,8 +36,10 @@ use pyo3::{
 };
 #[cfg(feature = "python")]
 use qiskit_util::IndexSet;
+use qiskit_util::getenv_use_multiple_threads;
 #[cfg(feature = "python")]
 use qiskit_util::py::{ImportOnceCell, PySequenceIndex, SequenceIndex};
+use rayon::prelude::*;
 #[cfg(feature = "python")]
 use std::ops::{AddAssign, DivAssign, MulAssign, SubAssign};
 #[cfg(feature = "python")]
@@ -281,6 +283,15 @@ pub enum LabelError {
     DuplicateIndex { index: u32 },
     #[error("labels must only contain letters from the alphabet 'IXYZ+-rl01'")]
     OutsideAlphabet,
+}
+
+/// The error returned for failed matrix operations.
+#[derive(Debug, Error)]
+pub enum MatrixError {
+    #[error("{0} qubit matrix exceeds size limit")]
+    LimitExceeded(u32),
+    #[error("number of qubits is 0")]
+    ZeroQubits,
 }
 
 #[derive(Error, Debug)]
@@ -631,18 +642,24 @@ impl SparseObservable {
     ///
     /// This function is idempotent.
     pub fn canonicalize(&self, tol: f64) -> SparseObservable {
-        let mut terms = btree_map::BTreeMap::new();
+        let mut terms = HashMap::with_capacity(self.num_terms());
         for term in self.iter() {
             terms
-                .entry((term.indices, term.bit_terms))
+                .entry(term.canonical_key())
                 .and_modify(|c| *c += term.coeff)
                 .or_insert(term.coeff);
         }
+        let mut vec = terms
+            .into_iter()
+            .filter(|(_, coeff)| coeff.norm_sqr() > tol * tol)
+            .collect::<Vec<_>>();
+        if getenv_use_multiple_threads() {
+            vec.par_sort_unstable_by_key(|&(k, _)| k);
+        } else {
+            vec.sort_unstable_by_key(|&(k, _)| k);
+        }
         let mut out = SparseObservable::zero(self.num_qubits);
-        for ((indices, bit_terms), coeff) in terms {
-            if coeff.norm_sqr() <= tol * tol {
-                continue;
-            }
+        for ((indices, bit_terms), coeff) in vec {
             out.coeffs.push(coeff);
             out.bit_terms.extend_from_slice(bit_terms);
             out.indices.extend_from_slice(indices);
@@ -1122,6 +1139,12 @@ impl SparseObservable {
         }
     }
 
+    /// Return whether the observable contains any projector terms.
+    pub fn contains_projectors(&self) -> bool {
+        self.iter()
+            .any(|view| view.bit_terms.iter().any(|bit| bit.is_projector()))
+    }
+
     /// Add the term implied by a dense string label onto this observable.
     pub fn add_dense_label<L: AsRef<[u8]>>(
         &mut self,
@@ -1271,6 +1294,33 @@ impl SparseObservable {
         let ab = self.compose(other).canonicalize(tol);
         let ba = other.compose(self).canonicalize(tol);
         ab == ba
+    }
+
+    /// Expand the observable into its dense matrix form.
+    ///
+    /// The reduced time complexity of this function is _O(4<sup>n</sup>)_,
+    /// where _n_ is the number of qubits. The algorithm is limited by the time
+    /// required to allocate the _2<sup>n</sup> × 2<sup>n</sup>_ matrix.
+    ///
+    /// # Warning
+    ///
+    /// The number of matrix elements scales exponentially with the number of
+    /// qubits. You risk running out of memory when the number of qubits is
+    /// sufficiently large. For example, an 8 qubit matrix uses ~4 KB of
+    /// memory, whereas 16 qubits uses ~69 GB!
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the total number of matrix elements would exceed
+    /// [`usize::MAX`] or the number of qubits is 0.
+    pub fn to_matrix(&self) -> Result<Array2<Complex64>, MatrixError> {
+        let mut matrix = matrix::create_matrix_with_zeros(self.num_qubits)?;
+
+        for term in self.iter() {
+            matrix::add_term(&mut matrix, &term)
+        }
+
+        Ok(matrix)
     }
 }
 
@@ -1662,6 +1712,11 @@ impl SparseTermView<'_> {
         format!("({coeff})({paulis})")
     }
 }
+impl<'a> SparseTermView<'a> {
+    fn canonical_key(self) -> (&'a [u32], &'a [BitTerm]) {
+        (self.indices, self.bit_terms)
+    }
+}
 
 /// A mutable view object onto a single term of a [SparseObservable].
 ///
@@ -1875,6 +1930,13 @@ impl From<ArithmeticError> for PyErr {
     }
 }
 
+#[cfg(feature = "python")]
+impl From<MatrixError> for PyErr {
+    fn from(value: MatrixError) -> Self {
+        PyValueError::new_err(value.to_string())
+    }
+}
+
 /// The single-character string label used to represent this term in the :class:`SparseObservable`
 /// alphabet.
 
@@ -2007,12 +2069,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for BitTerm {
 ///
 /// These are typically created by indexing into or iterating through a :class:`SparseObservable`.
 #[cfg(feature = "python")]
-#[pyclass(
-    name = "Term",
-    frozen,
-    module = "qiskit.quantum_info",
-    skip_from_py_object
-)]
+#[pyclass(name = "Term", frozen, module = "qiskit.quantum_info")]
 #[derive(Clone, Debug)]
 struct PySparseTerm {
     inner: SparseTerm,
@@ -3452,9 +3509,7 @@ impl PySparseObservable {
     ///         >>> right = SparseObservable.from_list([("XYZ", 1.0/7.0)] * 7)  # doesn't sum to 1.0
     ///         >>> assert left.simplify() != right.simplify()
     ///         >>> assert (left - right).simplify() == SparseObservable.zero(left.num_qubits)
-    #[pyo3(
-        signature = (/, tol=1e-8),
-    )]
+    #[pyo3(signature = (/, tol=1e-8))]
     fn simplify(&self, tol: f64) -> PyResult<Self> {
         let inner = self.inner.read().map_err(|_| InnerReadError)?;
         let simplified = inner.canonicalize(tol);
@@ -3925,6 +3980,37 @@ impl PySparseObservable {
         let other_inner = other.inner.read().map_err(|_| InnerReadError)?;
 
         Ok(self_inner.commutes(&other_inner, tol))
+    }
+
+    /// Expand the observable into its dense matrix form.
+    ///
+    /// The reduced time complexity of this function is :math:`O(4^n)` where
+    /// :math:`n` is the number of qubits. The algorithm is limited by
+    /// the time required to allocate the :math:`2^n \times 2^n` matrix.
+    ///
+    /// .. warning::
+    ///
+    ///     The number of matrix elements scales exponentially with the number of
+    ///     qubits. You risk running out of memory when the number of qubits is
+    ///     sufficiently large. For example, an 8 qubit matrix uses ~4 KB of
+    ///     memory, whereas 16 qubits uses ~69 GB!
+    ///
+    /// Returns:
+    ///     The observable represented as a dense matrix.
+    ///
+    /// Raises:
+    ///     ValueError: If the number of qubits exceeds system limits.
+    ///     ValueError: If the number of qubits is 0.
+    pub fn to_matrix<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<Complex64>>> {
+        let obs = self.inner.read().map_err(|_| InnerReadError)?;
+        let matrix = obs.to_matrix()?;
+        Ok(PyArray2::from_owned_array(py, matrix))
+    }
+
+    /// Return whether the observable contains any projector terms.
+    fn contains_projectors(&self) -> PyResult<bool> {
+        let inner = self.inner.read().map_err(|_| InnerReadError)?;
+        Ok(inner.contains_projectors())
     }
 
     fn __len__(&self) -> PyResult<usize> {

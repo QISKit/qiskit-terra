@@ -55,7 +55,9 @@ fn _initialize_phase_schedule(mat_z: ArrayView2<bool>) -> Array2<usize> {
 fn _shuffle(labels: &[usize], start_from: usize) -> Vec<usize> {
     let mut shuffled_labels = labels.to_owned();
     shuffled_labels[start_from..]
-        .chunks_exact_mut(2)
+        .as_chunks_mut::<2>()
+        .0
+        .iter_mut()
         .for_each(|pair| pair.swap(0, 1));
     shuffled_labels
 }

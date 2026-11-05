@@ -23,7 +23,7 @@ static int build_target(QkTarget *target, uint32_t num_qubits) {
     // Create a target with cx connectivity in a line.
     QkExitCode result_x = qk_target_add_instruction(target, qk_target_entry_new(QkGate_X));
     if (result_x != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a global X gate.\n");
+        fprintf(stderr, "Unexpected error occurred when adding a global X gate.\n");
         return RuntimeError;
     }
     QkTargetEntry *cx_entry = qk_target_entry_new(QkGate_CX);
@@ -35,13 +35,13 @@ static int build_target(QkTarget *target, uint32_t num_qubits) {
         QkExitCode result_cx_props =
             qk_target_entry_add_property(cx_entry, qargs, 2, inst_duration, inst_error);
         if (result_cx_props != QkExitCode_Success) {
-            printf("Unexpected error occurred when adding property to a CX gate entry.\n");
+            fprintf(stderr, "Unexpected error occurred when adding property to a CX gate entry.\n");
             return RuntimeError;
         }
     }
     QkExitCode result_cx = qk_target_add_instruction(target, cx_entry);
     if (result_cx != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a CX gate.\n");
+        fprintf(stderr, "Unexpected error occurred when adding a CX gate.\n");
         return RuntimeError;
     }
     return Ok;
@@ -71,7 +71,7 @@ static int test_vf2_average_line(void) {
     QkVF2LayoutResult *layout_result =
         qk_transpiler_pass_standalone_vf2_layout_average(qc, target, layout_config, false);
     if (!qk_vf2_layout_result_has_match(layout_result)) {
-        printf("%s: No layout was found\n", __func__);
+        fprintf(stderr, "%s: No layout was found\n", __func__);
         result = EqualityError;
         goto layout_cleanup;
     }
@@ -83,8 +83,8 @@ static int test_vf2_average_line(void) {
     for (uint32_t i = 0; i < num_qubits; i++) {
         uint32_t phys = qk_vf2_layout_result_map_virtual_qubit(layout_result, i);
         if (phys != expected[i]) {
-            printf("%s: Unexpected layout result virtual qubit %d mapped to %d\n", __func__, phys,
-                   expected[i]);
+            fprintf(stderr, "%s: Unexpected layout result virtual qubit %d mapped to %d\n",
+                    __func__, phys, expected[i]);
             result = EqualityError;
             goto layout_cleanup;
         }
@@ -123,7 +123,7 @@ static int test_vf2_no_layout_found(void) {
     QkVF2LayoutResult *layout_result =
         qk_transpiler_pass_standalone_vf2_layout_average(qc, target, NULL, false);
     if (qk_vf2_layout_result_has_match(layout_result)) {
-        printf("%s: Unexpected layout found when one shouldn't be possible", __func__);
+        fprintf(stderr, "%s: Unexpected layout found when one shouldn't be possible", __func__);
         result = EqualityError;
         goto layout_cleanup;
     }
@@ -160,12 +160,12 @@ static int test_vf2_exact_no_layout_1q_semantics(void) {
     QkVF2LayoutResult *layout_result =
         qk_transpiler_pass_standalone_vf2_layout_exact(qc, target, NULL);
     if (qk_vf2_layout_result_has_match(layout_result)) {
-        printf("%s: unexpected match\n", __func__);
+        fprintf(stderr, "%s: unexpected match\n", __func__);
         result = EqualityError;
         goto cleanup;
     }
     if (qk_vf2_layout_result_has_improvement(layout_result)) {
-        printf("%s: claimed improvement without a match\n", __func__);
+        fprintf(stderr, "%s: claimed improvement without a match\n", __func__);
         result = EqualityError;
         goto cleanup;
     }
@@ -178,7 +178,7 @@ cleanup:
     return result;
 
 target_failure:
-    printf("%s: failed to build_target\n", __func__);
+    fprintf(stderr, "%s: failed to build_target\n", __func__);
     return result;
 }
 
@@ -209,11 +209,11 @@ static int test_vf2_exact_no_layout_2q_semantics(void) {
     QkVF2LayoutResult *layout_result =
         qk_transpiler_pass_standalone_vf2_layout_exact(qc, target, NULL);
     if (qk_vf2_layout_result_has_match(layout_result)) {
-        printf("%s: unexpected match\n", __func__);
+        fprintf(stderr, "%s: unexpected match\n", __func__);
         goto cleanup;
     }
     if (qk_vf2_layout_result_has_improvement(layout_result)) {
-        printf("%s: claimed improvement without a match\n", __func__);
+        fprintf(stderr, "%s: claimed improvement without a match\n", __func__);
         goto cleanup;
     }
     result = Ok;
@@ -225,7 +225,7 @@ cleanup:
     return result;
 
 target_failure:
-    printf("%s: failed to build_target\n", __func__);
+    fprintf(stderr, "%s: failed to build_target\n", __func__);
     return result;
 }
 
@@ -256,11 +256,11 @@ static int test_vf2_exact_no_layout_2q_structure(void) {
     QkVF2LayoutResult *layout_result =
         qk_transpiler_pass_standalone_vf2_layout_exact(qc, target, NULL);
     if (qk_vf2_layout_result_has_match(layout_result)) {
-        printf("%s: unexpected match\n", __func__);
+        fprintf(stderr, "%s: unexpected match\n", __func__);
         goto cleanup;
     }
     if (qk_vf2_layout_result_has_improvement(layout_result)) {
-        printf("%s: claimed improvement without a match\n", __func__);
+        fprintf(stderr, "%s: claimed improvement without a match\n", __func__);
         goto cleanup;
     }
     result = Ok;
@@ -273,7 +273,7 @@ cleanup:
 
 target_failure:
     result = RuntimeError;
-    printf("%s: failed to build_target\n", __func__);
+    fprintf(stderr, "%s: failed to build_target\n", __func__);
     qk_target_free(target);
     return result;
 }
@@ -311,17 +311,18 @@ static int test_vf2_exact_no_improvement(void) {
     QkVF2LayoutResult *layout_result =
         qk_transpiler_pass_standalone_vf2_layout_exact(qc, target, NULL);
     if (!qk_vf2_layout_result_has_match(layout_result)) {
-        printf("%s: failed to find a layout\n", __func__);
+        fprintf(stderr, "%s: failed to find a layout\n", __func__);
         goto cleanup;
     }
     if (qk_vf2_layout_result_has_improvement(layout_result)) {
-        printf("%s: claimed improvement but original was optimal\n", __func__);
+        fprintf(stderr, "%s: claimed improvement but original was optimal\n", __func__);
         goto cleanup;
     }
     for (uint32_t i = 0; i < num_qubits; i++) {
         uint32_t mapped = qk_vf2_layout_result_map_virtual_qubit(layout_result, i);
         if (mapped != i) {
-            printf("%s: no-improvement result falsely mapped %u to %u\n", __func__, mapped, i);
+            fprintf(stderr, "%s: no-improvement result falsely mapped %u to %u\n", __func__, mapped,
+                    i);
             goto cleanup;
         }
     }
@@ -334,7 +335,7 @@ cleanup:
     return result;
 
 target_failure:
-    printf("%s: failed to build_target\n", __func__);
+    fprintf(stderr, "%s: failed to build_target\n", __func__);
     qk_target_free(target);
     return result;
 }
@@ -373,14 +374,15 @@ static int test_vf2_exact_remap(void) {
     QkVF2LayoutResult *layout_result =
         qk_transpiler_pass_standalone_vf2_layout_exact(qc, target, NULL);
     if (!qk_vf2_layout_result_has_improvement(layout_result)) {
-        printf("%s: failed to improve non-optimal layout\n", __func__);
+        fprintf(stderr, "%s: failed to improve non-optimal layout\n", __func__);
         goto cleanup;
     }
     for (uint32_t i = 0; i < num_qubits; i++) {
         // The correct result is {4, 3, 2, 1, 0}.
         uint32_t mapped = qk_vf2_layout_result_map_virtual_qubit(layout_result, i);
         if (mapped != num_qubits - i - 1) {
-            printf("%s: improvement result falsely mapped %u to %u\n", __func__, mapped, i);
+            fprintf(stderr, "%s: improvement result falsely mapped %u to %u\n", __func__, mapped,
+                    i);
             goto cleanup;
         }
     }
@@ -393,7 +395,7 @@ cleanup:
     return result;
 
 target_failure:
-    printf("%s: failed to build_target\n", __func__);
+    fprintf(stderr, "%s: failed to build_target\n", __func__);
     qk_target_free(target);
     return result;
 }

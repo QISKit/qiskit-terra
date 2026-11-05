@@ -1,0 +1,8 @@
+---
+features_c:
+  - |
+    :c:func:`qk_circuit_barrier` can now accept a null pointer as the ``qubits`` argument, in which
+    case ``num_qubits`` is ignored, and the barrier is applied to all qubits.
+performance:
+  - |
+    :c:func:`qk_circuit_barrier` no longer re-allocates a temporary buffer to view the `qubits` array.

@@ -16,7 +16,7 @@ use pyo3::prelude::*;
 
 use crate::bit::{ShareableClbit, ShareableQubit};
 use crate::circuit_data::{CircuitData, CircuitDataError, PyCircuitData};
-use crate::dag_circuit::DAGCircuit;
+use crate::dag_circuit::PyDAGCircuit;
 use crate::{Clbit, Qubit};
 
 /// An extractable representation of a QuantumCircuit reserved only for
@@ -46,13 +46,13 @@ impl<'a, 'py> FromPyObject<'a, 'py> for QuantumCircuitData<'py> {
     }
 }
 
-#[pyfunction(signature = (quantum_circuit, copy_operations = true, qubit_order = None, clbit_order = None))]
-pub fn circuit_to_dag(
+#[pyfunction(name = "circuit_to_dag", signature = (quantum_circuit, copy_operations = true, qubit_order = None, clbit_order = None))]
+pub fn py_circuit_to_dag(
     quantum_circuit: QuantumCircuitData,
     copy_operations: bool,
     qubit_order: Option<Vec<ShareableQubit>>,
     clbit_order: Option<Vec<ShareableClbit>>,
-) -> PyResult<DAGCircuit> {
+) -> PyResult<PyDAGCircuit> {
     // Convert ShareableQubit/ShareableClbit to internal indices
     let qubit_indices = qubit_order
         .as_ref()
@@ -96,7 +96,7 @@ pub fn circuit_to_dag(
         })
         .transpose()?;
 
-    DAGCircuit::from_circuit(
+    PyDAGCircuit::from_circuit(
         quantum_circuit,
         copy_operations,
         qubit_indices,
@@ -105,26 +105,26 @@ pub fn circuit_to_dag(
     .map_err(Into::into)
 }
 
-/// Convert a :class:`.DAGCircuit` to a :class:`.PyCircuitData`.
+/// Convert a :class:`.DAGCircuit` to a :class:`.CircuitData`.
 ///
 /// `copy_operations` refers to Python-space operations; if set true, we'll attach to a Python
 /// interpreter to ensure we can copy any objects.  If we're not running in a Python context, pass
 /// `false` to that argument (or better, in Rust space, use `CircuitData::from_dag_ref`).
 #[pyfunction(name = "dag_to_circuit", signature = (dag, copy_operations = true))]
 pub fn py_dag_to_circuit(
-    dag: &DAGCircuit,
+    dag: &PyDAGCircuit,
     copy_operations: bool,
 ) -> Result<PyCircuitData, CircuitDataError> {
     if copy_operations {
-        Python::attach(|py| CircuitData::from_dag_ref_deepcopy(py, dag))
+        Python::attach(|py| CircuitData::from_dag_ref_deepcopy(py, dag.try_read()?))
     } else {
-        CircuitData::from_dag_ref(dag)
+        CircuitData::from_dag_ref(dag.try_read()?)
     }
     .map(PyCircuitData::from)
 }
 
 pub fn converters(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(circuit_to_dag, m)?)?;
+    m.add_function(wrap_pyfunction!(py_circuit_to_dag, m)?)?;
     m.add_function(wrap_pyfunction!(py_dag_to_circuit, m)?)?;
     Ok(())
 }

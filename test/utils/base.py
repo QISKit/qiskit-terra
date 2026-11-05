@@ -98,31 +98,6 @@ class QiskitTestCase(BaseTestCase):
             module="qiskit.providers.fake_provider.generic_backend_v2",
         )
 
-        # Numpy 2 made a few new modules private, and have warnings that trigger if you try to
-        # access attributes that _would_ have existed.  Unfortunately, Python's `warnings` module
-        # adds a field called `__warningregistry__` to any module that triggers a warning, and
-        # `unittest.TestCase.assertWarns` then queries said fields on all existing modules.  On
-        # macOS ARM, we see some (we think harmless) warnings come out of `numpy.linalg._linalg` (a
-        # now-private module) during transpilation, which means that subsequent `assertWarns` calls
-        # can spuriously trick Numpy into sending out a nonsense `DeprecationWarning`.
-        # Tracking issue: https://github.com/Qiskit/qiskit/issues/12679
-        warnings.filterwarnings(
-            "ignore",
-            category=DeprecationWarning,
-            message=r".*numpy\.(\w+\.)*__warningregistry__",
-        )
-
-        # We only use pandas transitively through seaborn, so it's their responsibility to mark if
-        # their use of pandas would be a problem.
-        warnings.filterwarnings(
-            "default",
-            category=DeprecationWarning,
-            # The `(?s)` magic is to force use of the `re.DOTALL` flag, because the Pandas message
-            # includes hard-break newlines all over the place.
-            message="(?s).*Pyarrow.*required dependency.*next major release of pandas",
-            module=r"seaborn(\..*)?",
-        )
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.__setup_called = False

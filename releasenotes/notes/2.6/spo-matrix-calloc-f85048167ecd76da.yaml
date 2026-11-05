@@ -1,0 +1,5 @@
+---
+performance:
+  - |
+    :meth:`.SparsePauliOp.to_matrix` now allocates dense matrices in a way that is more likely to
+    get OS/kernel-level optimizations, especially for large matrices with few nonzero terms.

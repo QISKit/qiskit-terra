@@ -1,0 +1,18 @@
+---
+features_circuits:
+  - |
+    Updated :meth:`.QuantumCircuit.mcp` so that it automatically selects the best
+    decomposition technique based on the number of control qubits. This improves
+    the performance of :class:`.MCPhaseGate`, with circuit depth growing linearly
+    in the number of qubits rather than quadratically as before. For gates with
+    2, 3, or 4 control qubits, the previous method is better in CNOT count, but
+    for 5 or more control qubits, the new method is better.
+features_synthesis:
+  - |
+    Added three synthesis functions for multi-controlled phase gates.
+    :func:`.synth_mcp_noaux_v24` uses the newer no-auxiliary decomposition based
+    on multi-controlled RZ gates, and is the better choice for up to 4 control
+    qubits. :func:`.synth_mcp_noaux_sp22` implements the linear-depth strategy
+    from da Silva et al. and is used for 5 or more control qubits.
+    :func:`.synth_mcp_noaux_default` is a dispatcher that selects between these
+    two methods according to the number of control qubits.

@@ -200,6 +200,7 @@ def generate_unroll_3q(
     hls_config: HLSConfig | None = None,
     qubits_initially_zero: bool = True,
     optimization_metric: OptimizationMetric = OptimizationMetric.COUNT_2Q,
+    optimization_level: int = 2,
 ):
     """Generate an unroll >3q :class:`~qiskit.transpiler.PassManager`
 
@@ -224,6 +225,10 @@ def generate_unroll_3q(
             zero-initialized.
         optimization_metric: the :class:`~.OptimizationMetric` object
             that defines the metric used when optimizing the unrolling.
+        optimization_level: The optimization level to use for unrolling, in the case
+            that multiple unrolling algorithms are available. Higher
+            levels generate potentially more optimized circuits, at the expense
+            of longer transpilation time.
 
     Returns:
         PassManager: The unroll 3q or more pass manager
@@ -250,6 +255,7 @@ def generate_unroll_3q(
             min_qubits=3,
             qubits_initially_zero=qubits_initially_zero,
             optimization_metric=optimization_metric,
+            optimization_level=optimization_level,
         )
     )
     # If there are no target instructions revert to using unroll3qormore so

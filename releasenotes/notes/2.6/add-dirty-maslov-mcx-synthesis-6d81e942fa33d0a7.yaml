@@ -1,0 +1,24 @@
+---
+features_synthesis:
+  - |
+    Added :func:`.synth_mcx_n_dirty_m15`, which implements Maslov's
+    Clifford+T-friendly dirty-ancilla MCX construction. It uses one ancilla for
+    three or four controls and :math:`\lceil(k - 2) / 2\rceil` ancillas for larger
+    gates.
+
+  - |
+    The clean-ancilla :func:`.synth_mcx_n_clean_m15` implementation now also uses
+    :math:`\lceil(k - 2) / 2\rceil` ancillas instead of :math:`k - 2`, without
+    changing its T or CX counts. Thus, :meth:`.QuantumCircuit.mcry` with
+    ``mode=None`` can automatically select ``basic`` mode when at least
+    :math:`\lceil(k - 2) / 2\rceil` clean ancillas are available.
+features_transpiler:
+  - |
+    Added the ``mcx.n_dirty_m15`` high-level synthesis plugin. The default MCX
+    synthesis plugin selects it for T-count optimization with three or more controls,
+    and for two-qubit-count optimization with four or more controls, when enough dirty
+    ancillas are available and no higher-priority clean-ancilla method applies. It can
+    also be selected explicitly using :class:`.HLSConfig`, for example as
+    ``HLSConfig(mcx=["n_dirty_m15"])``. The plugin requires
+    :math:`\lceil(k - 2) / 2\rceil` clean or dirty ancillas for :math:`k \geq 4`,
+    and one ancilla for :math:`k = 3`.

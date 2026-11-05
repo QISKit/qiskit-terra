@@ -21,7 +21,7 @@ from logging import getLogger
 from test import QiskitTestCase
 
 
-class PassManagerTestCase(QiskitTestCase):
+class BasePassManagerTestCase(QiskitTestCase):
     """Test case for the pass manager module."""
 
     @contextlib.contextmanager

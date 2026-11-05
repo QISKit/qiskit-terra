@@ -364,7 +364,7 @@ class TestUseSymengineFlag(QpyCircuitTestCase):
         # Also check the qpy symbolic expression encoding is correct in the
         # payload
         with io.BytesIO() as file_obj:
-            dump(qc, file_obj, use_symengine=Booly(use_symengine))
+            dump(qc, file_obj, use_symengine=Booly(use_symengine), version=13)
             file_obj.seek(0)
             header_data = FILE_HEADER_V10._make(
                 struct.unpack(

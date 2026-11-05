@@ -31,7 +31,6 @@ class TestConstrainedReschedule(QiskitTestCase):
 
     def test_alignment_only_construction(self):
         """Regression test of #16245."""
-        # Test contributed with assistance from Claude Opus 4.7 (Claude Code).
         durations = InstructionDurations(
             [("x", 0, 160, "dt"), ("measure", 0, 1000, "dt")], dt=2.22e-10
         )

@@ -17,7 +17,6 @@ Abstract base class for Quantum Channels.
 from __future__ import annotations
 import copy
 import math
-import sys
 from abc import abstractmethod
 from numbers import Number, Integral
 
@@ -35,10 +34,7 @@ from qiskit.quantum_info.operators.channel.transformations import _to_kraus
 from qiskit.quantum_info.operators.channel.transformations import _to_operator
 from qiskit.quantum_info.operators.scalar_op import ScalarOp
 
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from typing import Self
 
 
 class QuantumChannel(LinearOp):
@@ -338,7 +334,7 @@ class QuantumChannel(LinearOp):
         if hasattr(data, "to_channel"):
             # TODO: this 'to_channel' method is the same case as the above
             # but is used by current version of Aer. It should be removed
-            # once Aer is nupdated to use `to_quantumchannel`
+            # once Aer is updated to use `to_quantumchannel`
             # instead of `to_channel`,
             return data.to_channel()
         # Finally if the input is not a QuantumChannel and doesn't have a

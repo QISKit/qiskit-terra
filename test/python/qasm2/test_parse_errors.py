@@ -825,6 +825,41 @@ class TestCustomClassical(QiskitTestCase):
                 program, custom_classical=[qiskit.qasm2.CustomClassical("f", 1, lambda x: x)]
             )
 
+    def test_runtime_failure_in_gate_body_raises_qasm2_parse_error(self):
+        def always_raises(*_):
+            raise RuntimeError("expected failure")
+
+        program = """
+            OPENQASM 2.0;
+            gate mygate(a) q { U(bad(a), 0, 0) q; }
+            qreg q[1];
+            mygate(0.5) q[0];
+        """
+        # loads() succeeds: the gate body is stored as an expression tree, not evaluated yet.
+        circuit = qiskit.qasm2.loads(
+            program,
+            custom_classical=[qiskit.qasm2.CustomClassical("bad", 1, always_raises)],
+        )
+        # The exception is raised here, when the Rust evaluator calls the custom function.
+        with self.assertRaisesRegex(
+            qiskit.qasm2.QASM2ParseError, "caught exception when constant folding"
+        ):
+            _ = circuit.data[0].operation.definition
+
+    def test_runtime_non_float_in_gate_body_raises_qasm2_parse_error(self):
+        program = """
+            OPENQASM 2.0;
+            gate mygate(a) q { U(stringify(a), 0, 0) q; }
+            qreg q[1];
+            mygate(0.5) q[0];
+        """
+        circuit = qiskit.qasm2.loads(
+            program,
+            custom_classical=[qiskit.qasm2.CustomClassical("stringify", 1, str)],
+        )
+        with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "non-float"):
+            _ = circuit.data[0].operation.definition
+
 
 @ddt.ddt
 class TestStrict(QiskitTestCase):

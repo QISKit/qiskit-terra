@@ -178,6 +178,30 @@ class TestCircuitToInstruction(QiskitTestCase):
         self.assertEqual(inst.definition[2].operation.params, [gamma, phi, 0])
         self.assertEqual(str(inst.definition[3].operation.params[0]), "gamma + phi")
 
+    def test_parameter_map_applies_to_global_phase(self):
+        """Regression test for #16181."""
+        p = Parameter("p")
+        q = Parameter("q")
+
+        qc = QuantumCircuit(1)
+        qc.global_phase = 2 * p
+        qc.rx(q, 0)
+
+        parameter_map = {p: 0.3, q: 0.5}
+        inst = circuit_to_instruction(qc, parameter_map=parameter_map)
+
+        # The substituted instruction must have no remaining parameters,
+        # neither in its ``params`` nor inside the hidden ``definition``.
+        self.assertEqual(inst.params, [0.3, 0.5])
+        self.assertEqual(inst.definition.parameters, set())
+        np.testing.assert_allclose(float(inst.definition.global_phase), 0.6)
+
+        # And it must be usable downstream without raising on unbound params.
+        outer = QuantumCircuit(1)
+        outer.append(inst, [0])
+        # This deliberately avoids `equiv` because we're testing the phase.
+        self.assertEqual(Operator(outer), Operator(qc.assign_parameters(parameter_map)))
+
     def test_zero_operands(self):
         """Test that an instruction can be created, even if it has zero operands."""
         base = QuantumCircuit(global_phase=math.pi)

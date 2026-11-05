@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed :class:`.ConsolidateBlocks` incorrectly removing non-identity gates
+    wider than 2 qubits with two unit roots present at the beginning of their 
+    main diagonal.
+    Fixed `#16852 <https://github.com/Qiskit/qiskit/issues/16852>`__.

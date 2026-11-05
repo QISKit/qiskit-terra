@@ -1,0 +1,15 @@
+---
+features_visualization:
+  - |
+    The Rust circuit drawer now renders :class:`.Barrier` labels, matching the
+    behavior of the Python text drawer. The label is drawn above the top-most
+    wire of the barrier and is truncated, with ``"..."`` appended, when it is
+    longer than the configured number of characters (16 by default).
+features_c:
+  - |
+    :c:struct:`QkCircuitDrawerConfig` has a new ``barrier_label_len`` field,
+    which controls the number of characters to display for barrier labels.
+    Longer labels are truncated at that length and ``"..."`` is appended.
+    Setting the field to ``0`` applies the default truncation length of 16
+    characters, so existing initializers that omit the field keep the default
+    behavior.

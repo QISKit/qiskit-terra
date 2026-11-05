@@ -18,13 +18,20 @@ import numpy as np
 import ddt
 
 from qiskit import QuantumRegister, QuantumCircuit
+from qiskit.circuit import Gate
 from qiskit.converters import circuit_to_dag
 from qiskit.circuit.library import U1Gate, RZGate, PhaseGate, CXGate, SXGate
 from qiskit.circuit.parameter import Parameter
 from qiskit.passmanager.flow_controllers import DoWhileController
 from qiskit.transpiler.target import Target
 from qiskit.transpiler import PassManager, PropertySet
-from qiskit.transpiler.passes import CommutationAnalysis, CommutativeCancellation, FixedPoint, Size
+from qiskit.transpiler.passes import (
+    CommutationAnalysis,
+    CommutativeCancellation,
+    RemoveIdentityEquivalent,
+    FixedPoint,
+    Size,
+)
 from qiskit.quantum_info import Operator
 from test import QiskitTestCase, combine
 
@@ -993,6 +1000,56 @@ measure q0[1] -> c0[1];
 
         pass_ = CommutativeCancellation(["sx", "rz"])
         self.assertEqual(pass_(qc), expected)
+
+    def test_approximation_degree(self):
+        """Test that approximation_degree controls commutation-based cancellation.
+
+        A small RZ rotation between two CX gates prevents the CX gates from canceling with
+        ``approximation_degree=1.0``. The CX gates do cancel with maximal approximation
+        ``approximation_degree=0.0``. Omitting ``approximation_degree`` has the same
+        behavior as ``1.0``.
+        """
+        eps = 1e-5
+        qc = QuantumCircuit(2)
+        qc.cx(0, 1)
+        qc.rz(eps, 1)
+        qc.cx(0, 1)
+
+        strict = CommutativeCancellation(approximation_degree=1.0)(qc)
+        approx = CommutativeCancellation(approximation_degree=0.0)(qc)
+        default = CommutativeCancellation()(qc)
+
+        self.assertEqual(strict.count_ops().get("cx", 0), 2)
+        self.assertEqual(approx.count_ops().get("cx", 0), 0)
+        self.assertEqual(default, strict)
+
+    @ddt.data(1e-10, 1e-11, 1e-12, 0)
+    def test_approximation_of_small_angles(self, eps):
+        """Check that CommutativeCancellation does not drop small angles,
+        that are within the tolerance levels. Check consistency with
+        RemoveIdentityEquivalent pass. See issue #17315."""
+        for angle in np.linspace(1e-5, 1e-6, num=25):
+            qc = QuantumCircuit(1)
+            qc.rz(angle, 0)
+            qc.rz(0, 0)
+
+            qc1 = QuantumCircuit(1)
+            qc1.rz(angle / 2, 0)
+            qc1.rz(angle / 2, 0)
+
+            cc = CommutativeCancellation(approximation_degree=1 - eps)(qc)
+            cc1 = CommutativeCancellation(approximation_degree=1 - eps)(qc1)
+            rie = RemoveIdentityEquivalent(approximation_degree=1 - eps)(qc)
+
+            self.assertEqual(cc, rie)
+            self.assertEqual(cc, cc1)
+
+    def test_custom_gates_sharing_wire(self):
+        """Custom gates sharing a wire are not cancelled"""
+        circ = QuantumCircuit(2)
+        circ.append(Gate("foo", 1, []), [1])
+        circ.append(Gate("bar", 2, []), [0, 1])
+        self.assertEqual(CommutativeCancellation()(circ), circ)
 
 
 if __name__ == "__main__":

@@ -23,18 +23,18 @@ static int build_unitary_target(QkTarget *target, uint32_t num_qubits) {
     // Create a target with cx connectivity in a line.
     QkExitCode result_x = qk_target_add_instruction(target, qk_target_entry_new(QkGate_X));
     if (result_x != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a global X gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a global X gate.");
         return RuntimeError;
     }
     QkExitCode result_sx = qk_target_add_instruction(target, qk_target_entry_new(QkGate_SX));
     if (result_sx != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a global SX gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a global SX gate.");
         return RuntimeError;
     }
 
     QkExitCode result_rz = qk_target_add_instruction(target, qk_target_entry_new(QkGate_RZ));
     if (result_rz != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a global RZ gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a global RZ gate.");
         return RuntimeError;
     }
 
@@ -47,13 +47,13 @@ static int build_unitary_target(QkTarget *target, uint32_t num_qubits) {
         QkExitCode result_cx_props =
             qk_target_entry_add_property(cx_entry, qargs, 2, inst_duration, inst_error);
         if (result_cx_props != QkExitCode_Success) {
-            printf("Unexpected error occurred when adding property to a CX gate entry.");
+            fprintf(stderr, "Unexpected error occurred when adding property to a CX gate entry.");
             return RuntimeError;
         }
     }
     QkExitCode result_cx = qk_target_add_instruction(target, cx_entry);
     if (result_cx != QkExitCode_Success) {
-        printf("Unexpected error occurred when adding a CX gate.");
+        fprintf(stderr, "Unexpected error occurred when adding a CX gate.");
         return RuntimeError;
     }
     return Ok;
@@ -81,7 +81,7 @@ static int test_unitary_synthesis_identity_matrix(void) {
     qk_transpiler_pass_standalone_unitary_synthesis(qc, target, 0, 1.0);
     size_t num_instructions = qk_circuit_num_instructions(qc);
     if (num_instructions != 0) {
-        printf("Identity unitary not removed from the circuit as expected");
+        fprintf(stderr, "Identity unitary not removed from the circuit as expected");
         result = EqualityError;
     }
     qk_circuit_free(qc);
@@ -115,7 +115,7 @@ static int test_unitary_synthesis_multiqubit_identity_matrix(void) {
     qk_transpiler_pass_standalone_unitary_synthesis(qc, target, 0, 1.0);
     size_t num_instructions = qk_circuit_num_instructions(qc);
     if (num_instructions != 0) {
-        printf("Identity unitary not removed from the circuit as expected");
+        fprintf(stderr, "Identity unitary not removed from the circuit as expected");
         result = EqualityError;
     }
     qk_circuit_free(qc);

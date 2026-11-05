@@ -20,9 +20,9 @@ This would be a particular problem for defining the circuit object and using it 
 * `qiskit-pyext` is the only crate that actually builds a Python C extension library.
   This is kind of like the parent crate of all the others, from an FFI perspective; others define `pyclass`es and `pyfunction`s and the like, but it's `qiskit-pyext` that builds the C extension.
   Our C extension is built as `qiskit._accelerate` in Python space.
-* `qiskit-cext` is the crate that defines the C FFI for Qiskit. It defines the C API to work with the rust code directly. It has two modes of operation: a standalone mode
-  that compiles to a C dynamic library without any runtime dependency on the Python interpreter, and a embedded mode where the API is re-exported from `qiskit-pyext`
-  and used to accelerate Python worklows when writing compiled extensions that interact with Qiskit.
+* `qiskit-cext` is the crate that defines the C FFI for Qiskit. It defines the C API to work with the Rust code directly. It has two modes of operation: a standalone mode
+  that compiles to a C dynamic library without any runtime dependency on the Python interpreter, and an embedded mode where the API is re-exported from `qiskit-pyext`
+  and used to accelerate Python workflows when writing compiled extensions that interact with Qiskit.
 * `qiskit-bindgen` is an internal library that contains the logic for constructing header files to access the C API defined in `qiskit-cext`.
 * `qiskit-accelerate` is a catch-all crate for one-off accelerators. This should be the end of the dependency tree and only be in the dependency list for the public
   interface crates: `qiskit-pyext` or `qiskit-cext`. If what you're working on is small and largely self-contained, and doesn't fit in another crate you probably just
@@ -41,8 +41,8 @@ This would be a particular problem for defining the circuit object and using it 
 * `qiskit-synthesis` is the crate for synthesis functionality.
 * `qiskit-circuit-library` is the crate for circuit library functions. It contains constructors or other
   circuit functionality that builds on the core circuit data model defined in `qiskit-circuit`.
-* `qiskit-providers` is the crate that defines the providers interface for Qiskit. The providers interface is what defines the concept of a Backend.
-  The backend models a quantum computer, which is the QPU and the infrastructure around it required to execute circuits on the quantum computer.
+* `qiskit-providers` defines the quantum program representation and the backend interface that consumes it. A
+  quantum program contains the semantics of classical processing that is near-time to the QPU in a quantum computer.
 * `qiskit-util` is for small utility functions and data structures that are independent of all
   Qiskit-specific objects, so it can be depended-on by both `quantum-info` and `circuit`.
 

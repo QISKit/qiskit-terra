@@ -35,7 +35,12 @@ from qiskit.converters import circuit_to_dag
 from qiskit.quantum_info.operators import Operator
 from qiskit.quantum_info.operators.measures import process_fidelity
 from qiskit.transpiler import PassManager, Target, generate_preset_pass_manager
-from qiskit.transpiler.passes import ConsolidateBlocks, Collect1qRuns, Collect2qBlocks
+from qiskit.transpiler.passes import (
+    ConsolidateBlocks,
+    Collect1qRuns,
+    Collect2qBlocks,
+    CollectMultiQBlocks,
+)
 from test import QiskitTestCase
 
 
@@ -415,6 +420,38 @@ class TestConsolidateBlocks(QiskitTestCase):
         pm = PassManager([Collect2qBlocks(), ConsolidateBlocks()])
         self.assertEqual(QuantumCircuit(5), pm.run(qc))
 
+    def test_identity_unitary_is_removed_up_to_phase(self):
+        """Test that a 2q identity (up to phase) unitary is removed."""
+        qc = QuantumCircuit(5)
+        qc.h(0)
+        qc.cx(0, 1)
+        qc.rz(2 * np.pi, 1)
+        qc.cx(0, 1)
+        qc.h(0)
+
+        pm = PassManager([Collect2qBlocks(), ConsolidateBlocks()])
+        self.assertEqual(QuantumCircuit(5, global_phase=np.pi), pm.run(qc))
+
+    def test_approximation_degree(self):
+        """Test setting the approximation degree."""
+        angle = 1e-2
+        qc = QuantumCircuit(1)
+        qc.rz(angle, 0)
+
+        with self.subTest(approximation_degree=1):
+            pm = PassManager([Collect1qRuns(), ConsolidateBlocks(approximation_degree=1)])
+            out = pm.run(qc)
+
+            expect = QuantumCircuit(1)
+            expect.unitary(RZGate(angle).to_matrix(), [0])
+
+            self.assertEqual(out, expect)
+
+        with self.subTest(approximation_degree=0.1):
+            pm = PassManager([Collect1qRuns(), ConsolidateBlocks(approximation_degree=0.1)])
+            out = pm.run(qc)
+            self.assertEqual(out, QuantumCircuit(1))
+
     def test_identity_1q_unitary_is_removed(self):
         """Test that a 1q identity unitary is removed without a basis."""
         qc = QuantumCircuit(5)
@@ -424,6 +461,22 @@ class TestConsolidateBlocks(QiskitTestCase):
         qc.h(0)
         pm = PassManager([Collect2qBlocks(), Collect1qRuns(), ConsolidateBlocks()])
         self.assertEqual(QuantumCircuit(5), pm.run(qc))
+
+    def test_identity_1q_unitary_is_removed_up_to_phase(self):
+        """Test that a 1q identity unitary is removed without a basis."""
+        qc = QuantumCircuit(5)
+        qc.h(0)
+        qc.rz(2 * np.pi, 0)
+        qc.h(0)
+        pm = PassManager([Collect2qBlocks(), Collect1qRuns(), ConsolidateBlocks()])
+        self.assertEqual(QuantumCircuit(5, global_phase=np.pi), pm.run(qc))
+
+    def test_toffoli_is_not_removed(self):
+        """Test that toffoli gate is not removed during consolidated block pass."""
+        qc = QuantumCircuit(3)
+        qc.ccx(0, 1, 2)
+        pm = PassManager([CollectMultiQBlocks(max_block_size=3), ConsolidateBlocks()])
+        self.assertTrue(Operator(qc).equiv(Operator(pm.run(qc))))
 
     def test_descent_into_control_flow(self):
         """Test consolidation in blocks when control flow op is the same as at top level."""

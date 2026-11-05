@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a bug in the :class:`.HighLevelSynthesis` transpiler pass where qubit
+    states were not tracked correctly between branches of an if-then-else or switch
+    instruction, potentially resulting in incorrect circuits.
+
+    See `#16859 <https://github.com/Qiskit/qiskit/issues/16859>`__.

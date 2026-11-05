@@ -207,7 +207,10 @@ class StatePreparation(Gate):
             None if self._label in ("State Preparation", "State Preparation Dg") else self._label
         )
 
-        return StatePreparation(self._params_arg, inverse=not self._inverse, label=label)
+        num_qubits = self.num_qubits if self._from_int else None
+        return StatePreparation(
+            self._params_arg, num_qubits=num_qubits, inverse=not self._inverse, label=label
+        )
 
     def broadcast_arguments(self, qargs, cargs):
         flat_qargs = [qarg for sublist in qargs for qarg in sublist]

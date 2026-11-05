@@ -140,6 +140,7 @@ class UnrollPassManager(PassManagerPBCStagePlugin):
                     min_qubits=1,
                     qubits_initially_zero=pass_manager_config.qubits_initially_zero,
                     optimization_metric=OptimizationMetric.COUNT_T,
+                    optimization_level=optimization_level,
                 ),
             ]
         )

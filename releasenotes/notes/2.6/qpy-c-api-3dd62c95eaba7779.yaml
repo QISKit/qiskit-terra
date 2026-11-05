@@ -1,0 +1,47 @@
+---
+features_c:
+  - |
+    Added QPY serialization and deserialization to the C API.
+    Multiple :c:struct:`QkCircuit` objects can now be serialized into a single
+    QPY stream in the latest QPY version, either to a buffer with
+    :c:func:`qk_qpy_dump_buffer`
+    or saved to a file with :c:func:`qk_qpy_dump_file`.
+    Both functions have an alternative ``*_with_version`` variant
+    that allows specifying the QPY version used for serialization.
+
+    These dump functions operate on native circuits without interacting with
+    Python. If you're using the C API in a Python extension you should use
+    the Python functions: :func:`.qpy.dump` and :func:`.qpy.load` as the
+    C API functions will return an error if Python is required to create
+    or load a QPY payload from the circuit.
+
+    All circuits in a QPY stream can be deserialized from a buffer or file
+    with :c:func:`qk_qpy_load_buffer` and :c:func:`qk_qpy_load_file`
+    (the version is handled automatically; no need for variants).
+
+    To free the buffer returned by :c:func:`qk_qpy_dump_buffer`
+    and :c:func:`qk_qpy_dump_buffer_with_version`,
+    call :c:func:`qk_qpy_free_buffer`. Circuit arrays returned by
+    :c:func:`qk_qpy_load_buffer` and :c:func:`qk_qpy_load_file` must be
+    released with :c:func:`qk_qpy_free_circuits`.
+
+    Each function that can fail accepts a nullable output pointer for a
+    diagnostic error string. When populated, the string contains details from
+    the underlying QPY error and must be released with :c:func:`qk_str_free`.
+
+    Also added :c:func:`qk_qpy_read_min_version` and
+    :c:func:`qk_qpy_write_min_version`, which return the oldest QPY format
+    versions the loaded library can read and write, respectively.
+
+    The new functions are:
+
+    * :c:func:`qk_qpy_dump_file`
+    * :c:func:`qk_qpy_dump_file_with_version`
+    * :c:func:`qk_qpy_load_file`
+    * :c:func:`qk_qpy_dump_buffer`
+    * :c:func:`qk_qpy_dump_buffer_with_version`
+    * :c:func:`qk_qpy_load_buffer`
+    * :c:func:`qk_qpy_free_buffer`
+    * :c:func:`qk_qpy_free_circuits`
+    * :c:func:`qk_qpy_read_min_version`
+    * :c:func:`qk_qpy_write_min_version`

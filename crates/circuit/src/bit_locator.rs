@@ -13,6 +13,7 @@
 use std::{fmt::Debug, hash::Hash, sync::OnceLock};
 
 use crate::bit::{BitLocations, Register};
+use crate::error::TryReserveError;
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict};
 use qiskit_util::IndexMap;
@@ -65,6 +66,17 @@ where
             bit_locations: IndexMap::with_capacity_and_hasher(capacity, Default::default()),
             cached: OnceLock::new(),
         }
+    }
+
+    /// Create an empty bit locator with a pre-allocated capacity to contain a given number. This
+    /// will return an error if the specified capacity can't be allocated.
+    pub fn try_with_capacity(capacity: usize) -> Result<Self, TryReserveError> {
+        let mut bit_locations = IndexMap::with_hasher(Default::default());
+        bit_locations.try_reserve(capacity)?;
+        Ok(Self {
+            bit_locations,
+            cached: OnceLock::new(),
+        })
     }
 
     /// Track a bit at the given locations.

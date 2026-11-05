@@ -107,6 +107,13 @@ class TestStinespring(ChannelTestCase):
         self.assertFalse(Stinespring((stine_l, stine_r)).is_cptp())
         self.assertFalse(Stinespring(self.UI + self.UX).is_cptp())
 
+    def test_is_cptp_honors_tolerances(self):
+        """Test that is_cptp uses caller-provided tolerance values."""
+        channel = Stinespring((1 + 4e-4) * np.eye(2))
+
+        self.assertFalse(channel.is_cptp(atol=1e-5, rtol=0))
+        self.assertTrue(channel.is_cptp(atol=1e-3, rtol=0))
+
     def test_conjugate(self):
         """Test conjugate method."""
         stine_l, stine_r = self.rand_matrix(16, 2), self.rand_matrix(16, 2)

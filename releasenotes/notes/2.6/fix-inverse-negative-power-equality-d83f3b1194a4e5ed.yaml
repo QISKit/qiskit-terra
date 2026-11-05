@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed :class:`.ParameterExpression` equality so that mathematically
+    equivalent expressions built via division and negative exponentiation
+    (for example, ``1 / x`` and ``x ** -1``) now compare equal. Previously
+    these produced structurally different expression trees and were
+    treated as unequal even though they represent the same value.
+    Fixed `#16840 <https://github.com/Qiskit/qiskit/issues/16840>`__.

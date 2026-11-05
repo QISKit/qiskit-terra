@@ -15,13 +15,17 @@ use hashbrown::{HashMap, HashSet};
 use pyo3::prelude::*;
 use qiskit_circuit::PhysicalQubit;
 use qiskit_circuit::Qubit;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 use qiskit_circuit::operations::Operation;
 use qiskit_circuit::packed_instruction::PackedInstruction;
 use rustworkx_core::petgraph::prelude::NodeIndex;
 
 #[pyfunction]
 #[pyo3(name = "any_gate_missing_from_target")]
+pub fn py_gates_missing_from_target(dag: &PyDAGCircuit, target: &Target) -> PyResult<bool> {
+    gates_missing_from_target(dag.try_read()?, target)
+}
+
 pub fn gates_missing_from_target(dag: &DAGCircuit, target: &Target) -> PyResult<bool> {
     #[inline]
     fn is_universal(gate: &PackedInstruction) -> bool {
@@ -103,6 +107,10 @@ pub fn gates_missing_from_target(dag: &DAGCircuit, target: &Target) -> PyResult<
 
 #[pyfunction]
 #[pyo3(name = "any_gate_missing_from_basis")]
+pub fn py_gates_missing_from_basis(dag: &PyDAGCircuit, basis: HashSet<String>) -> PyResult<bool> {
+    gates_missing_from_basis(dag.try_read()?, basis)
+}
+
 pub fn gates_missing_from_basis(dag: &DAGCircuit, basis: HashSet<String>) -> PyResult<bool> {
     for (gate, _) in dag.count_ops(true)? {
         if !basis.contains(gate.as_str()) {
@@ -113,7 +121,7 @@ pub fn gates_missing_from_basis(dag: &DAGCircuit, basis: HashSet<String>) -> PyR
 }
 
 pub fn gates_in_basis_mod(m: &Bound<PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pyfunction!(gates_missing_from_target))?;
-    m.add_wrapped(wrap_pyfunction!(gates_missing_from_basis))?;
+    m.add_wrapped(wrap_pyfunction!(py_gates_missing_from_target))?;
+    m.add_wrapped(wrap_pyfunction!(py_gates_missing_from_basis))?;
     Ok(())
 }

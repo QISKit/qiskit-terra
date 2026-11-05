@@ -15,7 +15,7 @@ use crate::TranspilerError;
 use crate::passes::schedule_analysis::{NodeDurations, PyNodeDurations};
 use hashbrown::HashMap;
 use pyo3::prelude::*;
-use qiskit_circuit::dag_circuit::{DAGCircuit, Wire};
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit, Wire};
 use qiskit_circuit::operations::{OperationRef, PyInstruction, PyOpKind, StandardInstruction};
 use qiskit_circuit::{Clbit, Qubit};
 use qiskit_util::IndexMap;
@@ -154,8 +154,8 @@ pub fn run_alap_schedule_analysis<T: TimeOps>(
 ///     PyDict: A dictionary mapping each DAGOpNode to its scheduled start time.
 ///
 #[pyo3(name = "alap_schedule_analysis", signature= (dag, clbit_write_latency, node_durations))]
-pub fn py_run_alap_schedule_analysis(
-    dag: &DAGCircuit,
+fn py_run_alap_schedule_analysis(
+    dag: &PyDAGCircuit,
     clbit_write_latency: u64,
     mut node_durations: PyNodeDurations,
 ) -> PyResult<PyNodeDurations> {
@@ -165,12 +165,14 @@ pub fn py_run_alap_schedule_analysis(
     // Get the first duration type
     let new_durations: NodeDurations = match &*node_durations {
         NodeDurations::Dt(node_durations) => {
-            run_alap_schedule_analysis(dag, clbit_write_latency, node_durations)?.into()
+            run_alap_schedule_analysis(dag.try_read()?, clbit_write_latency, node_durations)?.into()
         }
-        NodeDurations::Seconds(node_durations) => {
-            run_alap_schedule_analysis::<f64>(dag, clbit_write_latency as f64, node_durations)?
-                .into()
-        }
+        NodeDurations::Seconds(node_durations) => run_alap_schedule_analysis::<f64>(
+            dag.try_read()?,
+            clbit_write_latency as f64,
+            node_durations,
+        )?
+        .into(),
     };
     node_durations.update_durations(new_durations)?;
     Ok(node_durations)

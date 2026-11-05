@@ -17,14 +17,12 @@ from copy import deepcopy
 
 from qiskit import QuantumRegister, QuantumCircuit, ClassicalRegister
 from qiskit.circuit.library import U1Gate, CU1Gate
-from qiskit.passmanager.flow_controllers import DoWhileController
-from qiskit.transpiler import PassManager
-from qiskit.transpiler.passes import RemoveDiagonalGatesBeforeMeasure, DAGFixedPoint
+from qiskit.transpiler.passes import RemoveDiagonalGatesBeforeMeasure
 from qiskit.converters import circuit_to_dag
 from test import QiskitTestCase
 
 
-class TesRemoveDiagonalGatesBeforeMeasure(QiskitTestCase):
+class TestRemoveDiagonalGatesBeforeMeasure(QiskitTestCase):
     """Test remove_diagonal_gates_before_measure optimizations."""
 
     def test_optimize_1rz_1measure(self):
@@ -293,7 +291,7 @@ class TesRemoveDiagonalGatesBeforeMeasure(QiskitTestCase):
         self.assertEqual(pass_(test), expected)
 
 
-class TesRemoveDiagonalControlGatesBeforeMeasure(QiskitTestCase):
+class TestRemoveDiagonalControlGatesBeforeMeasure(QiskitTestCase):
     """Test remove diagonal control gates before measure."""
 
     def test_optimize_1cz_2measure(self):
@@ -493,6 +491,259 @@ class TesRemoveDiagonalControlGatesBeforeMeasure(QiskitTestCase):
         self.assertEqual(circuit_to_dag(expected), after)
 
 
+class TestRemoveConsecutiveDiagonalGatesBeforeMeasure(QiskitTestCase):
+    """Test removing consecutive diagonal gates before measure in a single run."""
+
+    def test_optimize_1t_1tdg_1measure(self):
+        """Remove a TGate and a TdgGate in a single run
+        qr0:--T--Tdg--m--       qr0:--m--
+                      |               |
+        cr0:----------.--  ==>  cr0:--.--
+        """
+        qr = QuantumRegister(1, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.t(qr[0])
+        circuit.tdg(qr[0])
+        circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_1s_1tdg_1measure(self):
+        """Remove a SGate and a TdgGate, which are not inverses of each other
+        qr0:--S--Tdg--m--       qr0:--m--
+                      |               |
+        cr0:----------.--  ==>  cr0:--.--
+        """
+        qr = QuantumRegister(1, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.s(qr[0])
+        circuit.tdg(qr[0])
+        circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_rz_z(self):
+        """Remove a RZGate and a ZGate in a single run
+        qr0:--RZ-Z--m--       qr0:--m--
+                    |               |
+        cr0:--------.--       cr0:--.--
+        """
+        qr = QuantumRegister(1, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.rz(0.1, qr[0])
+        circuit.z(qr[0])
+        circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_1rz_1z_1t_1p_1measure(self):
+        """Remove a long chain of diagonal gates in a single run
+        qr0:-RZ--Z--T--P--m--       qr0:--m--
+                          |               |
+        cr0:--------------.--  ==>  cr0:--.--
+        """
+        qr = QuantumRegister(1, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.rz(0.1, qr[0])
+        circuit.z(qr[0])
+        circuit.t(qr[0])
+        circuit.p(0.2, qr[0])
+        circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_2cz_2measure(self):
+        """Remove two CZGates in a single run
+        qr0:--Z--Z--m---       qr0:--m---
+              |  |  |                |
+        qr1:--.--.--|-m-  ==>  qr1:--|-m-
+                    | |              | |
+        cr0:--------.-.-       cr0:--.-.-
+        """
+        qr = QuantumRegister(2, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.cz(qr[0], qr[1])
+        circuit.cz(qr[0], qr[1])
+        circuit.measure(qr[0], cr[0])
+        circuit.measure(qr[1], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+        expected.measure(qr[1], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_1rz_1cz_1t_2measure(self):
+        """Remove a chain mixing 1Q and 2Q diagonal gates
+        qr0:-RZ--Z-----m---       qr0:--m---
+                 |     |                |
+        qr1:-----.--T--|-m-  ==>  qr1:--|-m-
+                       | |              | |
+        cr0:-----------.-.-       cr0:--.-.-
+        """
+        qr = QuantumRegister(2, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.rz(0.1, qr[0])
+        circuit.cz(qr[0], qr[1])
+        circuit.t(qr[1])
+        circuit.measure(qr[0], cr[0])
+        circuit.measure(qr[1], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+        expected.measure(qr[1], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_1ccz_1cz_3measure(self):
+        """Remove a CCZGate followed by a CZGate"""
+        qr = QuantumRegister(3, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.ccz(qr[0], qr[1], qr[2])
+        circuit.cz(qr[0], qr[1])
+        circuit.measure(qr[0], cr[0])
+        circuit.measure(qr[1], cr[0])
+        circuit.measure(qr[2], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+        expected.measure(qr[1], cr[0])
+        expected.measure(qr[2], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_mid_circuit_measure(self):
+        """Remove diagonal gates before each of several measures on the same qubit
+        qr0:--T--S--m--T--m--       qr0:--m--m--
+                    |     |               |  |
+        cr0:--------.-----.--  ==>  cr0:--.--.--
+        """
+        qr = QuantumRegister(1, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.t(qr[0])
+        circuit.s(qr[0])
+        circuit.measure(qr[0], cr[0])
+        circuit.t(qr[0])
+        circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+        expected.measure(qr[0], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_qubit_reused_after_measure(self):
+        """Remove diagonal gates before a measure even if the qubit is used afterwards
+        qr0:-RZ--m--H--T--m--       qr0:--m--H--m--
+                 |        |               |     |
+        cr0:-----.--------.--  ==>  cr0:--.-----.--
+        """
+        qr = QuantumRegister(1, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.rz(0.1, qr[0])
+        circuit.measure(qr[0], cr[0])
+        circuit.h(qr[0])
+        circuit.t(qr[0])
+        circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+        expected.h(qr[0])
+        expected.measure(qr[0], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+    def test_optimize_1cz_2measure_qubits_reused_after_measure(self):
+        """Remove a CZGate before measures even if both qubits are used afterwards
+        qr0:--Z--m-----H--.--m---       qr0:--m-----H--.--m---
+              |  |        |  |                |        |  |
+        qr1:--.--|-m-----(+)-|-m-  ==>  qr1:--|-m-----(+)-|-m-
+                 | |         | |              | |         | |
+        cr0:-----.-.---------.-.-       cr0:--.-.---------.-.-
+        """
+        qr = QuantumRegister(2, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.cz(qr[0], qr[1])
+        circuit.measure(qr[0], cr[0])
+        circuit.measure(qr[1], cr[0])
+        circuit.h(qr[0])
+        circuit.cx(qr[0], qr[1])
+        circuit.measure(qr[0], cr[0])
+        circuit.measure(qr[1], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = QuantumCircuit(qr, cr)
+        expected.measure(qr[0], cr[0])
+        expected.measure(qr[1], cr[0])
+        expected.h(qr[0])
+        expected.cx(qr[0], qr[1])
+        expected.measure(qr[0], cr[0])
+        expected.measure(qr[1], cr[0])
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(circuit_to_dag(expected), after)
+
+
 class TestRemoveDiagonalGatesBeforeMeasureOveroptimizations(QiskitTestCase):
     """Test situations where remove_diagonal_gates_before_measure should not optimize"""
 
@@ -536,37 +787,104 @@ class TestRemoveDiagonalGatesBeforeMeasureOveroptimizations(QiskitTestCase):
 
         self.assertEqual(expected, after)
 
+    def test_optimize_1rz_1cz_1measure(self):
+        """Do not remove a RZGate followed by a CZGate that cannot be removed
+        Compare with test_optimize_1rz_1cz_1t_2measure.
 
-class TestRemoveDiagonalGatesBeforeMeasureFixedPoint(QiskitTestCase):
-    """Test remove_diagonal_gates_before_measure optimizations in
-    a transpiler, using fixed point."""
+            qr0:-RZ--Z--m---
+                     |  |
+            qr1:-----.--|---
+                        |
+            cr0:--------.---
+        """
+        qr = QuantumRegister(2, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.rz(0.1, qr[0])
+        circuit.cz(qr[0], qr[1])
+        circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
 
-    def test_optimize_rz_z(self):
-        """Remove two swaps that overlap
-        qr0:--RZ-Z--m--       qr0:--m--
-                    |               |
-        cr0:--------.--       cr0:--.--
+        expected = deepcopy(dag)
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(expected, after)
+
+    def test_optimize_1cz_1t_1measure(self):
+        """Do not remove a CZGate because the diagonal gates on qr1 are not measured
+
+        qr0:--Z-----m---
+              |     |
+        qr1:--.--T--|---
+                    |
+        cr0:--------.---
+        """
+        qr = QuantumRegister(2, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.cz(qr[0], qr[1])
+        circuit.t(qr[1])
+        circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = deepcopy(dag)
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(expected, after)
+
+    def test_optimize_1cz_1h_2measure(self):
+        """Do not remove a CZGate because a non-diagonal gate precedes one of the measures
+
+        qr0:--Z-----m---
+              |     |
+        qr1:--.--H--|-m-
+                    | |
+        cr0:--------.-.-
+        """
+        qr = QuantumRegister(2, "qr")
+        cr = ClassicalRegister(1, "cr")
+        circuit = QuantumCircuit(qr, cr)
+        circuit.cz(qr[0], qr[1])
+        circuit.h(qr[1])
+        circuit.measure(qr[0], cr[0])
+        circuit.measure(qr[1], cr[0])
+        dag = circuit_to_dag(circuit)
+
+        expected = deepcopy(dag)
+
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
+
+        self.assertEqual(expected, after)
+
+    def test_optimize_1t_1h_1t_1measure(self):
+        """Remove only the T gate after the HGate, since H is not diagonal
+        qr0:--T--H--T--m--       qr0:--T--H--m--
+                       |                     |
+        cr0:-----------.--  ==>  cr0:--------.--
         """
         qr = QuantumRegister(1, "qr")
         cr = ClassicalRegister(1, "cr")
         circuit = QuantumCircuit(qr, cr)
-        circuit.rz(0.1, qr[0])
-        circuit.z(qr[0])
+        circuit.t(qr[0])
+        circuit.h(qr[0])
+        circuit.t(qr[0])
         circuit.measure(qr[0], cr[0])
+        dag = circuit_to_dag(circuit)
 
         expected = QuantumCircuit(qr, cr)
+        expected.t(qr[0])
+        expected.h(qr[0])
         expected.measure(qr[0], cr[0])
 
-        pass_manager = PassManager()
-        pass_manager.append(
-            DoWhileController(
-                [RemoveDiagonalGatesBeforeMeasure(), DAGFixedPoint()],
-                do_while=lambda property_set: not property_set["dag_fixed_point"],
-            )
-        )
-        after = pass_manager.run(circuit)
+        pass_ = RemoveDiagonalGatesBeforeMeasure()
+        after = pass_.run(dag)
 
-        self.assertEqual(expected, after)
+        self.assertEqual(circuit_to_dag(expected), after)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed an issue in :func:`.qpy.load` where it would potentially panic when
+    parsing a malformed payload that contained register bit indices not defined
+    in the circuit. This will now properly return a :class:`.QpyError` instead.

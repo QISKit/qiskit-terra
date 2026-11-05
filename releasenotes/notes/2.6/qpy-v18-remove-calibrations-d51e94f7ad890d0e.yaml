@@ -1,0 +1,9 @@
+---
+upgrade_qpy:
+  - |
+    QPY version 18 removes the ``CalibrationsPack`` field from the circuit binary
+    format. Pulse gate calibrations were already unsupported since Qiskit 2.0, and
+    the field has been written as an empty placeholder ever since. Files written with
+    QPY version 18 are 2 bytes smaller per circuit and cannot be read by Qiskit
+    versions that only support QPY up to version 17. Files written with QPY version
+    17 or earlier are still read correctly by the current Qiskit.

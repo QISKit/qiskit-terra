@@ -14,7 +14,7 @@ use pyo3::prelude::*;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 use crate::QiskitError;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::PyDAGCircuit;
 use qiskit_circuit::operations::{OperationRef, Param, StandardGate, add_param};
 use qiskit_synthesis::ross_selinger::{gridsynth_cleanup, gridsynth_rz};
 
@@ -106,11 +106,12 @@ fn synthesize_rz_gate_via_gridsynth(
 #[pyo3(name = "synthesize_rz_rotations")]
 #[pyo3(signature = (dag, approximation_degree=None, synthesis_error=None, cache_error=None))]
 pub fn py_run_synthesize_rz_rotations(
-    dag: &mut DAGCircuit,
+    dag: &mut PyDAGCircuit,
     approximation_degree: Option<f64>,
     synthesis_error: Option<f64>,
     cache_error: Option<f64>,
 ) -> PyResult<()> {
+    let dag = dag.try_write()?;
     // Skip the pass if there are no RZ rotation gates.
     if dag.get_op_counts().keys().all(|k| k != "rz") {
         return Ok(());

@@ -267,6 +267,22 @@ class TestErrors(QiskitTestCase):
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "sqrt of negative"):
             qiskit.qasm2.loads(program)
 
+    @ddt.data(
+        ("a / (a - a)", "cannot divide by zero"),
+        ("ln(0 - a)", "'ln' is undefined for non-positive"),
+        ("sqrt(0 - a)", "'sqrt' is undefined for negative"),
+        ("(0 - a) ^ 0.5", "non-integer power"),
+    )
+    @ddt.unpack
+    def test_refuses_invalid_arithmetic_when_building_definition(self, expression, message):
+        # None of these can be constant-folded during the parse, since they all depend on the gate
+        # parameter, so unlike the cases above they are caught by the runtime evaluator when the
+        # definition is first built, rather than by `loads` itself.
+        program = f"qreg q[1]; gate g(a) qq {{ U({expression}, 0.0, 0.0) qq; }} g(1.0) q[0];"
+        parsed = qiskit.qasm2.loads(program)
+        with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, message):
+            _ = parsed.data[0].operation.definition
+
     @ddt.data("*", "/", "^")
     def test_cannot_use_nonunary_operators_in_unary_position(self, operator):
         program = f"qreg q[1]; U({operator}1.0, 0.0, 0.0) q[0];"

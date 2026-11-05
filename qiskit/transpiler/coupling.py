@@ -55,11 +55,13 @@ class CouplingMap:
                 an adjacency list containing couplings, e.g. [[0,1], [0,2], [1,2]].
                 It is required that nodes are contiguously indexed starting at 0.
                 Missed nodes will be added as isolated nodes in the coupling map.
+                Repeated couplings are collapsed into a single edge.
             description (str): A string to describe the coupling map.
         """
         self.description = description
-        # the coupling map graph
-        self.graph = rx.PyDiGraph()
+        # the coupling map graph; parallel edges are meaningless for a coupling map, so
+        # ``multigraph=False`` makes duplicate couplings collapse onto the existing edge
+        self.graph = rx.PyDiGraph(multigraph=False)
         # a dict of dicts from node pairs to distances
         self._dist_matrix = None
         # a sorted list of physical qubits (integers) in this coupling map
@@ -117,6 +119,8 @@ class CouplingMap:
     def add_edge(self, src, dst):
         """
         Add directed edge to coupling graph.
+
+        If the edge is already present in the coupling graph this is a no-op.
 
         src (int): source physical qubit
         dst (int): destination physical qubit
@@ -241,13 +245,7 @@ class CouplingMap:
         """
         Convert uni-directional edges into bi-directional.
         """
-        # TODO: replace with PyDiGraph.make_symmetric() after rustworkx
-        # 0.13.0 is released.
-        edges = self.get_edges()
-        edge_set = set(edges)
-        for src, dest in edges:
-            if (dest, src) not in edge_set:
-                self.graph.add_edge(dest, src, None)
+        self.graph.make_symmetric()
         self._dist_matrix = None  # invalidate
         self._is_symmetric = None  # invalidate
 
@@ -305,7 +303,7 @@ class CouplingMap:
         """Return a fully connected coupling map on n qubits."""
         cmap = cls(description="full")
         if bidirectional:
-            cmap.graph = rx.generators.directed_mesh_graph(num_qubits)
+            cmap.graph = rx.generators.directed_mesh_graph(num_qubits, multigraph=False)
         else:
             edge_list = []
             for i in range(num_qubits):
@@ -318,14 +316,18 @@ class CouplingMap:
     def from_line(cls, num_qubits, bidirectional=True) -> "CouplingMap":
         """Return a coupling map of n qubits connected in a line."""
         cmap = cls(description="line")
-        cmap.graph = rx.generators.directed_path_graph(num_qubits, bidirectional=bidirectional)
+        cmap.graph = rx.generators.directed_path_graph(
+            num_qubits, bidirectional=bidirectional, multigraph=False
+        )
         return cmap
 
     @classmethod
     def from_ring(cls, num_qubits, bidirectional=True) -> "CouplingMap":
         """Return a coupling map of n qubits connected to each of their neighbors in a ring."""
         cmap = cls(description="ring")
-        cmap.graph = rx.generators.directed_cycle_graph(num_qubits, bidirectional=bidirectional)
+        cmap.graph = rx.generators.directed_cycle_graph(
+            num_qubits, bidirectional=bidirectional, multigraph=False
+        )
         return cmap
 
     @classmethod
@@ -333,7 +335,7 @@ class CouplingMap:
         """Return a coupling map of qubits connected on a grid of num_rows x num_columns."""
         cmap = cls(description="grid")
         cmap.graph = rx.generators.directed_grid_graph(
-            num_rows, num_columns, bidirectional=bidirectional
+            num_rows, num_columns, bidirectional=bidirectional, multigraph=False
         )
         return cmap
 
@@ -358,7 +360,9 @@ class CouplingMap:
             CouplingMap: A heavy hex coupling graph
         """
         cmap = cls(description="heavy-hex")
-        cmap.graph = rx.generators.directed_heavy_hex_graph(distance, bidirectional=bidirectional)
+        cmap.graph = rx.generators.directed_heavy_hex_graph(
+            distance, bidirectional=bidirectional, multigraph=False
+        )
         return cmap
 
     @classmethod
@@ -383,7 +387,7 @@ class CouplingMap:
         """
         cmap = cls(description="heavy-square")
         cmap.graph = rx.generators.directed_heavy_square_graph(
-            distance, bidirectional=bidirectional
+            distance, bidirectional=bidirectional, multigraph=False
         )
         return cmap
 
@@ -402,7 +406,7 @@ class CouplingMap:
         """
         cmap = cls(description="hexagonal-lattice")
         cmap.graph = rx.generators.directed_hexagonal_lattice_graph(
-            rows, cols, bidirectional=bidirectional
+            rows, cols, bidirectional=bidirectional, multigraph=False
         )
         return cmap
 
@@ -472,12 +476,10 @@ class CouplingMap:
 
     def __str__(self):
         """Return a string representation of the coupling graph."""
-        string = ""
-        if self.get_edges():
-            string += "["
-            string += ", ".join([f"[{src}, {dst}]" for (src, dst) in self.get_edges()])
-            string += "]"
-        return string
+        return str(list(self))
+
+    def __repr__(self):
+        return f"CouplingMap({list(self)!r})"
 
     def __eq__(self, other):
         """Check if the graph in ``other`` has the same node labels and edges as the graph in

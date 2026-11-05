@@ -187,6 +187,13 @@ class Operator(LinearOp):
 
         **latex_source**: Raw, uncompiled ASCII source to generate array using LaTeX.
 
+        .. warning::
+
+           Using this method with ``"latex"`` or ``"latex_source"`` output modes
+           relies on SymPy internally which is inherently unsafe as SymPy heavily
+           relies on Python's :func:`.eval` function. This method is not safe to
+           use with untrusted input.
+
         Args:
             output (str): Select the output method to use for drawing the
                 state. Valid choices are `repr`, `text`, `latex`, `latex_source`,
@@ -388,7 +395,7 @@ class Operator(LinearOp):
     ) -> Operator:
         """Create a new Operator object from a :class:`.QuantumCircuit`
 
-        While a :class:`~.QuantumCircuit` object can passed directly as ``data``
+        While a :class:`~.QuantumCircuit` object can be passed directly as ``data``
         to the class constructor this provides no options on how the circuit
         is used to create an :class:`.Operator`. This constructor method lets
         you control how the :class:`.Operator` is created so it can be adjusted

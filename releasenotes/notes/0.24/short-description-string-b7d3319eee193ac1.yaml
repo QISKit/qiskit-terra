@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixes the function ``TemplateOptimization`` to optimize circuits that 
+    match the pattern of template but do not match the parameter of some gates.
+    Refer to `#6974 <https://github.com/Qiskit/qiskit/issues/6974>` for more
+    specific example and details.

@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed an inconsistency in :class:`.ConsolidateBlocks`, which removed identity-equivalent
+    sequences differently to how :class:`.RemoveIdentityEquiv` and Qiskit's other transpiler passes.
+    This has been fixed and :class:`.ConsolidateBlocks` now behaves consistently by using the average gate
+    fidelity to check whether a sequence is close to the identity. This implies that also
+    sequences that are equivalent to the identity up to global phase are now being removed.

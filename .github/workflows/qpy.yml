@@ -29,7 +29,8 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        run: rustup toolchain install --profile minimal --no-self-update
 
       - uses: actions/cache@v6
         with:

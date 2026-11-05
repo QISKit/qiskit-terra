@@ -1216,8 +1216,11 @@ using the latest :class:`~.BackendV2` interface.
 For example, if we wanted to visualize the :class:`~.CouplingMap` for the
 example 3 qubit :class:`~.Target` above:
 
+.. code-block:: python
+
+   target.build_coupling_map().draw()
+
 .. plot::
-   :include-source:
    :alt: Output from the previous code.
 
    from qiskit.circuit import Parameter, Measure
@@ -1270,72 +1273,26 @@ example 3 qubit :class:`~.Target` above:
        }
    )
 
-   target.build_coupling_map().draw()
+   pil_draw = target.build_coupling_map().draw()
+
+   # The following code is only needed to display the image in the documentation. If you
+   # are running this code in a Jupyter notebook, `pil_draw` renders directly without
+   # requiring matplotlib.
+   from matplotlib import pyplot
+   pyplot.axis("off")
+   pyplot.imshow(pil_draw)
 
 This shows the global connectivity of the :class:`~.Target` which is the
 combination of the supported qubits for :class:`~.CXGate` and :class:`~.CZGate`. To
 see the individual connectivity, you can pass the operation name to
 :meth:`.CouplingMap.build_coupling_map`:
 
-.. plot::
-   :alt: Output from the previous code.
-   :include-source:
-
-   from qiskit.circuit import Parameter, Measure
-   from qiskit.transpiler import Target, InstructionProperties
-   from qiskit.circuit.library import UGate, RZGate, RXGate, RYGate, CXGate, CZGate
-
-   target = Target(num_qubits=3)
-   target.add_instruction(CXGate(), {(0, 1): InstructionProperties(error=.0001, duration=5e-7)})
-   target.add_instruction(
-       UGate(Parameter('theta'), Parameter('phi'), Parameter('lam')),
-       {
-           (0,): InstructionProperties(error=.00001, duration=5e-8),
-           (1,): InstructionProperties(error=.00002, duration=6e-8)
-       }
-   )
-   target.add_instruction(
-       RZGate(Parameter('theta')),
-       {
-           (1,): InstructionProperties(error=.00001, duration=5e-8),
-           (2,): InstructionProperties(error=.00002, duration=6e-8)
-       }
-   )
-   target.add_instruction(
-       RYGate(Parameter('theta')),
-       {
-           (1,): InstructionProperties(error=.00001, duration=5e-8),
-           (2,): InstructionProperties(error=.00002, duration=6e-8)
-       }
-   )
-   target.add_instruction(
-       RXGate(Parameter('theta')),
-       {
-           (1,): InstructionProperties(error=.00001, duration=5e-8),
-           (2,): InstructionProperties(error=.00002, duration=6e-8)
-       }
-   )
-   target.add_instruction(
-       CZGate(),
-       {
-           (1, 2): InstructionProperties(error=.0001, duration=5e-7),
-           (2, 0): InstructionProperties(error=.0001, duration=5e-7)
-       }
-   )
-   target.add_instruction(
-       Measure(),
-       {
-           (0,): InstructionProperties(error=.001, duration=5e-5),
-           (1,): InstructionProperties(error=.002, duration=6e-5),
-           (2,): InstructionProperties(error=.2, duration=5e-7)
-       }
-   )
+.. code-block:: python
 
    target.build_coupling_map('cx').draw()
 
 .. plot::
    :alt: Output from the previous code.
-   :include-source:
 
    from qiskit.circuit import Parameter, Measure
    from qiskit.transpiler import Target, InstructionProperties
@@ -1387,7 +1344,80 @@ see the individual connectivity, you can pass the operation name to
        }
    )
 
+   pil_draw = target.build_coupling_map('cx').draw()
+
+   # The following code is only needed to display the image in the documentation. If you
+   # are running this code in a Jupyter notebook, `pil_draw` renders directly without
+   # requiring matplotlib.
+   from matplotlib import pyplot
+   pyplot.axis("off")
+   pyplot.imshow(pil_draw)
+
+.. code-block:: python
+
    target.build_coupling_map('cz').draw()
+
+.. plot::
+   :alt: Output from the previous code.
+
+   from qiskit.circuit import Parameter, Measure
+   from qiskit.transpiler import Target, InstructionProperties
+   from qiskit.circuit.library import UGate, RZGate, RXGate, RYGate, CXGate, CZGate
+
+   target = Target(num_qubits=3)
+   target.add_instruction(CXGate(), {(0, 1): InstructionProperties(error=.0001, duration=5e-7)})
+   target.add_instruction(
+       UGate(Parameter('theta'), Parameter('phi'), Parameter('lam')),
+       {
+           (0,): InstructionProperties(error=.00001, duration=5e-8),
+           (1,): InstructionProperties(error=.00002, duration=6e-8)
+       }
+   )
+   target.add_instruction(
+       RZGate(Parameter('theta')),
+       {
+           (1,): InstructionProperties(error=.00001, duration=5e-8),
+           (2,): InstructionProperties(error=.00002, duration=6e-8)
+       }
+   )
+   target.add_instruction(
+       RYGate(Parameter('theta')),
+       {
+           (1,): InstructionProperties(error=.00001, duration=5e-8),
+           (2,): InstructionProperties(error=.00002, duration=6e-8)
+       }
+   )
+   target.add_instruction(
+       RXGate(Parameter('theta')),
+       {
+           (1,): InstructionProperties(error=.00001, duration=5e-8),
+           (2,): InstructionProperties(error=.00002, duration=6e-8)
+       }
+   )
+   target.add_instruction(
+       CZGate(),
+       {
+           (1, 2): InstructionProperties(error=.0001, duration=5e-7),
+           (2, 0): InstructionProperties(error=.0001, duration=5e-7)
+       }
+   )
+   target.add_instruction(
+       Measure(),
+       {
+           (0,): InstructionProperties(error=.001, duration=5e-5),
+           (1,): InstructionProperties(error=.002, duration=6e-5),
+           (2,): InstructionProperties(error=.2, duration=5e-7)
+       }
+   )
+
+   pil_draw = target.build_coupling_map('cz').draw()
+
+   # The following code is only needed to display the image in the documentation. If you
+   # are running this code in a Jupyter notebook, `pil_draw` renders directly without
+   # requiring matplotlib.
+   from matplotlib import pyplot
+   pyplot.axis("off")
+   pyplot.imshow(pil_draw)
 
 
 .. _transpiler-scheduling-description:

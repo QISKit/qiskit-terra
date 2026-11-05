@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a potential deadlock in the :class:`.Optimize1qGatesDecomposition`
+    transpiler pass when run with custom defined single qubit gates in
+    a :class:`.QuantumCircuit` or :class:`.Target`.
+    Fixed `#16591 <https://github.com/Qiskit/qiskit/issues/16591>`__.

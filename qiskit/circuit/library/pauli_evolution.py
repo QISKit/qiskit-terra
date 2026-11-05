@@ -99,6 +99,10 @@ class PauliEvolutionGate(Gate):
         q_1: ┤1                         ├
              └──────────────────────────┘
 
+    .. warning::
+
+        The transpiler might silently drop the ``synthesis`` strategy during optimization,
+        for example, if two Pauli evolution gates are merged.
 
     References:
 
@@ -465,3 +469,14 @@ def _pauli_rotation_trace_and_dim(gate: PauliEvolutionGate) -> tuple[complex, in
         return (np.exp(-1j * angle), 1)
 
     return (np.cos(angle), 2**num_qubits)
+
+
+def _contains_projectors(gate: PauliEvolutionGate) -> bool:
+    """Return whether gate contains any projector terms."""
+    if isinstance(gate.operator, SparseObservable):
+        return gate.operator.contains_projectors()
+    elif isinstance(gate.operator, list):
+        return any(
+            isinstance(op, SparseObservable) and op.contains_projectors() for op in gate.operator
+        )
+    return False

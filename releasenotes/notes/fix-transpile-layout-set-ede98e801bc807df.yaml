@@ -1,0 +1,4 @@
+fixes:
+  - |
+    Fixed :c:func:`qk_transpile_state_layout_set` behavior such that the state layout is unset when
+    null. See `#17054 <https://github.com/Qiskit/qiskit/issues/17054>`__.

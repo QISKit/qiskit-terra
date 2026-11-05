@@ -18,7 +18,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::{Bound, PyResult, pyfunction, wrap_pyfunction};
 use qiskit_circuit::PhysicalQubit;
-use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType};
+use qiskit_circuit::dag_circuit::{DAGCircuit, NodeType, PyDAGCircuit};
 use qiskit_circuit::operations::{
     Operation, OperationRef, Param, PyInstruction, PyOpKind, StandardInstruction,
 };
@@ -131,17 +131,13 @@ fn push_node_back(
             .first()
             .ok_or_else(|| PyValueError::new_err("Delay instruction missing duration parameter"))?;
         let duration = match param {
-            Param::Obj(val) => {
-                // Try to extract as different numeric types
-                Python::attach(|py| val.bind(py).extract::<u64>())
-            }
-            Param::Float(f) => Ok(*f as u64),
+            Param::Int(val) => Ok(*val),
             _ => Err(TranspilerError::new_err(
                 "The provided Delay duration is not in terms of dt.",
             )),
         }?;
 
-        this_t0 + duration
+        this_t0 + u64::try_from(duration)?
     } else {
         this_t0
     };
@@ -247,7 +243,7 @@ fn push_node_back(
 #[pyfunction]
 #[pyo3(name="constrained_reschedule", signature=(dag, node_start_time, clbit_write_latency, acquire_align, pulse_align, target))]
 pub fn py_run_constrained_reschedule(
-    dag: &DAGCircuit,
+    dag: &PyDAGCircuit,
     mut node_start_time: PyNodeDurations,
     clbit_write_latency: u32,
     acquire_align: u32,
@@ -260,7 +256,7 @@ pub fn py_run_constrained_reschedule(
         ));
     };
     run_constrained_reschedule(
-        dag,
+        dag.try_read()?,
         durations,
         clbit_write_latency,
         acquire_align,

@@ -61,6 +61,14 @@ class SubstitutionConfig:
 class TemplateSubstitution:
     """
     Class to run the substitution algorithm from the list of maximal matches.
+
+    .. warning::
+
+        This pass internally relies on using SymPy and will pass strings from the
+        :class:`.DAGCircuit` the pass is run on to SymPy. This is inherently unsafe as SymPy
+        heavily relies on Python's :func:`.eval` function for the processing of strings. This
+        pass should not be used with untrusted input.
+
     """
 
     def __init__(self, max_matches, circuit_dag_dep, template_dag_dep, user_cost_dict=None):

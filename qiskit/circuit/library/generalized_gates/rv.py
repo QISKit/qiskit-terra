@@ -51,7 +51,14 @@ class RVGate(Gate):
                 \end{pmatrix}
     """
 
-    def __init__(self, v_x: float, v_y: float, v_z: float, basis: str = "U"):
+    def __init__(
+        self,
+        v_x: float,
+        v_y: float,
+        v_z: float,
+        basis: str = "U",
+        label: str | None = None,
+    ):
         """
         Args:
             v_x: x-component
@@ -59,11 +66,12 @@ class RVGate(Gate):
             v_z: z-component
             basis: basis (see
                 :class:`~qiskit.synthesis.one_qubit.one_qubit_decompose.OneQubitEulerDecomposer`)
+            label: An optional label for the gate.
         """
 
         from qiskit.synthesis.one_qubit.one_qubit_decompose import OneQubitEulerDecomposer
 
-        super().__init__("rv", 1, [v_x, v_y, v_z])
+        super().__init__("rv", 1, [v_x, v_y, v_z], label=label)
         self._decomposer = OneQubitEulerDecomposer(basis=basis)
 
     def _define(self):

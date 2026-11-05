@@ -215,23 +215,26 @@ of the number of terms, you can iterate over all observable terms as
 Construction
 ============
 
-``QkObs`` can be constructed by initializing an empty observable (with ``qk_obs_zero``) and
-iteratively adding terms (with ``qk_obs_add_term``). Alternatively, an observable can be
-constructed from "raw" data (with ``qk_obs_new``) if all internal data is specified. This requires
-care to ensure the data is coherent and results in a valid observable.
+``QkObs`` can be constructed by initializing an empty observable (with ``qk_obs_zero`` or
+``qk_obs_with_capacity``) and iteratively adding terms (with
+``qk_obs_add_term``). Alternatively, an observable can be constructed from "raw"
+data (with ``qk_obs_new``) if all internal data is specified. This requires care
+to ensure the data is coherent and results in a valid observable.
 
 .. _qkobs-constructors:
 .. table:: Constructors
 
-  ===================  =========================================================================
-  Function             Summary
-  ===================  =========================================================================
-  ``qk_obs_zero``      Construct an empty observable on a given number of qubits.
+  ========================  =========================================================================
+  Function                  Summary
+  ========================  =========================================================================
+  ``qk_obs_zero``           Construct an empty observable on a given number of qubits.
 
-  ``qk_obs_identity``  Construct the identity observable on a given number of qubits.
+  ``qk_obs_with_capacity``  Construct an empty observable with a pre-allocated capacity.
 
-  ``qk_obs_new``       Construct an observable from :ref:`the raw data arrays <qkobs-arrays>`.
-  ===================  =========================================================================
+  ``qk_obs_identity``       Construct the identity observable on a given number of qubits.
+
+  ``qk_obs_new``            Construct an observable from :ref:`the raw data arrays <qkobs-arrays>`.
+  ========================  =========================================================================
 
 
 Mathematical manipulation

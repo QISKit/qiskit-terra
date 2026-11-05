@@ -470,10 +470,15 @@ mod export {
         for item in &items.enums {
             writeln!(out, "{}", r#enum(item))?;
         }
+        // Python executes the file top to bottom, so each declaration must precede its first use: opaque
+        // structs depend on nothing, unions may point to them, and structs may hold a union by value.
+        for item in items.structs.iter().filter(|item| item.fields.is_none()) {
+            writeln!(out, "{}", r#struct(item))?;
+        }
         for item in &items.unions {
             writeln!(out, "{}", r#union(item))?;
         }
-        for item in &items.structs {
+        for item in items.structs.iter().filter(|item| item.fields.is_some()) {
             writeln!(out, "{}", r#struct(item))?;
         }
         for item in &items.functions {

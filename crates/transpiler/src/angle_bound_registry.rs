@@ -19,7 +19,7 @@ use pyo3::types::PyDict;
 
 use crate::TranspilerError;
 use qiskit_circuit::PhysicalQubit;
-use qiskit_circuit::dag_circuit::DAGCircuit;
+use qiskit_circuit::dag_circuit::{DAGCircuit, PyDAGCircuit};
 
 #[derive(Clone)]
 pub(crate) enum CallbackType {
@@ -36,8 +36,12 @@ impl CallbackType {
                     inner
                         .bind(py)
                         .call1((angles, qubits))?
-                        .extract()
+                        .cast_into::<PyDAGCircuit>()
                         .map_err(PyErr::from)
+                        // Since there is currently no other way of safely obtaining
+                        // the owned DAGCircuit object. We will explicitly clone the
+                        // DAG obtained in Python.
+                        .map(|dag| dag.borrow().try_read().cloned())?
                 })
             }
             Self::Native(inner) => Ok(inner(angles, qubits)),
@@ -66,8 +70,11 @@ impl PyWrapAngleRegistry {
         name: &str,
         angles: Vec<f64>,
         qubits: Vec<PhysicalQubit>,
-    ) -> PyResult<Option<DAGCircuit>> {
-        self.0.substitute_angle_bounds(name, &angles, &qubits)
+    ) -> PyResult<Option<PyDAGCircuit>> {
+        Ok(self
+            .0
+            .substitute_angle_bounds(name, &angles, &qubits)?
+            .map(Into::into))
     }
 
     pub fn add_wrapper(&mut self, name: String, callback: Py<PyAny>) {
@@ -133,7 +140,9 @@ impl WrapAngleRegistry {
     ) -> PyResult<Option<DAGCircuit>> {
         match self.registry.get(name) {
             Some(callback) => Some(callback.call(angles, qubits)).transpose(),
-            None => Err(PyKeyError::new_err("Name: {} not in registry")),
+            None => Err(PyKeyError::new_err(format!(
+                "Name '{name}' not in WrapAngleRegistry"
+            ))),
         }
     }
 }

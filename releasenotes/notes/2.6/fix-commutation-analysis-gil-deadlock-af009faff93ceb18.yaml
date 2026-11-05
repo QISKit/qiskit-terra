@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a deadlock in :class:`.CommutationAnalysis` and :class:`.CommutativeCancellation`
+    when running multithreaded and the commutation of custom Python-defined gates
+    had to be computed from their matrices.
+    Fixed `#16937 <https://github.com/Qiskit/qiskit/issues/16937>`__.

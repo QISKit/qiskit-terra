@@ -17,11 +17,11 @@ use crate::formats::{
     ExpressionVarElementPack, ExpressionVarRegisterPack,
 };
 use crate::value::{
-    QPYReadData, QPYWriteData, pack_biguint, pack_duration, unpack_biguint, unpack_duration,
+    QPYReadData, QPYWriteData, clbit_at, clbit_index, creg_by_name, pack_biguint, pack_duration,
+    unpack_biguint, unpack_duration,
 };
 use binrw::{BinRead, BinResult, BinWrite, Endian, Error};
 use num_bigint::BigUint;
-use qiskit_circuit::Clbit;
 use qiskit_circuit::classical::expr::{
     Binary, BinaryOp, Cast, Expr, Index, Unary, UnaryOp, Value, Var,
 };
@@ -109,16 +109,7 @@ pub(crate) fn pack_expression_var(
     let (ty, value_pack) = match var {
         Var::Bit { bit } => (
             &Type::Bool,
-            ExpressionVarElementPack::Clbit(
-                qpy_data
-                    .circuit_data
-                    .clbits()
-                    .find(bit)
-                    .ok_or_else(|| {
-                        QpyError::InvalidBit(format!("Could not find bit {:?} in circuit", bit))
-                    })?
-                    .0,
-            ),
+            ExpressionVarElementPack::Clbit(clbit_index(bit, qpy_data)?),
         ),
         Var::Register { register, ty } => (
             ty,
@@ -152,24 +143,12 @@ pub(crate) fn unpack_expression_var(
     let ty = unpack_expression_type(var_type_pack);
     match var_element_pack {
         ExpressionVarElementPack::Clbit(index) => Ok(Var::Bit {
-            bit: qpy_data
-                .circuit_data
-                .clbits()
-                .get(Clbit(index))
-                .ok_or_else(|| QpyError::InvalidBit("Clbit not found in circuit data".to_string()))?
-                .clone(),
+            bit: clbit_at(index, qpy_data)?,
         }),
         ExpressionVarElementPack::Register(packed_register) => Ok(Var::Register {
-            register: qpy_data
-                .circuit_data
-                .cregs_data()
-                .get(packed_register.name.as_str())
-                .ok_or_else(|| {
-                    QpyError::InvalidRegister("Register not found in circuit data".to_string())
-                })?
-                .clone(),
+            register: creg_by_name(&packed_register.name, qpy_data)?,
             ty,
-        }), // TODO: can we avoid cloning?
+        }),
         ExpressionVarElementPack::Uuid(key) => {
             let var = qpy_data.standalone_vars.get(&key).ok_or_else(|| {
                 QpyError::InvalidParameter("Standalone var not found in qpy data".to_string())
@@ -314,7 +293,7 @@ pub(crate) fn read_expression<R: Read + Seek>(
             let operand = read_expression(reader, endian, (qpy_data,))?;
             let constant = operand.is_const();
             Ok(Expr::Unary(Box::new(Unary {
-                op: UnaryOp::from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
+                op: UnaryOp::try_from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
                 operand,
                 ty: unpack_expression_type(unary_type_pack),
                 constant,
@@ -325,7 +304,7 @@ pub(crate) fn read_expression<R: Read + Seek>(
             let right = read_expression(reader, endian, (qpy_data,))?;
             let constant = left.is_const() && right.is_const();
             Ok(Expr::Binary(Box::new(Binary {
-                op: BinaryOp::from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
+                op: BinaryOp::try_from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
                 left,
                 right,
                 ty: unpack_expression_type(binary_type_pack),

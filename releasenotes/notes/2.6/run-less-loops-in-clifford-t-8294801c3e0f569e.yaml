@@ -1,0 +1,8 @@
+---
+performance:
+  - |
+    Improved the performance of compilation into Clifford+T basis sets 
+    (for example, using :func:`~.generate_preset_clifford_t_pass_manager`)
+    by removing transpiler passes that have little or no impact on the quality
+    of the resulting circuit.
+    See `#16406 <https://github.com/Qiskit/qiskit/pull/16406>`__ for more details.
