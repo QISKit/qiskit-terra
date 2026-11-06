@@ -399,8 +399,7 @@ pub unsafe extern "C" fn qk_control_flow_block_circuit(
 
     let block_ids = cf_inst.instruction().blocks_view();
     // Per documentation, block_idx must be within bounds.
-    let block_circuit = &cf_inst.circuit().blocks()[block_ids[block_idx]];
-    ptr::from_ref(block_circuit)
+    &cf_inst.circuit().blocks()[block_ids[block_idx]]
 }
 
 /// @ingroup QkControlFlow
@@ -655,7 +654,7 @@ pub unsafe extern "C" fn qk_control_flow_condition_reg(
         return ptr::null();
     };
 
-    ptr::from_ref(creg)
+    creg
 }
 
 /// @ingroup QkControlFlow
@@ -780,7 +779,7 @@ pub unsafe extern "C" fn qk_control_flow_condition_expr(
         return ptr::null();
     };
 
-    ptr::from_ref(expr)
+    expr
 }
 
 /// @ingroup QkControlFlow
@@ -1349,7 +1348,7 @@ pub unsafe extern "C" fn qk_control_flow_switch_target_register(
         return ptr::null();
     };
 
-    ptr::from_ref(register)
+    register
 }
 
 /// @ingroup QkControlFlow
@@ -1391,7 +1390,7 @@ pub unsafe extern "C" fn qk_control_flow_switch_target_expr(
         return ptr::null();
     };
 
-    ptr::from_ref(expr)
+    expr
 }
 
 /// @ingroup QkControlFlow
