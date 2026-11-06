@@ -2312,7 +2312,7 @@ pub unsafe extern "C" fn inner_test_control_flow_circuit() -> *mut CircuitData {
     Box::into_raw(Box::new(circuit))
 }
 
-fn extract_if_while_condition(instruction: &ControlFlowInstruction) -> Option<&'_ Condition> {
+fn extract_if_while_condition(instruction: &ControlFlowInstruction) -> Option<&Condition> {
     match &instruction.control_flow {
         ControlFlow::IfElse { condition } | ControlFlow::While { condition } => Some(condition),
         _ => None,
