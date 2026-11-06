@@ -28,7 +28,11 @@ QISKIT_BUILD_WITH_MIMALLOC=1 RUSTFLAGS="-Cprofile-generate=$work_dir" QISKIT_BUI
 # Run profile data generation
 QISKIT_PARALLEL=FALSE stestr run --abbreviate
 
-python tools/pgo_scripts/test_utility_scale.py
+git clone https://github.com/Qiskit/benchpress --depth=1
+pushd benchpress
+pip install -r requirements.txt -r requirements-qiskit.txt 'pytest<9.2.0'
+pytest benchpress/qiskit_gym/device_transpile benchpress/qiskit_gym/construct
+popd
 
 deactivate
 
