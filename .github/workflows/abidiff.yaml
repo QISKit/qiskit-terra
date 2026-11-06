@@ -20,7 +20,7 @@ jobs:
 
       - name: Fetch baseline
         run: |
-          tag=$(git tag -l | tail -2 | head -1)
+          tag=$(git tag -l | tail -1)
           git checkout "${tag}"
 
       - name: Cache toolchain
