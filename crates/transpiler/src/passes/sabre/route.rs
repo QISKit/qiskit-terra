@@ -604,8 +604,9 @@ struct State {
     /// routed (and every swap chosen) so far in this trial.  Only maintained when the wait-time
     /// heuristic is enabled.
     ready: VecMap<PhysicalQubit, u32>,
-    /// Previous `ready` values of qubits touched by swaps of the current search step, so the
-    /// release valve can unwind them.
+    /// Old `ready` values of qubits touched since the last routed node, so the release valve can
+    /// unwind them.  A stack (pop in reverse; qubits can repeat) beats snapshotting `ready` every
+    /// node.  Lives here rather than with `current_swaps` so we reuse the allocation.
     ready_undo: Vec<(PhysicalQubit, u32)>,
     rng: Pcg64Mcg,
     seed: u64,

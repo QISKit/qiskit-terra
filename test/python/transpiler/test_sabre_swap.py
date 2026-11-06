@@ -29,7 +29,7 @@ from qiskit.compiler.transpiler import transpile
 from qiskit.converters import circuit_to_dag, dag_to_circuit
 from qiskit.providers.fake_provider import GenericBackendV2
 from qiskit.quantum_info import Operator
-from qiskit.transpiler.passes import SabreSwap, CheckMap, TrivialLayout, ApplyLayout
+from qiskit.transpiler.passes import SabreSwap, CheckMap
 from qiskit.transpiler.passes.routing.sabre_swap import Heuristic, SetScaling
 from qiskit.transpiler import CouplingMap, Layout, PassManager, Target, TranspilerError
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit
@@ -105,11 +105,22 @@ def looping_circuit(uphill_swaps=1, additional_local_minimum_gates=0):
 class TestSabreSwap(QiskitTestCase):
     """Tests the SabreSwap pass."""
 
-    def test_sabre_swap_pickle(self):
+    @ddt.data(
+        "basic",
+        "lookahead",
+        "decay",
+        "wait_time",
+        Heuristic()
+        .with_wait_time(0.0025, swap_cost=5)
+        .with_basic(1.0, SetScaling.Constant)
+        .with_lookahead([0.1], SetScaling.Constant)
+        .with_decay(0.001, 5),
+    )
+    def test_sabre_swap_pickle(self, heuristic):
         """Test the pass can be pickled."""
         coupling = CouplingMap.from_ring(5)
         target = Target.from_configuration(["u", "cx"], coupling_map=coupling)
-        sabre_swap = SabreSwap(target, "lookahead", seed=42, trials=1024)
+        sabre_swap = SabreSwap(target, heuristic, seed=42, trials=1024)
         with io.BytesIO() as buf:
             pickle.dump(sabre_swap, buf)
             buf.seek(0)
@@ -138,11 +149,22 @@ class TestSabreSwap(QiskitTestCase):
         after_result = output(test_circuit)
         self.assertEqual(before_result, after_result)
 
-    def test_sabre_swap_deepcopy(self):
+    @ddt.data(
+        "basic",
+        "lookahead",
+        "decay",
+        "wait_time",
+        Heuristic()
+        .with_wait_time(0.0025, swap_cost=5)
+        .with_basic(1.0, SetScaling.Constant)
+        .with_lookahead([0.1], SetScaling.Constant)
+        .with_decay(0.001, 5),
+    )
+    def test_sabre_swap_deepcopy(self, heuristic):
         """Test the pass can be deepcopied."""
         coupling = CouplingMap.from_ring(5)
         target = Target.from_configuration(["u", "cx"], coupling_map=coupling)
-        sabre_swap = SabreSwap(target, "lookahead", seed=42, trials=1024)
+        sabre_swap = SabreSwap(target, heuristic, seed=42, trials=1024)
         output = deepcopy(sabre_swap)
         self.assertIsInstance(output, SabreSwap)
         self.assertIsNone(output._routing_target)
@@ -390,33 +412,6 @@ class TestSabreSwap(QiskitTestCase):
         # Check that a re-run with the same seed produces the same circuit in the exact same order.
         self.assertEqual(normalize_nodes(dag_0), normalize_nodes(pass_0.run(dag)))
 
-    def _route_with_layout(self, circuit, coupling, heuristic, seed):
-        """Route a copy, retaining the initial and final logical-to-physical mappings."""
-        return PassManager(
-            [
-                TrivialLayout(coupling),
-                ApplyLayout(),
-                SabreSwap(coupling, heuristic, seed=seed, trials=1),
-            ]
-        ).run(circuit.copy())
-
-    def _assert_valid_unitary_route(self, reference, routed, coupling):
-        """Check the computation and physical constraints independently."""
-        self.assertEqual(routed.num_qubits, reference.num_qubits)
-        self.assertIsNotNone(routed.layout)
-        self.assertIsNotNone(routed.layout.initial_layout)
-        self.assertIsNotNone(routed.layout.final_layout)
-        self.assertEqual(Operator.from_circuit(routed), Operator.from_circuit(reference))
-        edges = set(coupling.get_edges())
-        for instruction in routed.data:
-            if instruction.operation._directive:
-                continue
-            self.assertLessEqual(instruction.operation.num_qubits, 2)
-            if instruction.operation.num_qubits == 2:
-                self.assertIn(
-                    tuple(routed.find_bit(qubit).index for qubit in instruction.qubits), edges
-                )
-
     @ddt.data((4, 0), (4, 42), (2, 0), (2, 42))
     @ddt.unpack
     def test_wait_time_routing_preserves_unitary(self, width, seed):
@@ -431,6 +426,7 @@ class TestSabreSwap(QiskitTestCase):
             qc.cx(1, 3)
         else:
             qc.cx(0, 1)
+        qc.ensure_physical()
         coupling = CouplingMap.from_line(width)
         decay = (
             Heuristic(attempt_limit=10 * width)
@@ -438,7 +434,6 @@ class TestSabreSwap(QiskitTestCase):
             .with_lookahead([0.5 / width], SetScaling.Constant)
             .with_decay(0.001, 5)
         )
-        outputs = {}
         for name, heuristic in [
             ("decay", "decay"),
             ("wait_time", "wait_time"),
@@ -446,20 +441,54 @@ class TestSabreSwap(QiskitTestCase):
             ("large_weight", decay.with_wait_time(1e-3)),
         ]:
             with self.subTest(heuristic=name):
-                routed = self._route_with_layout(qc, coupling, heuristic, seed)
-                outputs[name] = routed
-                self._assert_valid_unitary_route(qc, routed, coupling)
+                routed = PassManager(SabreSwap(coupling, heuristic, seed=seed, trials=1)).run(qc)
+                self.assertEqual(routed.num_qubits, qc.num_qubits)
+                self.assertIsNotNone(routed.layout)
+                self.assertIsNotNone(routed.layout.initial_layout)
+                self.assertIsNotNone(routed.layout.final_layout)
+                self.assertEqual(Operator.from_circuit(routed), Operator.from_circuit(qc))
+                check_map = CheckMap(coupling)
+                check_map(routed)
+                self.assertTrue(check_map.property_set["is_swap_mapped"])
+                for instruction in routed.data:
+                    if not instruction.operation._directive:
+                        self.assertLessEqual(instruction.operation.num_qubits, 2)
                 if width == 4:
                     self.assertGreater(routed.count_ops().get("swap", 0), 0)
                     self.assertNotEqual(routed.layout.final_index_layout(), list(range(width)))
                 else:
                     self.assertEqual(routed.count_ops().get("swap", 0), 0)
 
-        # A zero weight enables readiness tracking without changing the score or route.
-        self.assertEqual(outputs["zero_weight"].data, outputs["decay"].data)
+    @ddt.data((4, 0), (4, 42), (2, 0), (2, 42))
+    @ddt.unpack
+    def test_zero_wait_time_weight_preserves_decay_route(self, width, seed):
+        """A zero wait-time weight enables readiness tracking without changing the decay route."""
+        qc = QuantumCircuit(width)
+        qc.h(0)
+        qc.rz(0.37, width - 1)
+        qc.global_phase = 0.23
+        if width == 4:
+            for _ in range(4):
+                qc.cx(0, 1)
+            qc.cx(1, 3)
+        else:
+            qc.cx(0, 1)
+        qc.ensure_physical()
+        coupling = CouplingMap.from_line(width)
+        heuristic = (
+            Heuristic(attempt_limit=10 * width)
+            .with_basic(1.0, SetScaling.Constant)
+            .with_lookahead([0.5 / width], SetScaling.Constant)
+            .with_decay(0.001, 5)
+            .with_wait_time(0.0)
+        )
+        decay = PassManager(SabreSwap(coupling, "decay", seed=seed, trials=1)).run(qc)
+        zero_weight = PassManager(SabreSwap(coupling, heuristic, seed=seed, trials=1)).run(qc)
+
+        self.assertEqual(zero_weight.data, decay.data)
         self.assertEqual(
-            outputs["zero_weight"].layout.final_index_layout(),
-            outputs["decay"].layout.final_index_layout(),
+            zero_weight.layout.final_index_layout(),
+            decay.layout.final_index_layout(),
         )
 
     def test_equal_score_swaps_prefer_idle_wires(self):
@@ -472,19 +501,41 @@ class TestSabreSwap(QiskitTestCase):
         for _ in range(4):
             qc.cx(0, 1)
         qc.cx(1, 3)
+        qc.ensure_physical()
         coupling = CouplingMap.from_line(4)
         for seed in range(10):
-            routed = self._route_with_layout(qc, coupling, "wait_time", seed)
+            routed = PassManager(SabreSwap(coupling, "wait_time", seed=seed, trials=1)).run(qc)
             if seed == 0:
-                self._assert_valid_unitary_route(qc, routed, coupling)
+                self.assertEqual(routed.num_qubits, qc.num_qubits)
+                self.assertIsNotNone(routed.layout)
+                self.assertIsNotNone(routed.layout.initial_layout)
+                self.assertIsNotNone(routed.layout.final_layout)
+                self.assertEqual(Operator.from_circuit(routed), Operator.from_circuit(qc))
+                check_map = CheckMap(coupling)
+                check_map(routed)
+                self.assertTrue(check_map.property_set["is_swap_mapped"])
+                for instruction in routed.data:
+                    if not instruction.operation._directive:
+                        self.assertLessEqual(instruction.operation.num_qubits, 2)
             self.assertEqual(routed.count_ops()["swap"], 1)
             swap = next(inst for inst in routed.data if inst.operation.name == "swap")
             self.assertEqual({routed.find_bit(q).index for q in swap.qubits}, {2, 3})
             self.assertEqual(routed.depth(lambda inst: inst.operation.num_qubits == 2), 5)
 
-    @ddt.data((1e-6, {2, 3}), (1.0, {1, 2}))
+    @ddt.data(
+        *(
+            (wait_time_weight, lookahead_weight, expected_swap, seed)
+            for wait_time_weight, lookahead_weight, expected_swap in [
+                (0.0025, 1e-6, {2, 3}),
+                (0.0025, 1.0, {1, 2}),
+            ]
+            for seed in range(10)
+        )
+    )
     @ddt.unpack
-    def test_wait_time_and_lookahead_weights(self, lookahead_weight, expected_swap):
+    def test_wait_time_and_lookahead_weights(
+        self, wait_time_weight, lookahead_weight, expected_swap, seed
+    ):
         """Relative wait-time and lookahead weights determine which swap is preferred."""
         # Both swaps bring `cx(1, 3)` onto adjacent qubits.  Lookahead favors (1, 2) for
         # `cx(3, 4)`, while wait time favors (2, 3) because qubit 1 is busy with earlier gates.
@@ -494,6 +545,7 @@ class TestSabreSwap(QiskitTestCase):
             qc.cx(5, 1)
         qc.cx(1, 3)
         qc.cx(3, 4)
+        qc.ensure_physical()
         coupling = CouplingMap([[0, 1], [1, 2], [2, 3], [3, 4], [1, 5]])
         coupling.make_symmetric()
 
@@ -501,9 +553,9 @@ class TestSabreSwap(QiskitTestCase):
             Heuristic(attempt_limit=60)
             .with_basic(1.0, SetScaling.Constant)
             .with_lookahead([lookahead_weight], SetScaling.Constant)
-            .with_wait_time(0.0025)
+            .with_wait_time(wait_time_weight)
         )
-        routed = self._route_with_layout(qc, coupling, heuristic, seed=0)
+        routed = PassManager(SabreSwap(coupling, heuristic, seed=seed, trials=1)).run(qc)
         swap = next(inst for inst in routed.data if inst.operation.name == "swap")
         self.assertEqual({routed.find_bit(q).index for q in swap.qubits}, expected_swap)
 
@@ -533,19 +585,20 @@ class TestSabreSwap(QiskitTestCase):
         qc.cx(0, 4)
         qc.cx(4, 5)
         qc.cx(4, 7)
+        qc.ensure_physical()
         coupling = CouplingMap.from_line(8)
         weight = 1e-3
 
-        def two_qubit_ops(lookahead_weight, attempt_limit, seed):
+        def route(lookahead_weight, attempt_limit, seed):
             heuristic = (
                 Heuristic(attempt_limit=attempt_limit)
                 .with_basic(1.0, SetScaling.Constant)
                 .with_lookahead([lookahead_weight], SetScaling.Constant)
                 .with_wait_time(weight)
             )
-            routed = self._route_with_layout(qc, coupling, heuristic, seed)
-            if seed == 0:
-                self._assert_valid_unitary_route(qc, routed, coupling)
+            return PassManager(SabreSwap(coupling, heuristic, seed=seed, trials=1)).run(qc)
+
+        def two_qubit_ops(routed):
             return [
                 (inst.operation.name, {routed.find_bit(q).index for q in inst.qubits})
                 for inst in routed.data
@@ -565,23 +618,39 @@ class TestSabreSwap(QiskitTestCase):
                     # control run is a greedy choice, and its first two are the ones that
                     # ``attempt_limit=1`` discards: (0, 1) and then (1, 2).  A finite limit would
                     # not do, because the forced route happens to begin with the same two swaps.
-                    control = two_qubit_ops(lookahead_weight, None, seed)
-                    self.assertEqual(control[:2], [("swap", {0, 1}), ("swap", {1, 2})])
-                    ops = two_qubit_ops(lookahead_weight, 1, seed)
+                    control = route(lookahead_weight, None, seed)
+                    routed = route(lookahead_weight, 1, seed)
+                    if seed == 0:
+                        for circuit in (control, routed):
+                            self.assertEqual(circuit.num_qubits, qc.num_qubits)
+                            self.assertIsNotNone(circuit.layout)
+                            self.assertIsNotNone(circuit.layout.initial_layout)
+                            self.assertIsNotNone(circuit.layout.final_layout)
+                            self.assertEqual(
+                                Operator.from_circuit(circuit), Operator.from_circuit(qc)
+                            )
+                            check_map = CheckMap(coupling)
+                            check_map(circuit)
+                            self.assertTrue(check_map.property_set["is_swap_mapped"])
+                            for instruction in circuit.data:
+                                if not instruction.operation._directive:
+                                    self.assertLessEqual(instruction.operation.num_qubits, 2)
+                    self.assertEqual(
+                        two_qubit_ops(control)[:2], [("swap", {0, 1}), ("swap", {1, 2})]
+                    )
+                    ops = two_qubit_ops(routed)
                     self.assertEqual(ops[:4], forced)
                     self.assertEqual([qubits for name, qubits in ops if name == "cx"][1], second_cx)
 
-    def test_wait_time_heuristic_serialization(self):
-        """The wait-time component survives builders, pickling and copying."""
+    def test_wait_time_heuristic_repr_and_equality(self):
+        """The wait-time component is included in representations and equality."""
         heuristic = (
             Heuristic()
+            .with_wait_time(0.0025)
             .with_basic(1.0, SetScaling.Constant)
             .with_lookahead([0.1], SetScaling.Constant)
             .with_decay(0.001, 5)
-            .with_wait_time(0.0025)
         )
-        self.assertEqual(pickle.loads(pickle.dumps(heuristic)), heuristic)
-        self.assertEqual(deepcopy(heuristic), heuristic)
         self.assertIn("wait_time=WaitTimeHeuristic(weight=0.0025, swap_cost=3)", repr(heuristic))
         self.assertIn("wait_time=None", repr(Heuristic()))
         self.assertNotEqual(Heuristic(), Heuristic().with_wait_time(0.0025))
