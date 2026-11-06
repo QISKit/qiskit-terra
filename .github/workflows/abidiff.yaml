@@ -2,31 +2,33 @@ name: Compare C ABI
 
 on:
   pull_request:
-  push:
-    branches: [ main ]
+    paths:
+      - "crates/cext/**"
+      - "crates/bindgen/**"
+      - "crates/bindgen-cli/**"
 
 jobs:
   abidiff:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: base checkout
+      - name: checkout main
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.repository.default_branch }}
 
 
-      - name: base build
+      - name: build main
         run: |
           make cheader clib-dev
           mv dist/c/lib/libqiskit.so dist/c/lib/libqiskit.so.main
 
-      - name: checkout
+      - name: checkout current
         uses: actions/checkout@v7
         with:
           clean: false
 
-      - name: build
+      - name: build current
         run: make cheader clib-dev
 
       - name: install abi tools
