@@ -12,7 +12,6 @@
 
 """A generalized QAOA quantum circuit with a support of custom initial states and mixers."""
 
-
 from __future__ import annotations
 
 import numpy as np
@@ -56,6 +55,13 @@ def qaoa_ansatz(
         cost_operator = SparsePauliOp(["ZZII", "IIZZ", "ZIIZ"])
         ansatz = qaoa_ansatz(cost_operator, reps=3, insert_barriers=True)
         ansatz.draw("mpl")
+
+    .. note::
+
+        The default values follow the formulation of Ref. [1], where the problem
+        is phrased as a maximization of the energy of the cost Hamiltonian. In particular,
+        the default initial state is :math:`|+\rangle^{\otimes n}` which is the maximum
+        eigenstate of the default mixer :math:`\sum_{i=0}^{n-1} X_i`.
 
     Args:
         cost_operator: The operator representing the cost of the optimization problem, denoted as
