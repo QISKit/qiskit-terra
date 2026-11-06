@@ -2,26 +2,39 @@ name: Compare C ABI
 
 on:
   pull_request:
-    branches: [ $default-branch ]
+    branches: [ main ]
   push:
-    branches: [ $default-branch ]
+    branches: [ main ]
 
 jobs:
   abidiff:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
+      - name: base checkout
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
 
-      - name: Build (main)
 
-      - name: Build
+      - name: base build
+        run: |
+          make cheader clib-dev
+          mv dist/c/lib/libqiskit.so dist/c/lib/libqiskit.so.main
 
-      - name: Install ABI Tools
+      - name: checkout
+        uses: actions/checkout@v7
+        with:
+          clean: false
+
+      - name: build
+        run: make cheader clib-dev
+
+      - name: install abi tools
         run: |
           sudo apt update
           sudo apt install -y abigail-tools
 
-      - name: Compare ABI
-
-
-
+      - name: compare abi
+        continue-on-error: true
+        run: abidiff dist/c/lib/libqiskit.so.main dist/c/lib/libqiskit.so
