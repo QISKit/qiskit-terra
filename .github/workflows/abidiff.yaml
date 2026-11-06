@@ -13,10 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Fetch baseline
+      - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-tags: true
+
+      - name: Fetch baseline
         run: |
           tag=$(git tag -l | tail -2 | head -1)
           git checkout "${tag}"
