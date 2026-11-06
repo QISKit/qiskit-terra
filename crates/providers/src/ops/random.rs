@@ -132,9 +132,9 @@ fn output_shape(batch: &[Dim], shape: &[usize]) -> Result<Vec<Dim>, TensorError>
 
 /// Return every key's words, as one flat vector in row-major order.
 fn flat_key_words(keys: &KeyTensor) -> std::borrow::Cow<'_, [u32]> {
-    match keys.keys().as_slice() {
+    match keys.words().as_slice() {
         Some(slice) => std::borrow::Cow::Borrowed(slice),
-        None => std::borrow::Cow::Owned(keys.keys().iter().copied().collect()),
+        None => std::borrow::Cow::Owned(keys.words().iter().copied().collect()),
     }
 }
 
@@ -233,7 +233,7 @@ impl Layout {
 }
 
 /// Keys drawn from the operating system's entropy.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Entropy {
     kind: PrngKind,
     shape: Vec<usize>,
@@ -285,7 +285,7 @@ impl ProgramOp for Entropy {
 }
 
 /// Derive independent keys from a key.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Split {
     shape: Vec<usize>,
 }
@@ -468,7 +468,7 @@ mod test {
             derived
                 .keys()
                 .unwrap()
-                .keys()
+                .words()
                 .iter()
                 .copied()
                 .collect::<Vec<u32>>(),
@@ -486,7 +486,7 @@ mod test {
             derived
                 .keys()
                 .unwrap()
-                .keys()
+                .words()
                 .iter()
                 .copied()
                 .collect::<Vec<u32>>(),
