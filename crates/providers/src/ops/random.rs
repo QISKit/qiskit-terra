@@ -529,7 +529,7 @@ impl ProgramOp for RandomBits {
 const UNIFORM_INT_STRIDE: usize = 1 << 8;
 
 /// Draw integers uniformly from an inclusive range.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct UniformInt {
     shape: Vec<usize>,
     low: i64,
@@ -1343,7 +1343,7 @@ mod test {
         // blocks instead, a sample would read words belonging to its neighbour, so this compares
         // the op's output against substreams opened independently of it.
         let key = key_from(41);
-        let key_words: Vec<u32> = key.keys().unwrap().keys().iter().copied().collect();
+        let key_words: Vec<u32> = key.keys().unwrap().words().iter().copied().collect();
         let key_pair = [key_words[0], key_words[1]];
 
         let samples = ints_of(
