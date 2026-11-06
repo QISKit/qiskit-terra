@@ -117,9 +117,9 @@ impl<'a, 'py> FromPyObject<'a, 'py> for BinaryOp {
     }
 }
 
-#[cfg(feature = "py")]
 /// A Python descriptor to prevent PyO3 from attempting to import the Python-side
 /// enum before we're initialized.
+#[cfg(feature = "py")]
 #[pyclass(module = "qiskit._accelerate.circuit.classical.expr")]
 struct PyBinaryOp;
 

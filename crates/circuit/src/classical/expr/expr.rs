@@ -639,7 +639,7 @@ mod tests {
     }
 
     #[test]
-    fn test_visit_mut_ordering() -> Result<(), Infallible> {
+    fn test_visit_mut_ordering() {
         let mut expr: Expr = Binary {
             op: BinaryOp::Mul,
             left: Binary {
