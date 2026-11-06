@@ -10,11 +10,16 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use pyo3::IntoPyObjectExt;
-use pyo3::prelude::*;
-use pyo3::types::PyList;
+use std::num::TryFromIntError;
 
+#[cfg(feature = "py")]
 use hashbrown::HashMap;
+#[cfg(feature = "py")]
+use pyo3::IntoPyObjectExt;
+#[cfg(feature = "py")]
+use pyo3::prelude::*;
+#[cfg(feature = "py")]
+use pyo3::types::PyList;
 
 /// A newtype for the different categories of qubits used within layouts.  This is to enforce
 /// significantly more type safety when dealing with mixtures of physical and virtual qubits, as we
@@ -25,19 +30,8 @@ use hashbrown::HashMap;
 macro_rules! qubit_newtype {
     ($id: ident) => {
         #[repr(transparent)]
-        #[derive(
-            Debug,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            PartialOrd,
-            Ord,
-            Hash,
-            Default,
-            IntoPyObject,
-            IntoPyObjectRef,
-        )]
+        #[cfg_attr(feature = "py", derive(IntoPyObject, IntoPyObjectRef))]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
         pub struct $id(pub u32);
 
         impl $id {
@@ -72,6 +66,7 @@ macro_rules! qubit_newtype {
             }
         }
 
+        #[cfg(feature = "py")]
         impl<'a, 'py> ::pyo3::FromPyObject<'a, 'py> for $id {
             type Error = <u32 as FromPyObject<'a, 'py>>::Error;
 
@@ -80,6 +75,7 @@ macro_rules! qubit_newtype {
             }
         }
 
+        #[cfg(feature = "py")]
         unsafe impl numpy::Element for $id {
             const IS_COPY: bool = true;
 
@@ -134,30 +130,23 @@ impl VirtualQubit {
 ///         physical qubit index on the coupling graph.
 ///     logical_qubits (int): The number of logical qubits in the layout
 ///     physical_qubits (int): The number of physical qubits in the layout
-#[pyclass(module = "qiskit._accelerate.nlayout")]
+#[cfg_attr(feature = "py", pyclass(module = "qiskit._accelerate.nlayout"))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NLayout {
     virt_to_phys: Vec<PhysicalQubit>,
     phys_to_virt: Vec<VirtualQubit>,
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl NLayout {
     #[new]
-    fn new(
+    fn py_new(
         qubit_indices: HashMap<VirtualQubit, PhysicalQubit>,
         virtual_qubits: usize,
         physical_qubits: usize,
     ) -> Self {
-        let mut res = NLayout {
-            virt_to_phys: vec![PhysicalQubit(u32::MAX); virtual_qubits],
-            phys_to_virt: vec![VirtualQubit(u32::MAX); physical_qubits],
-        };
-        for (virt, phys) in qubit_indices {
-            res.virt_to_phys[virt.index()] = phys;
-            res.phys_to_virt[phys.index()] = virt;
-        }
-        res
+        Self::new(qubit_indices, virtual_qubits, physical_qubits)
     }
 
     fn __reduce__(&self, py: Python) -> PyResult<Py<PyAny>> {
@@ -185,31 +174,27 @@ impl NLayout {
     }
 
     /// Get physical bit from virtual bit
-    #[pyo3(text_signature = "(self, virtual, /)")]
-    pub fn virtual_to_physical(&self, r#virtual: VirtualQubit) -> PhysicalQubit {
-        self.virt_to_phys[r#virtual.index()]
+    #[pyo3(text_signature = "(self, virtual, /)", name = "virtual_to_physical")]
+    pub fn py_virtual_to_physical(&self, r#virtual: VirtualQubit) -> PhysicalQubit {
+        self.virtual_to_physical(r#virtual)
     }
 
     /// Get virtual bit from physical bit
-    #[pyo3(text_signature = "(self, physical, /)")]
-    pub fn physical_to_virtual(&self, physical: PhysicalQubit) -> VirtualQubit {
-        self.phys_to_virt[physical.index()]
+    #[pyo3(text_signature = "(self, physical, /)", name = "physical_to_virtual")]
+    pub fn py_physical_to_virtual(&self, physical: PhysicalQubit) -> VirtualQubit {
+        self.physical_to_virtual(physical)
     }
 
     /// Swap the specified virtual qubits
-    #[pyo3(text_signature = "(self, bit_a, bit_b, /)")]
-    pub fn swap_virtual(&mut self, bit_a: VirtualQubit, bit_b: VirtualQubit) {
-        self.virt_to_phys.swap(bit_a.index(), bit_b.index());
-        self.phys_to_virt[self.virt_to_phys[bit_a.index()].index()] = bit_a;
-        self.phys_to_virt[self.virt_to_phys[bit_b.index()].index()] = bit_b;
+    #[pyo3(text_signature = "(self, bit_a, bit_b, /)", name = "swap_virtual")]
+    pub fn py_swap_virtual(&mut self, bit_a: VirtualQubit, bit_b: VirtualQubit) {
+        self.swap_virtual(bit_a, bit_b)
     }
 
     /// Swap the specified physical qubits
-    #[pyo3(text_signature = "(self, bit_a, bit_b, /)")]
-    pub fn swap_physical(&mut self, bit_a: PhysicalQubit, bit_b: PhysicalQubit) {
-        self.phys_to_virt.swap(bit_a.index(), bit_b.index());
-        self.virt_to_phys[self.phys_to_virt[bit_a.index()].index()] = bit_a;
-        self.virt_to_phys[self.phys_to_virt[bit_b.index()].index()] = bit_b;
+    #[pyo3(text_signature = "(self, bit_a, bit_b, /)", name = "swap_physical")]
+    pub fn py_swap_physical(&mut self, bit_a: PhysicalQubit, bit_b: PhysicalQubit) {
+        self.swap_physical(bit_a, bit_b)
     }
 
     pub fn copy(&self) -> NLayout {
@@ -217,6 +202,68 @@ impl NLayout {
     }
 
     #[staticmethod]
+    #[pyo3(name = "generate_trivial_layout")]
+    pub fn py_generate_trivial_layout(num_qubits: u32) -> Self {
+        Self::generate_trivial_layout(num_qubits)
+    }
+
+    #[staticmethod]
+    #[pyo3(name = "from_virtual_to_physical")]
+    pub fn py_from_virtual_to_physical(
+        virt_to_phys: Vec<PhysicalQubit>,
+    ) -> Result<Self, TryFromIntError> {
+        Self::from_virtual_to_physical(virt_to_phys)
+    }
+
+    #[staticmethod]
+    #[pyo3(name = "from_physical_to_virtual")]
+    pub fn py_from_physical_to_virtual(phys_to_virt: Vec<VirtualQubit>) -> PyResult<Self> {
+        Ok(Self::from_physical_to_virtual(phys_to_virt)?)
+    }
+}
+
+impl NLayout {
+    #[cfg(feature = "py")]
+    fn new(
+        qubit_indices: HashMap<VirtualQubit, PhysicalQubit>,
+        virtual_qubits: usize,
+        physical_qubits: usize,
+    ) -> Self {
+        let mut res = NLayout {
+            virt_to_phys: vec![PhysicalQubit(u32::MAX); virtual_qubits],
+            phys_to_virt: vec![VirtualQubit(u32::MAX); physical_qubits],
+        };
+        for (virt, phys) in qubit_indices {
+            res.virt_to_phys[virt.index()] = phys;
+            res.phys_to_virt[phys.index()] = virt;
+        }
+        res
+    }
+
+    /// Get physical bit from virtual bit
+    pub fn virtual_to_physical(&self, r#virtual: VirtualQubit) -> PhysicalQubit {
+        self.virt_to_phys[r#virtual.index()]
+    }
+
+    /// Get virtual bit from physical bit
+    pub fn physical_to_virtual(&self, physical: PhysicalQubit) -> VirtualQubit {
+        self.phys_to_virt[physical.index()]
+    }
+
+    /// Swap the specified virtual qubits
+    pub fn swap_virtual(&mut self, bit_a: VirtualQubit, bit_b: VirtualQubit) {
+        self.virt_to_phys.swap(bit_a.index(), bit_b.index());
+        self.phys_to_virt[self.virt_to_phys[bit_a.index()].index()] = bit_a;
+        self.phys_to_virt[self.virt_to_phys[bit_b.index()].index()] = bit_b;
+    }
+
+    /// Swap the specified physical qubits
+    pub fn swap_physical(&mut self, bit_a: PhysicalQubit, bit_b: PhysicalQubit) {
+        self.phys_to_virt.swap(bit_a.index(), bit_b.index());
+        self.virt_to_phys[self.phys_to_virt[bit_a.index()].index()] = bit_a;
+        self.virt_to_phys[self.phys_to_virt[bit_b.index()].index()] = bit_b;
+    }
+
     pub fn generate_trivial_layout(num_qubits: u32) -> Self {
         NLayout {
             virt_to_phys: (0..num_qubits).map(PhysicalQubit).collect(),
@@ -224,8 +271,9 @@ impl NLayout {
         }
     }
 
-    #[staticmethod]
-    pub fn from_virtual_to_physical(virt_to_phys: Vec<PhysicalQubit>) -> PyResult<Self> {
+    pub fn from_virtual_to_physical(
+        virt_to_phys: Vec<PhysicalQubit>,
+    ) -> Result<Self, TryFromIntError> {
         let mut phys_to_virt = vec![VirtualQubit(u32::MAX); virt_to_phys.len()];
         for (virt, phys) in virt_to_phys.iter().enumerate() {
             phys_to_virt[phys.index()] = VirtualQubit(virt.try_into()?);
@@ -236,8 +284,9 @@ impl NLayout {
         })
     }
 
-    #[staticmethod]
-    pub fn from_physical_to_virtual(phys_to_virt: Vec<VirtualQubit>) -> PyResult<Self> {
+    pub fn from_physical_to_virtual(
+        phys_to_virt: Vec<VirtualQubit>,
+    ) -> Result<Self, TryFromIntError> {
         let mut virt_to_phys = vec![PhysicalQubit(u32::MAX); phys_to_virt.len()];
         for (phys, virt) in phys_to_virt.iter().enumerate() {
             virt_to_phys[virt.index()] = PhysicalQubit(phys.try_into()?);
@@ -247,9 +296,7 @@ impl NLayout {
             phys_to_virt,
         })
     }
-}
 
-impl NLayout {
     /// Iterator of `(VirtualQubit, PhysicalQubit)` pairs, in order of the `VirtualQubit` indices.
     pub fn iter_virtual(
         &'_ self,
@@ -304,6 +351,7 @@ impl ::std::ops::Index<PhysicalQubit> for NLayout {
     }
 }
 
+#[cfg(feature = "py")]
 pub fn nlayout(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<NLayout>()?;
     Ok(())

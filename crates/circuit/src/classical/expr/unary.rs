@@ -10,12 +10,19 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use crate::classical::expr::{Expr, ExprKind, PyExpr};
+use crate::classical::expr::Expr;
+#[cfg(feature = "py")]
+use crate::classical::expr::{ExprKind, PyExpr};
 use crate::classical::types::Type;
+#[cfg(feature = "py")]
 use crate::imports;
+#[cfg(feature = "py")]
 use pyo3::exceptions::PyValueError;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::PyTuple;
+#[cfg(feature = "py")]
 use pyo3::{IntoPyObjectExt, intern};
 
 /// A unary expression.
@@ -58,6 +65,7 @@ impl UnaryOp {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for Unary {
     type Target = PyAny;
     type Output = Bound<'py, PyAny>;
@@ -68,6 +76,7 @@ impl<'py> IntoPyObject<'py> for Unary {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for Unary {
     type Error = <PyUnary as FromPyObject<'a, 'py>>::Error;
 
@@ -77,6 +86,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Unary {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for UnaryOp {
     type Target = PyAny;
     type Output = Bound<'py, Self::Target>;
@@ -87,6 +97,7 @@ impl<'py> IntoPyObject<'py> for UnaryOp {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for UnaryOp {
     type Error = PyErr;
 
@@ -99,9 +110,11 @@ impl<'a, 'py> FromPyObject<'a, 'py> for UnaryOp {
 
 /// A Python descriptor to prevent PyO3 from attempting to import the Python-side
 /// enum before we're initialized.
+#[cfg(feature = "py")]
 #[pyclass(module = "qiskit._accelerate.circuit.classical.expr")]
 struct PyUnaryOp;
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyUnaryOp {
     fn __get__(&self, obj: &Bound<PyAny>, _obj_type: &Bound<PyAny>) -> Py<PyAny> {
@@ -115,6 +128,7 @@ impl PyUnaryOp {
 ///     op: The opcode describing which operation is being done.
 ///     operand: The operand of the operation.
 ///     type: The resolved type of the result.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     extends = PyExpr,
@@ -125,6 +139,7 @@ impl PyUnaryOp {
 #[derive(PartialEq, Clone, Debug)]
 pub struct PyUnary(Unary);
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyUnary {
     // The docstring for 'Op' is defined in Python (expr.py).

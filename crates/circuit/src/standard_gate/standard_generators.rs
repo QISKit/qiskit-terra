@@ -13,7 +13,9 @@
 use num_complex::Complex64;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, FRAC_PI_8, SQRT_2};
 
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::wrap_pyfunction;
 
 use crate::operations::{Operation, Param, StandardGate};
@@ -54,6 +56,7 @@ pub fn standard_gate_exponent(gate: StandardGate, params: &[Param]) -> Option<Sp
         .map(|p| match p {
             Param::Float(f) => *f,
             Param::ParameterExpression(_) => 1.0,
+            #[cfg(feature = "py")]
             Param::Obj(_) => panic!("StandardGate does not have Param::Obj parameters"),
             Param::Int(_) => panic!("StandardGate does not have Param::Int parameters"),
         })
@@ -323,6 +326,7 @@ pub fn standard_gate_exponent(gate: StandardGate, params: &[Param]) -> Option<Sp
     })
 }
 
+#[cfg(feature = "py")]
 #[pyfunction(name = "_standard_gate_exponent")]
 #[pyo3(signature = (gate, params=None))]
 pub fn py_standard_gate_exponent(
@@ -333,6 +337,7 @@ pub fn py_standard_gate_exponent(
     standard_gate_exponent(gate, &params)
 }
 
+#[cfg(feature = "py")]
 pub fn standard_generators(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_standard_gate_exponent, m)?)?;
     Ok(())

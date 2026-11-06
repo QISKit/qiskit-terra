@@ -21,8 +21,10 @@ use uuid::Uuid;
 
 use hashbrown::HashMap;
 use num_complex::Complex64;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
 
+#[cfg(feature = "py")]
 use crate::parameter::parameter_expression::PyParameter;
 
 // epsilon for SymbolExpr is heuristically defined
@@ -66,6 +68,7 @@ impl Hash for Symbol {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for Symbol {
     type Error = PyErr;
 
@@ -74,6 +77,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Symbol {
     }
 }
 
+#[cfg(feature = "py")]
 impl<'py> IntoPyObject<'py> for Symbol {
     type Target = <PyParameter as IntoPyObject<'py>>::Target;
     type Output = <PyParameter as IntoPyObject<'py>>::Output;
@@ -322,13 +326,15 @@ impl Drop for SymbolExpr {
 }
 
 /// Value type, can be integer, real or complex number
-#[derive(Debug, Clone, Copy, IntoPyObject, IntoPyObjectRef)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "py", derive(IntoPyObject, IntoPyObjectRef))]
 pub enum Value {
     Real(f64),
     Int(i64),
     Complex(Complex64),
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for Value {
     type Error = PyErr;
 

@@ -10,8 +10,11 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "py")]
 use pyo3::exceptions::PyValueError;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::PyTuple;
 
 /// A length of time used to express circuit timing.
@@ -30,7 +33,10 @@ use pyo3::types::PyTuple;
 ///          raise ValueError("expected dt or seconds")
 ///
 /// You can also use :meth:`value` and :meth:`unit` to get the information separately.
-#[pyclass(eq, module = "qiskit._accelerate.circuit", from_py_object)]
+#[cfg_attr(
+    feature = "py",
+    pyclass(eq, module = "qiskit._accelerate.circuit", from_py_object)
+)]
 #[derive(PartialEq, Clone, Copy, Debug)]
 #[allow(non_camel_case_types)]
 pub enum Duration {
@@ -42,6 +48,7 @@ pub enum Duration {
     s(f64),
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl Duration {
     #[new]
@@ -58,15 +65,9 @@ impl Duration {
     }
 
     /// The corresponding ``unit`` of the duration.
-    pub fn unit(&self) -> &'static str {
-        match self {
-            Duration::dt(_) => "dt",
-            Duration::ps(_) => "ps",
-            Duration::us(_) => "us",
-            Duration::ns(_) => "ns",
-            Duration::ms(_) => "ms",
-            Duration::s(_) => "s",
-        }
+    #[pyo3(name = "unit")]
+    pub fn py_unit(&self) -> &'static str {
+        self.unit()
     }
 
     /// The ``value`` of the duration.
@@ -104,5 +105,19 @@ impl Duration {
 
     fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         (py.get_type::<Duration>(), (self.unit(), self.py_value(py))).into_pyobject(py)
+    }
+}
+
+impl Duration {
+    /// The corresponding ``unit`` of the duration.
+    pub fn unit(&self) -> &'static str {
+        match self {
+            Duration::dt(_) => "dt",
+            Duration::ps(_) => "ps",
+            Duration::us(_) => "us",
+            Duration::ns(_) => "ns",
+            Duration::ms(_) => "ms",
+            Duration::s(_) => "s",
+        }
     }
 }

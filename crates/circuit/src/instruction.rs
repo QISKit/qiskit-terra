@@ -10,11 +10,14 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+#[cfg(feature = "py")]
 use crate::circuit_data::CircuitData;
 use crate::operations::{OperationRef, Param};
 use ndarray::Array2;
 use num_complex::Complex64;
+#[cfg(feature = "py")]
 use pyo3::exceptions::PyNotImplementedError;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
 use smallvec::SmallVec;
 
@@ -163,6 +166,7 @@ pub trait Instruction {
     fn try_matrix(&self) -> Option<Array2<Complex64>> {
         match self.op() {
             OperationRef::StandardGate(g) => g.matrix(self.params_view()),
+            #[cfg(feature = "py")]
             OperationRef::PyCustom(i) => i.matrix(),
             OperationRef::Unitary(u) => u.matrix(),
             OperationRef::PauliProductRotation(ppr) => ppr.matrix(),
@@ -171,6 +175,7 @@ pub trait Instruction {
     }
 }
 
+#[cfg(feature = "py")]
 pub fn create_py_op(
     py: Python,
     op: OperationRef,

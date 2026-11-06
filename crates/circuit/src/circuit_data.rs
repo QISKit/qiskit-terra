@@ -11,26 +11,34 @@
 // that they have been altered from the originals.
 
 use std::fmt::Debug;
+
+#[cfg(feature = "py")]
 use std::hash::Hash;
+#[cfg(feature = "py")]
 use std::ops::Deref;
 #[cfg(feature = "cache_pygates")]
 use std::sync::OnceLock;
 
+#[cfg(feature = "py")]
+use crate::bit::PyBit;
 use crate::bit::{
-    BitLocations, ClassicalRegister, PyBit, QuantumRegister, Register, ShareableClbit,
-    ShareableQubit,
+    BitLocations, ClassicalRegister, QuantumRegister, Register, ShareableClbit, ShareableQubit,
 };
 use crate::bit_locator::BitLocator;
+#[cfg(feature = "py")]
 use crate::circuit_instruction::{CircuitInstruction, OperationFromPython};
 use crate::classical::expr;
 use crate::dag_circuit::{DAGCircuit, add_global_phase};
+#[cfg(feature = "py")]
 use crate::imports::{ANNOTATED_OPERATION, QUANTUM_CIRCUIT};
 use crate::instruction::Parameters;
 use crate::interner::{Interned, InternedMap, Interner};
 use crate::object_registry::{self, ObjectRegistry};
+#[cfg(feature = "py")]
+use crate::operations::{BoxedCustomOperation, PyOpKind, PythonOperation};
 use crate::operations::{
-    BoxedCustomOperation, ControlFlow, ControlFlowView, LoopParam, Operation, OperationRef, Param,
-    PauliBased, PauliProductRotation, PyOpKind, PythonOperation, StandardGate,
+    ControlFlow, ControlFlowView, LoopParam, Operation, OperationRef, Param, ParamError,
+    PauliBased, PauliProductRotation, StandardGate,
 };
 use crate::packed_instruction::{PackedInstruction, PackedOperation};
 use crate::parameter::parameter_expression::{ParameterError, ParameterExpression};
@@ -40,19 +48,29 @@ use crate::register_data::{RegisterAlreadyExists, RegisterData};
 use crate::var_stretch_container::{
     StretchType, VarStretchContainer, VarStretchContainerError, VarType,
 };
+
+#[cfg(feature = "py")]
+use crate::instruction;
 use crate::{
     Block, BlocksMode, CapacityError, Clbit, ControlFlowBlocks, Qubit, Stretch, Var, VarsMode,
-    instruction,
 };
+#[cfg(feature = "py")]
 use qiskit_util::py::{PySequenceIndex, SequenceIndex};
 
 use ndarray::ArrayView1;
+#[cfg(feature = "py")]
 use num_complex::Complex64;
+#[cfg(feature = "py")]
 use numpy::PyReadonlyArray1;
+#[cfg(feature = "py")]
 use pyo3::IntoPyObjectExt;
+#[cfg(feature = "py")]
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::{IntoPyDict, PyDict, PyList, PyNone, PySet, PyTuple, PyType};
+#[cfg(feature = "py")]
 use pyo3::{PyTraverseError, PyVisit, import_exception, intern};
 
 use hashbrown::{HashMap, HashSet};
@@ -62,6 +80,7 @@ use thiserror::Error;
 
 use crate::error::TryReserveError;
 
+#[cfg(feature = "py")]
 import_exception!(qiskit.circuit.exceptions, CircuitError);
 
 /// This struct models the error conditions that can be raised from the
@@ -88,6 +107,7 @@ pub enum CircuitDataError {
     #[error("{0} at index {1} exceeds circuit capacity.")]
     BitExceedsCapacity(String, usize),
     // Explicitly an error returned from calling Python
+    #[cfg(feature = "py")]
     #[error(transparent)]
     ErrorFromPython(#[from] PyErr),
     #[error(transparent)]
@@ -106,6 +126,8 @@ pub enum CircuitDataError {
     StandardGateParameterIsComplex(String, String),
     #[error(transparent)]
     TryReserveError(TryReserveError),
+    #[error(transparent)]
+    ParamError(#[from] ParamError),
 }
 impl<T: Debug> From<object_registry::AbsentObject<T>> for CircuitDataError {
     fn from(val: object_registry::AbsentObject<T>) -> Self {
@@ -124,6 +146,7 @@ impl From<TryReserveError> for CircuitDataError {
     }
 }
 
+#[cfg(feature = "py")]
 impl From<CircuitDataError> for PyErr {
     fn from(error: CircuitDataError) -> Self {
         match error {
@@ -153,11 +176,13 @@ impl From<CircuitDataError> for PyErr {
                 ))
             }
             CircuitDataError::TryReserveError(error) => error.into(),
+            CircuitDataError::ParamError(param_error) => param_error.into(),
         }
     }
 }
 
 /// A tuple of a `CircuitData`'s internal state used for pickle's `__setstate__()` method.
+#[cfg(feature = "py")]
 type CircuitDataState<'py> = (
     Vec<QuantumRegister>,
     Vec<ClassicalRegister>,
@@ -243,24 +268,28 @@ mod passmanager {
 ///
 /// This object is usable as a :class:`.passmanager.IR` corresponding to the Rust/C-native
 /// components of :class:`.QuantumCircuit`.
+#[cfg(feature = "py")]
 #[pyclass(name = "CircuitData", sequence, module = "qiskit.circuit")]
 #[derive(Clone, Debug)]
 pub struct PyCircuitData {
     pub inner: CircuitData,
 }
 
+#[cfg(feature = "py")]
 impl From<CircuitData> for PyCircuitData {
     fn from(data: CircuitData) -> Self {
         PyCircuitData { inner: data }
     }
 }
 
+#[cfg(feature = "py")]
 impl From<PyCircuitData> for CircuitData {
     fn from(data: PyCircuitData) -> Self {
         data.inner
     }
 }
 
+#[cfg(feature = "py")]
 impl Deref for PyCircuitData {
     type Target = CircuitData;
 
@@ -469,6 +498,7 @@ impl CircuitData {
         self.data.reserve(additional);
     }
 
+    #[cfg(feature = "py")]
     /// Move this [CircuitData] into a complete Python `QuantumCircuit` object.
     pub fn into_py_quantum_circuit(self, py: Python) -> PyResult<Bound<PyAny>> {
         let py_circuit_data: PyCircuitData = self.into();
@@ -490,6 +520,7 @@ impl CircuitData {
     /// to this circuit.
     ///
     /// Returns the parameters in terms of block references.
+    #[cfg(feature = "py")]
     fn take_parameter_blocks(
         &mut self,
         params: Option<Parameters<CircuitData>>,
@@ -645,6 +676,7 @@ impl CircuitData {
         Ok(out)
     }
 
+    #[cfg(feature = "py")]
     /// Clone a new [CircuitData] from a [DAGCircuit], but applying a Python deepcopy
     ///
     /// This is the logical equivalent of Python's `dag_to_circuit`.
@@ -934,6 +966,7 @@ impl CircuitData {
             .iter()
             .for_each(|block| self.blocks.increment(*block))
     }
+    #[cfg(feature = "py")]
     #[inline]
     fn untrack_instruction_blocks(&mut self, index: usize) {
         self.data[index]
@@ -962,7 +995,13 @@ impl CircuitData {
                         instruction: instruction_index,
                         parameter: index as u32,
                     };
-                    for symbol in param.iter_parameters()? {
+                    #[cfg(feature = "py")]
+                    let symbols = param.iter_parameters()?;
+                    #[cfg(not(feature = "py"))]
+                    let symbols = match param.iter_parameters() {
+                        Ok(symbols) => symbols,
+                    };
+                    for symbol in symbols {
                         self.param_table.track(&symbol, Some(usage))?;
                     }
                 }
@@ -981,6 +1020,7 @@ impl CircuitData {
 
     /// Remove the entries from the `PackedInstruction` at the given index from the internal
     /// parameter table.
+    #[cfg(feature = "py")]
     fn untrack_instruction_parameters(
         &mut self,
         instruction_index: usize,
@@ -999,7 +1039,13 @@ impl CircuitData {
                         instruction: instruction_index,
                         parameter: index as u32,
                     };
-                    for symbol in param.iter_parameters()? {
+                    #[cfg(feature = "py")]
+                    let symbols = param.iter_parameters()?;
+                    #[cfg(not(feature = "py"))]
+                    let symbols = match param.iter_parameters() {
+                        Ok(symbols) => symbols,
+                    };
+                    for symbol in symbols {
                         self.param_table.untrack(&symbol, usage)?;
                     }
                 }
@@ -1029,7 +1075,14 @@ impl CircuitData {
         if matches!(self.global_phase, Param::Float(_)) {
             return Ok(());
         }
-        for symbol in self.global_phase.iter_parameters()? {
+        #[cfg(feature = "py")]
+        let param_iter = self.global_phase.iter_parameters()?;
+
+        #[cfg(not(feature = "py"))]
+        let param_iter = match self.global_phase.iter_parameters() {
+            Ok(iter) => iter,
+        };
+        for symbol in param_iter {
             self.param_table
                 .track(&symbol, Some(ParameterUse::GlobalPhase))?;
         }
@@ -1039,6 +1092,7 @@ impl CircuitData {
     /// Native internal driver of `__delitem__` that uses a Rust-space version of the
     /// `SequenceIndex`.  This assumes that the `SequenceIndex` contains only in-bounds indices, and
     /// panics if not.
+    #[cfg(feature = "py")]
     fn delitem(&mut self, indices: SequenceIndex) -> Result<(), CircuitDataError> {
         // We need to delete in reverse order so we don't invalidate higher indices with a deletion.
         for index in indices.descending() {
@@ -1262,6 +1316,7 @@ impl CircuitData {
                         HashMap::from([(symbol.clone(), e.as_ref().clone())]);
                     expr.subs(&map, false)?
                 }
+                #[cfg(feature = "py")]
                 Param::Obj(ob) => {
                     Python::attach(|py| -> Result<_, CircuitDataError> {
                         // The integer handling is only needed to support the case where an int is
@@ -1292,6 +1347,7 @@ impl CircuitData {
             Ok(Param::from_expr(new_expr, coerce)?)
         };
 
+        #[cfg(feature = "py")]
         let mut user_operations = HashMap::new();
         let mut uuids = Vec::new();
         // Mark blocks that we've already edited.
@@ -1300,8 +1356,17 @@ impl CircuitData {
             debug_assert!(!uses.is_empty());
             seen_blocks.clear();
             uuids.clear();
-            for inner_symbol in value.as_ref().iter_parameters()? {
-                uuids.push(self.param_table.track(&inner_symbol, None)?)
+
+            #[cfg(feature = "py")]
+            let param_iter = value.as_ref().iter_parameters()?;
+
+            #[cfg(not(feature = "py"))]
+            let param_iter = match value.as_ref().iter_parameters() {
+                Ok(iter) => iter,
+            };
+
+            for inner_symbol in param_iter {
+                uuids.push(self.param_table.track(&inner_symbol, None)?);
             }
             for usage in uses {
                 let (instruction, parameter) = match usage {
@@ -1344,6 +1409,7 @@ impl CircuitData {
                         let new_param = bind_expr(expr, &symbol, value.as_ref(), true)?;
 
                         // standard gates don't allow for complex parameters
+                        #[cfg(feature = "py")]
                         if let Param::Obj(expr) = &new_param {
                             return Err(CircuitDataError::StandardGateParameterIsComplex(
                                 previous.op.name().to_string(),
@@ -1408,6 +1474,7 @@ impl CircuitData {
                             previous.py_op.take();
                         }
                     }
+                    #[cfg(feature = "py")]
                     OperationRef::PyCustom(inst) => {
                         // Track user operations we've seen so we can rebind their definitions.
                         // Strictly this can add the same binding pair more than once, if an
@@ -1512,6 +1579,7 @@ impl CircuitData {
         }
 
         // handle custom gates, this can only happen in Py-space
+        #[cfg(feature = "py")]
         if !user_operations.is_empty() {
             Python::attach(|py| -> PyResult<()> {
                 let _definition_attr = intern!(py, "_definition");
@@ -1657,6 +1725,7 @@ impl CircuitData {
     /// Add a param to the current global phase of the circuit
     pub fn add_global_phase(&mut self, value: &Param) -> Result<(), CircuitDataError> {
         match value {
+            #[cfg(feature = "py")]
             Param::Obj(_) => Err(CircuitDataError::InvalidGlobalPhaseType),
             _ => self.set_global_phase_param(add_global_phase(&self.global_phase, value)),
         }
@@ -1835,6 +1904,7 @@ impl CircuitData {
         ops_count
     }
 
+    #[cfg(feature = "py")]
     fn clear_all(&mut self) {
         // Clear anything that could have a reference cycle.
         self.data.clear();
@@ -1891,7 +1961,9 @@ impl CircuitData {
 /// Helper struct for `assign_parameters` to allow use of `Param::extract_no_coerce` in
 /// PyO3-provided `FromPyObject` implementations on containers.
 #[repr(transparent)]
+#[cfg(feature = "py")]
 struct AssignParam(Param);
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for AssignParam {
     type Error = PyErr;
 
@@ -1916,6 +1988,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for AssignParam {
 ///     A list of the specified bits from `bits`. The `PyResult` error will contain a Python
 ///     `CircuitError` if an incorrect type or index is encountered, if the same bit is specified
 ///     more than once, or if the specifier is to a bit not in the `bit_set`.
+#[cfg(feature = "py")]
 fn bit_argument_conversion<B, R>(
     specifier: &Bound<PyAny>,
     bit_sequence: &[B],
@@ -1983,6 +2056,7 @@ where
     }
 }
 
+#[cfg(feature = "py")]
 fn bit_argument_conversion_scalar<B, R>(
     specifier: &Bound<PyAny>,
     bit_sequence: &[B],
@@ -2085,6 +2159,7 @@ fn for_each_symbol_use_in_control_flow(
     Ok(())
 }
 
+#[cfg(feature = "py")]
 #[pymethods]
 impl PyCircuitData {
     #[new]
@@ -3328,6 +3403,7 @@ impl PyCircuitData {
     }
 }
 
+#[cfg(feature = "py")]
 impl PyCircuitData {
     pub fn pack(&mut self, py: Python, inst: &CircuitInstruction) -> PyResult<PackedInstruction> {
         let qubits = self.inner.qargs_interner.insert_owned(
@@ -3447,13 +3523,12 @@ impl PyCircuitData {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::converters::py_dag_to_circuit;
     use crate::dag_circuit::DAGCircuit;
     use crate::operations::{ArrayType, PauliProductMeasurement, UnitaryGate};
     use nalgebra::{Matrix2, Matrix4};
 
     #[test]
-    fn packed_pointer_types_behave() -> PyResult<()> {
+    fn packed_pointer_types_behave() -> Result<(), CircuitDataError> {
         // This is largely to exercise the packed-pointer logic under debug builds (since the
         // Python-space tests run with Rust in release mode) and Miri.
 
@@ -3519,9 +3594,8 @@ mod test {
         };
         let other = qc.clone();
         check(&qc, &other);
-        let roundtrip = py_dag_to_circuit(
-            &DAGCircuit::from_circuit_data(&qc, false, None, None)?.into(),
-            false,
+        let roundtrip = CircuitData::from_dag_ref(
+            &DAGCircuit::from_circuit_data(&qc, false, None, None).unwrap(),
         )?;
         check(&qc, &roundtrip);
         Ok(())

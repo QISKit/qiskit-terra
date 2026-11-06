@@ -13,8 +13,10 @@
 pub mod expr;
 pub mod types;
 
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
 
+#[cfg(feature = "py")]
 pub(crate) fn register_python(m: &Bound<PyModule>) -> PyResult<()> {
     let expr_mod = PyModule::new(m.py(), "expr")?;
     expr::register_python(&expr_mod)?;

@@ -16,8 +16,11 @@ use crate::{Stretch, Var};
 use qiskit_util::IndexMap;
 use thiserror::Error;
 
+#[cfg(feature = "py")]
 use pyo3::exceptions::PyValueError;
+#[cfg(feature = "py")]
 use pyo3::types::PyTuple;
+#[cfg(feature = "py")]
 use pyo3::{IntoPyObjectExt, prelude::*};
 
 /// The scope type associated with a given variable in the container.
@@ -35,6 +38,7 @@ pub enum StretchType {
     Declare = 1,
 }
 
+#[cfg(feature = "py")]
 type VarStretchState = (Vec<(String, Py<PyAny>)>, Vec<expr::Var>, Vec<expr::Stretch>);
 
 /// Errors related to [VarStretchContainer] which may occur when adding
@@ -376,6 +380,7 @@ impl VarStretchContainer {
     }
 
     /// Returns cloned copies of identifier info, variable objects and stretch objects.
+    #[cfg(feature = "py")]
     pub fn to_pickle(&self, py: Python) -> VarStretchState {
         (
             self.identifier_info
@@ -388,6 +393,7 @@ impl VarStretchContainer {
     }
 
     /// Constructs Self given identifier info, variables and stretch objects previously serialized with [Self::to_pickle()]
+    #[cfg(feature = "py")]
     pub fn from_pickle(py: Python, state: VarStretchState) -> PyResult<Self> {
         let mut res = VarStretchContainer::with_capacity(Some(state.1.len()), Some(state.2.len()));
 
@@ -491,6 +497,7 @@ struct VarInfo {
     type_: VarType,
 }
 
+#[cfg(feature = "py")]
 impl VarInfo {
     fn to_pickle(&self, py: Python) -> PyResult<Py<PyAny>> {
         (self.var.0, self.type_ as u8).into_py_any(py)
@@ -516,6 +523,7 @@ struct StretchInfo {
     type_: StretchType,
 }
 
+#[cfg(feature = "py")]
 impl StretchInfo {
     fn to_pickle(&self, py: Python) -> PyResult<Py<PyAny>> {
         (self.stretch.0, self.type_ as u8).into_py_any(py)
@@ -540,6 +548,7 @@ enum IdentifierInfo {
     Var(VarInfo),
 }
 
+#[cfg(feature = "py")]
 impl IdentifierInfo {
     fn to_pickle(&self, py: Python) -> PyResult<Py<PyAny>> {
         match self {

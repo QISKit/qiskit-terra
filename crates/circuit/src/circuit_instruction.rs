@@ -22,6 +22,7 @@ use pyo3::IntoPyObjectExt;
 use pyo3::types::{PyBool, PyList, PyTuple, PyType};
 use pyo3::{PyResult, intern};
 
+use crate::NoBlocks;
 use crate::annotation::AnnotationFromPython;
 use crate::circuit_data::{CircuitData, PyCircuitData};
 use crate::classical::expr;
@@ -584,10 +585,6 @@ impl<T: CircuitBlock> OperationFromPython<T> {
         self.params.take().map(|p| p.unwrap_blocks())
     }
 }
-
-/// Marker object for use with `OperationFromPython` that marks that the extraction should fail if
-/// the object contains circuit blocks.
-pub struct NoBlocks;
 
 /// Helper trait implemented by `PyCircuitData` and `DAGCircuit` to implement extraction from
 /// a Python-owned control-flow block into a suitable Rust type.

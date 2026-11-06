@@ -16,15 +16,20 @@ pub mod bit_locator;
 mod blocks;
 pub mod circuit_data;
 pub mod circuit_drawer;
+#[cfg(feature = "py")]
 pub mod circuit_instruction;
 pub mod classical;
+#[cfg(feature = "py")]
 pub mod converters;
 pub mod dag_circuit;
+#[cfg(feature = "py")]
 pub mod dag_node;
+#[cfg(feature = "py")]
 mod dot_utils;
 pub mod duration;
 pub mod error;
 pub mod gate_matrix;
+#[cfg(feature = "py")]
 pub mod imports;
 pub mod instruction;
 pub mod interner;
@@ -41,15 +46,20 @@ mod variable_mapper;
 pub mod vf2;
 
 use bytemuck::{Pod, Zeroable};
+#[cfg(feature = "py")]
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::{PySequence, PyString, PyTuple};
 
-#[derive(Copy, Clone, Debug, Hash, Ord, PartialOrd, Eq, PartialEq, FromPyObject, Zeroable, Pod)]
+#[cfg_attr(feature = "py", derive(FromPyObject))]
+#[derive(Copy, Clone, Debug, Hash, Ord, PartialOrd, Eq, PartialEq, Zeroable, Pod)]
 #[repr(transparent)]
 pub struct Qubit(pub u32);
 
-#[derive(Copy, Clone, Debug, Hash, Ord, PartialOrd, Eq, PartialEq, FromPyObject, Zeroable, Pod)]
+#[cfg_attr(feature = "py", derive(FromPyObject))]
+#[derive(Copy, Clone, Debug, Hash, Ord, PartialOrd, Eq, PartialEq, Zeroable, Pod)]
 #[repr(transparent)]
 pub struct Clbit(pub u32);
 
@@ -62,8 +72,11 @@ pub struct Stretch(u32);
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Block(u32);
 
+/// Marker object for use with `OperationFromPython` that marks that the extraction should fail if
+/// the object contains circuit blocks.
+pub struct NoBlocks;
+
 pub use blocks::ControlFlowBlocks;
-pub use circuit_instruction::NoBlocks;
 pub use nlayout::PhysicalQubit;
 pub use nlayout::VirtualQubit;
 pub use packed_instruction::BlockMapper;
@@ -113,10 +126,12 @@ impl_circuit_identifier!(Var);
 impl_circuit_identifier!(Stretch);
 impl_circuit_identifier!(Block);
 
+#[cfg(feature = "py")]
 pub struct TupleLikeArg<'py> {
     value: Bound<'py, PyTuple>,
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for TupleLikeArg<'py> {
     type Error = PyErr;
 
@@ -153,6 +168,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for TupleLikeArg<'py> {
 ///
 /// Usually this doesn't matter much to code authors, but it can help a lot when dealing with
 /// references nested in ad-hoc structures, like `(&T1, &T2)`.
+#[cfg(feature = "py")]
 #[macro_export]
 macro_rules! impl_intopyobject_for_copy_pyclass {
     ($ty:ty) => {
@@ -181,6 +197,7 @@ pub enum VarsMode {
     Drop,
 }
 
+#[cfg(feature = "py")]
 impl<'a, 'py> FromPyObject<'a, 'py> for VarsMode {
     type Error = PyErr;
 
@@ -208,12 +225,14 @@ pub enum BlocksMode {
 #[derive(Clone, Copy, Debug, thiserror::Error)]
 #[error("exceeded allowed runtime capacity")]
 pub struct CapacityError;
+#[cfg(feature = "py")]
 impl From<CapacityError> for PyErr {
     fn from(val: CapacityError) -> PyErr {
         PyRuntimeError::new_err(val.to_string())
     }
 }
 
+#[cfg(feature = "py")]
 pub fn circuit(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<annotation::PyAnnotation>()?;
     m.add_class::<annotation::PyNativeAnnotation>()?;

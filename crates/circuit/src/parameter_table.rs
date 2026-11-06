@@ -16,14 +16,20 @@ use hashbrown::hash_map::Entry;
 use hashbrown::{HashMap, HashSet};
 use thiserror::Error;
 
+#[cfg(feature = "py")]
 use pyo3::exceptions::PyTypeError;
+#[cfg(feature = "py")]
 use pyo3::import_exception;
+#[cfg(feature = "py")]
 use pyo3::prelude::*;
+#[cfg(feature = "py")]
 use pyo3::types::PySet;
 
+#[cfg(feature = "py")]
 use crate::parameter::parameter_expression::{PyParameter, PyParameterExpression};
 use crate::parameter::symbol_expr::Symbol;
 
+#[cfg(feature = "py")]
 import_exception!(qiskit.circuit, CircuitError);
 
 /// This struct models the error conditions that can be raised from the
@@ -44,6 +50,7 @@ pub enum ParameterTableError {
     #[error("name conflict adding parameter '{0}'")]
     NameConflict(String),
 }
+#[cfg(feature = "py")]
 impl From<ParameterTableError> for PyErr {
     fn from(value: ParameterTableError) -> PyErr {
         CircuitError::new_err(value.to_string())
@@ -72,6 +79,7 @@ pub struct ParameterUuid(u128);
 impl ParameterUuid {
     /// Extract a UUID from a Python-space `Parameter` object. This assumes that the object is known
     /// to be a parameter.
+    #[cfg(feature = "py")]
     pub fn from_parameter(ob: &Bound<PyAny>) -> PyResult<Self> {
         let uuid = if let Ok(param) = ob.cast::<PyParameter>() {
             // this downcast should cover both PyParameterVectorElement and PyParameter
@@ -308,6 +316,7 @@ impl ParameterTable {
     /// Expose the tracked data for a given parameter as directly as possible to Python space.
     ///
     /// This is only really intended for use in testing.
+    #[cfg(feature = "py")]
     pub(crate) fn _py_raw_entry(&self, param: Bound<PyAny>) -> PyResult<Py<PySet>> {
         let py = param.py();
         let uuid = ParameterUuid::from_parameter(&param)?;
