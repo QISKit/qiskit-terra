@@ -15,6 +15,7 @@
 import configparser
 import os
 from warnings import warn
+import importlib
 
 from qiskit import exceptions
 
@@ -62,12 +63,20 @@ class UserConfig:
         if "default" in self.config_parser.sections():
             # Parse circuit_drawer
             circuit_drawer = self.config_parser.get("default", "circuit_drawer", fallback=None)
+            plugin_module = importlib.import_module("qiskit.visualization.circuit.plugin")
+            plugin_names = plugin_module.list_circuit_drawer_plugins()
             if circuit_drawer:
-                if circuit_drawer not in ["text", "mpl", "latex", "latex_source", "auto"]:
+                if (
+                    circuit_drawer
+                    not in ["text", "mpl", "latex", "latex_source", "auto"] + plugin_names
+                ):
                     raise exceptions.QiskitUserConfigError(
                         f"{circuit_drawer} is not a valid circuit drawer backend. Must be "
                         "either 'text', 'mpl', 'latex', 'latex_source', or "
                         "'auto'."
+                       "This can also be the external plugin name to use for output option."
+                        "You can see a list of installed plugins"
+                        " by using :func:`~list_circuit_drawer_plugins`." % circuit_drawer
                     )
                 self.settings["circuit_drawer"] = circuit_drawer
 

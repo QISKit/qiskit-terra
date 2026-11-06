@@ -1,0 +1,25 @@
+---
+features:
+  - |
+    Introducing a new circuit drawer plugin interface which is used to
+    create custom circuit drawers included in external packages.
+    Seamlessly with the :class:`~qiskit.visualization.circuit.plugin.CircuitDrawerPlugin`.
+    Users can select a plugin to use when calling :meth:`~qiskit.circuit.quantumcircuit.draw`
+    by stating the entry-point name.
+    A full list of installed plugins can be found using the :func:`~list_circuit_drawer_plugins` function.
+    For example, if you installed a package that includes a circuit drawer plugin named classiq, you could use it with::
+
+        from qiskit import QuantumCircuit
+
+        qc = QuantumCircuit(2)
+        qc.h(0)
+        qc.cx(0, 1)
+        qc.draw('classiq')
+
+    This will call the external package's drawer instead of using the default method of circuit drawer.
+
+    The plugin interface is built around setuptools
+    [`entry points`](https://setuptools.readthedocs.io/en/latest/userguide/entry_point.html),
+    which enable external packages to Qiskit to introduce new circuit drawers using
+    circuit drawer plugin. For details on writing a new plugin, refer to the
+    :mod:`qiskit.visualization.circuit.plugin` module documentation.

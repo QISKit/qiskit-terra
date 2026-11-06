@@ -43,6 +43,10 @@ from ..utils import _trim as trim_image
 from . import _utils
 from . import latex as _latex
 from . import matplotlib as _matplotlib
+from . import _utils
+from ..utils import _trim as trim_image
+from ..exceptions import VisualizationError
+from .plugin import CircuitDrawerPluginManager
 from . import text as _text
 
 if typing.TYPE_CHECKING:
@@ -97,6 +101,10 @@ def circuit_drawer(
         Raw uncompiled LaTeX output.  This is the source of what would be rendered by the
         ``latex`` drawer.
 
+    **<installed plugin name>**: This can also be the external plugin name to use for output option.
+                                 You can see a list of installed plugins
+                                 by using :func:`~list_circuit_drawer_plugins`.
+
     .. warning::
 
         Support for :class:`~.expr.Expr` nodes in conditions and :attr:`.SwitchCaseOp.target`
@@ -133,6 +141,8 @@ def circuit_drawer(
             as the default. For example, ``circuit_drawer = latex``. If the output
             kwarg is set, that backend will always be used over the default in
             the user config file.
+            This can also be the external plugin name to use for output option.
+            You can see a list of installed plugins by using :func:`~list_circuit_drawer_plugins`.
         interactive: When set to ``True``, show the circuit in a new window
             (for ``mpl`` this depends on the matplotlib backend being used
             supporting this). Note when used with either the `text` or the
@@ -314,7 +324,13 @@ def circuit_drawer(
 
     cregbundle = check_clbit_in_inst(circuit, cregbundle)
 
-    if output == "text":
+    # Get all Circuit Drawer Plugin names
+    plugin_manager = CircuitDrawerPluginManager()
+    plugin_names = plugin_manager.drawer_plugins.names()
+    if output in plugin_names:
+        drawer_instance = plugin_manager.get_drawer(output)()
+        image = drawer_instance.draw(circuit)
+    elif output == "text":
         return _text_circuit_drawer(
             circuit,
             filename=filename,

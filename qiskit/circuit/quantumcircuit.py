@@ -4039,6 +4039,10 @@ class QuantumCircuit(IR):
             Raw uncompiled LaTeX output.  This is the source of what would be rendered by the
             ``latex`` drawer.
 
+        **<installed plugin name>**: This can also be the external plugin name to use for output option.
+                                 You can see a list of installed plugins
+                                 by using :func:`~list_circuit_drawer_plugins`.
+
         .. warning::
 
             Support for :class:`~.expr.Expr` nodes in conditions and :attr:`.SwitchCaseOp.target`
@@ -4054,6 +4058,8 @@ class QuantumCircuit(IR):
                 as the default. For example, ``circuit_drawer = latex``. If the output
                 kwarg is set, that backend will always be used over the default in
                 the user config file.
+                This can also be the external plugin name to use for output option.
+                You can see a list of installed plugins by using :func:`~list_circuit_drawer_plugins`.
             scale: Scale of image to draw (shrink if ``< 1.0``). Only used by
                 the ``mpl``, ``latex`` and ``latex_source`` outputs. Defaults to ``1.0``.
             filename: File path to save image to. Defaults to ``None`` (result not saved in a file).
