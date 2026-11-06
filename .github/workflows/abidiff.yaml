@@ -1,0 +1,65 @@
+name: Compare C ABI
+
+on:
+  pull_request:
+    # paths:
+    #   - "crates/bindgen/**"
+    #   - "crates/bindgen-cli/**"
+    #   - "crates/cext/**"
+    #   - "crates/cext-vtable"
+
+jobs:
+  abidiff:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-tags: true
+
+      - name: Fetch baseline
+        run: |
+          tag=$(git tag -l | tail -1)
+          git checkout "${tag}"
+
+      - name: Cache toolchain
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.rustup/toolchains/
+            ~/.rustup/update-hashes/
+          key: ${{ runner.os }}-rustup-${{ hashFiles('rust-toolchain.toml') }}
+
+      - name: Cache build
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build baseline
+        run: |
+          make cheader clib-dev
+          mv dist/c/lib/libqiskit.so dist/c/lib/libqiskit.so.main
+
+      - name: Fetch changes
+        uses: actions/checkout@v7
+        with:
+          clean: false
+
+      - name: Build changes
+        run: make cheader clib-dev
+
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install --no-install-recommends -y abigail-tools
+
+      - name: Compare
+        continue-on-error: true
+        run: abidiff dist/c/lib/libqiskit.so.main dist/c/lib/libqiskit.so
