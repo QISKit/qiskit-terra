@@ -31,7 +31,7 @@ QISKIT_PARALLEL=FALSE stestr run --abbreviate
 git clone https://github.com/Qiskit/benchpress --depth=1
 pushd benchpress
 pip install -r requirements.txt -r requirements-qiskit.txt 'pytest<9.2.0'
-pytest benchpress/qiskit_gym
+pytest benchpress/qiskit_gym/device_transpile benchpress/qiskit_gym/construct
 popd
 
 deactivate
