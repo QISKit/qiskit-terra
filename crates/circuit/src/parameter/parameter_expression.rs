@@ -2033,11 +2033,8 @@ impl ParameterValueType {
                 Value::Real(r) => Some(ParameterValueType::Float(r)),
                 Value::Complex(c) => Some(ParameterValueType::Complex(c)),
             }
-        } else if let SymbolExpr::Symbol(_symbol) = expr {
-            #[cfg(feature = "py")]
-            return Some(ParameterValueType::Parameter(PyParameter(_symbol.clone())));
-            #[cfg(not(feature = "py"))]
-            return None;
+        } else if let SymbolExpr::Symbol(symbol) = expr {
+            Some(Self::Parameter(PyParameter(symbol.clone())))
         } else {
             // ParameterExpressions have the value None, as they must be constructed
             None
@@ -2287,26 +2284,15 @@ fn qpy_replay_inner(
             // If the extracted value resolved into a concrete value, we don't need to recurse
             // into it, since its computed value will be stored along
             // with the operation in the replay.
-            if match lhs_value {
-                #[cfg(feature = "py")]
-                Some(ParameterValueType::Parameter(_)) => true,
-                None => true,
-                _ => false,
-            } {
+            if matches!(lhs_value, Some(ParameterValueType::Parameter(_)) | None) {
                 qpy_replay_inner(&lhs, name_map, replay, unused);
             }
-            if match rhs_value {
-                #[cfg(feature = "py")]
-                Some(ParameterValueType::Parameter(_)) => true,
-                None => true,
-                _ => false,
-            } {
+            if matches!(rhs_value, Some(ParameterValueType::Parameter(_)) | None) {
                 qpy_replay_inner(&rhs, name_map, replay, unused);
             }
 
             // add the expression to the replay
             match lhs_value {
-                #[cfg(feature = "py")]
                 Some(ParameterValueType::Parameter(_)) => {
                     // For non-commutative operations (SUB, DIV, POW): if LHS is a Parameter and RHS is
                     // an expression (None), we need to use reverse operations (RSUB, RDIV, RPOW)
@@ -2395,7 +2381,6 @@ fn qpy_replay_inner(
         }
     }
 }
-
 #[cfg(test)]
 mod test {
     use super::*;
