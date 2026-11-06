@@ -30,7 +30,7 @@ features_transpiler:
             .with_basic(1.0, SetScaling.Constant)
             .with_lookahead([0.5 / width], SetScaling.Constant)
             .with_decay(0.001, 5)
-            .with_wait_time(2.2e-5)
+            .with_wait_time(0.0025)
         )
         layout_and_routing = SabreLayout(
             coupling_map, heuristic=heuristic, seed=0, layout_trials=20, swap_trials=20

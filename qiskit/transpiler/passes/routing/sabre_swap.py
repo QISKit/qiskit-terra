@@ -141,7 +141,7 @@ class SabreSwap(TransformationPass):
             physical qubits are free.  Each two-qubit interaction routed by Sabre occupies one
             layer (consecutive gates on the same pair of qubits are routed as a single
             interaction, so they count once) and an inserted SWAP three.  With the preset weight
-            V = 2.2e-5 the term acts as a tie-break between equally scored SWAPs, preferring
+            V = 0.0025 the term acts as a tie-break between equally scored SWAPs, preferring
             wires that are idle.
 
             .. math::
@@ -249,7 +249,7 @@ class SabreSwap(TransformationPass):
                 .with_basic(1.0, SetScaling.Constant)
                 .with_lookahead([0.5 / num_coupling_qubits], SetScaling.Constant)
                 .with_decay(0.001, 5)
-                .with_wait_time(2.2e-5)
+                .with_wait_time(0.0025)
             )
         else:
             raise TranspilerError(f"Heuristic {self.heuristic} not recognized.")

@@ -51,11 +51,6 @@ use qiskit_util::getenv_use_multiple_threads;
 /// Number of trials for control flow block swap epilogues.
 const SWAP_EPILOGUE_TRIALS: usize = 4;
 
-/// Estimated two-qubit depth of one routing swap in the ready-time schedule: a swap is
-/// synthesised as three native two-qubit gates on the same pair, whereas a routed 2q node counts
-/// as one layer (including when it represents several contracted gates).
-const SWAP_DEPTH: u32 = 3;
-
 /// The number of control-flow blocks to take off the stack.
 ///
 /// This funky struct is just a trick to get the Rust compiler to use the niche optimisation for
@@ -451,6 +446,7 @@ impl<'a> RoutingProblem<'a> {
 ///
 /// The given `initial_swaps`, if any, will be consumed iff the node is actually routed.  The seed
 /// is required because a control-flow operation may need to be recursively routed.
+/// If the wait-time heuristic is enabled, routing a two-qubit node advances its wires' ready times.
 ///
 /// Returns `Ok` if the node was routed, and `Err` with the unroutable 2q pair if not.
 fn try_route<'a>(
@@ -459,17 +455,28 @@ fn try_route<'a>(
     problem: RoutingProblem<'a>,
     order: &mut Order<'a>,
     layout: &NLayout,
+    ready: &mut VecMap<PhysicalQubit, u32>,
     seed: u64,
 ) -> Result<(), [VirtualQubit; 2]> {
     let node = &problem.sabre.dag[node_id];
     let kind = match &node.kind {
         InteractionKind::Synchronize => RoutedItemKind::Simple,
-        InteractionKind::TwoQ([a, b]) => problem
-            .target
-            .neighbors
-            .contains_edge(layout[*a], layout[*b])
-            .then_some(RoutedItemKind::Simple)
-            .ok_or([*a, *b])?,
+        InteractionKind::TwoQ([a, b]) => {
+            let (physical_a, physical_b) = (layout[*a], layout[*b]);
+            if !problem
+                .target
+                .neighbors
+                .contains_edge(physical_a, physical_b)
+            {
+                return Err([*a, *b]);
+            }
+            if problem.heuristic.wait_time.is_some() {
+                let t = ready[physical_a].max(ready[physical_b]) + 1;
+                ready[physical_a] = t;
+                ready[physical_b] = t;
+            }
+            RoutedItemKind::Simple
+        }
         InteractionKind::ControlFlow(blocks) => {
             let dag_node_id = *node
                 .indices
@@ -612,6 +619,7 @@ impl State {
     fn begin(problem: RoutingProblem, layout: NLayout, seed: u64) -> (Self, Order) {
         let mut order = Order::for_problem(problem);
         let num_qubits: u32 = problem.target.num_qubits().try_into().unwrap();
+        let mut ready = vec![0; num_qubits as usize].into();
         let num_layers = 1 + problem
             .heuristic
             .lookahead
@@ -641,7 +649,9 @@ impl State {
         // Route any available initial gates, to populate the front layer.
         visit.extend(problem.sabre.first_layer.iter().copied());
         while let Some(node) = visit.pop_front() {
-            match try_route(node, &mut None, problem, &mut order, &layout, seed) {
+            match try_route(
+                node, &mut None, problem, &mut order, &layout, &mut ready, seed,
+            ) {
                 Ok(()) => satisfy_successor_edges(
                     node,
                     problem.sabre,
@@ -686,7 +696,7 @@ impl State {
             predecessors.push(these_predecessors);
         }
 
-        let mut state = State {
+        let state = State {
             predecessors: predecessors.into(),
             decay: vec![1.; num_qubits as usize].into(),
             layers,
@@ -695,45 +705,27 @@ impl State {
             reached_previous_layer: Vec::new(),
             swap_scores: Vec::with_capacity(problem.target.neighbors.edge_count() / 2),
             best_swaps: Vec::new(),
-            ready: vec![0; num_qubits as usize].into(),
+            ready,
             ready_undo: Vec::new(),
             rng: Pcg64Mcg::seed_from_u64(seed),
             seed,
         };
-        state.advance_routed(problem, &order, 0);
         (state, order)
     }
 
     /// Advance the ready times of the wires of a swap applied at the current layout.  This is a
     /// no-op unless the wait-time heuristic is enabled.
     #[inline]
-    fn advance_swap(&mut self, problem: RoutingProblem, swap: [PhysicalQubit; 2]) {
-        if problem.heuristic.wait_time.is_none() {
+    fn update_ready_times_on_swap(&mut self, problem: RoutingProblem, swap: [PhysicalQubit; 2]) {
+        let Some(WaitTimeHeuristic { swap_cost, .. }) = problem.heuristic.wait_time else {
             return;
-        }
+        };
         let [a, b] = swap;
         self.ready_undo.push((a, self.ready[a]));
         self.ready_undo.push((b, self.ready[b]));
-        let t = self.ready[a].max(self.ready[b]) + SWAP_DEPTH;
+        let t = self.ready[a].max(self.ready[b]) + swap_cost;
         self.ready[a] = t;
         self.ready[b] = t;
-    }
-
-    /// Advance the ready times for every node routed into `order` from index `start` on, all of
-    /// which were routed at the current layout.  This is a no-op unless the wait-time heuristic
-    /// is enabled.
-    fn advance_routed(&mut self, problem: RoutingProblem, order: &Order, start: usize) {
-        if problem.heuristic.wait_time.is_none() {
-            return;
-        }
-        for item in &order.order[start..] {
-            if let InteractionKind::TwoQ([a, b]) = &problem.sabre.dag[item.node].kind {
-                let (a, b) = (self.layout[*a], self.layout[*b]);
-                let t = self.ready[a].max(self.ready[b]) + 1;
-                self.ready[a] = t;
-                self.ready[b] = t;
-            }
-        }
     }
 
     /// Apply a swap to the program-state structures (front layer, extended set and current
@@ -777,7 +769,6 @@ impl State {
         nodes: &[NodeIndex],
         mut initial_swaps: Option<Vec<[PhysicalQubit; 2]>>,
     ) {
-        let start = order.order.len();
         // The delta-updates to layers only works if we know that we're starting the update from a
         // set of nodes that are in the front layer, and the rest of the layer structure is already
         // fully initialised.
@@ -793,6 +784,7 @@ impl State {
                 problem,
                 order,
                 &self.layout,
+                &mut self.ready,
                 self.seed,
             )
             .expect("incoming nodes must be routable");
@@ -817,6 +809,7 @@ impl State {
                 problem,
                 order,
                 &self.layout,
+                &mut self.ready,
                 self.seed,
             ) {
                 Ok(()) => satisfy_successor_edges(
@@ -872,7 +865,6 @@ impl State {
             initial_swaps.is_none(),
             "if initial swaps are given, at least one node must be known to be routable"
         );
-        self.advance_routed(problem, order, start);
     }
 
     /// Add swaps to the current set that greedily bring the nearest node together.  This is a
@@ -924,7 +916,7 @@ impl State {
         }
         current_swaps.iter().for_each(|&swap| {
             self.apply_swap(swap);
-            self.advance_swap(problem, swap);
+            self.update_ready_times_on_swap(problem, swap);
         });
 
         // If we apply a single swap it could be that we route 2 nodes; that is a setup like
@@ -1000,15 +992,16 @@ impl State {
             }
         }
 
+        if let Some(WaitTimeHeuristic { weight, .. }) = problem.heuristic.wait_time {
+            // Each swap also pays for the time it waits before both its wires are free.
+            for (swap, score) in self.swap_scores.iter_mut() {
+                *score += weight * f64::from(self.ready[swap[0]].max(self.ready[swap[1]]));
+            }
+        }
+
         let mut min_score = f64::INFINITY;
         let epsilon = problem.heuristic.best_epsilon;
         for &(swap, score) in self.swap_scores.iter() {
-            // Each swap also pays for the schedule layers it waits before both its wires are free.
-            let score = if let Some(WaitTimeHeuristic { weight }) = problem.heuristic.wait_time {
-                score + weight * f64::from(self.ready[swap[0]].max(self.ready[swap[1]]))
-            } else {
-                score
-            };
             if score - min_score < -epsilon {
                 min_score = score;
                 self.best_swaps.clear();
@@ -1133,7 +1126,7 @@ pub fn swap_map_trial<'a>(
         while routable_nodes.is_empty() && current_swaps.len() <= problem.heuristic.attempt_limit {
             let best_swap = state.choose_best_swap(problem);
             state.apply_swap(best_swap);
-            state.advance_swap(problem, best_swap);
+            state.update_ready_times_on_swap(problem, best_swap);
             current_swaps.push(best_swap);
             // These two nodes can't be the same; if they are, then the gate is on both qubits of
             // the swap, and so it would have been routable before we applied the swap too, i.e.

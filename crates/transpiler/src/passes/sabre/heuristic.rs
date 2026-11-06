@@ -176,28 +176,31 @@ impl DecayHeuristic {
 }
 
 /// Define the characteristics of the "wait time" heuristic.  Each physical qubit tracks the
-/// estimated two-qubit layer at which it next becomes free: a routed two-qubit node occupies one
-/// layer (even when it represents several contracted gates on the same pair) and an inserted swap
-/// three.  A candidate swap's score is increased by `weight` times the later of its two qubits'
-/// ready times, so swaps on idle wires are preferred.  The term is added after the decay
-/// multiplier (if any), so it is not scaled by it.
+/// estimated time at which it next becomes free: a routed two-qubit node has unit cost
+/// (even when it represents several contracted gates on the same pair) and an inserted swap
+/// has cost `swap_cost`.  A candidate swap's score is increased by `weight` times the later of
+/// its two qubits' ready times, so swaps on idle wires are preferred.  The term is added after
+/// the decay multiplier (if any), so it is not scaled by it.
 #[pyclass(from_py_object)]
 #[pyo3(module = "qiskit._accelerate.sabre", frozen)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct WaitTimeHeuristic {
-    /// Score added per layer of waiting, relative to the ``basic`` weight.
+    /// Score added per unit of waiting, relative to the ``basic`` weight.
     pub weight: f64,
+    /// Expected cost of a swap relative to an arbitrary two-qubit node in the SabreDAG.
+    pub swap_cost: u32,
 }
 impl_intopyobject_for_copy_pyclass!(WaitTimeHeuristic);
 #[pymethods]
 impl WaitTimeHeuristic {
     #[new]
-    pub fn new(weight: f64) -> Self {
-        Self { weight }
+    #[pyo3(signature = (weight, swap_cost=3))]
+    pub fn new(weight: f64, swap_cost: u32) -> Self {
+        Self { weight, swap_cost }
     }
 
     pub fn __getnewargs__(&self, py: Python) -> PyResult<Py<PyAny>> {
-        (self.weight,).into_py_any(py)
+        (self.weight, self.swap_cost).into_py_any(py)
     }
 
     pub fn __eq__(&self, py: Python, other: Py<PyAny>) -> bool {
@@ -205,9 +208,9 @@ impl WaitTimeHeuristic {
     }
 
     pub fn __repr__(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let fmt = "WaitTimeHeuristic(weight={!r})";
+        let fmt = "WaitTimeHeuristic(weight={!r}, swap_cost={!r})";
         PyString::new(py, fmt)
-            .call_method1("format", (self.weight,))?
+            .call_method1("format", (self.weight, self.swap_cost))?
             .into_py_any(py)
     }
 }
@@ -312,13 +315,14 @@ impl Heuristic {
         }
     }
 
-    /// Set the weight of the ``wait_time`` heuristic: the score added per estimated two-qubit
-    /// layer that a swap must wait before both of its physical qubits are free.  This should be
+    /// Set the weight of the ``wait_time`` heuristic: the score added per unit of time
+    /// that a swap must wait before both of its physical qubits are free.  This should be
     /// small relative to ``basic``; the ``"wait_time"`` preset of :class:`.SabreSwap` uses
-    /// ``2.2e-5``.
-    pub fn with_wait_time(&self, weight: f64) -> Self {
+    /// ``0.0025``.  ``swap_cost`` is the expected cost of a swap relative to a two-qubit DAG node.
+    #[pyo3(signature = (weight, swap_cost=3))]
+    pub fn with_wait_time(&self, weight: f64, swap_cost: u32) -> Self {
         Self {
-            wait_time: Some(WaitTimeHeuristic { weight }),
+            wait_time: Some(WaitTimeHeuristic { weight, swap_cost }),
             ..self.clone()
         }
     }

@@ -426,7 +426,7 @@ class TestSabreLayoutHeuristic(QiskitTestCase):
 
     def test_wait_time_heuristic(self):
         """The requested heuristic is executed while preserving the circuit and connectivity."""
-        heuristic = self.decay.with_wait_time(2.2e-5)
+        heuristic = self.decay.with_wait_time(0.0025)
         for skip_routing in (False, True):
             with self.subTest(skip_routing=skip_routing):
                 pass_ = SabreLayout(
@@ -473,7 +473,7 @@ class TestSabreLayoutHeuristic(QiskitTestCase):
             SabreLayout(
                 self.coupling,
                 routing_pass=BasicSwap(self.coupling),
-                heuristic=self.decay.with_wait_time(2.2e-5),
+                heuristic=self.decay.with_wait_time(0.0025),
             )
 
 
