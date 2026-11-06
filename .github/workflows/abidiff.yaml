@@ -13,10 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Fetch current
+      - name: Fetch baseline
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          fetch-tags: true
+        run: |
+          tag=$(git tag -l | tail -2 | head -1)
+          git checkout "${tag}"
 
       - name: Cache toolchain
         uses: actions/cache@v6
@@ -37,7 +40,7 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build current
+      - name: Build baseline
         run: |
           make cheader clib-dev
           mv dist/c/lib/libqiskit.so dist/c/lib/libqiskit.so.main
