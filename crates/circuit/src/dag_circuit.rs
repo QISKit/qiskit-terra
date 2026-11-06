@@ -1762,7 +1762,7 @@ impl PyDAGCircuit {
             }
         };
 
-        let idle_wires_convert: Vec<_> = native_idle_wires(dag, as_set)
+        let idle_wires_convert: Vec<_> = dag.idle_wires(as_set)
             .map(converter)
             .collect::<PyResult<_>>()?;
         Ok(PyTuple::new(py, idle_wires_convert)?
@@ -9134,34 +9134,6 @@ impl From<DAGCircuit> for PyDAGCircuit {
             unit: "dt".to_string(),
         }
     }
-}
-
-#[cfg(feature = "py")]
-fn native_idle_wires(
-    dag: &DAGCircuit,
-    ignore: Option<HashSet<&str>>,
-) -> impl Iterator<Item = Wire> {
-    (0..dag.qubit_io_map.len())
-        .map(|idx| Wire::Qubit(Qubit::new(idx)))
-        .chain((0..dag.clbit_io_map.len()).map(|idx| Wire::Clbit(Clbit::new(idx))))
-        .chain((0..dag.var_io_map.len()).map(|idx| Wire::Var(Var::new(idx))))
-        .filter(move |wire| match ignore.as_ref() {
-            Some(ignore) => {
-                let nodes_found = dag
-                    .nodes_on_wire(*wire)
-                    .filter(|node| matches!(dag.dag[*node], NodeType::Operation(_)))
-                    .any(|node| {
-                        let weight = dag.dag.node_weight(node).unwrap();
-                        if let NodeType::Operation(packed) = weight {
-                            !ignore.contains(packed.op.name())
-                        } else {
-                            false
-                        }
-                    });
-                !nodes_found
-            }
-            None => dag.is_wire_idle(*wire),
-        })
 }
 
 /// Add to global phase. Global phase can only be Float or ParameterExpression so this
