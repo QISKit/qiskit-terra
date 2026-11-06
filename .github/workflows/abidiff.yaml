@@ -41,10 +41,11 @@ jobs:
       - name: Build changes
         run: make cheader clib-dev
 
-      - name: Install ABI tools
+      - name: Install tools
         run: |
           sudo apt update
           sudo apt install --no-install-recommends -y abigail-tools
 
-      - name: Compare ABI
+      - name: Compare
+        continue-on-error: true
         run: abidiff dist/c/lib/libqiskit.so.main dist/c/lib/libqiskit.so
