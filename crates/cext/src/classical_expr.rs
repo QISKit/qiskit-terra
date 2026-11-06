@@ -359,9 +359,9 @@ impl From<&Duration> for CDurationType {
 #[derive(Copy, Clone)]
 pub union CDurationValue {
     /// System time units (active when `ty` in `QkDurationInfo` is `QkDurationType_Dt`)
-    dt: i64,
+    pub dt: i64,
     /// Real time value (active for all other duration types)
-    time: f64,
+    pub time: f64,
 }
 
 /// The complete representation of a duration value.
@@ -376,9 +376,9 @@ pub union CDurationValue {
 #[derive(Copy, Clone)]
 pub struct CDurationInfo {
     /// The duration unit type (discriminant for the union)
-    ty: CDurationType,
+    pub ty: CDurationType,
     /// The duration value
-    value: CDurationValue,
+    pub value: CDurationValue,
 }
 
 impl From<&Duration> for CDurationInfo {
@@ -833,7 +833,7 @@ pub struct CBigUint {
 }
 
 impl CBigUint {
-    const ZERO: CBigUint = CBigUint {
+    pub const ZERO: CBigUint = CBigUint {
         limbs: ptr::null_mut(),
         num_limbs: 0,
     };
