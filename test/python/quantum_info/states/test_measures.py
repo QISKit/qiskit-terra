@@ -92,9 +92,7 @@ class TestStateMeasures(QiskitTestCase):
         reference2 = Statevector.from_instruction(qc2)
         expected = state_fidelity(reference1, reference2)
 
-        self.assertAlmostEqual(
-            state_fidelity(stabilizer1, stabilizer2), expected
-        )
+        self.assertAlmostEqual(state_fidelity(stabilizer1, stabilizer2), expected)
 
     def test_state_fidelity_stabilizer_statevector(self):
         """Test state_fidelity for mixed StabilizerState and Statevector inputs."""
@@ -106,18 +104,10 @@ class TestStateMeasures(QiskitTestCase):
         state_plus = StabilizerState(qc_plus)
         statevector_plus = Statevector.from_instruction(qc_plus)
 
-        self.assertAlmostEqual(
-            state_fidelity(state_plus, statevector_plus), 1.0, places=7
-        )
-        self.assertAlmostEqual(
-            state_fidelity(statevector_plus, state_plus), 1.0, places=7
-        )
-        self.assertAlmostEqual(
-            state_fidelity(state_zero, statevector_plus), 0.5, places=7
-        )
-        self.assertAlmostEqual(
-            state_fidelity(statevector_plus, state_zero), 0.5, places=7
-        )
+        self.assertAlmostEqual(state_fidelity(state_plus, statevector_plus), 1.0, places=7)
+        self.assertAlmostEqual(state_fidelity(statevector_plus, state_plus), 1.0, places=7)
+        self.assertAlmostEqual(state_fidelity(state_zero, statevector_plus), 0.5, places=7)
+        self.assertAlmostEqual(state_fidelity(statevector_plus, state_zero), 0.5, places=7)
 
     def test_state_fidelity_stabilizer_density_matrix(self):
         """Test state_fidelity for mixed StabilizerState and DensityMatrix inputs."""
@@ -129,18 +119,10 @@ class TestStateMeasures(QiskitTestCase):
         state_plus = StabilizerState(qc_plus)
         density_matrix_plus = DensityMatrix(qc_plus)
 
-        self.assertAlmostEqual(
-            state_fidelity(state_plus, density_matrix_plus), 1.0, places=7
-        )
-        self.assertAlmostEqual(
-            state_fidelity(density_matrix_plus, state_plus), 1.0, places=7
-        )
-        self.assertAlmostEqual(
-            state_fidelity(state_zero, density_matrix_plus), 0.5, places=7
-        )
-        self.assertAlmostEqual(
-            state_fidelity(density_matrix_plus, state_zero), 0.5, places=7
-        )
+        self.assertAlmostEqual(state_fidelity(state_plus, density_matrix_plus), 1.0, places=7)
+        self.assertAlmostEqual(state_fidelity(density_matrix_plus, state_plus), 1.0, places=7)
+        self.assertAlmostEqual(state_fidelity(state_zero, density_matrix_plus), 0.5, places=7)
+        self.assertAlmostEqual(state_fidelity(density_matrix_plus, state_zero), 0.5, places=7)
 
     def test_state_fidelity_density_matrix(self):
         """Test state_fidelity function for density matrix inputs"""

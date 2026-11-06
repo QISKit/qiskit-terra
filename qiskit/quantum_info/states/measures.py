@@ -26,6 +26,7 @@ from qiskit.quantum_info.states.utils import (
     _funm_svd,
 )
 
+
 def state_fidelity(
     state1: Statevector | DensityMatrix | StabilizerState,
     state2: Statevector | DensityMatrix | StabilizerState,
@@ -61,9 +62,9 @@ def state_fidelity(
     if isinstance(state1, StabilizerState) and isinstance(state2, StabilizerState):
         combined_state = state2.evolve(state1.clifford.adjoint())
         return float(
-            combined_state.probabilities_dict_from_bitstring(
-                "0" * combined_state.num_qubits
-            ).get("0" * combined_state.num_qubits, 0.0)
+            combined_state.probabilities_dict_from_bitstring("0" * combined_state.num_qubits).get(
+                "0" * combined_state.num_qubits, 0.0
+            )
         )
 
     # Convert StabilizerState inputs to Statevector for mixed-state fidelity
@@ -76,7 +77,6 @@ def state_fidelity(
     # Format input states
     state1 = _format_state(state1, validate=validate)
     state2 = _format_state(state2, validate=validate)
-
 
     # Get underlying numpy arrays
     arr1 = state1.data
@@ -98,7 +98,6 @@ def state_fidelity(
         fid = np.linalg.norm(s1sq.dot(s2sq), ord="nuc") ** 2
     # Convert to py float rather than return np.float
     return float(np.real(fid))
-
 
 
 def purity(state: Statevector | DensityMatrix, validate: bool = True) -> float:
