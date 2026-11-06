@@ -53,11 +53,11 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Stretch {
     }
 }
 
-#[cfg(feature = "py")]
 /// A stretch variable.
 ///
 /// In general, construction of stretch variables for use in programs should use :meth:`Stretch.new`
 /// or :meth:`.QuantumCircuit.add_stretch`
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     hash,

@@ -75,12 +75,12 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Type {
     }
 }
 
-#[cfg(feature = "py")]
 /// Root base class of all nodes in the type tree.  The base case should never be instantiated
 /// directly.
 ///
 /// This must not be subclassed by users; subclasses form the internal data of the representation
 /// of expressions, and it does not make sense to add more outside of Qiskit library code.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     hash,
@@ -137,8 +137,8 @@ enum TypeKind {
     Uint,
 }
 
-#[cfg(feature = "py")]
 /// The Boolean type.  This has exactly two values: ``True`` and ``False``.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     hash,
@@ -172,8 +172,8 @@ impl PyBool {
     }
 }
 
-#[cfg(feature = "py")]
 /// A length of time, possibly negative.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     hash,
@@ -207,10 +207,10 @@ impl PyDuration {
     }
 }
 
-#[cfg(feature = "py")]
 /// An IEEE-754 double-precision floating point number.
 ///
 /// In the future, this may also be used to represent other fixed-width floats.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     hash,
@@ -244,8 +244,8 @@ impl PyFloat {
     }
 }
 
-#[cfg(feature = "py")]
 /// An unsigned integer of fixed bit width.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     hash,

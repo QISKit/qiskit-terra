@@ -51,13 +51,13 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Index {
     }
 }
 
-#[cfg(feature = "py")]
 /// An indexing expression.
 ///
 /// Args:
 ///     target: The object being indexed.
 ///     index: The expression doing the indexing.
 ///     type: The resolved type of the result.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     extends = PyExpr,

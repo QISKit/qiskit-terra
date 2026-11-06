@@ -51,9 +51,9 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Cast {
     }
 }
 
-#[cfg(feature = "py")]
 /// A cast from one type to another, implied by the use of an expression in a different
 /// context.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     extends = PyExpr,

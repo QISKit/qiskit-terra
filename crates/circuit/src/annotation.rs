@@ -265,8 +265,8 @@ pub fn create_py_annotation(annotation: &Arc<dyn Annotation>, py: Python) -> PyR
     Ok(Py::new(py, init)?.into_any())
 }
 
-#[cfg(feature = "py")]
 /// Used to extract an instance of [Annotation].
+#[cfg(feature = "py")]
 pub enum AnnotationFromPython {
     Native(Arc<dyn Annotation>),
     Python(PythonAnnotation),

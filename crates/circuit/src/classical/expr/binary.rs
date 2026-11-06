@@ -131,7 +131,6 @@ impl PyBinaryOp {
     }
 }
 
-#[cfg(feature = "py")]
 /// A binary expression.
 ///
 /// Args:
@@ -139,6 +138,7 @@ impl PyBinaryOp {
 ///     left: The left-hand operand.
 ///     right: The right-hand operand.
 ///     type: The resolved type of the result.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     extends = PyExpr,

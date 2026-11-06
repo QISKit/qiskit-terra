@@ -1762,7 +1762,8 @@ impl PyDAGCircuit {
             }
         };
 
-        let idle_wires_convert: Vec<_> = dag.idle_wires(as_set)
+        let idle_wires_convert: Vec<_> = dag
+            .idle_wires(as_set)
             .map(converter)
             .collect::<PyResult<_>>()?;
         Ok(PyTuple::new(py, idle_wires_convert)?

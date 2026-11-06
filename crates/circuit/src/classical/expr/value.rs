@@ -51,8 +51,8 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Value {
     }
 }
 
-#[cfg(feature = "py")]
 /// A single scalar value.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     extends = PyExpr,

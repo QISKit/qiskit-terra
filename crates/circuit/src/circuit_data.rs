@@ -181,8 +181,8 @@ impl From<CircuitDataError> for PyErr {
     }
 }
 
-#[cfg(feature = "py")]
 /// A tuple of a `CircuitData`'s internal state used for pickle's `__setstate__()` method.
+#[cfg(feature = "py")]
 type CircuitDataState<'py> = (
     Vec<QuantumRegister>,
     Vec<ClassicalRegister>,

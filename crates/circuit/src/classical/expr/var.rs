@@ -76,7 +76,6 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Var {
     }
 }
 
-#[cfg(feature = "py")]
 /// A classical variable.
 ///
 /// These variables take two forms: a new-style variable that owns its storage location and has an
@@ -86,6 +85,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Var {
 /// :meth:`.QuantumCircuit.add_var`.
 ///
 /// Variables are immutable after construction, so they can be used as dictionary keys.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     hash,

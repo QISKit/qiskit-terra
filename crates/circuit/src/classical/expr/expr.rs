@@ -387,7 +387,6 @@ impl From<Box<Index>> for Expr {
     }
 }
 
-#[cfg(feature = "py")]
 /// Root base class of all nodes in the expression tree.  The base case should never be
 /// instantiated directly.
 ///
@@ -396,6 +395,7 @@ impl From<Box<Index>> for Expr {
 ///
 /// All subclasses are responsible for setting their ``type`` attribute in their ``__init__``, and
 /// should not call the parent initializer.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     hash,

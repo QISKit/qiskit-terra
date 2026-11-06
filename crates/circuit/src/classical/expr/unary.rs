@@ -108,9 +108,9 @@ impl<'a, 'py> FromPyObject<'a, 'py> for UnaryOp {
     }
 }
 
-#[cfg(feature = "py")]
 /// A Python descriptor to prevent PyO3 from attempting to import the Python-side
 /// enum before we're initialized.
+#[cfg(feature = "py")]
 #[pyclass(module = "qiskit._accelerate.circuit.classical.expr")]
 struct PyUnaryOp;
 
@@ -122,13 +122,13 @@ impl PyUnaryOp {
     }
 }
 
-#[cfg(feature = "py")]
 /// A unary expression.
 ///
 /// Args:
 ///     op: The opcode describing which operation is being done.
 ///     operand: The operand of the operation.
 ///     type: The resolved type of the result.
+#[cfg(feature = "py")]
 #[pyclass(
     eq,
     extends = PyExpr,
