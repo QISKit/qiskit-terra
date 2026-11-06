@@ -16,6 +16,7 @@ pub mod bit_locator;
 mod blocks;
 pub mod circuit_data;
 pub mod circuit_drawer;
+#[cfg(feature = "py")]
 pub mod circuit_instruction;
 pub mod classical;
 #[cfg(feature = "py")]
@@ -71,8 +72,11 @@ pub struct Stretch(u32);
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Block(u32);
 
+/// Marker object for use with `OperationFromPython` that marks that the extraction should fail if
+/// the object contains circuit blocks.
+pub struct NoBlocks;
+
 pub use blocks::ControlFlowBlocks;
-pub use circuit_instruction::NoBlocks;
 pub use nlayout::PhysicalQubit;
 pub use nlayout::VirtualQubit;
 pub use packed_instruction::BlockMapper;
