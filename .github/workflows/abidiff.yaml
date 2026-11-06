@@ -37,5 +37,4 @@ jobs:
           sudo apt install -y abigail-tools
 
       - name: compare abi
-        continue-on-error: true
         run: abidiff dist/c/lib/libqiskit.so.main dist/c/lib/libqiskit.so
