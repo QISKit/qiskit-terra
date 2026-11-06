@@ -12,8 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: Load cache
-      - uses: actions/cache@v6
+      - name: Cache
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
