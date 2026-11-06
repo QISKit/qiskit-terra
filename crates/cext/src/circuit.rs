@@ -64,7 +64,7 @@ const _: () = unsafe { expose_by_box!(ClassicalRegister) };
 ///     QkCircuit *empty = qk_circuit_new(100, 100);
 ///
 #[unsafe(no_mangle)]
-pub extern "C" fn qk_circuit_new(num_qubits: u32, num_clbits: u32) -> *mut CircuitData {
+pub extern "C" fn qk_circuit_new(num_qubits: u64, num_clbits: u32) -> *mut CircuitData {
     let qubits = if num_qubits > 0 {
         Some(
             (0..num_qubits)
