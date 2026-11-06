@@ -16,7 +16,7 @@ use ndarray::{ArcArrayD, ArrayD, IxDyn};
 use num_complex::{Complex32, Complex64};
 
 use super::broadcast::{broadcast_elementwise, broadcast_shape};
-use super::{DType, Dim, TensorError, TensorType};
+use super::{DType, Dim, KeyTensor, TensorError, TensorType};
 
 /// A tensor of one of the supported dtypes.
 ///
@@ -36,6 +36,7 @@ pub enum Tensor {
     U32(ArcArrayD<u32>),
     U64(ArcArrayD<u64>),
     Bit(ArcArrayD<u8>), // bool
+    Key(KeyTensor),     // prng key
 }
 
 /// Return the error raised when an `op` has no implementation for some type(s).
@@ -57,6 +58,7 @@ fn dtype_error(op: &'static str, lhs: DType, rhs: DType) -> TensorError {
 macro_rules! cast_real {
     ($arr:expr, $src:ty, $target:expr) => {
         match $target {
+            DType::Key(_) => unreachable!("a key target is refused by Tensor::cast"),
             DType::Bit => Tensor::Bit($arr.mapv(|x: $src| u8::from(x != 0 as $src)).into_shared()),
             DType::U8 => Tensor::U8($arr.mapv(|x: $src| x as u8).into_shared()),
             DType::U16 => Tensor::U16($arr.mapv(|x: $src| x as u16).into_shared()),
@@ -118,6 +120,7 @@ impl Tensor {
             Tensor::U16(_) => DType::U16,
             Tensor::U8(_) => DType::U8,
             Tensor::Bit(_) => DType::Bit,
+            Tensor::Key(keys) => DType::Key(keys.kind()),
         }
     }
 
@@ -137,6 +140,7 @@ impl Tensor {
             Tensor::U16(a) => a.shape(),
             Tensor::U8(a) => a.shape(),
             Tensor::Bit(a) => a.shape(),
+            Tensor::Key(keys) => keys.shape(),
         }
     }
 
@@ -145,6 +149,14 @@ impl Tensor {
         TensorType {
             dtype: self.dtype(),
             shape: self.shape().iter().map(|&n| Dim::Fixed(n)).collect(),
+        }
+    }
+
+    /// Return the keys this tensor holds, or `None` if it is not a key tensor.
+    pub fn keys(&self) -> Option<&KeyTensor> {
+        match self {
+            Tensor::Key(keys) => Some(keys),
+            _ => None,
         }
     }
 
@@ -243,6 +255,7 @@ impl Tensor {
             Tensor::U16(a) => broadcast!(U16, a),
             Tensor::U8(a) => broadcast!(U8, a),
             Tensor::Bit(a) => broadcast!(Bit, a),
+            Tensor::Key(keys) => keys.broadcast_to(shape).map(Tensor::Key),
         }
         .ok_or_else(|| TensorError::ShapeMismatch {
             lhs: self.shape().to_vec(),
@@ -251,11 +264,22 @@ impl Tensor {
     }
 
     /// Cast this tensor to `target`, consuming it. Returns `self` unchanged if already that dtype.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either dtype is a [`DType::Key`] which does not support arithmetic and has an opaque
+    /// value type.
     pub fn cast(self, target: DType) -> Tensor {
+        assert!(
+            self.dtype().prng_kind().is_none() && target.prng_kind().is_none(),
+            "cannot cast {} to {target}",
+            self.dtype()
+        );
         if self.dtype() == target {
             return self;
         }
         match &self {
+            Tensor::Key(_) => unreachable!("a key dtype is refused above"),
             Tensor::Bit(a) | Tensor::U8(a) => cast_real!(a, u8, target),
             Tensor::U16(a) => cast_real!(a, u16, target),
             Tensor::U32(a) => cast_real!(a, u32, target),
@@ -504,6 +528,7 @@ impl_tensor_bitop!(bitxor_tensor, ^, "bitxor");
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::tensor::PrngKind;
     use ndarray::IxDyn;
 
     #[test]
@@ -1310,5 +1335,71 @@ mod test {
         }
 
         assert_eq!(fails, Vec::<String>::new(), "cast failures: {fails:?}");
+    }
+
+    // Keys.
+
+    /// Return a tensor of `batch` keys, whose words count up from zero.
+    fn key_tensor(batch: &[usize]) -> Tensor {
+        let kind = PrngKind::Philox4x32;
+        let mut shape = batch.to_vec();
+        shape.push(kind.key_words());
+        let count = shape.iter().product::<usize>();
+        let words = ndarray::ArrayD::from_shape_vec(IxDyn(&shape), (0..count as u32).collect())
+            .unwrap()
+            .into_shared();
+        Tensor::Key(KeyTensor::new(kind, words).unwrap())
+    }
+
+    #[test]
+    fn test_key_tensor_reports_its_dtype_and_shape() {
+        // The key words are not an axis of the tensor, so a lone key is a scalar.
+        assert_eq!(key_tensor(&[]).shape(), &[] as &[usize]);
+        assert_eq!(key_tensor(&[2, 3]).shape(), &[2, 3]);
+
+        assert_eq!(key_tensor(&[3]).dtype(), DType::Key(PrngKind::Philox4x32));
+        assert_eq!(
+            key_tensor(&[3]).tensor_type(),
+            TensorType {
+                dtype: DType::Key(PrngKind::Philox4x32),
+                shape: vec![Dim::Fixed(3)],
+            }
+        );
+    }
+
+    #[test]
+    fn test_keys_reads_a_key_tensor_only() {
+        let tensor = key_tensor(&[3]);
+        assert_eq!(tensor.keys().unwrap().kind(), PrngKind::Philox4x32);
+        assert!(Tensor::from([1u32, 2]).keys().is_none());
+    }
+
+    #[test]
+    fn test_key_broadcasts_over_its_batch_axes() {
+        let broadcast = key_tensor(&[1]).broadcast_to(&[3]).unwrap();
+        assert_eq!(broadcast.shape(), &[3]);
+        assert_eq!(
+            broadcast.keys().unwrap().words().shape(),
+            &[3, 2],
+            "the words axis comes along"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot cast Key<philox4x32> to U32")]
+    fn test_cast_from_a_key_panics() {
+        let _ = key_tensor(&[3]).cast(DType::U32);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot cast U32 to Key<philox4x32>")]
+    fn test_cast_to_a_key_panics() {
+        let _ = Tensor::from([1u32, 2]).cast(DType::Key(PrngKind::Philox4x32));
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot cast Key<philox4x32> to Key<philox4x32>")]
+    fn test_cast_of_a_key_to_its_own_dtype_panics() {
+        let _ = key_tensor(&[3]).cast(DType::Key(PrngKind::Philox4x32));
     }
 }

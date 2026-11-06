@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed :func:`.qasm3.dump` and :func:`.qasm3.dumps` raising a ``TypeError`` when
+    exporting gates that store array-valued parameters, such as :class:`.PermutationGate`.
+    Such gates are exported through a parameterless OpenQASM 3 decomposition, but the
+    exporter was still emitting the original parameters at the call site, which also made
+    the output invalid when ``disable_constants=True``.
+    Fixed `#16995 <https://github.com/Qiskit/qiskit/issues/16995>`__.

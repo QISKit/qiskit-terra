@@ -165,6 +165,7 @@ pub struct Signature {
 }
 
 /// The evaluation content of an instruction.
+#[derive(Debug, Clone)]
 enum InstructionBody {
     Parameter,
     Op(BoxedProgramOp),
@@ -185,6 +186,7 @@ impl InstructionBody {
 }
 
 /// One instruction of a function: what it is, what it reads, and what it produces.
+#[derive(Debug, Clone)]
 struct ProgramInstruction {
     body: InstructionBody,
     /// The values this instruction consumes, in operand order.
@@ -373,6 +375,7 @@ pub enum FunctionEvalError {
 /// be malformed by construction. A call instruction is the exception: its contract is checked against
 /// the function it names when a [`QuantumProgram`](super::QuantumProgram) is assembled. Because of SSA
 /// discipline, instruction order is a valid execution order.
+#[derive(Debug, Clone)]
 pub struct ProgramFunction {
     /// Every instruction, indexed by [`InstructionId`].
     instructions: Vec<ProgramInstruction>,
@@ -1597,7 +1600,7 @@ mod test {
     // ---------------------------------------------------------------------------
 
     /// An op defined outside the crate, in its own namespace, with no in-process implementation.
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     struct Elsewhere;
 
     /// The error [`Elsewhere`] returns when asked to evaluate itself.
@@ -1684,7 +1687,7 @@ mod test {
     }
 
     /// An op counting how often it has been evaluated.
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     struct Tally(Arc<AtomicUsize>);
 
     impl ProgramOp for Tally {

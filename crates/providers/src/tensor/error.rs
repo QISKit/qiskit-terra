@@ -15,7 +15,7 @@
 use thiserror::Error;
 
 use super::tensor_type::fmt_shape;
-use super::{DType, Dim};
+use super::{DType, Dim, PrngKind};
 
 /// Errors returned by tensor operations.
 #[derive(Debug, Error)]
@@ -49,4 +49,11 @@ pub enum TensorError {
         fmt_shape(shape)
     )]
     DynamicDim { shape: Vec<Dim> },
+    /// The trailing axis of a key's words is not the width the generator requires.
+    #[error("a {kind} key needs a trailing axis of {expected} words, got shape {shape:?}")]
+    KeyWords {
+        kind: PrngKind,
+        expected: usize,
+        shape: Vec<usize>,
+    },
 }

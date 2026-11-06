@@ -18,7 +18,7 @@ use super::{ProgramOp, QISKIT};
 use crate::tensor::{DType, Tensor, TensorType};
 
 /// Cast a tensor to a target dtype, keeping its shape.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cast {
     target: DType,
 }
@@ -38,6 +38,9 @@ impl ProgramOp for Cast {
     }
     fn namespace(&self) -> &str {
         QISKIT
+    }
+    fn describe(&self) -> Option<String> {
+        Some(format!("target={}", self.target))
     }
     fn arity(&self) -> usize {
         1

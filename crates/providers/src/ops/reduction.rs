@@ -11,7 +11,7 @@
 // that they have been altered from the originals.
 
 use super::error::{MathOpError, check_axis};
-use super::inference::{any, reduce};
+use super::inference::{promotable, reduce};
 use super::{ProgramOp, QISKIT};
 use crate::tensor::{DType, Tensor, TensorType};
 use ndarray::{ArrayBase, ArrayD, Axis, Data, IxDyn, NdFloat, Zip};
@@ -112,11 +112,12 @@ where
 /// Generate the [`ProgramOp`] implementation for a reduction along one axis.
 ///
 /// Each reduction takes one operand, accepts every dtype, and folds along `self.axis`. They differ
-/// only in the dtype they produce and in the fold itself, so each op supplies `$result_dtype` and
-/// an inherent `fn reduce_axis(&self, x: &Tensor) -> Tensor`. `reduce_axis` may assume `self.axis`
-/// is in bounds for `x`.
+/// only in the dtype they produce, in the fold itself and in the fields they have, so each op
+/// supplies `$result_dtype`, the `$field`s it is described by, and an inherent
+/// `fn reduce_axis(&self, x: &Tensor) -> Tensor`. `reduce_axis` may assume `self.axis` is in bounds
+/// for `x`.
 macro_rules! reduction_op {
-    ($name:ident, $op_name:literal, $result_dtype:expr) => {
+    ($name:ident, $op_name:literal, $result_dtype:expr, [$($field:ident),+]) => {
         impl ProgramOp for $name {
             type Error = MathOpError;
 
@@ -125,6 +126,9 @@ macro_rules! reduction_op {
             }
             fn namespace(&self) -> &str {
                 QISKIT
+            }
+            fn describe(&self) -> Option<String> {
+                Some([$(format!("{}={}", stringify!($field), self.$field)),+].join(", "))
             }
             fn arity(&self) -> usize {
                 1
@@ -137,7 +141,7 @@ macro_rules! reduction_op {
                 inputs: &[TensorType],
             ) -> Result<Vec<TensorType>, Self::Error> {
                 crate::unpack_operands!(self, inputs, [x]);
-                Ok(vec![reduce(x, self.axis, any, $result_dtype)?])
+                Ok(vec![reduce(x, self.axis, promotable, $result_dtype)?])
             }
             fn eval(&self, args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
                 crate::unpack_operands!(self, args, [x]);
@@ -152,7 +156,7 @@ macro_rules! reduction_op {
 ///
 /// An `F32` operand produces `F32` and a complex one keeps its dtype. Every other dtype produces
 /// `F64`. Averaging a zero-length axis divides by zero and gives `NaN`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Mean {
     axis: usize,
 }
@@ -186,7 +190,7 @@ impl Mean {
     }
 }
 
-reduction_op!(Mean, "mean", mean_out_dtype);
+reduction_op!(Mean, "mean", mean_out_dtype, [axis]);
 
 /// Variance of a tensor along a specified axis, removing that axis.
 ///
@@ -196,7 +200,7 @@ reduction_op!(Mean, "mean", mean_out_dtype);
 /// An `F32` operand produces `F32`, `C64` produces `F32` and `C128` produces `F64`. Every other
 /// dtype produces `F64`. The variance of a complex tensor is the mean squared modulus of its
 /// deviations.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Variance {
     axis: usize,
     ddof: f64,
@@ -241,12 +245,12 @@ impl Variance {
     }
 }
 
-reduction_op!(Variance, "variance", real_out_dtype);
+reduction_op!(Variance, "variance", real_out_dtype, [axis, ddof]);
 
 /// Standard deviation of a tensor along a specified axis, removing that axis.
 ///
 /// This is the square root of [`Variance`].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Std {
     axis: usize,
     ddof: f64,
@@ -269,7 +273,7 @@ impl Std {
     }
 }
 
-reduction_op!(Std, "std", real_out_dtype);
+reduction_op!(Std, "std", real_out_dtype, [axis, ddof]);
 
 #[cfg(test)]
 mod tests {
@@ -889,5 +893,30 @@ mod tests {
             Std::new(1, 0.0).eval(&[x]).unwrap_err(),
             MathOpError::InvalidAxis { axis: 1, ndim: 1 }
         ));
+    }
+
+    #[test]
+    fn test_reducing_a_key_is_refused_at_inference() {
+        // Without this, the result dtype map's catch-all arm would claim a key reduces to F64 and
+        // eval would be reached with a tensor it cannot average.
+        let key = DType::Key(crate::tensor::PrngKind::Philox4x32);
+        let key_type = TensorType {
+            dtype: key,
+            shape: vec![crate::tensor::Dim::Fixed(3)],
+        };
+        for op in [
+            &Mean::new(0) as &dyn ProgramOp<Error = MathOpError>,
+            &Variance::new(0, 0.0),
+            &Std::new(0, 0.0),
+        ] {
+            assert!(
+                matches!(
+                    op.infer_output_types(std::slice::from_ref(&key_type)).unwrap_err(),
+                    MathOpError::UnsupportedDType { operand: 0, dtype } if dtype == key
+                ),
+                "for {}",
+                op.full_name()
+            );
+        }
     }
 }

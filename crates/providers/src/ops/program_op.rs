@@ -13,6 +13,7 @@
 //! Defines the contract of atomic units within a quantum program.
 
 use crate::tensor::{Tensor, TensorType};
+use std::fmt::Debug;
 
 /// The [`ProgramOp::namespace`] of every op Qiskit defines.
 pub const QISKIT: &str = "qiskit";
@@ -52,7 +53,7 @@ macro_rules! unpack_operands {
 ///
 /// An op defined outside this crate lives in its own [`Self::namespace`] and is treated like
 /// any other.
-pub trait ProgramOp {
+pub trait ProgramOp: Debug {
     /// The error this op reports for a rejected operand type or a failed evaluation.
     type Error;
 
@@ -65,6 +66,11 @@ pub trait ProgramOp {
     /// Return the namespace and name as one string.
     fn full_name(&self) -> String {
         format!("{}.{}", self.namespace(), self.name())
+    }
+
+    /// Return a short summary of the content of this op, `axis=0` for instance.
+    fn describe(&self) -> Option<String> {
+        None
     }
 
     /// Return the number of operand tensors this op consumes.
@@ -104,11 +110,18 @@ pub type BoxedOpError = Box<dyn std::error::Error + Send + Sync + 'static>;
 /// An owned [`ErasedProgramOp`].
 pub type BoxedProgramOp = Box<dyn ErasedProgramOp>;
 
+impl Clone for BoxedProgramOp {
+    fn clone(&self) -> Self {
+        self.clone_dyn()
+    }
+}
+
 /// A type-erased [`ProgramOp`].
-pub trait ErasedProgramOp: std::any::Any + Send + Sync + sealed::Clonable {
+pub trait ErasedProgramOp: std::any::Any + Debug + Send + Sync + sealed::Clonable {
     fn name(&self) -> &str;
     fn namespace(&self) -> &str;
     fn full_name(&self) -> String;
+    fn describe(&self) -> Option<String>;
     fn arity(&self) -> usize;
     fn has_builtin_eval(&self) -> bool;
     fn infer_output_types(&self, inputs: &[TensorType]) -> Result<Vec<TensorType>, BoxedOpError>;
@@ -129,6 +142,10 @@ where
 
     fn full_name(&self) -> String {
         ProgramOp::full_name(self)
+    }
+
+    fn describe(&self) -> Option<String> {
+        ProgramOp::describe(self)
     }
 
     fn arity(&self) -> usize {

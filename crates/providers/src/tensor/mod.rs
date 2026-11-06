@@ -18,11 +18,15 @@
 mod broadcast;
 mod dtype;
 mod error;
+mod rng;
 mod tensor_type;
 mod value;
 
 pub use broadcast::broadcast_shape;
 pub use dtype::{DType, promotion};
 pub use error::TensorError;
+pub use rng::{KeyTensor, PrngKind};
 pub use tensor_type::{Dim, TensorType, broadcast_dims, broadcast_dims_to, require_static};
 pub use value::Tensor;
+
+pub(crate) use tensor_type::fmt_shape;

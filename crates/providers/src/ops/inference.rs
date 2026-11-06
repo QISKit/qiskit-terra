@@ -21,9 +21,9 @@ pub(super) type Accepts = fn(DType) -> bool;
 /// How an op's result dtype follows from its operand's.
 pub(super) type ResultDType = fn(DType) -> DType;
 
-/// Admit every dtype.
-pub(super) fn any(_dtype: DType) -> bool {
-    true
+/// Admit every dtype that has a position in the promotion lattice.
+pub(super) fn promotable(dtype: DType) -> bool {
+    promotion(dtype, dtype).is_some()
 }
 
 /// Infer the result type of an elementwise operation over two operands.
@@ -35,14 +35,7 @@ pub(super) fn elementwise_binary(
     y: &TensorType,
     accepts: Accepts,
 ) -> Result<TensorType, MathOpError> {
-    let dtype = promotion(x.dtype, y.dtype);
-    if !accepts(dtype) {
-        return Err(MathOpError::UnsupportedPromotion {
-            lhs: x.dtype,
-            rhs: y.dtype,
-            dtype,
-        });
-    }
+    let dtype = promoted_dtype(x.dtype, y.dtype, accepts)?;
     Ok(TensorType {
         dtype,
         shape: broadcast_dims(&x.shape, &y.shape)?,
@@ -101,10 +94,10 @@ fn check_accepts(dtype: DType, accepts: Accepts) -> Result<(), MathOpError> {
 /// Return the dtype a cast from `from` to `to` produces.
 ///
 /// This is the evaluation-time counterpart of [`cast`]. Every cast is supported except from a
-/// complex dtype to a real one.
+/// complex dtype to a real one, and any cast involving a [`DType::Key`], which is opaque.
 pub(super) fn cast_dtype(from: DType, to: DType) -> Result<DType, MathOpError> {
     let complex = |dtype| matches!(dtype, DType::C64 | DType::C128);
-    if complex(from) && !complex(to) {
+    if (complex(from) && !complex(to)) || from.prng_kind().is_some() || to.prng_kind().is_some() {
         return Err(MathOpError::UnsupportedCast { from, to });
     }
     Ok(to)
@@ -114,8 +107,11 @@ pub(super) fn cast_dtype(from: DType, to: DType) -> Result<DType, MathOpError> {
 ///
 /// This is the evaluation-time counterpart of [`elementwise_binary`]. Evaluation casts both operands
 /// to this dtype first.
+///
+/// Returns [`MathOpError::NoPromotion`] if the operands have no common dtype, and
+/// [`MathOpError::UnsupportedPromotion`] if they have one that `accepts` rejects.
 pub(super) fn promoted_dtype(x: DType, y: DType, accepts: Accepts) -> Result<DType, MathOpError> {
-    let dtype = promotion(x, y);
+    let dtype = promotion(x, y).ok_or(MathOpError::NoPromotion { lhs: x, rhs: y })?;
     if !accepts(dtype) {
         return Err(MathOpError::UnsupportedPromotion {
             lhs: x,
@@ -130,6 +126,11 @@ pub(super) fn promoted_dtype(x: DType, y: DType, accepts: Accepts) -> Result<DTy
 mod test {
     use super::*;
     use crate::tensor::{Dim, TensorError};
+
+    /// Admit every dtype, so that a rule is exercised with nothing of its own rejected.
+    fn any(_dtype: DType) -> bool {
+        true
+    }
 
     /// Return a `TensorType` of `dtype` over fixed axes `shape`.
     fn ty(dtype: DType, shape: &[usize]) -> TensorType {
@@ -229,6 +230,46 @@ mod test {
             reduce(&ty(DType::F64, &[2, 3]), 2, any, |dtype| dtype).unwrap_err(),
             MathOpError::InvalidAxis { axis: 2, ndim: 2 }
         ));
+    }
+
+    #[test]
+    fn test_a_key_is_refused_by_every_rule() {
+        let key = DType::Key(crate::tensor::PrngKind::Philox4x32);
+        let key_type = ty(key, &[3]);
+        let f64_type = ty(DType::F64, &[3]);
+
+        // Arithmetic has no dtype to compute in, so neither operand position is admitted.
+        for (lhs, rhs) in [(&key_type, &f64_type), (&f64_type, &key_type)] {
+            assert!(matches!(
+                elementwise_binary(lhs, rhs, promotable).unwrap_err(),
+                MathOpError::NoPromotion { .. }
+            ));
+        }
+        assert!(matches!(
+            promoted_dtype(key, DType::F64, promotable).unwrap_err(),
+            MathOpError::NoPromotion {
+                lhs,
+                rhs: DType::F64
+            } if lhs == key
+        ));
+
+        // A reduction and a unary operation each read one operand, so they reject it directly.
+        assert!(matches!(
+            reduce(&key_type, 0, promotable, |dtype| dtype).unwrap_err(),
+            MathOpError::UnsupportedDType { operand: 0, dtype } if dtype == key
+        ));
+        assert!(matches!(
+            elementwise_unary(&key_type, promotable).unwrap_err(),
+            MathOpError::UnsupportedDType { operand: 0, dtype } if dtype == key
+        ));
+
+        // Casting is refused.
+        for (from, to) in [(key, DType::U32), (DType::U32, key), (key, key)] {
+            assert!(matches!(
+                cast_dtype(from, to).unwrap_err(),
+                MathOpError::UnsupportedCast { .. }
+            ));
+        }
     }
 
     #[test]

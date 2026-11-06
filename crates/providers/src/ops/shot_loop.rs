@@ -51,6 +51,37 @@ impl ShotLoop {
     }
 }
 
+impl std::fmt::Debug for ShotLoop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct Summary<'a>(&'a CircuitData);
+
+        impl std::fmt::Debug for Summary<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("CircuitData")
+                    .field("num_qubits", &self.0.num_qubits())
+                    .field(
+                        "cregs",
+                        &self
+                            .0
+                            .cregs()
+                            .iter()
+                            .map(|creg| (creg.name(), creg.len()))
+                            .collect::<Vec<_>>(),
+                    )
+                    .finish_non_exhaustive()
+            }
+        }
+
+        f.debug_struct("ShotLoop")
+            .field(
+                "circuits",
+                &self.circuits.iter().map(Summary).collect::<Vec<_>>(),
+            )
+            .field("shots", &self.shots)
+            .finish()
+    }
+}
+
 impl ProgramOp for ShotLoop {
     type Error = ShotLoopError;
 
@@ -59,6 +90,13 @@ impl ProgramOp for ShotLoop {
     }
     fn namespace(&self) -> &str {
         QISKIT
+    }
+    fn describe(&self) -> Option<String> {
+        Some(format!(
+            "circuits={}, shots={}",
+            self.circuits.len(),
+            self.shots
+        ))
     }
     fn arity(&self) -> usize {
         self.circuits.len()
@@ -328,6 +366,29 @@ mod test {
             op.eval(&[Tensor::from(&[] as &[f64])]).unwrap_err(),
             ShotLoopError::NoBuiltinEval
         ));
+    }
+
+    #[test]
+    fn test_debug_summarizes_each_circuit() {
+        let op = ShotLoop::new(
+            vec![circuit(1, &[("c", 2), ("meas", 3)]), circuit(0, &[])],
+            100,
+        )
+        .unwrap();
+        let debug = format!("{op:?}");
+        assert_eq!(
+            debug,
+            concat!(
+                "ShotLoop { circuits: [",
+                "CircuitData { num_qubits: 0, cregs: [(\"c\", 2), (\"meas\", 3)], .. }, ",
+                "CircuitData { num_qubits: 0, cregs: [], .. }",
+                "], shots: 100 }"
+            )
+        );
+        assert!(
+            !debug.contains("interner"),
+            "a circuit's storage is summarized rather than dumped"
+        );
     }
 
     #[test]
