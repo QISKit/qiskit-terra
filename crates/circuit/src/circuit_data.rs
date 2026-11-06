@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use std::convert::Infallible;
 use std::fmt::Debug;
 
 #[cfg(feature = "py")]
@@ -38,8 +37,8 @@ use crate::object_registry::{self, ObjectRegistry};
 #[cfg(feature = "py")]
 use crate::operations::{BoxedCustomOperation, PyOpKind, PythonOperation};
 use crate::operations::{
-    ControlFlow, ControlFlowView, LoopParam, Operation, OperationRef, Param, PauliBased,
-    PauliProductRotation, StandardGate,
+    ControlFlow, ControlFlowView, LoopParam, Operation, OperationRef, Param, ParamError,
+    PauliBased, PauliProductRotation, StandardGate,
 };
 use crate::packed_instruction::{PackedInstruction, PackedOperation};
 use crate::parameter::parameter_expression::{ParameterError, ParameterExpression};
@@ -127,6 +126,8 @@ pub enum CircuitDataError {
     StandardGateParameterIsComplex(String, String),
     #[error(transparent)]
     TryReserveError(TryReserveError),
+    #[error(transparent)]
+    ParamError(#[from] ParamError),
 }
 impl<T: Debug> From<object_registry::AbsentObject<T>> for CircuitDataError {
     fn from(val: object_registry::AbsentObject<T>) -> Self {
@@ -142,12 +143,6 @@ impl<T: Debug, B: Debug> From<object_registry::AddError<T, B>> for CircuitDataEr
 impl From<TryReserveError> for CircuitDataError {
     fn from(val: TryReserveError) -> Self {
         Self::TryReserveError(val)
-    }
-}
-
-impl From<Infallible> for CircuitDataError {
-    fn from(value: Infallible) -> Self {
-        match value {}
     }
 }
 
@@ -181,6 +176,7 @@ impl From<CircuitDataError> for PyErr {
                 ))
             }
             CircuitDataError::TryReserveError(error) => error.into(),
+            CircuitDataError::ParamError(param_error) => param_error.into(),
         }
     }
 }
@@ -999,7 +995,13 @@ impl CircuitData {
                         instruction: instruction_index,
                         parameter: index as u32,
                     };
-                    for symbol in param.iter_parameters()? {
+                    #[cfg(feature = "py")]
+                    let symbols = param.iter_parameters()?;
+                    #[cfg(not(feature = "py"))]
+                    let symbols = match param.iter_parameters() {
+                        Ok(symbols) => symbols,
+                    };
+                    for symbol in symbols {
                         self.param_table.track(&symbol, Some(usage))?;
                     }
                 }
@@ -1037,7 +1039,13 @@ impl CircuitData {
                         instruction: instruction_index,
                         parameter: index as u32,
                     };
-                    for symbol in param.iter_parameters()? {
+                    #[cfg(feature = "py")]
+                    let symbols = param.iter_parameters()?;
+                    #[cfg(not(feature = "py"))]
+                    let symbols = match param.iter_parameters() {
+                        Ok(symbols) => symbols,
+                    };
+                    for symbol in symbols {
                         self.param_table.untrack(&symbol, usage)?;
                     }
                 }
@@ -1067,7 +1075,14 @@ impl CircuitData {
         if matches!(self.global_phase, Param::Float(_)) {
             return Ok(());
         }
-        for symbol in self.global_phase.iter_parameters()? {
+        #[cfg(feature = "py")]
+        let param_iter = self.global_phase.iter_parameters()?;
+
+        #[cfg(not(feature = "py"))]
+        let param_iter = match self.global_phase.iter_parameters() {
+            Ok(iter) => iter,
+        };
+        for symbol in param_iter {
             self.param_table
                 .track(&symbol, Some(ParameterUse::GlobalPhase))?;
         }
@@ -1329,10 +1344,7 @@ impl CircuitData {
                 }
             };
             // Param::from_expr() only errors in the python path when calling Python
-            #[cfg(feature = "py")]
-            return Ok(Param::from_expr(new_expr, coerce)?);
-            #[cfg(not(feature = "py"))]
-            return Param::from_expr(new_expr, coerce).ok_or(CircuitDataError::InvalidParameter);
+            Ok(Param::from_expr(new_expr, coerce)?)
         };
 
         #[cfg(feature = "py")]
@@ -1345,7 +1357,15 @@ impl CircuitData {
             seen_blocks.clear();
             uuids.clear();
 
-            for inner_symbol in value.as_ref().iter_parameters()? {
+            #[cfg(feature = "py")]
+            let param_iter = value.as_ref().iter_parameters()?;
+
+            #[cfg(not(feature = "py"))]
+            let param_iter = match value.as_ref().iter_parameters() {
+                Ok(iter) => iter,
+            };
+
+            for inner_symbol in param_iter {
                 uuids.push(self.param_table.track(&inner_symbol, None)?);
             }
             for usage in uses {

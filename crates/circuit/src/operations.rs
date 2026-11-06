@@ -23,6 +23,7 @@ use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{error, fmt, vec};
+use thiserror::Error;
 
 use crate::ControlFlowBlocks;
 use crate::annotation::Annotation;
@@ -148,6 +149,25 @@ impl<'a, 'py> FromPyObject<'a, 'py> for Param {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum ParamError {
+    #[error("Unable to convert create a Parameter based on a complex value.")]
+    ComplexValueError,
+    #[error(transparent)]
+    #[cfg(feature = "py")]
+    PythonError(#[from] PyErr),
+}
+
+#[cfg(feature = "py")]
+impl From<ParamError> for PyErr {
+    fn from(value: ParamError) -> Self {
+        match value {
+            ParamError::ComplexValueError => PyValueError::new_err(value.to_string()),
+            ParamError::PythonError(py_err) => py_err,
+        }
+    }
+}
+
 impl Param {
     /// Get the float value, if one is stored.
     pub fn try_float(&self) -> Option<f64> {
@@ -224,10 +244,10 @@ impl Param {
         }
     }
 
-    #[cfg(feature = "py")]
     // TODO: Replace `Box<dyn Iterator>` with a custom iterator struct. The
     // Box<dyn Iterator> is an anti-pattern which shouldn't really be needed.
     /// Get an iterator over any `Symbol` instances tracked within this `Param`.
+    #[cfg(feature = "py")]
     pub fn iter_parameters(&self) -> PyResult<Box<dyn Iterator<Item = Symbol> + '_>> {
         match self {
             Param::Float(_) | Param::Int(_) => Ok(Box::new(::std::iter::empty())),
@@ -254,10 +274,10 @@ impl Param {
         }
     }
 
-    #[cfg(not(feature = "py"))]
     // TODO: Replace `Box<dyn Iterator>` with a custom iterator struct. The
     // Box<dyn Iterator> is an anti-pattern which shouldn't really be needed.
     /// Get an iterator over any `Symbol` instances tracked within this `Param`.
+    #[cfg(not(feature = "py"))]
     pub fn iter_parameters(&self) -> Result<Box<dyn Iterator<Item = Symbol> + '_>, Infallible> {
         match self {
             Param::Float(_) | Param::Int(_) => Ok(Box::new(::std::iter::empty())),
@@ -265,7 +285,6 @@ impl Param {
         }
     }
 
-    // #[cfg(not(feature = "py"))]
     /// Construct a [Param] from a [ParameterExpression]. Allows type coercion.
     ///
     /// # Arguments
@@ -278,39 +297,7 @@ impl Param {
     /// # Returns
     ///
     /// - `Param` - The [Param] object.
-    #[cfg(not(feature = "py"))]
-    pub fn from_expr(expr: ParameterExpression, coerce_to_float: bool) -> Option<Self> {
-        match expr.try_to_value(true) {
-            Ok(value) => match value {
-                Value::Int(i) => {
-                    coerce_to_float.then(|| Self::Float(i as f64)) // coerce integer to float
-                }
-                Value::Real(f) => Some(Self::Float(f)),
-                Value::Complex(c) => {
-                    // Complex numbers are only defined in Python custom
-                    // objects and aren't valid gate parameters for
-                    // anything else so return none
-                    (coerce_to_float && value.is_real()).then(|| Self::Float(c.re))
-                }
-            },
-            Err(_) => Some(Self::ParameterExpression(Arc::new(expr))),
-        }
-    }
-
-    #[cfg(feature = "py")]
-    /// Construct a [Param] from a [ParameterExpression]. Allows type coercion.
-    ///
-    /// # Arguments
-    ///
-    /// * expr - The expression to construct the [Param] from.
-    /// * coerce_to_float - If `true`, coerce integers and complex (with 0 imaginary part) types to
-    ///   [Param::Float]. If `false`, only float types are [Param::Float] and integers and
-    ///   complex numbers are represented as [Param::ParameterExpression].
-    ///
-    /// # Returns
-    ///
-    /// - `Param` - The [Param] object.
-    pub fn from_expr(expr: ParameterExpression, coerce_to_float: bool) -> PyResult<Self> {
+    pub fn from_expr(expr: ParameterExpression, coerce_to_float: bool) -> Result<Self, ParamError> {
         match expr.try_to_value(true) {
             Ok(value) => match value {
                 Value::Int(i) => {
@@ -328,7 +315,10 @@ impl Param {
                         // Complex numbers are only defined in Python custom
                         // objects and aren't valid gate parameters for
                         // anything else so return it as an object
-                        Python::attach(|py| Ok(Self::Obj(c.into_py_any(py)?)))
+                        #[cfg(feature = "py")]
+                        return Python::attach(|py| Ok(Self::Obj(c.into_py_any(py)?)));
+                        #[cfg(not(feature = "py"))]
+                        return Err(ParamError::ComplexValueError);
                     }
                 }
             },
@@ -336,10 +326,10 @@ impl Param {
         }
     }
 
-    #[cfg(feature = "py")]
     /// Extract from a Python object without numeric coercion to float.  The default conversion will
     /// coerce integers into floats, but in things like `assign_parameters`, this is not always
     /// desirable.
+    #[cfg(feature = "py")]
     pub fn extract_no_coerce(ob: Borrowed<PyAny>) -> PyResult<Self> {
         Ok(if ob.is_instance_of::<PyFloat>() {
             Param::Float(ob.extract()?)
@@ -399,8 +389,8 @@ impl Param {
         }
     }
 
-    #[cfg(feature = "py")]
     /// Clones the [Param] object safely by reference count or copying.
+    #[cfg(feature = "py")]
     pub fn clone_ref(&self, py: Python) -> Self {
         match self {
             Param::ParameterExpression(exp) => Param::ParameterExpression(exp.clone()),
