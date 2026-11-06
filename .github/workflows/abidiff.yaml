@@ -12,6 +12,17 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
+      - name: Load cache
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Fetch current
         uses: actions/checkout@v7
         with:
@@ -27,13 +38,13 @@ jobs:
         with:
           clean: false
 
-#       - name: install abi tools
-#         run: |
-#           sudo apt update
-#           sudo apt install -y abigail-tools
-#
       - name: Build changes
         run: make cheader clib-dev
+
+      - name: Install ABI tools
+        run: |
+          sudo apt update
+          sudo apt install --no-install-recommends -y abigail-tools
 
       - name: Compare ABI
         run: abidiff dist/c/lib/libqiskit.so.main dist/c/lib/libqiskit.so
