@@ -15,11 +15,14 @@
 import unittest
 
 from qiskit import QuantumCircuit
-from qiskit.transpiler import InstructionDurations
+from qiskit.circuit import Measure
+from qiskit.circuit.library import XGate
+from qiskit.transpiler import InstructionDurations, InstructionProperties, Target
 from qiskit.transpiler.passes import (
     ASAPScheduleAnalysis,
     ConstrainedReschedule,
     ALAPScheduleAnalysis,
+    TimeUnitConversion,
 )
 from qiskit.transpiler.passmanager import PassManager
 
@@ -74,6 +77,56 @@ class TestConstrainedReschedule(QiskitTestCase):
         for node, start_time in pm.property_set["node_start_time"].items():
             if node.op.name == "measure":
                 self.assertEqual(0, start_time % 16)
+
+    def test_target_acquire_alignment(self):
+        """Test measurement alignment is read from the target."""
+        target = Target(dt=1, acquire_alignment=16, pulse_alignment=1)
+        target.add_instruction(XGate(), {(0,): InstructionProperties(duration=160)})
+        target.add_instruction(Measure(), {(0,): InstructionProperties(duration=800)})
+
+        qc = QuantumCircuit(1, 1)
+        qc.x(0)
+        qc.delay(100, 0, unit="dt")
+        qc.measure(0, 0)
+
+        pm = PassManager(
+            [
+                TimeUnitConversion(target.durations()),
+                ALAPScheduleAnalysis(target.durations()),
+                ConstrainedReschedule(target=target),
+            ]
+        )
+        pm.run(qc)
+
+        starts_by_name = {
+            node.op.name: time for node, time in pm.property_set["node_start_time"].items()
+        }
+        self.assertEqual(starts_by_name, {"x": 0, "delay": 160, "measure": 272})
+
+    def test_target_preserves_aligned_measure(self):
+        """Test already aligned measurements are not shifted."""
+        target = Target(dt=1, acquire_alignment=16, pulse_alignment=1)
+        target.add_instruction(XGate(), {(0,): InstructionProperties(duration=160)})
+        target.add_instruction(Measure(), {(0,): InstructionProperties(duration=800)})
+
+        qc = QuantumCircuit(1, 1)
+        qc.x(0)
+        qc.delay(96, 0, unit="dt")
+        qc.measure(0, 0)
+
+        pm = PassManager(
+            [
+                TimeUnitConversion(target.durations()),
+                ALAPScheduleAnalysis(target.durations()),
+                ConstrainedReschedule(target=target),
+            ]
+        )
+        pm.run(qc)
+
+        starts_by_name = {
+            node.op.name: time for node, time in pm.property_set["node_start_time"].items()
+        }
+        self.assertEqual(starts_by_name, {"x": 0, "delay": 160, "measure": 256})
 
 
 if __name__ == "__main__":

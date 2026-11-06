@@ -292,8 +292,8 @@ pub fn run_constrained_reschedule(
             node_index,
             node_start_time,
             clbit_write_latency,
-            acquire_align,
             pulse_align,
+            acquire_align,
             target,
         )?;
     }

@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed :class:`.ConstrainedReschedule` so that, when a :class:`.Target` is
+    provided, measurement operations are shifted according to the target's
+    acquire alignment rather than its pulse alignment.
