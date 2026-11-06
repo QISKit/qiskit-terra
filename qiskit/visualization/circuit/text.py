@@ -9,6 +9,7 @@
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
+# Modified to resolve classical-bit bindings when drawing control-flow blocks.
 
 """
 A module for drawing circuits in ascii art or some other text representation
@@ -719,6 +720,7 @@ class TextDrawing:
         self.clbits = clbits
         self.nodes = nodes
         self._circuit = circuit
+        self._bound_clbits = {}
         if with_layout:
             if self._circuit._layout:
                 self.layout = self._circuit._layout.initial_layout
@@ -1148,14 +1150,15 @@ class TextDrawing:
         if self.measure_arrows and isinstance(op, Measure):
             gate = MeasureFrom()
             layer.set_qubit(node.qargs[0], gate)
-            register, _, reg_index = get_bit_reg_index(self._circuit, node.cargs[0])
+            clbit = self._bound_clbits.get(node.cargs[0], node.cargs[0])
+            register, _, reg_index = get_bit_reg_index(self._circuit, clbit)
             if self.cregbundle and register is not None:
                 layer.set_clbit(
-                    node.cargs[0],
+                    clbit,
                     MeasureTo(str(reg_index)),
                 )
             else:
-                layer.set_clbit(node.cargs[0], MeasureTo())
+                layer.set_clbit(clbit, MeasureTo())
 
         elif getattr(op, "_directive", False):
             # barrier
@@ -1363,19 +1366,26 @@ class TextDrawing:
             circuit_list.insert(0, next(iter(node.op.cases_specifier()))[1].copy_empty_like())
 
         for circ_num, circuit in enumerate(circuit_list):
+            # Register membership and measurement labels use the outermost circuit's bits.
+            outer_clbits = self._bound_clbits
+            self._bound_clbits = outer_clbits.copy()
             # Update the wire_map with the qubits and clbits from the inner circuit
             flow_wire_map = wire_map.copy()
             flow_wire_map.update(
                 {inner: wire_map[outer] for outer, inner in zip(node.qargs, circuit.qubits)}
             )
             for outer, inner in zip(node.cargs, circuit.clbits):
-                if self.cregbundle and (
-                    (in_reg := get_bit_register(self._circuit, inner)) is not None
-                ):
-                    out_reg = get_bit_register(self._circuit, outer)
-                    flow_wire_map.update({in_reg: wire_map[out_reg]})
-                else:
-                    flow_wire_map.update({inner: wire_map[outer]})
+                bound = outer_clbits.get(outer, outer)
+                self._bound_clbits[inner] = bound
+                out_reg = get_bit_register(self._circuit, bound)
+                wire = (
+                    wire_map[out_reg]
+                    if self.cregbundle and out_reg is not None
+                    else wire_map[outer]
+                )
+                flow_wire_map[inner] = wire
+                if self.cregbundle and (in_reg := get_bit_register(circuit, inner)) is not None:
+                    flow_wire_map[in_reg] = wire
 
             if circ_num > 0:
                 # Draw a middle box such as Else and Case
@@ -1408,6 +1418,8 @@ class TextDrawing:
 
                 flow_layer2.connect_with("│")
                 layers.append(flow_layer2.full_layer)
+
+            self._bound_clbits = outer_clbits
 
         # Draw the right box for End
         flow_layer = self.draw_flow_box(node, wire_map, CF_RIGHT, conditional=False)

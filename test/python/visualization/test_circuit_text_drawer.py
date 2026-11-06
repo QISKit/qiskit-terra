@@ -9,6 +9,7 @@
 # Any modifications or derivative works of this code must retain this
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
+# Modified to test classical-bit bindings in composed control-flow blocks.
 
 """circuit_drawer with output="text" draws a circuit in ascii art"""
 
@@ -4677,6 +4678,38 @@ class TestCircuitControlFlowOps(QiskitVisualizationTestCase):
         # we don't check the full drawing, we just check the drawing didn't fail
         out = str(circuit_drawer(circuit, output="text"))
         self.assertTrue("For-0 (0, 1, 2)" in out)
+
+    def test_control_flow_bound_measurement_bits(self):
+        """Measurements in composed blocks use their outer classical-bit bindings."""
+        for bundled in (False, True):
+            for registered in (False, True):
+                for nested in (False, True):
+                    with self.subTest(bundled=bundled, registered=registered, nested=nested):
+                        cell = (
+                            QuantumCircuit(1, 1)
+                            if registered
+                            else QuantumCircuit([Qubit(), Clbit()])
+                        )
+                        with cell.if_test(expr.lift(True)):
+                            if nested:
+                                with cell.if_test(expr.lift(True)):
+                                    cell.measure(0, 0)
+                            else:
+                                cell.measure(0, 0)
+                        actual = QuantumCircuit(2, 2)
+                        expected = QuantumCircuit(2, 2)
+                        for qubit, clbit in ((1, 0), (0, 1)):
+                            actual.compose(cell, [qubit], [clbit], inplace=True)
+                            with expected.if_test(expr.lift(True)):
+                                if nested:
+                                    with expected.if_test(expr.lift(True)):
+                                        expected.measure(qubit, clbit)
+                                else:
+                                    expected.measure(qubit, clbit)
+                        self.assertEqual(
+                            str(actual.draw("text", cregbundle=bundled, fold=-1)),
+                            str(expected.draw("text", cregbundle=bundled, fold=-1)),
+                        )
 
     def test_nested_switch_op_var(self):
         """Test switch with standalone Var."""

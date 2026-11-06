@@ -1,0 +1,6 @@
+fixes:
+  - |
+    Fixed a crash in the text circuit drawer when measurements in a control-flow
+    block use classical bits distinct from those in the enclosing circuit.
+    Measurement labels now follow the bits bound to the enclosing circuit,
+    including in nested blocks. See :issue:`15822`.
