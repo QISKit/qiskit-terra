@@ -1,0 +1,27 @@
+name: Compare C ABI
+
+on:
+  pull_request:
+    branches: [ $default-branch ]
+  push:
+    branches: [ $default-branch ]
+
+jobs:
+  abidiff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build (main)
+
+      - name: Build
+
+      - name: Install ABI Tools
+        run: |
+          sudo apt update
+          sudo apt install -y abigail-tools
+
+      - name: Compare ABI
+
+
+
