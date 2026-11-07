@@ -355,6 +355,19 @@ impl CircuitInstruction {
         }
     }
 
+    // `copy.replace` support (Python 3.13+).
+    #[pyo3(signature=(operation=None, qubits=None, clbits=None, params=None))]
+    pub fn __replace__(
+        &self,
+        py: Python,
+        operation: Option<&Bound<PyAny>>,
+        qubits: Option<Bound<PyAny>>,
+        clbits: Option<Bound<PyAny>>,
+        params: Option<Bound<PyAny>>,
+    ) -> PyResult<Self> {
+        self.replace(py, operation, qubits, clbits, params)
+    }
+
     pub fn __getnewargs__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         (
             self.get_operation(py)?,

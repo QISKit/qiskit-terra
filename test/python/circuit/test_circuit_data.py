@@ -11,6 +11,9 @@
 # that they have been altered from the originals.
 
 """Test operations on circuit.data."""
+import copy
+import sys
+import unittest
 import warnings
 import pickle
 import ddt
@@ -1179,3 +1182,30 @@ class TestQuantumCircuitInstructionData(QiskitTestCase):
         data_rhs = CircuitData()
         getattr(data_rhs, func)(rhs_v)
         self.assertFalse(data_rhs == data_lhs)
+
+    @unittest.skipIf(sys.version_info < (3, 13), "copy.replace is new in Python 3.13")
+    def test_copy_replace(self):
+        """Test that copy.replace on a CircuitInstruction matches CircuitInstruction.replace"""
+        qr = QuantumRegister(2)
+        cr = ClassicalRegister(1)
+        instruction = CircuitInstruction(RXGate(0.5), [qr[0]], [cr[0]])
+
+        with self.subTest("no changes"):
+            self.assertEqual(copy.replace(instruction), instruction)
+
+        cases = {
+            "operation": {"operation": HGate()},
+            "qubits": {"qubits": [qr[1]]},
+            "clbits": {"clbits": []},
+            "params": {"params": [0.25]},
+            "several fields": {"operation": CXGate(), "qubits": [qr[1], qr[0]], "clbits": []},
+        }
+        for name, changes in cases.items():
+            with self.subTest(name):
+                replaced = copy.replace(instruction, **changes)
+                self.assertEqual(replaced, instruction.replace(**changes))
+                self.assertNotEqual(replaced, instruction)
+
+        with self.subTest("unknown field"):
+            with self.assertRaises(TypeError):
+                copy.replace(instruction, label="x")

@@ -1,0 +1,7 @@
+---
+features_circuits:
+  - |
+    :class:`.CircuitInstruction` now supports :func:`copy.replace` on Python 3.13 and newer.
+    ``copy.replace(instruction, **changes)`` is equivalent to
+    :meth:`.CircuitInstruction.replace`.
+    See `#13286 <https://github.com/Qiskit/qiskit/issues/13286>`__.
