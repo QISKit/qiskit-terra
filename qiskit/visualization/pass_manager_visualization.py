@@ -29,19 +29,20 @@ from .exceptions import VisualizationError
 DEFAULT_STYLE = {AnalysisPass: "red", TransformationPass: "blue"}
 
 
-@_optionals.HAS_GRAPHVIZ.require_in_call
+@_optionals.HAS_PYGRAPHVIZ.require_in_call
 @_optionals.HAS_PYDOT.require_in_call
 def pass_manager_drawer(pass_manager, filename=None, style=None, raw=False):
     """
     Draws the pass manager.
 
-    This function needs `pydot <https://github.com/pydot/pydot>`__, which in turn needs
-    `Graphviz <https://www.graphviz.org/>`__ to be installed.
+    This function needs `pydot <https://github.com/pydot/pydot>`__ and
+    `pygraphviz <https://pygraphviz.github.io/>`__ to be installed. pygraphviz 2.0 bundles the
+    Graphviz binaries, so no separate Graphviz installation is required.
 
     .. warning::
-        This function will call the system Graphviz tool on a file involving user-controllable
-        strings (such as pass names).  It is recommended to only call this function on trusted
-        input.
+        This function will call the Graphviz tooling (bundled with pygraphviz) on a file
+        involving user-controllable strings (such as pass names).  It is recommended to only
+        call this function on trusted input.
 
     Args:
         pass_manager (PassManager): the pass manager to be drawn
@@ -111,19 +112,20 @@ def _get_node_color(pss, style):
     return "black"
 
 
-@_optionals.HAS_GRAPHVIZ.require_in_call
+@_optionals.HAS_PYGRAPHVIZ.require_in_call
 @_optionals.HAS_PYDOT.require_in_call
 def staged_pass_manager_drawer(pass_manager, filename=None, style=None, raw=False):
     """
     Draws the staged pass manager.
 
-        This function needs `pydot <https://github.com/erocarrera/pydot>`__, which in turn needs
-    `Graphviz <https://www.graphviz.org/>`__ to be installed.
+        This function needs `pydot <https://github.com/pydot/pydot>`__ and
+    `pygraphviz <https://pygraphviz.github.io/>`__ to be installed. pygraphviz 2.0 bundles the
+    Graphviz binaries, so no separate Graphviz installation is required.
 
     .. warning::
-        This function will call the system Graphviz tool on a file involving user-controllable
-        strings (such as pass names).  It is recommended to only call this function on trusted
-        input.
+        This function will call the Graphviz tooling (bundled with pygraphviz) on a file
+        involving user-controllable strings (such as pass names).  It is recommended to only
+        call this function on trusted input.
 
     Args:
         pass_manager (StagedPassManager): the staged pass manager to be drawn
@@ -300,9 +302,12 @@ def make_output(graph, raw, filename):
         else:
             raise VisualizationError("if format=raw, then a filename is required.")
 
+    import pygraphviz
+
+    agraph = pygraphviz.AGraph(string=graph.to_string())
+
     if not _optionals.HAS_PIL and filename:
-        # pylint says this isn't a method - it is
-        graph.write_png(filename)
+        agraph.draw(filename, format="png", prog="dot")
         return None
 
     _optionals.HAS_PIL.require_now("pass manager drawer")
@@ -312,8 +317,7 @@ def make_output(graph, raw, filename):
 
         tmppath = os.path.join(tmpdirname, "pass_manager.png")
 
-        # pylint says this isn't a method - it is
-        graph.write_png(tmppath)
+        agraph.draw(tmppath, format="png", prog="dot")
 
         image = Image.open(tmppath)
         os.remove(tmppath)

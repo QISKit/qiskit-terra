@@ -14,6 +14,7 @@
 
 import unittest
 import os
+import sys
 
 from qiskit.transpiler import CouplingMap, Layout
 from qiskit.transpiler.passmanager import PassManager
@@ -36,7 +37,7 @@ from qiskit.circuit.library.standard_gates.equivalence_library import (
 from .visualization import QiskitVisualizationTestCase, path_to_diagram_reference
 
 
-@unittest.skipUnless(optionals.HAS_GRAPHVIZ, "Graphviz not installed.")
+@unittest.skipUnless(optionals.HAS_PYGRAPHVIZ, "pygraphviz not installed.")
 @unittest.skipUnless(optionals.HAS_PYDOT, "pydot not installed")
 @unittest.skipUnless(optionals.HAS_PIL, "Pillow not installed")
 class TestPassManagerDrawer(QiskitVisualizationTestCase):
@@ -97,6 +98,26 @@ class TestPassManagerDrawer(QiskitVisualizationTestCase):
             self.assertFilesAreEqual(filename, path_to_diagram_reference("pass_manager_style.dot"))
         finally:
             os.remove(filename)
+
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "Requires the Windows PermissionError fix in Qiskit/qiskit#17031",
+    )
+    def test_pass_manager_drawer_pygraphviz_render(self):
+        """Test pass manager drawing with pygraphviz rendering directly to an image."""
+        from PIL import Image
+
+        image = self.pass_manager.draw()
+        self.assertIsInstance(image, Image.Image)
+
+        filename = "test_pm_render.png"
+        try:
+            self.pass_manager.draw(filename=filename)
+            self.assertTrue(os.path.exists(filename))
+            self.assertGreater(os.path.getsize(filename), 0)
+        finally:
+            if os.path.exists(filename):
+                os.remove(filename)
 
 
 if __name__ == "__main__":

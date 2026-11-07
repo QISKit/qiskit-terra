@@ -1,0 +1,17 @@
+---
+features_visualization:
+  - |
+    :func:`.pass_manager_drawer` and :func:`.staged_pass_manager_drawer` now render
+    images using `pygraphviz <https://pygraphviz.github.io/>`__, which bundles the
+    Graphviz binaries as of version 2.0. A separate manual installation of the
+    Graphviz software is no longer required to draw pass managers.
+upgrade_visualization:
+  - |
+    :func:`.pass_manager_drawer` and :func:`.staged_pass_manager_drawer` (and therefore
+    :meth:`.PassManager.draw` and :meth:`.StagedPassManager.draw`) now require the optional
+    dependency `pygraphviz <https://pygraphviz.github.io/>`__ version 2.0 or later when
+    rendering an image, in place of a system installation of Graphviz. It can be installed
+    with ``pip install pygraphviz`` or as part of the ``qiskit[visualization]`` extra.
+    Because the rendering now uses the Graphviz build bundled with pygraphviz, the
+    generated images may differ slightly in size and font rendering from those produced
+    by a system Graphviz installation. The ``raw=True`` DOT output is unchanged.

@@ -58,6 +58,7 @@ qasm3-import = [
 visualization = [
     "matplotlib >= 3.3",
     "pydot",
+    "pygraphviz >= 2.0",
     "Pillow >= 4.2.1",
     "pylatexenc >= 1.4",
     "seaborn >= 0.9.0",
@@ -236,6 +237,7 @@ optionals-interactive = [
     "matplotlib>=3.3",
     "pillow>=4.2.1",
     "pydot",
+    "pygraphviz>=2.0",
     "pylatexenc>=1.4",
     "seaborn>=0.9.0",
 ]

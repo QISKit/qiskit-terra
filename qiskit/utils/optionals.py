@@ -131,6 +131,12 @@ External Python Libraries
     For some graph visualizations, Qiskit uses `pydot <https://github.com/pydot/pydot>`__ as an
     interface to GraphViz (see :data:`HAS_GRAPHVIZ`).
 
+.. py:data:: HAS_PYGRAPHVIZ
+
+    Qiskit uses `pygraphviz <https://pygraphviz.github.io/>`__ to render pass-manager
+    visualizations.  From version 2.0, pygraphviz ships with bundled Graphviz binaries, so no
+    separate Graphviz installation is required.
+
 .. py:data:: HAS_PYGMENTS
 
     Pygments is a code highlighter and formatter used by many environments that involve rich
@@ -306,6 +312,7 @@ HAS_NETWORKX = _LazyImportTester("networkx", install="pip install networkx")
 HAS_NLOPT = _LazyImportTester("nlopt", name="NLopt Optimizer", install="pip install nlopt")
 HAS_PIL = _LazyImportTester("PIL.Image", name="pillow", install="pip install pillow")
 HAS_PYDOT = _LazyImportTester("pydot", install="pip install pydot")
+HAS_PYGRAPHVIZ = _LazyImportTester("pygraphviz", install="pip install pygraphviz")
 HAS_PYGMENTS = _LazyImportTester("pygments", install="pip install pygments")
 HAS_PYLATEX = _LazyImportTester(
     {
