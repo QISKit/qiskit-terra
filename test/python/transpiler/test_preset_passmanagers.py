@@ -165,6 +165,22 @@ class TestPresetPassManager(QiskitTestCase):
         result = transpile(circuit, basis_gates=None, optimization_level=level)
         self.assertEqual(result, circuit)
 
+    @combine(level=[2, 3], name="level{level}")
+    def test_diagonal_gates_removed_after_optimization(self, level):
+        """Test diagonal gates introduced during optimization are removed."""
+        circuit = QuantumCircuit(1, 1)
+        circuit.s(0)
+        circuit.ry(np.pi, 0)
+        circuit.ry(-np.pi, 0)
+        circuit.measure(0, 0)
+
+        result = transpile(circuit, optimization_level=level)
+
+        op_nodes = [
+            node.name for node in circuit_to_dag(result).topological_op_nodes()
+        ]
+        self.assertNotIn("u1", op_nodes)
+
     def test_level0_keeps_reset(self):
         """Test level 0 should keep the reset instructions"""
         q = QuantumRegister(2, name="q")

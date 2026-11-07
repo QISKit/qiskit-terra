@@ -642,6 +642,9 @@ class OptimizationPassManager(PassManagerStagePlugin):
             ConditionalController(translation.to_flow_controller(), condition=should_unroll),
         ]
 
+        if optimization_level in (2, 3):
+            post_loop.append(RemoveDiagonalGatesBeforeMeasure())
+
         optimization = PassManager()
         optimization.append(pre_loop + loop_check)
         optimization.append(DoWhileController(loop + unroll + loop_check, do_while=continue_loop))
