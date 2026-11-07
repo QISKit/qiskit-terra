@@ -138,7 +138,12 @@ def adder_ripple_v95(num_state_qubits: int, kind: str = "half") -> QuantumCircui
     if kind in ["full", "half"]:  # final CX (cancels for the 'fixed' case)
         circuit.cx(qr_a[-1], qr_b[-1])
 
-    if len(carries) > 1:
+    if kind == "fixed":
+        # there is no carry-out qubit, hence the carry into the most significant bit is the
+        # last entry of ``carries`` (for "full" and "half" the last entry is the carry-out)
+        if num_state_qubits > 1:
+            circuit.append(sum_gate, [carries[-1], qr_a[-1], qr_b[-1]])
+    elif len(carries) > 1:
         circuit.append(sum_gate, [carries[-2], qr_a[-1], qr_b[-1]])
 
     i -= 2
