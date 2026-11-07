@@ -30,8 +30,11 @@ use qiskit_quantum_info::sparse_observable::{
 ///
 /// # Safety
 ///
-/// * ``bit_terms`` must be a non-null, aligned pointer to ``len`` elements of type ``QkBitTerm``.
-/// * ``indices`` must be a non-null, aligned pointer to ``len`` elements of type ``uint32_t``.
+/// * If ``len`` is larger than 0, ``bit_terms`` must be a non-null, aligned pointer to ``len``
+///   elements of type ``QkBitTerm``.
+/// * If ``len`` is larger than 0, ``indices`` must be a non-null, aligned pointer to ``len``
+///   elements of type ``uint32_t``. These elements must be term-wise sorted in strict ascending
+///   order.
 #[repr(C)]
 pub struct CSparseTerm {
     /// The coefficient of the observable term.
@@ -41,8 +44,8 @@ pub struct CSparseTerm {
     /// An aligned pointer to ``len`` elements of type ``QkBitTerm``.  This can be ``NULL`` if and
     /// only if ``len`` is 0.
     bit_terms: *mut BitTerm,
-    /// An aligned pointer to ``len`` elements of type ``uint32_t``.  This can be ``NULL`` if and
-    /// only if ``len`` is 0.
+    /// An aligned pointer to ``len`` elements of type ``uint32_t``.  The indices must be term-wise
+    /// sorted in strict ascending order.  This pointer can be ``NULL`` if and only if ``len`` is 0.
     indices: *mut u32,
     /// The number of qubits the observable term is defined on.
     num_qubits: u32,
