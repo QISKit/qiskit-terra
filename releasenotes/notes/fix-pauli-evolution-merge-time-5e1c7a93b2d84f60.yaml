@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Fixed an issue where :class:`.CommutativeOptimization` could merge two consecutive
+    :class:`.PauliEvolutionGate` instances whose Hamiltonians are close but not equal, even
+    when the evolution times were large enough for the difference to change the resulting
+    unitary significantly. The merge check now takes the evolution times into account: the
+    gates are merged only if ``(|t1| + |t2|) * ||H1 - H2||`` is within the tolerance derived
+    from the ``approximation_degree`` of the pass. If either evolution time is a symbolic
+    expression, the Hamiltonians must be equal. Fixed
+    `#16873 <https://github.com/Qiskit/qiskit/issues/16873>`__.

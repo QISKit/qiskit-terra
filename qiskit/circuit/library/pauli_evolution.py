@@ -388,30 +388,69 @@ def _get_default_label(operator):
     return f"exp(-it {_operator_label(operator)})"
 
 
+def _bounded_phase_error(op1, op2, t1: float, t2: float) -> float:
+    """Phase error bound if op2 is replaced by op1 and their times are summed."""
+    diff = op1 - op2
+    # These explicit zero tolerances matter: simplify()'s own default of 1e-8
+    # would otherwise wipe out the small coefficient difference we're measuring.
+    if isinstance(diff, SparsePauliOp):
+        diff = diff.simplify(atol=0, rtol=0)
+    else:
+        diff = diff.simplify(tol=0)
+    coef_diff = float(np.sum(np.abs(diff.coeffs)))
+    return (abs(t1) + abs(t2)) * coef_diff
+
+
 def _merge_two_pauli_evolutions(
-    gate1: PauliEvolutionGate, gate2: PauliEvolutionGate
+    gate1: PauliEvolutionGate, gate2: PauliEvolutionGate, tol: float = 0.0
 ) -> PauliEvolutionGate | None:
-    """
-    Attempts to merge two PauliEvolutionGates can be merged.
+    """Attempt to merge two :class:`.PauliEvolutionGate` objects into one.
+
+    The merged gate evolves under ``gate1``'s operator for the summed time.
+
+    For ``SparsePauliOp`` or ``SparseObservable`` operators with numeric times, the gates are
+    merged only if ``eps <= tol``, where ``eps = (|t1| + |t2|) * ||op1 - op2||`` bounds the
+    distance between the merged and the original unitary. The average gate infidelity of the
+    merge is at most ``eps**2``, because an eigenvalue ``exp(i*theta)`` at distance ``eps`` from 1
+    has ``1 - cos(theta) <= eps**2 / 2``. So a merge guarantees ``1 - F_avg < tol**2``. This is
+    stricter than the ``1 - F_avg < tol`` criterion of the other checks in
+    :class:`.CommutativeOptimization`, so some merges within that criterion are refused.
+    ``SparseObservable`` has no canonical form, so equal operators written differently may not
+    be merged.
+
+    If either time is symbolic, the operators must be equal and ``tol`` is not used. Operators of
+    any other type are merged only if they compare equal.
+
+    Args:
+        gate1: First gate.
+        gate2: Second gate.
+        tol: Maximum allowed value of the bound ``eps`` (see above).
 
     Returns:
-
-    * None if the arguments are not of type PauliEvolutionGate or cannot be merged,
-    * Combined PauliEvolutionGate otherwise.
+        The merged gate, or ``None`` if the gates cannot be merged.
 
     This function is internal (used from within Rust code) and not a part of public API.
     """
     if not isinstance(gate1, PauliEvolutionGate) or not isinstance(gate2, PauliEvolutionGate):
         return None
 
-    if isinstance(gate1.operator, SparseObservable) and isinstance(
-        gate2.operator, SparseObservable
+    if isinstance(gate1.operator, (SparseObservable, SparsePauliOp)) and isinstance(
+        gate2.operator, type(gate1.operator)
     ):
-        # When both operators are SparseObservables, we can compare their canonical representatives.
-        can_merge = gate1.operator.simplify() == gate2.operator.simplify()
-    elif isinstance(gate1.operator, SparsePauliOp) and isinstance(gate2.operator, SparsePauliOp):
-        # SparsePauliOp already has a function that compares canonical representatives.
-        can_merge = gate1.operator.equiv(gate2.operator)
+        if gate1.is_parameterized() or gate2.is_parameterized():
+            if isinstance(gate1.operator, SparsePauliOp):
+                can_merge = gate1.operator.equiv(gate2.operator, atol=0)
+            else:
+                can_merge = gate1.operator.simplify(tol=0) == gate2.operator.simplify(tol=0)
+        else:
+            eps = _bounded_phase_error(
+                gate1.operator, gate2.operator, float(gate1.time), float(gate2.time)
+            )
+            # ``eps`` bounds the distance between the merged and the original unitary. The average
+            # gate infidelity is at most ``eps**2``, not ``eps``, so ``eps <= tol`` guarantees
+            # ``1 - F_avg < tol**2``: safe, but stricter than the ``1 - F_avg < tol`` used elsewhere.
+            can_merge = eps <= tol
+
     else:
         can_merge = gate1.operator == gate2.operator
 
