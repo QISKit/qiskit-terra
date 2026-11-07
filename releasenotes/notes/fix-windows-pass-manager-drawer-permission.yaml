@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed a ``PermissionError`` raised on Windows when drawing a
+    :class:`~.PassManager` directly to an image without specifying an output
+    filename.

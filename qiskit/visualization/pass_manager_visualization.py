@@ -315,8 +315,11 @@ def make_output(graph, raw, filename):
         # pylint says this isn't a method - it is
         graph.write_png(tmppath)
 
-        image = Image.open(tmppath)
-        os.remove(tmppath)
+        # FIX: Load image using a context manager and copy it into memory
+        # TemporaryDirectory will automatically clean up the file when exiting the block.
+        with Image.open(tmppath) as temp_image:
+            image = temp_image.copy()
+
         if filename:
             image.save(filename, "PNG")
         return image

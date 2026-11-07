@@ -98,6 +98,15 @@ class TestPassManagerDrawer(QiskitVisualizationTestCase):
         finally:
             os.remove(filename)
 
+    @unittest.skipUnless(
+        optionals.HAS_PYDOT and optionals.HAS_GRAPHVIZ and optionals.HAS_PIL,
+        "pydot, graphviz, and pillow are required for rendering pass manager images",
+    )
+    def test_pass_manager_drawer_tempfile_windows_permission(self):
+        """Test pass manager drawing returns a PIL Image without permission errors on temporary files."""
+        image = self.pass_manager.draw()
+        self.assertIsNotNone(image)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
