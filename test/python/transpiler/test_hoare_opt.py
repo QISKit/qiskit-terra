@@ -13,6 +13,8 @@
 """Test the HoareOptimizer pass"""
 
 import unittest
+import warnings
+
 from numpy import pi
 
 from qiskit.utils import optionals
@@ -28,6 +30,23 @@ from test import QiskitTestCase
 @unittest.skipUnless(optionals.HAS_Z3, "z3-solver needs to be installed to run these tests")
 class TestHoareOptimizer(QiskitTestCase):
     """Test the HoareOptimizer pass"""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._cm = warnings.catch_warnings()
+        cls._cm.__enter__()
+        # We're knowingly testing a pass that is deprecated and due for removal in Qiskit 3.0.
+        warnings.filterwarnings(
+            "ignore",
+            category=DeprecationWarning,
+            message=r".*``qiskit\.transpiler\.passes\.optimization\.hoare_opt\.HoareOptimizer``.*",
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._cm.__exit__(None, None, None)
+        super().tearDownClass()
 
     def test_phasegate_removal(self):
         """Should remove the phase on a classical state,

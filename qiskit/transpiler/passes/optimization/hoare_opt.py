@@ -11,6 +11,7 @@
 # that they have been altered from the originals.
 
 """Pass for Hoare logic circuit optimization."""
+
 from qiskit.transpiler.basepasses import TransformationPass
 from qiskit.circuit import QuantumRegister, ControlledGate, Gate
 from qiskit.dagcircuit import DAGCircuit
@@ -19,6 +20,7 @@ from qiskit.quantum_info.operators.predicates import matrix_equal
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.circuit.library.standard_gates import CZGate, CU1Gate, MCU1Gate
 from qiskit.utils import optionals as _optionals
+from qiskit.utils.deprecation import deprecate_func
 
 
 @_optionals.HAS_Z3.require_in_instance
@@ -28,6 +30,14 @@ class HoareOptimizer(TransformationPass):
     https://arxiv.org/abs/1810.00375
     """
 
+    @deprecate_func(
+        since="2.7",
+        additional_msg=(
+            "There is no direct replacement; use the other optimization passes in "
+            "``qiskit.transpiler.passes.optimization`` instead."
+        ),
+        removal_timeline="in Qiskit 3.0",
+    )
     def __init__(self, size=10):
         """
         Args:
