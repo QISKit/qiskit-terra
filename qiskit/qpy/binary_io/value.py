@@ -368,6 +368,17 @@ class _ExprWriter(expr.ExprVisitor[None]):
         node.target.accept(self)
         node.index.accept(self)
 
+    def visit_range(self, node, /):
+        if self.version < 18:
+            raise exceptions.UnsupportedFeatureForVersion(
+                "classical expr.Range", required=18, target=self.version
+            )
+        self.file_obj.write(type_keys.Expression.RANGE)
+        self._write_expr_type(node.type)
+        node.start.accept(self)
+        node.stop.accept(self)
+        node.step.accept(self)
+
 
 def _write_expr(
     file_obj,
@@ -692,6 +703,8 @@ def _read_expr(
     clbits: collections.abc.Sequence[Clbit],
     cregs: collections.abc.Mapping[str, ClassicalRegister],
     standalone_vars: collections.abc.Sequence[expr.Var],
+    *,
+    version: int,
 ) -> expr.Expr:
 
     type_key = file_obj.read(formats.EXPRESSION_DISCRIMINATOR_SIZE)
@@ -760,7 +773,9 @@ def _read_expr(
             struct.unpack(formats.EXPRESSION_CAST_PACK, file_obj.read(formats.EXPRESSION_CAST_SIZE))
         )
         return expr.Cast(
-            _read_expr(file_obj, clbits, cregs, standalone_vars), type_, implicit=payload.implicit
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
+            type_,
+            implicit=payload.implicit,
         )
     if type_key == type_keys.Expression.UNARY:
         payload = formats.EXPRESSION_UNARY._make(
@@ -770,7 +785,7 @@ def _read_expr(
         )
         return expr.Unary(
             expr.Unary.Op(payload.opcode),
-            _read_expr(file_obj, clbits, cregs, standalone_vars),
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
             type_,
         )
     if type_key == type_keys.Expression.BINARY:
@@ -781,14 +796,25 @@ def _read_expr(
         )
         return expr.Binary(
             expr.Binary.Op(payload.opcode),
-            _read_expr(file_obj, clbits, cregs, standalone_vars),
-            _read_expr(file_obj, clbits, cregs, standalone_vars),
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
             type_,
         )
     if type_key == type_keys.Expression.INDEX:
         return expr.Index(
-            _read_expr(file_obj, clbits, cregs, standalone_vars),
-            _read_expr(file_obj, clbits, cregs, standalone_vars),
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
+            type_,
+        )
+    if type_key == type_keys.Expression.RANGE:
+        if version < 18:
+            raise exceptions.UnsupportedFeatureForVersion(
+                "classical expr.Range", required=18, target=version
+            )
+        return expr.Range(
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
+            _read_expr(file_obj, clbits, cregs, standalone_vars, version=version),
             type_,
         )
     raise exceptions.QpyError(f"Invalid classical-expression Expr key '{type_key}'")
@@ -1114,8 +1140,8 @@ def loads_value(
             clbits=clbits,
             cregs=cregs or {},
             standalone_vars=standalone_vars,
+            version=version,
         )
-
     raise exceptions.QpyError(f"Serialization for {type_key} is not implemented in value I/O.")
 
 

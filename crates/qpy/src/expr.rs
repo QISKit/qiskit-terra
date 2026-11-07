@@ -23,7 +23,7 @@ use crate::value::{
 use binrw::{BinRead, BinResult, BinWrite, Endian, Error};
 use num_bigint::BigUint;
 use qiskit_circuit::classical::expr::{
-    Binary, BinaryOp, Cast, Expr, Index, Unary, UnaryOp, Value, Var,
+    Binary, BinaryOp, Cast, Expr, Index, Range, Unary, UnaryOp, Value, Var,
 };
 use qiskit_circuit::classical::types::Type;
 use qiskit_circuit::duration::Duration;
@@ -223,6 +223,26 @@ pub(crate) fn write_expression<W: Write + Seek>(
             write_expression(&binary_node.left, writer, endian, (qpy_data,))?;
             write_expression(&binary_node.right, writer, endian, (qpy_data,))?;
         }
+        Expr::Range(range_node) => {
+            if qpy_data.version < 18 {
+                return Err(to_binrw_error(
+                    writer,
+                    QpyError::UnsupportedFeatureForVersion {
+                        feature: "classical expr.Range".to_string(),
+                        version: 18,
+                        min_version: qpy_data.version,
+                    },
+                ));
+            }
+            ExpressionElementPack::Range(pack_expression_type(&range_node.ty)).write_options(
+                writer,
+                endian,
+                (),
+            )?;
+            write_expression(&range_node.start, writer, endian, (qpy_data,))?;
+            write_expression(&range_node.stop, writer, endian, (qpy_data,))?;
+            write_expression(&range_node.step, writer, endian, (qpy_data,))?;
+        }
     };
     Ok(())
 }
@@ -308,6 +328,29 @@ pub(crate) fn read_expression<R: Read + Seek>(
                 left,
                 right,
                 ty: unpack_expression_type(binary_type_pack),
+                constant,
+            })))
+        }
+        ExpressionElementPack::Range(range_type_pack) => {
+            if qpy_data.version < 18 {
+                return Err(to_binrw_error(
+                    reader,
+                    QpyError::UnsupportedFeatureForVersion {
+                        feature: "classical expr.Range".to_string(),
+                        version: 18,
+                        min_version: qpy_data.version,
+                    },
+                ));
+            }
+            let start = read_expression(reader, endian, (qpy_data,))?;
+            let stop = read_expression(reader, endian, (qpy_data,))?;
+            let step = read_expression(reader, endian, (qpy_data,))?;
+            let constant = start.is_const() && stop.is_const() && step.is_const();
+            Ok(Expr::Range(Box::new(Range {
+                start,
+                stop,
+                step,
+                ty: unpack_expression_type(range_type_pack),
                 constant,
             })))
         }

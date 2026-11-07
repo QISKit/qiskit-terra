@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 import itertools
 
 from qiskit.circuit import ClassicalRegister, Clbit
@@ -170,6 +170,34 @@ class IfElseOp(ControlFlowOp):
             ablock for ablock, _ in itertools.zip_longest(blocks, range(2), fillvalue=None)
         )
         return IfElseOp(self._condition, true_body, false_body=false_body, label=self.label)
+
+    def substitute(self, substitutions: Mapping[expr.Var, expr.Expr]) -> IfElseOp:
+        """Return a new :class:`IfElseOp` with classical :class:`~.expr.Var` nodes replaced.
+
+        The substitution is applied to the :attr:`condition` (when it is an
+        :class:`~.expr.Expr`; a legacy two-tuple condition has no variables and is left
+        unchanged) and recursively to each branch via
+        :meth:`.QuantumCircuit.substitute_vars`.
+
+        Args:
+            substitutions: mapping from :class:`~.expr.Var` to the replacement
+                :class:`~.expr.Expr`.
+
+        Returns:
+            A new :class:`IfElseOp` with the substitutions applied.
+        """
+        condition = (
+            self._condition.substitute(substitutions)
+            if isinstance(self._condition, expr.Expr)
+            else self._condition
+        )
+        blocks = [block.substitute_vars(substitutions, strict=False) for block in self.blocks]
+        return IfElseOp(
+            condition,
+            blocks[0],
+            blocks[1] if len(blocks) > 1 else None,
+            label=self.label,
+        )
 
 
 class IfElsePlaceholder(InstructionPlaceholder):

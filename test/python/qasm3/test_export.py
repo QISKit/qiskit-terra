@@ -997,6 +997,110 @@ c[1] = measure q[1];
         )
         self.assertEqual(dumps(qc), expected_qasm)
 
+    def test_for_loop_constant_expr_range(self):
+        """Constant expr.Range exports as an OpenQASM 3 range expression."""
+        loop_body = QuantumCircuit(1)
+        loop_body.h(0)
+        range_expr = expr.Range(expr.lift(0, types.Uint(8)), expr.lift(5, types.Uint(8)))
+        qc = QuantumCircuit(1)
+        qc.for_loop(range_expr, None, loop_body, [0], [])
+        qr_name = qc.qregs[0].name
+        expected_qasm = "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                f"qubit[1] {qr_name};",
+                "for uint[8] _ in [0:1:5] {",
+                f"  h {qr_name}[0];",
+                "}",
+                "",
+            ]
+        )
+        self.assertEqual(dumps(qc), expected_qasm)
+
+    def test_for_loop_dynamic_expr_range(self):
+        """Non-constant expr.Range exports with variable bounds."""
+        qc = QuantumCircuit(1)
+        start_var = qc.add_var("start", expr.lift(0, types.Uint(8)))
+        stop_var = qc.add_var("stop", expr.lift(10, types.Uint(10)))
+        range_expr = expr.Range(start_var, stop_var)
+        loop_body = QuantumCircuit(1)
+        loop_body.h(0)
+        qc.for_loop(range_expr, None, loop_body, [0], [])
+        qr_name = qc.qregs[0].name
+        expected_qasm = "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                f"qubit[1] {qr_name};",
+                "uint[8] start;",
+                "uint[10] stop;",
+                "start = 0;",
+                "stop = 10;",
+                "for uint[10] _ in [start:1:stop] {",
+                f"  h {qr_name}[0];",
+                "}",
+                "",
+            ]
+        )
+        self.assertEqual(dumps(qc), expected_qasm)
+
+    def test_for_loop_constant_expr_range_with_var(self):
+        """Constant expr.Range with loop Var exports the loop variable typed by the Var.
+
+        The loop variable indexes a register (a body with the input loop var cannot also capture
+        an outer ``expr.Var``)."""
+        cr = ClassicalRegister(16, "cr")
+        qc = QuantumCircuit(QuantumRegister(1, "q"), cr)
+        i = expr.Var.new("i", types.Uint(8))
+        range_expr = expr.Range(
+            expr.lift(0, types.Uint(8)), expr.lift(10, types.Uint(8)), expr.lift(2, types.Uint(8))
+        )
+        with qc.for_loop(range_expr, i):
+            qc.store(expr.index(cr, i), expr.lift(True))
+        expected_qasm = "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                "bit[16] cr;",
+                "qubit[1] q;",
+                "for uint[8] i in [0:2:10] {",
+                "  cr[i] = true;",
+                "}",
+                "",
+            ]
+        )
+        self.assertEqual(dumps(qc), expected_qasm)
+
+    def test_for_loop_dynamic_expr_range_with_var(self):
+        """Non-constant expr.Range with loop Var exports both the range and loop variable."""
+        qc = QuantumCircuit(QuantumRegister(1, "q"))
+        start_var = qc.add_var("start", expr.lift(0, types.Uint(8)))
+        stop_var = qc.add_var("stop", expr.lift(10, types.Uint(10)))
+        cr = ClassicalRegister(16, "cr")
+        qc.add_register(cr)
+        loop_var = expr.Var.new("lv", types.Uint(10))
+        range_expr = expr.Range(start_var, stop_var)
+        with qc.for_loop(range_expr, loop_var):
+            qc.store(expr.index(cr, loop_var), expr.lift(True))
+        expected_qasm = "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                "bit[16] cr;",
+                "qubit[1] q;",
+                "uint[8] start;",
+                "uint[10] stop;",
+                "start = 0;",
+                "stop = 10;",
+                "for uint[10] lv in [start:1:stop] {",
+                "  cr[lv] = true;",
+                "}",
+                "",
+            ]
+        )
+        self.assertEqual(dumps(qc), expected_qasm)
+
     def test_nested_for_loop(self):
         """Test that a for loop nested inside another outputs the expected result."""
         inner_parameter = Parameter("my_x")

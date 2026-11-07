@@ -511,6 +511,10 @@ class QuantumCircuit(IR):
     .. automethod:: iter_declared_vars
     .. automethod:: iter_declared_stretches
 
+    Real-time :class:`~.expr.Var` nodes can be structurally replaced throughout a circuit with
+    :meth:`substitute_vars`, the :class:`~.expr.Var` analogue of :meth:`assign_parameters`.
+
+    .. automethod:: substitute_vars
 
     .. _circuit-adding-operations:
 
@@ -3020,14 +3024,27 @@ class QuantumCircuit(IR):
 
         circuit_scope = self._current_scope()
 
-        # Make copy of parameterized gate instances
+        # Make copy of parameterized gate instances.
+        # For a `ForLoopOp` class, `params[1]` may be a real-time `expr.Var`
+        # declared inside the loop body.  It must not be validated against the outer
+        # scope.  `params[0]` (the indexset) is still validated when it is an
+        # `expr.Range` class.
+        is_for_loop = isinstance(operation, ForLoopOp)
         if params := getattr(operation, "params", ()):
             is_parameter = False
-            for param in params:
+            for idx, param in enumerate(params):
                 is_parameter = is_parameter or isinstance(param, ParameterExpression)
-                # Control flow ops have a different validation for classical expressions
-                if isinstance(param, expr.Expr) and not isinstance(operation, ControlFlowOp):
-                    param = _validate_expr(circuit_scope, param)
+                # Control-flow ops validate their own classical expressions through their blocks
+                # and captures, with one exception: a `ForLoopOp`'s `expr.Range` indexset
+                # (``params[0]``) may have free variables that must be resolved/captured against
+                # the enclosing scope here.  The loop variable (``params[1]``) is the body's
+                # ``input`` var and must not be validated against the outer scope.
+                if isinstance(param, expr.Expr):
+                    if is_for_loop:
+                        if idx != 1:
+                            param = _validate_expr(circuit_scope, param)
+                    elif not isinstance(operation, ControlFlowOp):
+                        param = _validate_expr(circuit_scope, param)
             if copy and is_parameter:
                 operation = _copy.deepcopy(operation)
         if isinstance(operation, ControlFlowOp):
@@ -5192,6 +5209,247 @@ class QuantumCircuit(IR):
 
         return None if inplace else target
 
+    def substitute_vars(
+        self,
+        substitutions: Mapping[expr.Var, expr.Expr],
+        inplace: bool = False,
+        strict: bool = True,
+        keep_substituted_vars: bool = False,
+    ) -> QuantumCircuit | None:
+        """Substitute real-time classical :class:`~.expr.Var` nodes throughout the circuit.
+
+        .. note::
+
+            This is a **circuit-rewriting / compilation utility**, not a runtime assignment.
+            It rewrites the circuit *as data*, replacing every textual occurrence of a
+            :class:`~.expr.Var` with a new expression before the circuit is executed.  It is
+            intended for transpiler passes and circuit-manipulation tools — for example,
+            renaming variables to avoid namespace clashes, specializing an
+            :class:`~.expr.Range`-based ``for`` loop at compile time, or lowering named vars to
+            hardware register expressions.
+
+            To *assign* a classical value to a variable at **runtime** (i.e. as part of the
+            quantum program's execution), use :meth:`store` to emit a :class:`~.Store`
+            instruction instead.  ``substitute_vars`` cannot replace :meth:`store` for any
+            purpose that depends on runtime data flow.
+
+        This is the :class:`~.expr.Var` analogue of :meth:`assign_parameters`: where that method
+        binds compile-time :class:`~.Parameter` objects to *values*, this method replaces a
+        :class:`~.expr.Var` with an arbitrary replacement :class:`~.expr.Expr` (which may itself
+        be another :class:`~.expr.Var` or a compound expression).  The rewrite is purely
+        structural: expression types are preserved from the original tree and are not re-inferred.
+
+        .. warning::
+
+            **Type mismatches are not detected.** Replacing a ``Uint(8)`` variable with a
+            ``Uint(16)`` expression leaves every ``Cast(..., Uint(8))`` node in the tree wrapping
+            a ``Uint(16)`` operand.  The circuit remains structurally well-formed but carries
+            inconsistent type annotations that a strict backend or OpenQASM 3 serializer may
+            reject at compile time::
+
+                # WRONG: type mismatch silently produces an inconsistent tree
+                x: Uint(8) → y: Uint(16)
+                # Before: Binary(ADD, Var(x, Uint(8)), Cast(1, Uint(8)), ty=Uint(8))
+                # After:  Binary(ADD, Var(y, Uint(16)), Cast(1, Uint(8)), ty=Uint(8))
+                #                           ^^^^^^^^ mismatch: Uint(16) inside a Uint(8) tree
+
+            Always ensure the replacement expression has the same
+            :attr:`~.expr.Expr.type` as the variable it replaces.
+
+            **Substitution is not a runtime update.** The following patterns look similar but
+            mean fundamentally different things::
+
+                # Compile-time rewrite: replaces the symbol 'x' everywhere in the circuit data.
+                # The circuit no longer references 'x' after this call.
+                out = qc.substitute_vars({x: y})
+
+                # Runtime update: emits a classical assignment instruction that executes
+                # when the circuit runs on hardware.  'x' and 'y' are both still live.
+                qc.store(x, y)
+
+            Use :meth:`store` whenever the assignment depends on runtime measurement results
+            or other dynamic classical data.
+
+            **l-value substitution.** If a variable is used as the target of a
+            :class:`~.Store` instruction (an l-value), substituting it with a compound
+            expression (e.g. ``a + b``) will cause the :class:`~.Store` constructor to raise
+            :exc:`.CircuitError` because ``a + b`` is not a valid storage target.  This is a
+            deliberate guard — it surfaces a semantic error that would otherwise be silently
+            emitted as invalid OpenQASM 3.
+
+        Every classical expression in the circuit has the substitution applied: :class:`~.Store`
+        l-values and r-values, control-flow conditions (:class:`.IfElseOp`, :class:`.WhileLoopOp`),
+        :class:`.SwitchCaseOp` targets, and :class:`.ForLoopOp` :class:`~.expr.Range` indexsets.
+        Nested control-flow bodies (including :class:`.BoxOp`) are rewritten recursively.
+        By default, substituted variables are removed from the circuit's variable declarations
+        once they have been rewritten away.  Set ``keep_substituted_vars=True`` to retain them —
+        useful in multi-pass pipelines where a later pass needs to substitute or inspect those
+        variables again before final clean-up.  Every :class:`~.expr.Var` leaf that appears inside
+        a replacement expression and is already declared in this circuit is automatically
+        propagated to the same scope (input, captured, or declared) in the output circuit — this
+        applies recursively to compound replacement expressions such as ``a + b``, so all known
+        free variables are carried over.  Free variables in replacement expressions that are not
+        declared in this circuit are left to the caller.
+
+        One special case overrides the default removal regardless of ``keep_substituted_vars``: a
+        key that also appears as a free variable inside one of the replacement expressions
+        (self-referential substitution, e.g. ``x → x + 1``) is always kept in scope, because the
+        rewritten expressions still reference it and removing it would produce an invalid circuit.
+
+        .. note::
+
+            **Ghost declarations and subsequent passes.**  When ``keep_substituted_vars=True`` a
+            substituted variable remains declared even though it no longer appears in any
+            expression.  A subsequent :meth:`substitute_vars` call with ``strict=True`` will still
+            find it and pass validation, but the structural rewrite will have no effect because the
+            variable is not referenced anywhere.  Use this flag only when a later pass will either
+            re-substitute or explicitly remove those retained declarations.
+
+        Args:
+            substitutions: mapping from each :class:`~.expr.Var` to replace to its replacement
+                :class:`~.expr.Expr`.  For a safe, type-consistent rewrite the replacement
+                should have the same type as the key it replaces.
+            inplace: if ``True``, mutate this circuit and return ``None``; otherwise return a new,
+                independent circuit and leave this one unchanged (mirrors :meth:`assign_parameters`).
+            strict: if ``True`` (the default), raise :exc:`.CircuitError` if any key in
+                ``substitutions`` is not declared in the circuit (as input, captured, or declared).
+                Set to ``False`` to silently ignore extra keys, e.g. when applying a shared
+                substitution map to a set of circuits that do not all declare the same variables.
+            keep_substituted_vars: if ``False`` (the default), substituted variables are removed
+                from the output circuit's variable declarations once they have been rewritten away.
+                Set to ``True`` to retain them as ghost declarations for use in a later pass.
+                Only applies to keys actually declared in this circuit; undeclared keys skipped by
+                ``strict=False`` are ignored entirely.  Variables that *must* be kept for
+                correctness (self-referential substitutions) are always retained regardless of this
+                flag.
+
+        Returns:
+            A new :class:`QuantumCircuit` with the substitutions applied, or ``None`` if ``inplace``
+            is ``True``.
+
+        Raises:
+            CircuitError: if ``strict=True`` and a key in ``substitutions`` is not present in this
+                circuit.
+            CircuitError: if two substitution keys with incompatible scopes map to the same new
+                bare :class:`~.expr.Var` replacement.
+
+        See also:
+            :meth:`store` — emit a runtime classical assignment instruction.
+            :meth:`assign_parameters` — bind compile-time :class:`~.Parameter` objects to values.
+            :meth:`~.expr.Expr.substitute` — apply a substitution to a single expression node.
+        """
+        from qiskit.circuit.store import Store
+        from qiskit.circuit.controlflow.control_flow import ControlFlowOp
+
+        if not substitutions:
+            return None if inplace else self.copy()
+
+        # Build a lookup: Var -> scope-kind for every var declared in this circuit.
+        # Used both for strict-mode checking and for scope propagation of replacement vars.
+        _SCOPE_INPUT = "input"
+        _SCOPE_CAPTURE = "capture"
+        _SCOPE_DECLARED = "declared"
+        var_scope: dict[expr.Var, str] = {
+            **dict.fromkeys(self.iter_input_vars(), _SCOPE_INPUT),
+            **dict.fromkeys(self.iter_captured_vars(), _SCOPE_CAPTURE),
+            **dict.fromkeys(self.iter_declared_vars(), _SCOPE_DECLARED),
+        }
+
+        if strict:
+            if extras := [var for var in substitutions if var not in var_scope]:
+                raise CircuitError(
+                    f"Cannot substitute variables ({', '.join(str(v) for v in extras)}) not"
+                    " present in the circuit."
+                )
+
+        # --- Pass 1: scan every replacement expression for free Var leaves.
+        #
+        # Three things happen here:
+        #
+        # (a) Self-referential keys: if a key also appears as a free var inside its own (or any
+        #     other) replacement, the structural rewrite replaces all textual occurrences of that
+        #     key, but the key's *declaration* must survive in the output circuit — otherwise the
+        #     rewritten expression references an undeclared variable.  We collect these into
+        #     ``keys_to_keep`` so the re-declaration loop below does not drop them.
+        #
+        # (b) Scope propagation for vars already in this circuit: any free var leaf that is
+        #     declared here (but is not itself being substituted away) is carried forward under
+        #     the same scope.  Covers compound replacements like ``a + b`` recursively.
+        #
+        # (c) Scope inference for bare Var replacements of new vars: when a replacement is a
+        #     plain Var not yet declared in this circuit, we infer its scope from the key being
+        #     replaced.  If two different keys with *different* scopes both map to the same new
+        #     Var, we cannot resolve the conflict and raise CircuitError.  If they agree on scope
+        #     the Var is added under that scope.
+        keys_to_keep: set[expr.Var] = set()
+        replacement_var_scope: dict[expr.Var, str] = {}  # free vars already in this circuit
+        new_var_scope: dict[expr.Var, str] = {}  # bare Var replacements not yet in circuit
+
+        for key, replacement in substitutions.items():
+            key_scope = var_scope.get(key)  # None when key is not in this circuit (strict=False)
+
+            # (c): bare Var replacement that is new to this circuit
+            if isinstance(replacement, expr.Var) and replacement not in var_scope:
+                if key_scope is not None:
+                    if replacement in new_var_scope and new_var_scope[replacement] != key_scope:
+                        raise CircuitError(
+                            f"Cannot determine scope for replacement variable '{replacement}': "
+                            f"it replaces both a {new_var_scope[replacement]} variable and a "
+                            f"{key_scope} variable, which are incompatible scopes."
+                        )
+                    new_var_scope[replacement] = key_scope
+
+            # (a) + (b): walk the full replacement expression tree
+            for free_var in expr.iter_vars(replacement):
+                if free_var in substitutions:
+                    # (a) This substitution key appears inside a replacement — keep its declaration.
+                    keys_to_keep.add(free_var)
+                elif free_var in var_scope:
+                    # (b) Known var not being substituted — propagate its scope.
+                    replacement_var_scope[free_var] = var_scope[free_var]
+
+        # ``vars_mode="drop"`` gives an empty shell with the same qubits/clbits/registers and
+        # global state, but no realtime variables -- we re-add only the ones not being substituted,
+        # plus the propagated free vars from replacement expressions.
+        out = self.copy_empty_like(vars_mode="drop")
+
+        def _add_var_for_scope(v: expr.Var, scope: str) -> None:
+            if out.has_var(v):
+                return
+            if scope == _SCOPE_INPUT:
+                out.add_input(v)
+            elif scope == _SCOPE_CAPTURE:
+                out.add_capture(v)
+            else:
+                out.add_uninitialized_var(v)
+
+        for var in self.iter_input_vars():
+            if var not in substitutions or var in keys_to_keep or keep_substituted_vars:
+                out.add_input(var)
+        for var in self.iter_captured_vars():
+            if var not in substitutions or var in keys_to_keep or keep_substituted_vars:
+                out.add_capture(var)
+        for var in self.iter_declared_vars():
+            if var not in substitutions or var in keys_to_keep or keep_substituted_vars:
+                out.add_uninitialized_var(var)
+
+        for rep_var, scope in replacement_var_scope.items():
+            _add_var_for_scope(rep_var, scope)
+        for new_var, scope in new_var_scope.items():
+            _add_var_for_scope(new_var, scope)
+
+        for inst in self.data:
+            op = inst.operation
+            if isinstance(op, (Store, ControlFlowOp)) and hasattr(op, "substitute"):
+                op = op.substitute(substitutions)
+            out.append(op, inst.qubits, inst.clbits, copy=False)
+        out.global_phase = self.global_phase
+
+        if inplace:
+            self._data = out._data
+            return None
+        return out
+
     def has_control_flow_op(self) -> bool:
         """Checks whether the circuit has an instance of :class:`.ControlFlowOp`
         present amongst its operations."""
@@ -7125,6 +7383,7 @@ class QuantumCircuit(IR):
         allow_jumps: bool = True,
         forbidden_message: str | None = None,
         loop_var: expr.Var | None = None,
+        loop_var_explicit: bool = False,
     ) -> int:
         """Add a scope for collecting instructions into this circuit.
 
@@ -7140,6 +7399,9 @@ class QuantumCircuit(IR):
                 :exc:`.CircuitError` with this message.
             loop_var: If given, the runtime loop variable of a for-loop block.  This should not be
                 set for the legacy :class:`.Parameter` form.
+            loop_var_explicit: Whether ``loop_var`` was supplied explicitly by the user.  An
+                explicit loop var is kept as the body's input even if it is never referenced; an
+                auto-generated one is dropped if unused.
 
         Returns:
             the depth of control-flow scopes (after the push)
@@ -7153,6 +7415,7 @@ class QuantumCircuit(IR):
                 allow_jumps=allow_jumps,
                 forbidden_message=forbidden_message,
                 loop_var=loop_var,
+                loop_var_explicit=loop_var_explicit,
             )
         )
         return len(self._control_flow_scopes)
@@ -7395,7 +7658,7 @@ class QuantumCircuit(IR):
     @typing.overload
     def for_loop(
         self,
-        indexset: Iterable[int],
+        indexset: Iterable[int] | expr.Range,
         loop_parameter: Parameter | expr.Var | None = ...,
         body: None = ...,
         qubits: None = ...,
@@ -7407,7 +7670,7 @@ class QuantumCircuit(IR):
     @typing.overload
     def for_loop(
         self,
-        indexset: Iterable[int],
+        indexset: Iterable[int] | expr.Range,
         loop_parameter: Parameter | expr.Var | None,
         body: QuantumCircuit,
         qubits: Sequence[QubitSpecifier],
@@ -7450,12 +7713,24 @@ class QuantumCircuit(IR):
                     qc.break_loop()
 
         Args:
-            indexset (Iterable[int]): A collection of integers to loop over.  Always necessary.
-            loop_parameter (Optional[Parameter|expr.Var]): The parameter used within ``body`` to which
-                the values from ``indexset`` will be assigned.  In the context-manager form, if this
-                argument is not supplied, then a loop parameter will be allocated for you and
-                returned as the value of the ``with`` statement.  This will only be bound into the
-                circuit if it is used within the body.
+            indexset (Iterable[int] | range | expr.Range): A collection of integers to loop
+                over, a Python :class:`range`, or a classical :class:`~.expr.Range`. A Python
+                :class:`range` or integer list is a compile-time index set; an
+                :class:`~.expr.Range` is a real-time index set (its bounds may be runtime
+                expressions). Both can be unrolled by
+                :class:`~qiskit.transpiler.passes.UnrollForLoops` when the bounds are constant.
+                See :class:`~.ForLoopOp` for the full compatibility table with ``loop_parameter``.
+            loop_parameter (Optional[Parameter | expr.Var]): The placeholder bound to each
+                ``indexset`` value inside ``body``. For a Python :class:`range`/integer list,
+                this may be a :class:`~.Parameter`, an :class:`~.expr.Var` of type
+                :class:`~.types.Uint`, or ``None``; for an :class:`~.expr.Range`, this must be an
+                :class:`~.expr.Var` of type :class:`~.types.Uint` (or ``None``).
+                In the context-manager form, if this argument is not supplied a loop variable is
+                auto-allocated whose type follows the ``indexset`` (:class:`~.Parameter` for
+                ``range``/list, :class:`~.expr.Var` for :class:`~.expr.Range`) and returned as the
+                value of the ``with`` statement; an auto-generated loop variable that the body
+                never references is dropped.  An :class:`~.expr.Var` loop variable is input into
+                the body rather than declared or captured (see :class:`~.ForLoopOp`).
 
                 If this argument is ``None`` in the manual form of this method, ``body`` will be
                 repeated once for each of the items in ``indexset`` but their values will be

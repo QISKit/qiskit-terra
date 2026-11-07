@@ -343,6 +343,8 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
         "_forbidden_message",
         "_instructions",
         "_loop_var",
+        "_loop_var_explicit",
+        "_loop_var_used",
         "_parent",
         "_stretches_capture",
         "_stretches_local",
@@ -362,6 +364,7 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
         allow_jumps: bool = True,
         forbidden_message: str | None = None,
         loop_var: expr.Var | None = None,
+        loop_var_explicit: bool = False,
     ):
         """
         Args:
@@ -387,7 +390,13 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
                 pseudo scopes where the state machine of the builder scopes has changed into a
                 position where no instructions should be accepted, such as when inside a ``switch``
                 but outside any cases.
-            loop_var: If given, a classical var used for the loop counter
+            loop_var: If given, a classical :class:`~.expr.Var` used as the loop counter of an
+                enclosing :class:`.ForLoopOp`.  It is in scope within the body, and is emitted as
+                the body's single ``input`` variable rather than as a captured or declared local.
+            loop_var_explicit: Whether ``loop_var`` was supplied explicitly by the user.  An
+                explicit loop var is kept as a body input even if it is never referenced (mirroring
+                explicit :class:`~.Parameter` loop variables); an auto-generated one is dropped if
+                unused.
         """
         self._instructions = CircuitData(qubits, clbits)
         self.registers = set(registers)
@@ -395,6 +404,11 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
         self._vars_local = {}
         self._vars_capture = {}
         self._loop_var = loop_var
+        self._loop_var_explicit = loop_var_explicit
+        # Set on first reference of the loop var inside the body.  Together with
+        # `_loop_var_explicit` this decides whether the loop var is emitted as the body's input
+        # variable: an auto-generated loop var that is never used is dropped.
+        self._loop_var_used = False
         self._stretches_local = {}
         self._stretches_capture = {}
         self._allow_jumps = allow_jumps
@@ -542,6 +556,9 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
         if (local := self._stretches_local.get(var.name)) is not None:
             raise CircuitError(f"cannot use '{var}' which is shadowed by the local '{local}'")
         if self._loop_var is not None and self._loop_var == var:
+            # The loop var is owned by the loop header and input into the body; mark it used so
+            # `build` emits it as the body's input variable.
+            self._loop_var_used = True
             return
         if (local := self._vars_local.get(var.name)) is not None:
             if local == var:
@@ -687,7 +704,14 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
             self._instructions.clbits,
             *self.registers,
             global_phase=self.global_phase,
-            inputs=() if self._loop_var is None else (self._loop_var,),
+            # The loop var is emitted as the body's single input only if it was actually
+            # referenced, or if the user supplied it explicitly (kept even when unused, matching
+            # explicit `Parameter` loop variables).  An unused auto-generated loop var is dropped.
+            inputs=(
+                (self._loop_var,)
+                if self._loop_var is not None and (self._loop_var_used or self._loop_var_explicit)
+                else ()
+            ),
             captures=itertools.chain(self._vars_capture.values(), self._stretches_capture.values()),
         )
         for var in self._vars_local.values():
@@ -777,4 +801,6 @@ class ControlFlowBuilderBlock(CircuitScopeInterface):
         out._allow_jumps = self._allow_jumps
         out._forbidden_message = self._forbidden_message
         out._loop_var = self._loop_var
+        out._loop_var_explicit = self._loop_var_explicit
+        out._loop_var_used = self._loop_var_used
         return out

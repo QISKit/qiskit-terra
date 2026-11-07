@@ -146,3 +146,59 @@ class TestIsLValue(QiskitTestCase):
     )
     def test_bad_cases(self, not_an_lvalue):
         self.assertFalse(expr.is_lvalue(not_an_lvalue))
+
+
+class TestExprSubstitute(QiskitTestCase):
+    """Tests for :meth:`~.expr.Expr.substitute`."""
+
+    def test_substitute_var_in_binary(self):
+        """A Var leaf is replaced throughout a binary expression."""
+        var = expr.Var.new("a", types.Uint(8))
+        node = expr.add(var, expr.lift(1, types.Uint(8)))
+        replacement = expr.lift(5, types.Uint(8))
+        result = node.substitute({var: replacement})
+        self.assertEqual(result, expr.add(replacement, expr.lift(1, types.Uint(8))))
+
+    def test_substitute_var_in_range(self):
+        """Substitution recurses into Range bounds."""
+        var = expr.Var.new("stop", types.Uint(8))
+        node = expr.Range(expr.lift(0, types.Uint(8)), var)
+        replacement = expr.lift(10, types.Uint(8))
+        result = node.substitute({var: replacement})
+        self.assertEqual(result, expr.Range(expr.lift(0, types.Uint(8)), replacement))
+
+    def test_substitute_var_with_compound_expr(self):
+        """A Var may be replaced by an arbitrary (non-Var) expression."""
+        var = expr.Var.new("a", types.Uint(8))
+        other = expr.Var.new("b", types.Uint(8))
+        node = expr.bit_and(var, expr.lift(0xFF, types.Uint(8)))
+        replacement = expr.add(other, expr.lift(1, types.Uint(8)))
+        result = node.substitute({var: replacement})
+        self.assertEqual(result, expr.bit_and(replacement, expr.lift(0xFF, types.Uint(8))))
+
+    def test_substitute_var_deeply_nested(self):
+        """Substitution reaches a Var nested several levels deep, at every occurrence."""
+        var = expr.Var.new("a", types.Uint(8))
+        node = expr.bit_or(
+            expr.bit_and(var, expr.lift(1, types.Uint(8))),
+            expr.bit_xor(var, expr.lift(2, types.Uint(8))),
+        )
+        replacement = expr.lift(7, types.Uint(8))
+        result = node.substitute({var: replacement})
+        self.assertEqual(
+            result,
+            expr.bit_or(
+                expr.bit_and(replacement, expr.lift(1, types.Uint(8))),
+                expr.bit_xor(replacement, expr.lift(2, types.Uint(8))),
+            ),
+        )
+        self.assertNotIn(var, list(expr.iter_vars(result)))
+
+    def test_substitute_var_noop(self):
+        """An empty substitution mapping returns an equal expression, leaving others alone."""
+        var = expr.Var.new("a", types.Uint(8))
+        node = expr.add(var, expr.lift(1, types.Uint(8)))
+        self.assertEqual(node.substitute({}), node)
+        # A variable that does not appear in the tree leaves it unchanged.
+        absent = expr.Var.new("b", types.Uint(8))
+        self.assertEqual(node.substitute({absent: expr.lift(2, types.Uint(8))}), node)

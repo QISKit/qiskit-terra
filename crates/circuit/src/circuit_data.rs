@@ -2054,6 +2054,9 @@ fn for_each_symbol_use_in_control_flow(
                 instruction: instruction_index,
                 parameter: 2,
             };
+            // The compile-time loop variant (Parameter) shadows any same-named parameter in the
+            // body — skip it from parameter tracking.  The runtime loop variant (expr::Var) is in
+            // a different namespace from gate parameters entirely, so it needs no filtering here.
             for symbol in body.parameters() {
                 // Skip the loop variable itself — it is runtime-bound.
                 if let Some(LoopParam::Parameter(loop_symbol)) = loop_param

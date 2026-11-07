@@ -3988,6 +3988,24 @@ class TestControlFlowBuildersFailurePaths(QiskitTestCase):
             with self.assertRaisesRegex(CircuitError, "cannot use.*shadowed"):
                 base.store(outer, expr.lift(True))
 
+    def test_cannot_use_var_clashing_with_loop_var_name(self):
+        """A *different* ``Var`` sharing the auto-generated loop variable's name cannot be used
+        inside the body.
+
+        Entering ``for_loop`` with an :class:`~.expr.Range` auto-generates an :class:`~.expr.Var`
+        loop variable that is the body's ``input`` variable and is in scope by name.  A different
+        variable of the same name is therefore not in scope; a regression here would let the
+        auto-generated loop variable be silently shadowed.
+        """
+        base = QuantumCircuit()
+        indexset = expr.Range(expr.lift(0, types.Uint(8)), expr.lift(4, types.Uint(8)))
+        with base.for_loop(indexset) as loop_var:
+            clash = expr.Var.new(loop_var.name, loop_var.type)
+            self.assertNotEqual(clash, loop_var)
+            target = base.add_var("target", expr.lift(0, types.Uint(8)))
+            with self.assertRaisesRegex(CircuitError, "cannot close over.*not in scope"):
+                base.store(target, clash)
+
     def test_cannot_use_beyond_outer_shadow(self):
         outer = expr.Var.new("a", types.Bool())
         inner = expr.Var.new("a", types.Bool())

@@ -546,6 +546,10 @@ class SymbolTable:
                 return out
         raise KeyError(f"'{variable}' is not defined in the current context")
 
+    def is_variable_registered(self, variable: object) -> bool:
+        """Whether this Qiskit object is already registered in any live scope."""
+        return any(variable in scope for scope in self.objects)
+
     def register_gate_without_definition(self, name: str, gate: Gate | None) -> ast.Identifier:
         """Register a gate that does not require an OQ3 definition.
 
@@ -1065,6 +1069,11 @@ class QASM3Builder:
 
         In addition to everything literally in the circuit's ``data`` field, this also includes
         declarations for any local :class:`.expr.Var` nodes.
+
+        A declared :class:`~.expr.Var` that is already registered in the symbol table is skipped
+        here. This naturally handles the case where the variable is the loop variable of an
+        enclosing :class:`~.ForLoopOp` — the ``for`` statement already declared it in the
+        header (e.g. ``for uint i in ...``).
         """
 
         # We forward-declare all local variables uninitialised at the top of their scope. It would
@@ -1080,6 +1089,7 @@ class QASM3Builder:
                 self.symbols.register_variable(var.name, var, allow_rename=True),
             )
             for var in self.scope.circuit.iter_declared_vars()
+            if not self.symbols.is_variable_registered(var)
         ]
 
         for stretch in self.scope.circuit.iter_declared_stretches():
@@ -1232,7 +1242,12 @@ class QASM3Builder:
         return ast.WhileLoopStatement(condition, loop_body)
 
     def build_for_loop(self, instruction: CircuitInstruction) -> ast.ForLoopStatement:
-        """Build a :obj:`.ForLoopOp` into a :obj:`.ast.ForLoopStatement`."""
+        """Build a :obj:`.ForLoopOp` into a :obj:`.ast.ForLoopStatement`.
+
+        The ``indexset`` may be a Python :class:`range` (converted to an inclusive
+        OpenQASM 3 range), a tuple of integers, or a classical :class:`~.expr.Range`
+        exported as an OpenQASM 3 range expression without materialization.
+        """
         indexset, loop_parameter, loop_circuit = instruction.operation.params
         with self.new_scope(loop_circuit, instruction.qubits, instruction.clbits):
             name = "_" if loop_parameter is None else loop_parameter.name
@@ -1246,22 +1261,36 @@ class QASM3Builder:
                     end=self.build_integer(indexset.stop - 1),
                     step=self.build_integer(indexset.step) if indexset.step != 1 else None,
                 )
+                type_ = ast.IntType()
+            elif isinstance(indexset, expr.Range):
+                # expr.Range already uses OpenQASM 3 inclusive-stop semantics, so export
+                # ``stop`` as-is (unlike Python ``range``, which needs ``stop - 1`` above).
+                indexset_ast = ast.Range(
+                    start=self.build_expression(indexset.start),
+                    end=self.build_expression(indexset.stop),
+                    step=(
+                        self.build_expression(indexset.step) if indexset.step is not None else None
+                    ),
+                )
+                type_ = _build_ast_type(indexset.type)
             else:
                 try:
                     indexset_ast = ast.IndexSet([self.build_integer(value) for value in indexset])
+                    type_ = ast.IntType()
                 except QASM3ExporterError:
                     raise QASM3ExporterError(
                         "The values in OpenQASM 3 'for' loops must all be integers, but received"
                         f" '{indexset}'."
                     ) from None
             body_ast = ast.ProgramBlock(self.build_current_scope())
-            type_ = (
-                _build_ast_type(loop_parameter.type)
-                if isinstance(loop_parameter, expr.Var)
-                # If in legacy iterable mode, we only support integer index sets.
-                else ast.IntType()
-            )
-        return ast.ForLoopStatement(indexset_ast, loop_parameter_ast, body_ast, type_)
+        # The loop-variable type follows the loop parameter when it is an `expr.Var` (this covers
+        # both an `expr.Range` indexset and a Python `range`/integer list paired with a real-time
+        # `Var` counter).  Otherwise it follows the indexset: the `expr.Range` element type when the
+        # loop variable was auto-dropped (`loop_parameter is None`), or `int` for the legacy
+        # Python-range / integer-list form.
+        if isinstance(loop_parameter, expr.Var):
+            type_ = _build_ast_type(loop_parameter.type)
+        return ast.ForLoopStatement(indexset_ast, loop_parameter_ast, body_ast, type_=type_)
 
     def build_annotation(self, annotation: Annotation) -> ast.Annotation:
         """Use the custom serializers to construct an annotation object."""

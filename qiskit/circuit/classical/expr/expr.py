@@ -18,6 +18,7 @@ __all__ = [
     "Cast",
     "Expr",
     "Index",
+    "Range",
     "Stretch",
     "Unary",
     "Value",
@@ -35,6 +36,7 @@ from qiskit._accelerate.circuit.classical.expr import (
     Unary,
     Binary,
     Index,
+    Range,
 )
 
 

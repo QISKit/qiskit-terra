@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import typing
+from collections.abc import Mapping
 
 from qiskit.circuit.delay import Delay
 from qiskit.circuit.exceptions import CircuitError
@@ -23,6 +24,7 @@ from .control_flow import ControlFlowOp
 
 if typing.TYPE_CHECKING:
     from qiskit.circuit import QuantumCircuit, Annotation
+    from qiskit.circuit.classical import expr
 
 
 class BoxOp(ControlFlowOp):
@@ -122,6 +124,21 @@ class BoxOp(ControlFlowOp):
             label=self.label,
             annotations=self.annotations,
         )
+
+    def substitute(self, substitutions: Mapping[expr.Var, expr.Expr]) -> BoxOp:
+        """Return a new :class:`BoxOp` with classical :class:`~.expr.Var` nodes replaced.
+
+        A box has no classical condition of its own, so the substitution is applied
+        recursively to the box body via :meth:`.QuantumCircuit.substitute_vars`.
+
+        Args:
+            substitutions: mapping from :class:`~.expr.Var` to the replacement
+                :class:`~.expr.Expr`.
+
+        Returns:
+            A new :class:`BoxOp` with the substitutions applied.
+        """
+        return self.replace_blocks([self.blocks[0].substitute_vars(substitutions, strict=False)])
 
     def __eq__(self, other):
         return (

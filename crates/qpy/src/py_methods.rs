@@ -485,6 +485,7 @@ pub(crate) fn py_convert_from_generic_value(
         },
         GenericValue::BigInt(bigint) => Ok(bigint.clone().into_py_any(py)?),
         GenericValue::Duration(duration) => Ok((*duration).into_py_any(py)?),
+        GenericValue::RangeExpr(range_expr) => Ok(range_expr.clone().into_py_any(py)?),
     }
 }
 

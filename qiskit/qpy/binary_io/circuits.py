@@ -492,6 +492,14 @@ def _read_instruction(
         )
         params.append(param)
 
+    # For a `ForLoopOp` whose loop parameter is a runtime `expr.Var`, the parameter slot is
+    # serialized as Null; re-infer the loop variable from the body circuit's single `input`
+    # variable (mirrors the Rust QPY reader and the `ForLoopOp` data model).
+    if gate_name == "ForLoopOp" and len(params) == 3 and params[1] is None:
+        input_vars = list(params[2].iter_input_vars())
+        if len(input_vars) == 1:
+            params[1] = input_vars[0]
+
     # Load annotations.
     annotations = (
         _read_instruction_annotations(file_obj, annotation_state) if has_annotations else None
@@ -1166,15 +1174,25 @@ def _write_instruction(
         )
         file_obj.write(instruction_arg_raw)
     # Encode instruction params
-    for param in instruction_params:
-        type_key, data_bytes = _dumps_instruction_parameter(
-            param,
-            index_map,
-            use_symengine,
-            version=version,
-            standalone_var_indices=standalone_var_indices,
-            annotation_factories=annotation_state.factories,
-        )
+    is_for_loop = isinstance(instruction.operation, controlflow.ForLoopOp)
+    for param_index, param in enumerate(instruction_params):
+        # ForLoopOp param[1] with an expr.Var is a real-time loop index.  This Python
+        # serialization path only runs for QPY versions below the Rust write threshold
+        # (>= 18 always uses the Rust engine).  The loop variable is the loop body's ``input``
+        # variable, so it round-trips as part of the body circuit; the instruction slot is
+        # written as NULL and the variable is re-inferred from the body on read.
+        if is_for_loop and param_index == 1 and isinstance(param, expr.Var) and param.standalone:
+            type_key = type_keys.Value.NULL
+            data_bytes = b""
+        else:
+            type_key, data_bytes = _dumps_instruction_parameter(
+                param,
+                index_map,
+                use_symengine,
+                version=version,
+                standalone_var_indices=standalone_var_indices,
+                annotation_factories=annotation_state.factories,
+            )
         common.write_generic_typed_data(file_obj, type_key, data_bytes)
     if annotations:
         if version < 15:

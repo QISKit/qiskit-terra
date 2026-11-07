@@ -266,6 +266,9 @@ pub enum CLoopCollectionType {
     List = 0,
     /// The loop iterates over a Python-style range (start, stop, step)
     Range = 1,
+    /// The loop iterates over a classical ``expr.Range`` whose bounds are classical expressions
+    /// (possibly only known at runtime)
+    ExprRange = 2,
 }
 
 /// A struct containing loop elements from a ForLoop control flow instruction.
@@ -974,6 +977,7 @@ pub unsafe extern "C" fn qk_control_flow_loop_collection_type(
     match collection {
         ForCollection::List(_) => CLoopCollectionType::List,
         ForCollection::PyRange(_) => CLoopCollectionType::Range,
+        ForCollection::Range(_) => CLoopCollectionType::ExprRange,
     }
 }
 

@@ -1295,6 +1295,31 @@ class TestLoadFromQPY(QiskitTestCase):
         self.assertEqual(tuple(new_circuit.data[0].operation.params[0]), (-1, 0, 1))
         self.assertDeprecatedBitProperties(qc, new_circuit)
 
+    def test_qpy_with_for_loop_var_loop_parameter(self):
+        """QPY faithfully round-trips expr.Range for-loops with runtime loop variables."""
+        cr = ClassicalRegister(8, "cr")
+        qc = QuantumCircuit(QuantumRegister(1), cr)
+        range_expr = expr.Range(expr.lift(0, types.Uint(8)), expr.lift(4, types.Uint(8)))
+        with qc.for_loop(range_expr) as loop_var:
+            qc.store(expr.index(cr, loop_var), True)
+
+        qpy_file = io.BytesIO()
+        dump(qc, qpy_file)
+        qpy_file.seek(0)
+        loaded = load(qpy_file)[0]
+
+        self.assertEqual(qc, loaded)
+        self.assertDeprecatedBitProperties(qc, loaded)
+
+        from qiskit.qasm3 import dumps
+
+        loaded_for_loop = next(
+            inst.operation for inst in loaded.data if inst.operation.name == "for_loop"
+        )
+        loop_param = loaded_for_loop.params[1]
+        self.assertIsInstance(loop_param, expr.Var)
+        self.assertIn(f"for uint[8] {loop_param.name} in", dumps(loaded))
+
     def test_qpy_with_for_loop_var_loop_counter(self):
         """Test qpy serialization with a for loop that uses expr.Var as its counter."""
         qc = QuantumCircuit(1, 1)

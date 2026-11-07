@@ -18,7 +18,7 @@ use num_traits::{ToPrimitive, Zero};
 use qiskit_circuit::{
     bit::{ClassicalRegister, ShareableClbit},
     classical::{
-        expr::{Binary, BinaryOp, Cast, Expr, Index, Stretch, Unary, UnaryOp, Value, Var},
+        expr::{Binary, BinaryOp, Cast, Expr, Index, Range, Stretch, Unary, UnaryOp, Value, Var},
         types::Type,
     },
     duration::Duration,
@@ -43,6 +43,8 @@ pub enum CExprNodeKind {
     Stretch = 5,
     /// Index/subscript expression
     Index = 6,
+    /// Range expression (a classical ``expr.Range`` used as a for-loop indexset)
+    Range = 7,
 }
 
 impl From<&Expr> for CExprNodeKind {
@@ -55,6 +57,7 @@ impl From<&Expr> for CExprNodeKind {
             Expr::Stretch(_) => Self::Stretch,
             Expr::Value(_) => Self::Value,
             Expr::Var(_) => Self::Var,
+            Expr::Range(_) => Self::Range,
         }
     }
 }
@@ -1217,6 +1220,13 @@ pub unsafe extern "C" fn inner_test_expr_kinds_and_types(
             uuid: Uuid::new_v4().as_u128(),
             name: "test_stretch".to_owned(),
         }),
+        CExprNodeKind::Range => Expr::Range(Box::new(Range {
+            start: dummy_value.clone(),
+            stop: dummy_value.clone(),
+            step: dummy_value,
+            ty: rust_type,
+            constant: true,
+        })),
     };
 
     Box::into_raw(Box::new(expr))

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from collections.abc import Mapping
 
 from qiskit.circuit import ClassicalRegister, Clbit
 from qiskit.circuit.classical import expr
@@ -103,6 +104,28 @@ class WhileLoopOp(ControlFlowOp):
     def replace_blocks(self, blocks):
         (body,) = blocks
         return WhileLoopOp(self._condition, body, label=self.label)
+
+    def substitute(self, substitutions: Mapping[expr.Var, expr.Expr]) -> WhileLoopOp:
+        """Return a new :class:`WhileLoopOp` with classical :class:`~.expr.Var` nodes replaced.
+
+        The substitution is applied to the :attr:`condition` (when it is an
+        :class:`~.expr.Expr`; a legacy two-tuple condition is left unchanged) and recursively
+        to the loop body via :meth:`.QuantumCircuit.substitute_vars`.
+
+        Args:
+            substitutions: mapping from :class:`~.expr.Var` to the replacement
+                :class:`~.expr.Expr`.
+
+        Returns:
+            A new :class:`WhileLoopOp` with the substitutions applied.
+        """
+        condition = (
+            self._condition.substitute(substitutions)
+            if isinstance(self._condition, expr.Expr)
+            else self._condition
+        )
+        body = self.blocks[0].substitute_vars(substitutions, strict=False)
+        return WhileLoopOp(condition, body, label=self.label)
 
 
 class WhileLoopContext:

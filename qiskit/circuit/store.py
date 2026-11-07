@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import typing
+from collections.abc import Mapping
 
 from .exceptions import CircuitError
 from .classical import expr, types
@@ -87,3 +88,21 @@ class Store(Instruction):
     def rvalue(self):
         """Get the r-value :class:`~.expr.Expr` node that is being written into the l-value."""
         return self.params[1]
+
+    def substitute(self, substitutions: Mapping[expr.Var, expr.Expr]) -> Store:
+        """Return a new :class:`Store` with classical :class:`~.expr.Var` nodes replaced.
+
+        Both the :attr:`lvalue` and :attr:`rvalue` expressions have ``substitutions`` applied
+        via :meth:`~.expr.Expr.substitute`.
+
+        Args:
+            substitutions: mapping from :class:`~.expr.Var` to the replacement
+                :class:`~.expr.Expr`.
+
+        Returns:
+            A new :class:`Store` with the substitutions applied.
+        """
+        return Store(
+            self.lvalue.substitute(substitutions),
+            self.rvalue.substitute(substitutions),
+        )

@@ -1064,6 +1064,8 @@ pub enum ExpressionElementPack {
     Binary(ExpressionTypePack, u8),
     #[brw(magic = b'i')]
     Index(ExpressionTypePack),
+    #[brw(magic = b'r')]
+    Range(ExpressionTypePack),
 }
 
 // An expression's var data - either a clbit, a register, or given by a uuid (for a standalone var)

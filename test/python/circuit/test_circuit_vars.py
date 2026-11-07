@@ -15,8 +15,10 @@ import itertools
 
 from test import QiskitTestCase
 
-from qiskit.circuit import QuantumCircuit, CircuitError, Clbit, ClassicalRegister, Store
+from qiskit.circuit import QuantumCircuit, CircuitError, Clbit, ClassicalRegister, Store, Parameter
 from qiskit.circuit.classical import expr, types
+from qiskit.circuit.controlflow import ForLoopOp, IfElseOp, WhileLoopOp, BoxOp
+from qiskit.circuit.controlflow.switch_case import SwitchCaseOp, CASE_DEFAULT
 
 
 class TestCircuitVars(QiskitTestCase):
@@ -580,3 +582,545 @@ class TestCircuitVars(QiskitTestCase):
 
         # When giving an `Stretch`, the match must be exact, not just the name.
         self.assertFalse(QuantumCircuit(captures=[a]).has_stretch(expr.Stretch.new("a")))
+
+
+class TestSubstituteVars(QiskitTestCase):
+    """Tests for :meth:`~.QuantumCircuit.substitute_vars` and the per-operation
+    ``substitute`` helpers it dispatches to."""
+
+    def test_substitute_var_in_store(self):
+        """Store lvalues and rvalues are rewritten."""
+        qc = QuantumCircuit()
+        target = qc.add_var("target", expr.lift(0, types.Uint(8)))
+        loop_var = expr.Var.new("i", types.Uint(8))
+        qc.add_uninitialized_var(loop_var)
+        qc.store(target, loop_var)
+
+        result = qc.substitute_vars({loop_var: expr.lift(3, types.Uint(8))})
+
+        store_rvalues = [
+            inst.operation.rvalue for inst in result.data if inst.operation.name == "store"
+        ]
+        self.assertIn(expr.lift(3, types.Uint(8)), store_rvalues)
+        self.assertNotIn(loop_var, list(result.iter_vars()))
+
+    def test_substitute_inplace_mutates_and_returns_none(self):
+        """``inplace=True`` rewrites the circuit in place and returns ``None``."""
+        qc = QuantumCircuit()
+        target = qc.add_var("target", expr.lift(0, types.Uint(8)))
+        loop_var = expr.Var.new("i", types.Uint(8))
+        qc.add_uninitialized_var(loop_var)
+        qc.store(target, loop_var)
+
+        out = qc.substitute_vars({loop_var: expr.lift(3, types.Uint(8))}, inplace=True)
+
+        self.assertIsNone(out)
+        store_rvalues = [
+            inst.operation.rvalue for inst in qc.data if inst.operation.name == "store"
+        ]
+        self.assertIn(expr.lift(3, types.Uint(8)), store_rvalues)
+        self.assertNotIn(loop_var, list(qc.iter_vars()))
+
+    def test_substitute_copy_leaves_input_untouched(self):
+        """``inplace=False`` (default) leaves the input circuit unchanged."""
+        qc = QuantumCircuit()
+        target = qc.add_var("target", expr.lift(0, types.Uint(8)))
+        loop_var = expr.Var.new("i", types.Uint(8))
+        qc.add_uninitialized_var(loop_var)
+        qc.store(target, loop_var)
+
+        result = qc.substitute_vars({loop_var: expr.lift(3, types.Uint(8))})
+
+        self.assertIsNot(result, qc)
+        self.assertIn(loop_var, list(qc.iter_vars()))
+        self.assertNotIn(loop_var, list(result.iter_vars()))
+
+    def test_substitute_var_in_if_else_condition(self):
+        """Classical if-else conditions are rewritten."""
+        loop_var = expr.Var.new("i", types.Uint(8))
+        true_body = QuantumCircuit(1)
+        true_body.x(0)
+        false_body = QuantumCircuit(1)
+        qc = QuantumCircuit(1)
+        qc.append(
+            IfElseOp(
+                expr.equal(loop_var, expr.lift(1, types.Uint(8))),
+                true_body,
+                false_body,
+            ),
+            [0],
+        )
+
+        result = qc.substitute_vars({loop_var: expr.lift(1, types.Uint(8))}, strict=False)
+
+        condition = result.data[0].operation.condition
+        self.assertEqual(
+            condition,
+            expr.equal(expr.lift(1, types.Uint(8)), expr.lift(1, types.Uint(8))),
+        )
+
+    def test_substitute_var_in_for_loop_body(self):
+        """The loop variable is bound by the loop, so substituting it is a no-op on the body.
+
+        The loop variable is the body's ``input`` variable (it cannot be substituted away without
+        leaving the body disagreeing with ``loop_parameter``); it indexes a register rather than
+        closing over an outer ``expr.Var`` (a body with an input var cannot also have captures).
+        """
+        cr = ClassicalRegister(16, "cr")
+        qc = QuantumCircuit(1)
+        qc.add_register(cr)
+        indexset = expr.Range(expr.lift(0, types.Uint(8)), expr.lift(4, types.Uint(8)))
+        with qc.for_loop(indexset) as loop_var:
+            qc.store(expr.index(cr, loop_var), expr.lift(True))
+
+        result = qc.substitute_vars({loop_var: expr.lift(2, types.Uint(8))}, strict=False)
+
+        for_loop = next(inst.operation for inst in result.data if inst.operation.name == "for_loop")
+        self.assertEqual(for_loop.params[0], indexset)
+        self.assertEqual(for_loop.params[1], loop_var)
+        body_indices = [
+            inst.operation.lvalue.index
+            for inst in for_loop.params[2].data
+            if inst.operation.name == "store"
+        ]
+        self.assertEqual(body_indices, [loop_var])
+
+    def test_empty_substitution_returns_independent_circuit(self):
+        """An empty mapping returns a copy whose mutation does not affect the input."""
+        qc = QuantumCircuit(1)
+        qc.add_var("target", expr.lift(0, types.Uint(8)))
+        qc.x(0)
+
+        result = qc.substitute_vars({})
+
+        self.assertIsNot(result, qc)
+        original_len = len(qc.data)
+        result.x(0)
+        self.assertEqual(len(qc.data), original_len)
+        self.assertEqual(len(result.data), original_len + 1)
+
+    def test_declared_var_initialization_preserved(self):
+        """Initial values of preserved declared vars survive substitution."""
+        qc = QuantumCircuit()
+        qc.add_var("kept", expr.lift(7, types.Uint(8)))
+        loop_var = expr.Var.new("i", types.Uint(8))
+        qc.add_uninitialized_var(loop_var)
+
+        result = qc.substitute_vars({loop_var: expr.lift(3, types.Uint(8))})
+
+        store_rvalues = [
+            inst.operation.rvalue for inst in result.data if inst.operation.name == "store"
+        ]
+        self.assertIn(expr.lift(7, types.Uint(8)), store_rvalues)
+
+    def test_substitute_var_in_switch_case_roundtrip(self):
+        """Switch-case targets and bodies are rewritten and reconstructed correctly."""
+        target_var = expr.Var.new("t", types.Uint(8))
+        body_zero = QuantumCircuit(1)
+        body_zero.x(0)
+        body_default = QuantumCircuit(1)
+        body_default.h(0)
+
+        qc = QuantumCircuit(1)
+        qc.append(
+            SwitchCaseOp(target_var, [(0, body_zero), (CASE_DEFAULT, body_default)]),
+            [0],
+        )
+
+        result = qc.substitute_vars({target_var: expr.lift(0, types.Uint(8))}, strict=False)
+
+        switch = result.data[0].operation
+        self.assertEqual(switch.target, expr.lift(0, types.Uint(8)))
+        cases = list(switch.cases_specifier())
+        self.assertEqual(len(cases), 2)
+        self.assertEqual(cases[0][0], (0,))
+        self.assertEqual(cases[1][0], (CASE_DEFAULT,))
+
+    def test_for_loop_with_python_range_indexset_recurses_into_body(self):
+        """A Python ``range`` indexset passes through untouched while the body is rewritten."""
+        captured = expr.Var.new("flag", types.Uint(8))
+        loop_param = Parameter("i")
+
+        body = QuantumCircuit(1)
+        body.add_capture(captured)
+        target = body.add_var("target", expr.lift(0, types.Uint(8)))
+        body.store(target, captured)
+
+        qc = QuantumCircuit(1)
+        qc.add_uninitialized_var(captured)
+        qc.append(ForLoopOp(range(4), loop_param, body), [0])
+
+        result = qc.substitute_vars({captured: expr.lift(7, types.Uint(8))})
+
+        for_loop = next(inst.operation for inst in result.data if inst.operation.name == "for_loop")
+        self.assertEqual(for_loop.params[0], range(4))
+        self.assertIsInstance(for_loop.params[1], Parameter)
+        self.assertEqual(for_loop.params[1].name, loop_param.name)
+        body_stores = [
+            inst.operation.rvalue
+            for inst in for_loop.params[2].data
+            if inst.operation.name == "store"
+        ]
+        self.assertIn(expr.lift(7, types.Uint(8)), body_stores)
+        self.assertNotIn(captured, list(result.iter_vars()))
+
+    def test_substitute_var_inside_box_body(self):
+        """Vars inside a box body are rewritten (the box itself has no condition)."""
+        flag = expr.Var.new("flag", types.Uint(8))
+
+        box_body = QuantumCircuit(1)
+        box_body.add_capture(flag)
+        sink = box_body.add_var("sink", expr.lift(0, types.Uint(8)))
+        box_body.store(sink, flag)
+
+        qc = QuantumCircuit(1)
+        qc.add_uninitialized_var(flag)
+        qc.append(BoxOp(box_body), [0])
+
+        result = qc.substitute_vars({flag: expr.lift(4, types.Uint(8))})
+
+        box = result.data[-1].operation
+        self.assertIsInstance(box, BoxOp)
+        body_stores = [
+            inst.operation.rvalue for inst in box.blocks[0].data if inst.operation.name == "store"
+        ]
+        self.assertIn(expr.lift(4, types.Uint(8)), body_stores)
+        self.assertNotIn(flag, list(result.iter_vars()))
+
+    def test_substitute_var_through_three_level_nesting(self):
+        """Three-level nesting: for > if > store — substitution reaches the deepest body."""
+        deep_var = expr.Var.new("deep", types.Uint(8))
+
+        innermost = QuantumCircuit(1)
+        innermost.add_capture(deep_var)
+        sink = innermost.add_var("sink", expr.lift(0, types.Uint(8)))
+        innermost.store(sink, deep_var)
+
+        if_block = QuantumCircuit(1)
+        if_block.add_capture(deep_var)
+        if_block.append(
+            IfElseOp(expr.equal(deep_var, expr.lift(2, types.Uint(8))), innermost, None),
+            [0],
+        )
+
+        qc = QuantumCircuit(1)
+        qc.add_uninitialized_var(deep_var)
+        qc.append(ForLoopOp(range(2), Parameter("i"), if_block), [0])
+
+        result = qc.substitute_vars({deep_var: expr.lift(2, types.Uint(8))})
+
+        for_body = result.data[-1].operation.params[2]
+        inner_if = for_body.data[0].operation
+        self.assertEqual(
+            inner_if.condition,
+            expr.equal(expr.lift(2, types.Uint(8)), expr.lift(2, types.Uint(8))),
+        )
+        innermost_body = inner_if.blocks[0]
+        innermost_stores = [
+            inst.operation.rvalue for inst in innermost_body.data if inst.operation.name == "store"
+        ]
+        self.assertIn(expr.lift(2, types.Uint(8)), innermost_stores)
+        self.assertNotIn(deep_var, list(result.iter_vars()))
+
+    def test_op_substitute_store(self):
+        """:meth:`Store.substitute` rewrites both lvalue and rvalue."""
+        a = expr.Var.new("a", types.Uint(8))
+        b = expr.Var.new("b", types.Uint(8))
+        store = Store(a, b)
+        new = store.substitute({a: a, b: expr.lift(5, types.Uint(8))})
+        self.assertEqual(new.rvalue, expr.lift(5, types.Uint(8)))
+
+    def test_op_substitute_while_loop_rewrites_condition_and_body(self):
+        """:meth:`WhileLoopOp.substitute` rewrites an expr condition and recurses into the body."""
+        cond_var = expr.Var.new("c", types.Uint(8))
+        body_var = expr.Var.new("v", types.Uint(8))
+
+        body = QuantumCircuit(1)
+        body.add_capture(cond_var)
+        body.add_uninitialized_var(body_var)
+        sink = body.add_var("sink", expr.lift(0, types.Uint(8)))
+        body.store(sink, body_var)
+
+        op = WhileLoopOp(
+            expr.equal(cond_var, expr.lift(0, types.Uint(8))),
+            body,
+        )
+
+        replacement = expr.lift(3, types.Uint(8))
+        new = op.substitute({body_var: replacement})
+
+        # Condition: cond_var is not in the substitution map, so it is unchanged.
+        self.assertEqual(
+            new.condition,
+            expr.equal(cond_var, expr.lift(0, types.Uint(8))),
+        )
+        # Body: body_var is replaced by the literal 3.
+        body_stores = [
+            inst.operation.rvalue for inst in new.blocks[0].data if inst.operation.name == "store"
+        ]
+        self.assertIn(replacement, body_stores)
+        # The original body is not mutated.
+        original_body_stores = [
+            inst.operation.rvalue for inst in op.blocks[0].data if inst.operation.name == "store"
+        ]
+        self.assertIn(body_var, original_body_stores)
+
+    def test_op_substitute_while_loop_rewrites_condition_var(self):
+        """:meth:`WhileLoopOp.substitute` rewrites a Var that appears in the condition."""
+        cond_var = expr.Var.new("c", types.Uint(8))
+        body = QuantumCircuit(1)
+        body.add_capture(cond_var)
+
+        op = WhileLoopOp(expr.equal(cond_var, expr.lift(0, types.Uint(8))), body)
+
+        new_cond_var = expr.Var.new("d", types.Uint(8))
+        new = op.substitute({cond_var: new_cond_var})
+
+        self.assertEqual(
+            new.condition,
+            expr.equal(new_cond_var, expr.lift(0, types.Uint(8))),
+        )
+
+    def test_op_substitute_while_loop_legacy_tuple_condition_unchanged(self):
+        """:meth:`WhileLoopOp.substitute` leaves a legacy two-tuple condition untouched.
+
+        A legacy condition is a ``(Clbit, bool)`` or ``(ClassicalRegister, int)`` two-tuple
+        rather than an :class:`~.expr.Expr`.  It carries no :class:`~.expr.Var` nodes so the
+        substitution map has nothing to apply to it.
+        """
+        cr = ClassicalRegister(1, "cr")
+        body = QuantumCircuit(1)
+        body.add_register(cr)
+        op = WhileLoopOp((cr[0], True), body)
+
+        # The tuple condition has no expr.Var nodes; substitution must not touch it.
+        some_var = expr.Var.new("x", types.Bool())
+        new = op.substitute({some_var: expr.lift(True)})
+
+        self.assertEqual(new.condition, (cr[0], True))
+
+    def test_op_substitute_for_loop_keeps_loop_parameter(self):
+        """:meth:`ForLoopOp.substitute` rewrites the Range indexset but not the loop var."""
+        stop = expr.Var.new("n", types.Uint(8))
+        loop_var = expr.Var.new("i", types.Uint(8))
+        indexset = expr.Range(expr.lift(0, types.Uint(8)), stop)
+        body = QuantumCircuit(1, inputs=[loop_var])
+        op = ForLoopOp(indexset, loop_var, body)
+
+        new = op.substitute({stop: expr.lift(8, types.Uint(8))})
+
+        self.assertEqual(
+            new.params[0], expr.Range(expr.lift(0, types.Uint(8)), expr.lift(8, types.Uint(8)))
+        )
+        self.assertEqual(new.params[1], loop_var)
+
+    def test_substitute_vars_strict_raises_for_unknown_var(self):
+        """`substitute_vars(strict=True)` raises when a key is not declared in the circuit."""
+        qc = QuantumCircuit()
+        a = qc.add_var("a", expr.lift(0, types.Uint(8)))
+        ghost = expr.Var.new("ghost", types.Uint(8))  # not in qc
+
+        with self.assertRaisesRegex(CircuitError, "Cannot substitute variables.*ghost"):
+            qc.substitute_vars({ghost: a}, strict=True)
+
+    def test_substitute_vars_strict_false_ignores_unknown_var(self):
+        """`substitute_vars(strict=False)` silently skips keys absent from the circuit."""
+        qc = QuantumCircuit()
+        a = qc.add_var("a", expr.lift(0, types.Uint(8)))
+        ghost = expr.Var.new("ghost", types.Uint(8))  # not in qc
+
+        # No error; the ghost key is simply ignored and 'a' is preserved as-is.
+        out = qc.substitute_vars({ghost: a}, strict=False)
+        self.assertIsInstance(out, QuantumCircuit)
+        self.assertTrue(out.has_var(a))
+
+    def test_substitute_vars_strict_default_is_true(self):
+        """`substitute_vars` raises by default (strict=True) for an unknown var."""
+        qc = QuantumCircuit()
+        qc.add_var("a", expr.lift(0, types.Uint(8)))
+        ghost = expr.Var.new("ghost", types.Uint(8))
+
+        with self.assertRaises(CircuitError):
+            qc.substitute_vars({ghost: expr.lift(0, types.Uint(8))})
+
+    # --- Case 2: self-referential substitution (key appears in its own replacement) ---
+
+    def test_self_referential_substitution_keeps_key_in_scope(self):
+        """A key that appears in its own replacement is kept in scope, not removed."""
+        qc = QuantumCircuit()
+        # Use add_input so x has no implicit initializer store (which would create an x lvalue
+        # that becomes non-lvalue x+1 after substitution and trigger a Store error).
+        x = qc.add_input("x", types.Uint(8))
+        target = qc.add_var("target", expr.lift(0, types.Uint(8)))
+        qc.store(target, x)
+
+        # x → x + 1: every READ of x becomes x+1, but x must stay declared as an input.
+        out = qc.substitute_vars({x: expr.add(x, expr.lift(1, types.Uint(8)))})
+
+        self.assertTrue(
+            out.has_var(x), "x must remain declared since it appears in its replacement"
+        )
+        self.assertIn(x, list(out.iter_input_vars()))
+        store_rvalues = [
+            inst.operation.rvalue for inst in out.data if inst.operation.name == "store"
+        ]
+        self.assertIn(expr.add(x, expr.lift(1, types.Uint(8))), store_rvalues)
+
+    def test_self_referential_substitution_cross_key_keeps_referenced_key(self):
+        """A key referenced inside *another* key's replacement is also kept in scope."""
+        qc = QuantumCircuit()
+        # Use input vars to avoid implicit initializer stores that would turn x into a lvalue.
+        x = qc.add_input("x", types.Uint(8))
+        y = qc.add_input("y", types.Uint(8))
+        target = qc.add_var("target", expr.lift(0, types.Uint(8)))
+        qc.store(target, x)
+        qc.store(target, y)
+
+        # y → x + 1: y is fully replaced, x is referenced inside y's replacement so x stays.
+        out = qc.substitute_vars({y: expr.add(x, expr.lift(1, types.Uint(8)))})
+
+        self.assertTrue(
+            out.has_var(x), "x must remain declared since it appears in y's replacement"
+        )
+        self.assertFalse(out.has_var(y), "y must be removed as it was fully substituted")
+
+    # --- Case 3: two keys share the same new replacement Var ---
+
+    def test_two_keys_same_replacement_var_compatible_scopes(self):
+        """Two input vars that both map to the same new Var → new Var added as input once."""
+        qc = QuantumCircuit()
+        a = qc.add_input("a", types.Uint(8))
+        b = qc.add_input("b", types.Uint(8))
+        z = expr.Var.new("z", types.Uint(8))  # not in qc
+
+        out = qc.substitute_vars({a: z, b: z}, strict=False)
+
+        self.assertTrue(out.has_var(z))
+        self.assertIn(z, list(out.iter_input_vars()))
+        self.assertFalse(out.has_var(a))
+        self.assertFalse(out.has_var(b))
+
+    def test_two_keys_same_replacement_var_conflicting_scopes_raises(self):
+        """An input var and a declared var both mapping to the same new Var raises CircuitError."""
+        qc = QuantumCircuit()
+        a = qc.add_input("a", types.Uint(8))
+        b = qc.add_var("b", expr.lift(0, types.Uint(8)))  # declared scope
+        z = expr.Var.new("z", types.Uint(8))  # not in qc
+
+        with self.assertRaisesRegex(CircuitError, "Cannot determine scope.*incompatible scopes"):
+            qc.substitute_vars({a: z, b: z}, strict=False)
+
+    # ---------------------------------------------------------------------------
+    # keep_substituted_vars flag
+    # ---------------------------------------------------------------------------
+
+    def test_keep_substituted_vars_normal_rename_ghost_declaration(self):
+        """keep_substituted_vars=True keeps the substituted key as a ghost declaration."""
+        qc = QuantumCircuit()
+        x = qc.add_input("x", types.Uint(8))
+        y = expr.Var.new("y", types.Uint(8))
+
+        out = qc.substitute_vars({x: y}, keep_substituted_vars=True)
+
+        # x is now a ghost: declared but not referenced anywhere
+        self.assertTrue(out.has_var(x), "x must be retained as a ghost declaration")
+        self.assertIn(x, list(out.iter_input_vars()), "x must keep its input scope")
+        # y was added with x's inferred scope
+        self.assertTrue(out.has_var(y))
+        self.assertIn(y, list(out.iter_input_vars()))
+
+    def test_keep_substituted_vars_false_removes_key(self):
+        """keep_substituted_vars=False (default) removes the substituted key."""
+        qc = QuantumCircuit()
+        x = qc.add_input("x", types.Uint(8))
+        y = expr.Var.new("y", types.Uint(8))
+
+        out = qc.substitute_vars({x: y})
+
+        self.assertFalse(out.has_var(x), "x must be removed by default")
+        self.assertTrue(out.has_var(y))
+
+    def test_keep_substituted_vars_subsequent_strict_pass_finds_ghost(self):
+        """A ghost declaration is found by strict=True on a second substitution, but the
+        structural rewrite has no effect because the ghost is not referenced anywhere."""
+        qc = QuantumCircuit()
+        x = qc.add_input("x", types.Uint(8))
+        y = expr.Var.new("y", types.Uint(8))
+        z = expr.Var.new("z", types.Uint(8))
+
+        # First pass: substitute x → y, keep x as ghost.
+        mid = qc.substitute_vars({x: y}, keep_substituted_vars=True, strict=False)
+        self.assertTrue(mid.has_var(x))
+
+        # Second pass: strict=True finds x (ghost) and passes validation; structural
+        # effect is zero because x does not appear in any expression.
+        out = mid.substitute_vars({x: z}, strict=True, keep_substituted_vars=False)
+
+        # x ghost is now dropped (keep=False), z is added with x's scope
+        self.assertFalse(out.has_var(x))
+        self.assertTrue(out.has_var(z))
+        self.assertIn(z, list(out.iter_input_vars()))
+
+    def test_keep_substituted_vars_self_referential_always_kept(self):
+        """Self-referential keys are always retained regardless of keep_substituted_vars."""
+        qc = QuantumCircuit()
+        x = qc.add_input("x", types.Uint(8))
+        target = qc.add_var("target", expr.lift(0, types.Uint(8)))
+        qc.store(target, x)
+
+        # keep_substituted_vars=False but x must stay because it appears in its own replacement.
+        out = qc.substitute_vars(
+            {x: expr.add(x, expr.lift(1, types.Uint(8)))},
+            keep_substituted_vars=False,
+        )
+        self.assertTrue(out.has_var(x), "x must be kept — it appears in its own replacement")
+
+    def test_keep_substituted_vars_cross_referential_keeps_key_y_as_ghost(self):
+        """With keep=True, the fully-substituted cross-referential key y becomes a ghost."""
+        qc = QuantumCircuit()
+        x = qc.add_input("x", types.Uint(8))
+        y = qc.add_input("y", types.Uint(8))
+        target = qc.add_var("target", expr.lift(0, types.Uint(8)))
+        qc.store(target, y)
+
+        # y → x + 1: y is substituted away, x is kept by keys_to_keep.
+        # With keep=True, y is also retained as a ghost.
+        out = qc.substitute_vars(
+            {y: expr.add(x, expr.lift(1, types.Uint(8)))},
+            keep_substituted_vars=True,
+        )
+        self.assertTrue(out.has_var(y), "y must be retained as ghost with keep=True")
+        self.assertIn(y, list(out.iter_input_vars()))
+        self.assertTrue(out.has_var(x), "x retained by keys_to_keep regardless of flag")
+
+    def test_keep_substituted_vars_strict_false_key_not_in_circuit_no_op(self):
+        """keep_substituted_vars=True has no effect for keys not declared in the circuit
+        (strict=False path) — there is nothing to retain at the top level."""
+        qc = QuantumCircuit()
+        declared = qc.add_var("declared", expr.lift(0, types.Uint(8)))
+        ghost_key = expr.Var.new("ghost_key", types.Uint(8))  # not in qc
+
+        out = qc.substitute_vars(
+            {ghost_key: expr.lift(0, types.Uint(8))},
+            strict=False,
+            keep_substituted_vars=True,
+        )
+
+        # ghost_key was never declared here, so keep has nothing to act on.
+        self.assertFalse(out.has_var(ghost_key))
+        # The var that was declared and not substituted survives unchanged.
+        self.assertTrue(out.has_var(declared))
+
+    def test_keep_substituted_vars_two_keys_same_new_var_both_ghosts(self):
+        """With keep=True and two keys mapping to the same new var (compatible scopes),
+        both original keys are retained as ghosts and the new var is added once."""
+        qc = QuantumCircuit()
+        a = qc.add_input("a", types.Uint(8))
+        b = qc.add_input("b", types.Uint(8))
+        z = expr.Var.new("z", types.Uint(8))
+
+        out = qc.substitute_vars({a: z, b: z}, strict=False, keep_substituted_vars=True)
+
+        self.assertIn(z, list(out.iter_input_vars()), "z must be added as input")
+        self.assertIn(a, list(out.iter_input_vars()), "a retained as ghost")
+        self.assertIn(b, list(out.iter_input_vars()), "b retained as ghost")

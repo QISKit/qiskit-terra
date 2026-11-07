@@ -565,18 +565,23 @@ pub enum ForCollection {
     PyRange(PyRange),
     /// Some ordered collection of integers.
     List(Vec<isize>),
+    /// A Dynamic Range object from qiskit.circuit.classical.expr
+    Range(expr::Range),
 }
+
 impl ForCollection {
     pub fn is_empty(&self) -> bool {
         match self {
             Self::PyRange(xs) => xs.is_empty(),
             Self::List(xs) => xs.is_empty(),
+            Self::Range(xs) => xs.is_empty(),
         }
     }
     pub fn len(&self) -> usize {
         match self {
             Self::PyRange(xs) => xs.len(),
             Self::List(xs) => xs.len(),
+            Self::Range(xs) => xs.len(),
         }
     }
 }
@@ -588,9 +593,17 @@ pub struct ControlFlowInstruction {
     pub num_clbits: u32,
 }
 
+/// The variable bound to each iteration value in a for-loop.
+///
+/// A compile-time [`Symbol`] (wrapping a Python `Parameter`) can be substituted at transpile
+/// time by `assign_parameters`; a runtime [`Var`] is the body's input variable, bound by the
+/// loop header at runtime and only unrollable by substituting it in the body's classical
+/// expressions.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LoopParam {
+    /// A compile-time [`Symbol`] (a Python `Parameter`).
     Parameter(Symbol),
+    /// A runtime real-time variable [`Var`].
     Variable(Var),
 }
 

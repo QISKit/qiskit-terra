@@ -1705,14 +1705,40 @@ class MatplotlibDrawer:
                 zorder=PORDER_FLOW,
             )
             if isinstance(node.op, ForLoopOp):
-                idx_set = str(node_data[node].indexset)
-                # If a range was used display 'range' and grab the range value
-                # to be displayed below
-                if "range" in idx_set:
-                    idx_set = "r(" + idx_set[6:-1] + ")"
+                indexset = node_data[node].indexset
+                # Check if it's an expr.Range object first
+                if isinstance(indexset, expr.Range):
+                    # Extract start, stop, step for cleaner display
+                    def _get_display_name(expr_obj):
+                        """Get a clean display name for an expression."""
+                        # Try to get the name attribute if it's a Var
+                        if hasattr(expr_obj, "name") and expr_obj.name is not None:
+                            return str(expr_obj.name)
+                        # Try to get the value if it's a Value
+                        if hasattr(expr_obj, "value"):
+                            return str(expr_obj.value)
+                        # Fall back to string representation, but truncate if too long
+                        s = str(expr_obj)
+                        return s[:15] + "..." if len(s) > 15 else s
+
+                    start_str = _get_display_name(indexset.start)
+                    stop_str = _get_display_name(indexset.stop)
+                    # Only show step if it's not the default (1)
+                    step_val = indexset.step.value if hasattr(indexset.step, "value") else None
+                    if step_val is not None and step_val == 1:
+                        idx_set = f"r({start_str}, {stop_str})"
+                    else:
+                        step_str = _get_display_name(indexset.step)
+                        idx_set = f"r({start_str}, {stop_str}, {step_str})"
+                elif isinstance(indexset, range):
+                    # Python range object
+                    if indexset.step == 1:
+                        idx_set = f"r({indexset.start}, {indexset.stop})"
+                    else:
+                        idx_set = f"r({indexset.start}, {indexset.stop}, {indexset.step})"
                 else:
                     # If a tuple, show first 4 elements followed by '...'
-                    idx_set = str(node_data[node].indexset)[1:-1].split(",")[:5]
+                    idx_set = str(indexset)[1:-1].split(",")[:5]
                     if len(idx_set) > 4:
                         idx_set[4] = "..."
                     idx_set = f"{','.join(idx_set)}"

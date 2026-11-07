@@ -18,7 +18,7 @@ __all__ = ("CASE_DEFAULT", "SwitchCaseOp")
 
 import contextlib
 from typing import Any, Literal, TYPE_CHECKING
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from qiskit.circuit import ClassicalRegister, Clbit
 from qiskit.circuit.classical import expr, types
@@ -188,6 +188,32 @@ class SwitchCaseOp(ControlFlowOp):
         if len(blocks) != len(self._params):
             raise CircuitError(f"needed {len(self._case_map)} blocks but received {len(blocks)}")
         return SwitchCaseOp(self.target, zip(self._label_spec, blocks))
+
+    def substitute(self, substitutions: Mapping[expr.Var, expr.Expr]) -> SwitchCaseOp:
+        """Return a new :class:`SwitchCaseOp` with classical :class:`~.expr.Var` nodes replaced.
+
+        The substitution is applied to the switch target (when it is an
+        :class:`~.expr.Expr`; a bare :class:`.Clbit`/:class:`.ClassicalRegister` target is left
+        unchanged) and recursively to each case body via
+        :meth:`.QuantumCircuit.substitute_vars`.
+
+        Args:
+            substitutions: mapping from :class:`~.expr.Var` to the replacement
+                :class:`~.expr.Expr`.
+
+        Returns:
+            A new :class:`SwitchCaseOp` with the substitutions applied.
+        """
+        target = (
+            self.target.substitute(substitutions)
+            if isinstance(self.target, expr.Expr)
+            else self.target
+        )
+        cases = [
+            (labels, body.substitute_vars(substitutions, strict=False))
+            for labels, body in self.cases_specifier()
+        ]
+        return SwitchCaseOp(target, cases, label=self.label)
 
 
 class SwitchCasePlaceholder(InstructionPlaceholder):

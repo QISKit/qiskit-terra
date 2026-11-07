@@ -23,10 +23,9 @@ from qiskit.circuit.random import random_circuit
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.parametervector import ParameterVector
 from qiskit.quantum_info import SparsePauliOp, SparseObservable
-from qiskit.circuit.classical import expr
+from qiskit.circuit.classical import expr, types
 from qiskit.synthesis import LieTrotter
 from qiskit.qpy.common import QPY_RUST_READ_MIN_VERSION, QPY_RUST_WRITE_MIN_VERSION, QPY_VERSION
-from qiskit.qpy.binary_io import write_circuit
 from qiskit.qpy import dump, load
 from qiskit.qpy import UnsupportedFeatureForVersion
 from test import QiskitTestCase
@@ -85,6 +84,16 @@ class TestQPYRoundtrip(QiskitTestCase):
         self.assertEqual(circuit.layout, new_circuit.layout)
         self.assertEqual(circuit.parameters, new_circuit.parameters)
 
+    def assert_dump_raises_unsupported(self, circuit, version, write_with):
+        """Assert dump() rejects the circuit for the given writer backend."""
+        use_rust_for_write = write_with == "Rust"
+        with patch(
+            "qiskit.qpy.common.QPY_RUST_WRITE_MIN_VERSION",
+            QPY_RUST_WRITE_MIN_VERSION if use_rust_for_write else QPY_VERSION + 1,
+        ):
+            with io.BytesIO() as fptr, self.assertRaises(UnsupportedFeatureForVersion):
+                dump(circuit, fptr, version=version)
+
     @all_qpy_combinations(QPY_RUST_READ_MIN_VERSION)
     def test_simple(self, version, write_with, read_with):
         """Basic roundtrip test"""
@@ -121,8 +130,7 @@ class TestQPYRoundtrip(QiskitTestCase):
         with qc.box(duration=expr.mul(2, a)):
             qc.cx(0, 1)
         if version < 14:
-            with io.BytesIO() as fptr, self.assertRaises(UnsupportedFeatureForVersion):
-                write_circuit(fptr, qc, version=version, use_rust=write_with == "Rust")
+            self.assert_dump_raises_unsupported(qc, version=version, write_with=write_with)
         else:
             self.assert_roundtrip_equal(
                 qc, version=version, read_with=read_with, write_with=write_with
@@ -173,6 +181,151 @@ class TestQPYRoundtrip(QiskitTestCase):
         qc.switch(expr.bit_and(cr, 3), [(1, body.copy()), (2, body.copy())], [0], [])
         qc.switch(expr.logic_not(qc.clbits[0]), [(False, body.copy())], [0], [])
         self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+    @all_qpy_combinations(QPY_RUST_READ_MIN_VERSION)
+    def test_for_loop_with_range(self, version, write_with, read_with):
+        """Check the ForLoop control flow gate with Range expression passes roundtrip"""
+        qc = QuantumCircuit(2, 1)
+        start = expr.lift(0, types.Uint(8))
+        stop = expr.lift(5, types.Uint(8))
+        step = expr.lift(1, types.Uint(8))
+        range_expr = expr.Range(start, stop, step)
+
+        with qc.for_loop(range_expr):
+            qc.h(0)
+            qc.cx(0, 1)
+            qc.measure(0, 0)
+            with qc.if_test((0, True)):
+                qc.break_loop()
+        if version < 18:
+            self.assert_dump_raises_unsupported(qc, version=version, write_with=write_with)
+        else:
+            self.assert_roundtrip_equal(
+                qc, version=version, read_with=read_with, write_with=write_with
+            )
+
+    @all_qpy_combinations(18)
+    def test_for_loop_with_var_loop_parameter(self, version, write_with, read_with):
+        """For-loop expr.Var loop parameters round-trip faithfully in QPY v18+."""
+        cr = ClassicalRegister(16, "cr")
+        qc = QuantumCircuit(QuantumRegister(1), cr)
+        range_expr = expr.Range(
+            expr.lift(0, types.Uint(8)), expr.lift(6, types.Uint(8)), expr.lift(2, types.Uint(8))
+        )
+        with qc.for_loop(range_expr) as loop_var:
+            qc.store(expr.index(cr, loop_var), expr.lift(True))
+
+        self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+    @all_qpy_combinations(18)
+    def test_for_loop_with_explicit_unused_var_loop_parameter(self, version, write_with, read_with):
+        """Explicit loop Vars are preserved even when unused in the body."""
+        loop_var = expr.Var.new("i", types.Uint(8))
+        qc = QuantumCircuit(1)
+        range_expr = expr.Range(
+            expr.lift(0, types.Uint(8)), expr.lift(4, types.Uint(8)), expr.lift(1, types.Uint(8))
+        )
+        with qc.for_loop(range_expr, loop_var):
+            qc.h(0)
+        self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+    @all_qpy_combinations(18)
+    def test_for_loop_with_dynamic_range_and_var_loop_parameter(
+        self, version, write_with, read_with
+    ):
+        """Dynamic expr.Range for-loops with loop Vars round-trip in QPY v18+."""
+        cr = ClassicalRegister(16, "cr")
+        qc = QuantumCircuit(QuantumRegister(1), cr)
+        start_var = qc.add_var("start", expr.lift(0, types.Uint(8)))
+        stop_var = qc.add_var("stop", expr.lift(6, types.Uint(8)))
+        range_expr = expr.Range(start_var, stop_var)
+        with qc.for_loop(range_expr) as loop_var:
+            qc.store(expr.index(cr, loop_var), expr.lift(True))
+        self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+    @all_qpy_combinations(18)
+    def test_nested_for_loop_with_expr_range(self, version, write_with, read_with):
+        """Nested for-loops with expr.Range indexsets round-trip at QPY v18+."""
+        cr = ClassicalRegister(16, "cr")
+        qc = QuantumCircuit(QuantumRegister(2), cr)
+        outer = expr.Range(expr.lift(0, types.Uint(8)), expr.lift(2, types.Uint(8)))
+        inner = expr.Range(expr.lift(0, types.Uint(8)), expr.lift(3, types.Uint(8)))
+        with qc.for_loop(outer) as outer_var:
+            qc.store(expr.index(cr, outer_var), expr.lift(True))
+            with qc.for_loop(inner) as inner_var:
+                qc.h(0)
+                qc.store(expr.index(cr, inner_var), expr.lift(True))
+        self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+    def test_for_loop_expr_range_unsupported_below_v18(self):
+        """expr.Range for-loops cannot be dumped with QPY format versions below 18."""
+        from qiskit.circuit.controlflow import ForLoopOp
+
+        cr = ClassicalRegister(16, "cr")
+        constant_range = QuantumCircuit(QuantumRegister(1), cr)
+        range_expr = expr.Range(
+            expr.lift(0, types.Uint(8)), expr.lift(6, types.Uint(8)), expr.lift(2, types.Uint(8))
+        )
+        with constant_range.for_loop(range_expr) as loop_var:
+            constant_range.store(expr.index(cr, loop_var), expr.lift(True))
+
+        dynamic_range = QuantumCircuit(QuantumRegister(1), ClassicalRegister(16, "cr"))
+        start_var = dynamic_range.add_var("start", expr.lift(0, types.Uint(8)))
+        stop_var = dynamic_range.add_var("stop", expr.lift(6, types.Uint(8)))
+        dynamic_range_expr = expr.Range(start_var, stop_var)
+        with dynamic_range.for_loop(dynamic_range_expr) as loop_var:
+            dynamic_range.store(expr.index(dynamic_range.cregs[0], loop_var), expr.lift(True))
+
+        explicit_loop_var = QuantumCircuit(1)
+        loop_var = expr.Var.new("i", types.Uint(8))
+        with explicit_loop_var.for_loop(
+            expr.Range(expr.lift(0, types.Uint(8)), expr.lift(4, types.Uint(8))), loop_var
+        ):
+            explicit_loop_var.h(0)
+
+        none_loop_param = QuantumCircuit(1)
+        body = QuantumCircuit(1)
+        body.h(0)
+        none_loop_param.append(
+            ForLoopOp(
+                expr.Range(expr.lift(0, types.Uint(8)), expr.lift(4, types.Uint(8))), None, body
+            ),
+            [0],
+        )
+
+        circuits = (constant_range, dynamic_range, explicit_loop_var, none_loop_param)
+
+        for qc in circuits:
+            for version in (16, 17):
+                writers = (
+                    ("Python", "Rust") if version >= QPY_RUST_WRITE_MIN_VERSION else ("Python",)
+                )
+                for write_with in writers:
+                    self.assert_dump_raises_unsupported(qc, version=version, write_with=write_with)
+
+    @all_qpy_combinations(QPY_RUST_READ_MIN_VERSION)
+    def test_for_loop_with_expr_range_and_none_loop_parameter(self, version, write_with, read_with):
+        """ForLoopOp with expr.Range indexset and explicit None loop parameter round-trips.
+
+        When the user opts out of a loop variable (param[1] is None), the ForLoopOp
+        still serialises and deserialises correctly at QPY v18+.
+        This exercises the NULL param path for ForLoopOp param[1] with an expr.Range
+        indexset, distinct from the LOOP_VARIABLE path and the Python-range NULL path.
+        """
+        qc = QuantumCircuit(1)
+        range_expr = expr.Range(expr.lift(0, types.Uint(8)), expr.lift(4, types.Uint(8)))
+        # Explicit None: no loop variable requested.
+        from qiskit.circuit.controlflow import ForLoopOp
+
+        body = QuantumCircuit(1)
+        body.h(0)
+        qc.append(ForLoopOp(range_expr, None, body), [0])
+        if version < 18:
+            self.assert_dump_raises_unsupported(qc, version=version, write_with=write_with)
+        else:
+            self.assert_roundtrip_equal(
+                qc, version=version, read_with=read_with, write_with=write_with
+            )
 
     @all_qpy_combinations(QPY_RUST_READ_MIN_VERSION)
     def test_evolutiongate(self, version, write_with, read_with):

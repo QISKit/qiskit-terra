@@ -23,7 +23,7 @@ use pyo3::types::PyAny;
 
 use qiskit_circuit::bit::{ClassicalRegister, ShareableClbit};
 use qiskit_circuit::circuit_data::CircuitData;
-use qiskit_circuit::classical::expr::{Expr, Stretch, Var};
+use qiskit_circuit::classical::expr::{Expr, Range, Stretch, Var};
 use qiskit_circuit::classical::types::Type;
 use qiskit_circuit::duration::Duration;
 use qiskit_circuit::operations::{ForCollection, OperationRef, PyInstruction, PyOpKind, PyRange};
@@ -393,7 +393,7 @@ pub enum ExpressionType {
 #[binrw]
 #[brw(repr = u8)]
 #[repr(u8)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ExpressionVarDeclaration {
     Input = b'I',
     Capture = b'C',
@@ -485,7 +485,8 @@ pub enum GenericValue {
     Complex64(Complex64),
     CaseDefault,
     Register(ParamRegisterValue), // This is not the full register data; rather, it's the name stored inside instructions, or a clbit address
-    Range(PyRange),
+    Range(PyRange),               // Python range (start, stop, step as integers)
+    RangeExpr(Range),             // Range expression from qiskit.circuit.classical.expr
     Tuple(Vec<GenericValue>),
     NumpyObject(Bytes),
     ParameterExpressionSymbol(Arc<Symbol>),
@@ -865,6 +866,21 @@ pub(crate) fn serialize_generic_value(
                 })?;
             (ValueType::Modifier, serialize(&packed_modifier)?)
         }
+        GenericValue::RangeExpr(range_expr) => {
+            if qpy_data.version < 18 {
+                return Err(QpyError::UnsupportedFeatureForVersion {
+                    feature: "classical expr.Range".to_string(),
+                    version: 18,
+                    min_version: qpy_data.version,
+                });
+            }
+            // Serialize Range expression as an Expression
+            let expr = Expr::Range(Box::new(range_expr.clone()));
+            (
+                ValueType::Expression,
+                serialize_expression(&expr, qpy_data)?,
+            )
+        }
         GenericValue::Register(param_register_value) => (
             ValueType::Register,
             serialize_param_register_value(param_register_value, qpy_data)?,
@@ -916,12 +932,26 @@ pub(crate) fn pack_for_collection(value: &ForCollection, version: u8) -> Generic
                 .collect(),
         ),
         ForCollection::PyRange(py_range) => GenericValue::Range(*py_range),
+        ForCollection::Range(range_expr) => GenericValue::RangeExpr(range_expr.clone()),
     }
 }
 
 pub(crate) fn unpack_for_collection(value: &GenericValue) -> Result<ForCollection, QpyError> {
     match value {
         GenericValue::Range(py_range) => Ok(ForCollection::PyRange(*py_range)),
+        GenericValue::RangeExpr(range_expr) => Ok(ForCollection::Range(range_expr.clone())),
+        GenericValue::Expression(expr) => {
+            // Convert Range expressions to ForCollection::Range when unpacking
+            // This keeps Range expressions on the same code path as other expressions
+            // until we need to identify it as a Range for ForCollection unpacking
+            if let Expr::Range(range) = expr {
+                Ok(ForCollection::Range((**range).clone()))
+            } else {
+                Err(QpyError::ConversionError(
+                    "Could not unpack ForCollection".to_string(),
+                ))
+            }
+        }
         GenericValue::Tuple(vec) => {
             let value_list = vec
                 .iter()
