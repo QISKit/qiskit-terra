@@ -79,6 +79,69 @@ impl QpyCaller {
     }
 }
 
+// Easy string storage when the string size is u16
+#[allow(dead_code)] // Used by the QPY 19 reader and writer.
+#[binrw]
+#[brw(big)]
+#[derive(Debug)]
+pub struct StringU16Pack {
+    #[br(temp)]
+    #[bw(try_calc = u16::try_from(value.len()))]
+    size: u16,
+
+    #[br(count = size, try_map = String::from_utf8)]
+    #[bw(map = |value| value.as_bytes())]
+    pub value: String,
+}
+
+// Packing for Complex64 numbers to avoid serializing them into bytes
+#[allow(dead_code)] // Used by the QPY 19 reader and writer.
+#[binrw]
+#[brw(big)]
+#[derive(Clone, Copy, Debug)]
+pub struct Complex64Pack {
+    pub re: f64,
+    pub im: f64,
+}
+
+// For matrices occurring in quantum computing, the most common sizes are 2x2 and 4x4
+// It's more compact to handle this case separately
+#[allow(dead_code)] // Used by the QPY 19 reader and writer.
+#[binrw]
+#[brw(big)]
+#[derive(Clone, Debug)]
+pub enum Complex64MatrixPack {
+    #[brw(magic = b'o')]
+    OneQubit([Complex64Pack; 4]),
+    #[brw(magic = b't')]
+    TwoQubit([Complex64Pack; 16]),
+    #[brw(magic = b'g')]
+    GeneralMatrix(Complex64GeneralMatrixPack),
+}
+
+// A struct for general-size matrix
+#[allow(dead_code)] // Used by the QPY 19 reader and writer.
+#[binrw]
+#[brw(big)]
+#[derive(Clone, Debug)]
+pub struct Complex64GeneralMatrixPack {
+    rows: u32,
+    cols: u32,
+
+    #[bw(ignore)]
+    #[br(
+        temp,
+        try_calc = rows
+            .checked_mul(cols)
+            .and_then(|count| usize::try_from(count).ok())
+            .ok_or("matrix dimensions exceed the supported size")
+    )]
+    count: usize,
+
+    #[br(count = count)]
+    values: Vec<Complex64Pack>,
+}
+
 /// Endianness selector for QPY value serialization and deserialization.
 ///
 /// QPY's format spec requires big-endian (network byte order) for all values.

@@ -407,8 +407,308 @@ QPY Format
 ==========
 
 The QPY serialization format is a portable cross-platform binary
-serialization format for :class:`~qiskit.circuit.QuantumCircuit` objects in Qiskit. The basic
-file format is as follows:
+serialization format for :class:`~qiskit.circuit.QuantumCircuit` objects in Qiskit.
+
+.. _qpy_version_19:
+
+QPY 19 format
+-------------
+QPY 19 overhauls the high level format of QPY files, although many of the low level data structures remain unchanged.
+
+All integer and floating-point fields in QPY 19 use network byte order [#f1]_ (big endian), and
+all structures are packed without padding.  Strings are UTF-8.  Unless stated otherwise, a string
+is encoded as a ``uint16_t`` byte length followed immediately by that many bytes.
+
+File layout
+~~~~~~~~~~~
+
+A QPY 19 file starts with the six ASCII bytes ``QISKIT``, followed by this header:
+
+.. code-block:: c
+
+    struct {
+        uint8_t  qpy_version;             // 19
+        uint8_t  qiskit_major_version;
+        uint8_t  qiskit_minor_version;
+        uint8_t  qiskit_patch_version;
+        uint64_t num_circuits;
+        char     symbolic_encoding;
+        char     program_type;            // 'c' for circuits
+    } FILE_HEADER;
+
+The header is followed by ``num_circuits`` values of type ``uint64_t``.  These are absolute byte
+offsets from the start of the file to the corresponding circuit payload.  The circuit payloads
+follow the offset table in the same order and without padding.
+
+The ``symbolic_encoding`` field is retained for compatibility with earlier formats.  QPY 19
+parameter expressions use QPY's native representation.  The only supported ``program_type`` is
+``'c'`` (:class:`.QuantumCircuit`).
+
+Each circuit payload has the following sections, in order:
+
+.. code-block:: text
+
+    CIRCUIT_HEADER_V19
+    STANDALONE_VARS
+    ANNOTATION_HEADER
+    PARAMETER_VECTOR_TABLE
+    CUSTOM_DEFINITIONS
+    INSTRUCTIONS
+    LAYOUT
+
+The counts in the circuit header and the individual section headers determine the sizes of these
+sections.  ``STANDALONE_VARS``, ``ANNOTATION_HEADER``, ``PARAMETER_VECTOR_TABLE``,
+``CUSTOM_DEFINITIONS``, and ``LAYOUT`` retain their QPY 18 encodings, which are defined in the
+:ref:`older QPY formats <qpy_older_formats>` section below.
+
+CIRCUIT_HEADER_V19
+~~~~~~~~~~~~~~~~~~
+
+The circuit header contains both fixed-size fields and variable-size data:
+
+.. code-block:: c
+
+    struct {
+        STRING_U16 circuit_name;
+        GLOBAL_PHASE global_phase;
+        uint32_t num_qubits;
+        uint32_t num_clbits;
+        uint64_t num_instructions;
+        uint32_t num_vars;
+        uint32_t num_registers;
+        REGISTER registers[num_registers];
+        uint32_t qubit_interner_size;
+        uint32_t clbit_interner_size;
+        INTERNER_ENTRY qubit_interner[qubit_interner_size];
+        INTERNER_ENTRY clbit_interner[clbit_interner_size];
+        uint64_t metadata_size;
+        uint8_t metadata[metadata_size];
+    } CIRCUIT_HEADER_V19;
+
+``STRING_U16`` is a ``uint16_t`` byte length followed by the UTF-8 bytes.  ``REGISTER`` is the QPY
+18 :ref:`register representation <qpy_registers>`.  ``metadata`` is encoded by the metadata
+serializer passed to :func:`.dump` (JSON by default).
+
+``GLOBAL_PHASE`` starts with a one-byte type code followed by the indicated payload:
+
+==========  =============================================================
+Type code   Payload
+==========  =============================================================
+``f``       One ``double``.
+``p``       A :class:`.Parameter`: ``uint16_t`` name size, 16 UUID bytes,
+            then the UTF-8 name.
+``v``       A QPY 18 :ref:`PARAMETER_VECTOR_ELEMENT <qpy_param_vector>`.
+``e``       A QPY 18 :ref:`PARAMETER_EXPR <qpy_param_expr_v3>`.
+==========  =============================================================
+
+Argument interners
+~~~~~~~~~~~~~~~~~~
+
+Instructions refer to their quantum and classical arguments by indices into the two interner
+tables in ``CIRCUIT_HEADER_V19``.  An entry starts with a one-byte type code:
+
+==========  =============================================================
+Type code   Payload
+==========  =============================================================
+``u``       No payload.  This is an unused slot retained to preserve later indices.
+``s``       One ``uint32_t`` bit index.
+``d``       Two ``uint32_t`` bit indices.
+``t``       Three ``uint32_t`` bit indices.
+``v``       A ``uint16_t`` count followed by that many ``uint32_t`` bit indices.
+``a``       No payload.  This means all bits of the corresponding kind.
+==========  =============================================================
+
+The bit indices in the quantum interner refer to the circuit's qubit list; those in the classical
+interner refer to its clbit list.
+
+INSTRUCTION
+~~~~~~~~~~~
+
+There are exactly ``num_instructions`` instruction payloads:
+
+.. code-block:: c
+
+    struct {
+        uint8_t  operation_type;
+        uint32_t qargs;                   // quantum-interner index
+        uint32_t cargs;                   // classical-interner index
+        OPERATION_DATA operation_data;    // selected by operation_type
+        uint16_t num_parameters;
+        PARAMETER parameters[num_parameters];
+        uint8_t  extra_fields;
+        INSTRUCTION_ANNOTATIONS annotations; // if extra_fields & 0x80
+        STRING_U16 label;                     // if extra_fields & 0x40
+    } INSTRUCTION;
+
+``extra_fields`` is a bit mask.  Bit ``0x80`` indicates annotations and bit ``0x40`` indicates a
+label.  All other bits are reserved and must be zero.  ``INSTRUCTION_ANNOTATIONS`` retains its QPY
+15 :ref:`encoding <qpy_instruction_annotations_v15>`.
+
+Operations
+~~~~~~~~~~
+
+``operation_type`` determines the bytes in ``operation_data``:
+
+=====  =============================  ==============================================================
+Value  Operation                      Payload
+=====  =============================  ==============================================================
+0      Standard gate                  One ``uint8_t`` standard-gate discriminant.
+1      Standard instruction           One ``uint8_t`` standard-instruction discriminant.  For a
+                                       delay (discriminant 1), this is followed by its unit code.
+2      Custom operation               One ``uint64_t`` index into ``CUSTOM_DEFINITIONS``.
+3      Python-defined operation       A ``FROM_PYTHON`` payload.
+4      Unitary gate                   A ``COMPLEX_MATRIX`` payload.
+5      Controlled gate                A ``CONTROLLED_GATE`` payload.
+6      Control-flow operation         A ``CONTROL_FLOW`` payload.
+7      Pauli-evolution gate           A ``PAULI_EVOLUTION_V19`` payload.
+8      Pauli-product measurement      A ``PAULI_PRODUCT_MEASUREMENT`` payload.
+9      Pauli-product rotation         A ``PAULI_PRODUCT_ROTATION`` payload.
+10     Store                          Two native ``EXPRESSION`` payloads: lvalue, then rvalue.
+=====  =============================  ==============================================================
+
+The delay unit is one of ``'n'`` (nanoseconds), ``'p'`` (picoseconds), ``'u'`` (microseconds),
+``'m'`` (milliseconds), ``'s'`` (seconds), ``'t'`` (backend ``dt``), or ``'e'`` (a duration
+expression).
+
+``FROM_PYTHON`` identifies a Python-defined operation and records the named arguments needed to
+initialize it:
+
+.. code-block:: c
+
+    struct {
+        STRING_U16 class_name;
+        STRING_U16 operation_name;
+        uint16_t num_init_parameters;
+        struct {
+            STRING_U16 name;
+            PARAMETER value;
+        } init_parameters[num_init_parameters];
+    } FROM_PYTHON;
+
+``CONTROLLED_GATE`` is a ``FROM_PYTHON`` payload followed by two ``uint32_t`` values,
+``num_ctrl_qubits`` and ``ctrl_state``.
+
+``COMPLEX_MATRIX`` starts with ``'o'`` followed by four complex numbers for a one-qubit matrix,
+``'t'`` followed by 16 complex numbers for a two-qubit matrix, or ``'g'`` followed by two
+``uint32_t`` values (rows and columns) and ``rows * columns`` complex numbers.  Each complex number
+is stored as two ``double`` values, real then imaginary, in row-major order.
+
+Control-flow operations
+~~~~~~~~~~~~~~~~~~~~~~~
+
+A ``CONTROL_FLOW`` payload starts with a one-byte operation code:
+
+==========  ========================  ================================================================
+Type code   Operation                 Payload
+==========  ========================  ================================================================
+``b``       :class:`.BoxOp`           A ``BOX_DURATION``.
+``k``       :class:`.BreakLoopOp`     None.
+``c``       :class:`.ContinueLoopOp`  None.
+``f``       :class:`.ForLoopOp`       A ``FOR_COLLECTION``, then a ``LOOP_PARAMETER``.
+``i``       :class:`.IfElseOp`        A ``CONDITION``.
+``s``       :class:`.SwitchCaseOp`    A ``SWITCH_TARGET``, then ``CASE_SPEC``.
+``w``       :class:`.WhileLoopOp`     A ``CONDITION``.
+==========  ========================  ================================================================
+
+The circuit bodies of a control-flow operation are ordinary instruction parameters of type ``q``;
+they are not part of ``operation_data``.
+
+``BOX_DURATION`` is ``'n'`` with no payload, ``'d'`` followed by a ``DURATION``, or ``'e'``
+followed by an ``EXPRESSION``.  ``FOR_COLLECTION`` is either ``'l'``, a ``uint64_t`` count, and
+that many ``int64_t`` values, or ``'r'`` followed by the three ``int64_t`` values ``start``,
+``stop``, and ``step``.  ``LOOP_PARAMETER`` is ``'n'`` for none, ``'p'`` followed by a
+``Parameter``, or ``'v'`` for the loop variable.
+
+``CONDITION`` has one of these forms:
+
+* ``'b'``, followed by a ``uint32_t`` clbit index and a ``uint8_t`` value;
+* ``'r'``, followed by ``STRING_U16`` for the classical-register name and a ``BIG_UINT`` value; or
+* ``'e'``, followed by an ``EXPRESSION``.
+
+``SWITCH_TARGET`` similarly starts with ``'b'`` and a ``uint32_t`` clbit index, ``'r'`` and a
+``STRING_U16`` register name, or ``'e'`` and an ``EXPRESSION``.  ``CASE_SPEC`` is a ``uint32_t``
+number of cases.  Each case is a ``uint32_t`` number of labels followed by its labels; a label is
+``'d'`` for the default case or ``'i'`` followed by a ``BIG_UINT``.
+
+Pauli operations
+~~~~~~~~~~~~~~~~
+
+A Boolean vector is encoded as a ``uint32_t`` bit count followed by ``ceil(bit_count / 8)`` bytes.
+Bits are ordered least-significant-bit first within each byte.
+
+.. code-block:: c
+
+    struct {
+        BOOL_VECTOR z;
+        BOOL_VECTOR x;
+        uint8_t neg;
+    } PAULI_PRODUCT_MEASUREMENT;
+
+    struct {
+        BOOL_VECTOR z;
+        BOOL_VECTOR x;
+    } PAULI_PRODUCT_ROTATION;
+
+``PAULI_EVOLUTION_V19`` stores the operator and synthesis method directly; the evolution time is
+in the instruction's ordinary parameter list:
+
+.. code-block:: c
+
+    struct {
+        uint64_t operator_count;
+        uint8_t standalone_operator;
+        uint64_t synthesis_data_size;
+        PAULI_DATA operators[operator_count];
+        uint8_t synthesis_data[synthesis_data_size];
+    } PAULI_EVOLUTION_V19;
+
+``PAULI_DATA`` retains the QPY 18 encoding.  ``synthesis_data`` is a serialized representation of
+the product-formula synthesis settings.
+
+Instruction parameters
+~~~~~~~~~~~~~~~~~~~~~~
+
+Each ``PARAMETER`` starts with a one-byte type code.  Unlike earlier QPY formats, there is no
+generic size field: each payload is self-delimiting.
+
+==========  ================================================================================
+Type code   Payload
+==========  ================================================================================
+``b``       One ``uint8_t`` Boolean value.
+``i``       One ``int64_t``.
+``I``       ``BIG_UINT``: a ``uint8_t`` byte count followed by the unsigned big-endian bytes.
+``f``       One ``double``.
+``c``       Two ``double`` values, real then imaginary.
+``D``       No payload; the ``CASE_DEFAULT`` sentinel.
+``r``       Three ``int64_t`` values: ``start``, ``stop``, and ``step``.
+``n``       A ``uint64_t`` byte length followed by a NumPy-encoded object.
+``T``       A ``uint64_t`` element count followed by that many nested ``PARAMETER`` payloads.
+``p``       A :class:`.Parameter`: ``uint16_t`` name size, 16 UUID bytes, then its UTF-8 name.
+``v``       A QPY 18 :ref:`PARAMETER_VECTOR_ELEMENT <qpy_param_vector>`.
+``e``       A QPY 18 :ref:`PARAMETER_EXPR <qpy_param_expr_v3>`.
+``s``       ``STRING_U16``.
+``z``       No payload; the Python ``None`` value.
+``x``       A native ``EXPRESSION``.
+``m``       A QPY :ref:`MODIFIER <qpy_version_11>`.
+``d``       A QPY :ref:`DURATION <qpy_version_14>`.
+``R``       A register value.
+``q``       A nested circuit payload.
+==========  ================================================================================
+
+A register-valued parameter is ``0`` followed by a ``uint32_t`` clbit index, or ``1`` followed by
+a ``STRING_U16`` classical-register name.  Native ``EXPRESSION`` payloads use the expression-tree
+encoding defined for the earlier formats, with the additions through QPY 16.  A nested circuit is
+encoded using the same circuit format described in this section.
+
+.. _qpy_older_formats:
+
+Older QPY formats
+=================
+
+QPY versions 1 through 18 use a common base format that was extended incrementally.  The sections
+below define that base format and each version's changes.
+
+The basic file format is as follows:
 
 A QPY file (or memory object) always starts with the following 6
 byte UTF8 string: ``QISKIT`` which is immediately followed by the overall

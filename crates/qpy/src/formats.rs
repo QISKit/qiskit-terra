@@ -1051,22 +1051,82 @@ pub enum ExpressionTypePack {
 #[brw(big)]
 pub enum ExpressionElementPack {
     #[brw(magic = b'x')]
-    Var(ExpressionTypePack, ExpressionVarElementPack),
+    Var {
+        kind: ExpressionTypePack,
+        value: ExpressionVarElementPack,
+    },
     #[brw(magic = b's')]
-    Stretch(ExpressionTypePack, u16),
+    Stretch {
+        kind: ExpressionTypePack,
+        index: u16,
+    },
     #[brw(magic = b'v')]
-    Value(ExpressionTypePack, ExpressionValueElementPack),
+    Value {
+        kind: ExpressionTypePack,
+        value: ExpressionValueElementPack,
+    },
     #[brw(magic = b'c')]
-    Cast(ExpressionTypePack, u8),
+    Cast {
+        kind: ExpressionTypePack,
+        implicit: u8,
+    },
     #[brw(magic = b'u')]
-    Unary(ExpressionTypePack, u8),
+    Unary { kind: ExpressionTypePack, op: u8 },
     #[brw(magic = b'b')]
-    Binary(ExpressionTypePack, u8),
+    Binary { kind: ExpressionTypePack, op: u8 },
     #[brw(magic = b'i')]
-    Index(ExpressionTypePack),
+    Index { kind: ExpressionTypePack },
 }
 
-// An expression's var data - either a clbit, a register, or given by a uuid (for a standalone var)
+/// Context-free representation of a classical expression in the QPY wire format.
+/// Circuit references remain encoded as indices or names until the circuit reader resolves them.
+#[allow(dead_code)] // Used by the QPY 19 reader and writer.
+#[derive(BinWrite, BinRead, Debug)]
+#[brw(big)]
+pub enum PackedExpression {
+    #[brw(magic = b'x')]
+    Var {
+        kind: ExpressionTypePack,
+        value: ExpressionVarElementPack,
+    },
+    #[brw(magic = b's')]
+    Stretch {
+        kind: ExpressionTypePack,
+        index: u16,
+    },
+    #[brw(magic = b'v')]
+    Value {
+        kind: ExpressionTypePack,
+        value: ExpressionValueElementPack,
+    },
+    #[brw(magic = b'c')]
+    Cast {
+        kind: ExpressionTypePack,
+        implicit: u8,
+        operand: Box<PackedExpression>,
+    },
+    #[brw(magic = b'u')]
+    Unary {
+        kind: ExpressionTypePack,
+        op: u8,
+        operand: Box<PackedExpression>,
+    },
+    #[brw(magic = b'b')]
+    Binary {
+        kind: ExpressionTypePack,
+        op: u8,
+        left: Box<PackedExpression>,
+        right: Box<PackedExpression>,
+    },
+    #[brw(magic = b'i')]
+    Index {
+        kind: ExpressionTypePack,
+        target: Box<PackedExpression>,
+        index: Box<PackedExpression>,
+    },
+}
+
+// An expression's var data - either a clbit, a register, or given by a index (for a standalone var)
 #[derive(BinWrite, BinRead, Debug)]
 #[brw(big)]
 pub enum ExpressionVarElementPack {
@@ -1075,7 +1135,7 @@ pub enum ExpressionVarElementPack {
     #[brw(magic = b'R')]
     Register(ExpressionVarRegisterPack),
     #[brw(magic = b'U')]
-    Uuid(u16), // the uuid in the standalone vars list
+    Index(u16), // the index in the standalone vars list
 }
 
 // An expression register data, specifically it's name
