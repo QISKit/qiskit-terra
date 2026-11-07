@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.OptimizeSwapBeforeMeasure` where, after removing a
+    swap, measurements writing to the same classical bit could be re-created in
+    a different order, changing the final value of that bit. The original
+    order of the measurements is now preserved.

@@ -42,8 +42,9 @@ class OptimizeSwapBeforeMeasure(TransformationPass):
         for swap in swaps[::-1]:
             if getattr(swap.op, "_condition", None) is not None:
                 continue
+            descendants = dag.descendants(swap)
             final_successor = []
-            for successor in dag.descendants(swap):
+            for successor in descendants:
                 final_successor.append(
                     isinstance(successor, DAGOutNode)
                     or (isinstance(successor, DAGOpNode) and isinstance(successor.op, Measure))
@@ -59,8 +60,11 @@ class OptimizeSwapBeforeMeasure(TransformationPass):
                 for creg in dag.cregs.values():
                     measure_layer.add_creg(creg)
 
-                for successor in list(dag.descendants(swap)):
-                    if isinstance(successor, DAGOpNode) and isinstance(successor.op, Measure):
+                # ``descendants`` is unordered, so walk the DAG topologically to re-create the
+                # measurements in their original order. This matters when several measurements
+                # write to the same classical bit: the last one determines the final value.
+                for successor in [n for n in dag.topological_op_nodes() if n in descendants]:
+                    if isinstance(successor.op, Measure):
                         # replace measure node with a new one, where qargs is set with the "other"
                         # swap qarg.
                         dag.remove_op_node(successor)
