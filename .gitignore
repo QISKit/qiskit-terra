@@ -5,6 +5,7 @@
 /.venv/
 /venv/
 .DS_Store
+*.local.md
 
 # Compiler/bytecode artifacts
 __pycache__/
