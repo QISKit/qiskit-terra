@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    Fixed non-deterministic gate selection in two-qubit unitary synthesis (and consequently
+    :func:`.transpile` at optimization levels 2 and 3) when multiple two-qubit candidate gates
+    on a qubit pair have identical scores or errors. Previously, candidate operations were
+    evaluated in the randomized iteration order of the internal :class:`~collections.abc.Set`
+    returned by :meth:`.Target.operation_names_for_qargs`. They are now sorted so that equal-scoring
+    tie-breaks are deterministic across runs.
+    Fixed `#17218 <https://github.com/Qiskit/qiskit/issues/17218>`__.

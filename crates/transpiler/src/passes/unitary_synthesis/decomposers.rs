@@ -927,6 +927,8 @@ fn get_candidate_2q_operations(
     let forwards_names = target
         .operation_names_for_qargs(&qubits)
         .unwrap_or_default();
+    let mut forwards_names: Vec<&str> = forwards_names.into_iter().collect();
+    forwards_names.sort_unstable();
     let mut reverse_names = target
         .operation_names_for_qargs(&rev_qubits)
         .unwrap_or_default();
@@ -970,7 +972,9 @@ fn get_candidate_2q_operations(
             error,
         });
     }
-    for name in reverse_names {
+    let mut remaining_reverse: Vec<&str> = reverse_names.into_iter().collect();
+    remaining_reverse.sort_unstable();
+    for name in remaining_reverse {
         let Some(TargetOperation::Normal(op)) = target.operation_from_name(name) else {
             continue;
         };

@@ -1193,6 +1193,31 @@ class TestUnitarySynthesisTarget(QiskitTestCase):
 
         _ = UnitarySynthesis(basis_gates=["cx", "u"])(circuit)
 
+    def test_deterministic_gate_choice_on_equal_score(self):
+        """Test that synthesis among equally scored 2q gates is deterministic.
+
+        Regression test for #17218.
+        """
+        from qiskit import transpile
+
+        target = Target.from_configuration(["u", "cx", "cz", "ecr"], num_qubits=2)
+        qc = QuantumCircuit(2)
+        qc.ensure_physical()
+        for k in range(4):
+            qc.cx(k % 2, (k + 1) % 2)
+            qc.ry(0.3 + k, 0)
+            qc.rz(0.1 + 0.7 * k, 1)
+
+        pass_ = UnitarySynthesis(target=target)
+        results = [dict(pass_(qc).count_ops()) for _ in range(10)]
+        self.assertTrue(all(r == results[0] for r in results))
+
+        tp_results = [
+            dict(transpile(qc, target=target, optimization_level=2, seed_transpiler=0).count_ops())
+            for _ in range(10)
+        ]
+        self.assertTrue(all(r == tp_results[0] for r in tp_results))
+
 
 if __name__ == "__main__":
     unittest.main()
