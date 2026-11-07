@@ -16,12 +16,14 @@ import unittest
 from numpy import pi
 
 from qiskit.utils import optionals
+from qiskit.transpiler import PassManager
 from qiskit.transpiler.passes import HoareOptimizer
 from qiskit.converters import circuit_to_dag
-from qiskit import QuantumCircuit
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.circuit.library import XGate, RZGate, CSwapGate, SwapGate
 from qiskit.dagcircuit import DAGOpNode
 from qiskit.quantum_info import Statevector
+from qiskit.qasm3 import loads as qasm3_loads
 from test import QiskitTestCase
 
 
@@ -312,6 +314,113 @@ class TestHoareOptimizer(QiskitTestCase):
         result = pass_.run(circuit_to_dag(circuit))
 
         self.assertEqual(result, circuit_to_dag(expected))
+
+    @unittest.skipUnless(optionals.HAS_QASM3_IMPORT, "qiskit-qasm3-import is required")
+    def test_issue_14969_regression(self):
+        """Cache eviction must not crash or change the state in issue 14969."""
+
+        bug_qasm = """OPENQASM 3.0;
+include \"stdgates.inc\";
+gate rzx(p0) _gate_q_0, _gate_q_1 {
+  h _gate_q_1;
+  cx _gate_q_0, _gate_q_1;
+  rz(p0) _gate_q_1;
+  cx _gate_q_0, _gate_q_1;
+  h _gate_q_1;
+}
+gate cu1(p0) _gate_q_0, _gate_q_1 {
+  p(0.5*p0) _gate_q_0;
+  cx _gate_q_0, _gate_q_1;
+  p((-0.5)*p0) _gate_q_1;
+  cx _gate_q_0, _gate_q_1;
+  p(0.5*p0) _gate_q_1;
+}
+gate cu1_o0(p0) _gate_q_0, _gate_q_1 {
+  x _gate_q_0;
+  cu1(p0) _gate_q_0, _gate_q_1;
+  x _gate_q_0;
+}
+gate cz_o0 _gate_q_0, _gate_q_1 {
+  x _gate_q_0;
+  cz _gate_q_0, _gate_q_1;
+  x _gate_q_0;
+}
+bit[1] c;
+qubit[4] q;
+cu1_o0(6) q[3], q[2];
+cy q[2], q[1];
+rzx(2) q[1], q[3];
+cx q[1], q[0];
+rx(2) q[0];
+cx q[1], q[0];
+cy q[0], q[3];
+sdg q[0];
+x q[0];
+cz_o0 q[3], q[0];
+sdg q[0];
+sdg q[0];
+cz_o0 q[0], q[1];
+cz q[3], q[2];
+s q[2];
+swap q[3], q[2];
+x q[2];
+rz(5) q[2];
+id q[2];
+y q[2];
+id q[2];
+c[0] = measure q[2];
+"""
+
+        circuit = qasm3_loads(bug_qasm)
+        expected = Statevector.from_instruction(circuit.remove_final_measurements(inplace=False))
+        for size in (2, 3, 5, 10, 20):
+            with self.subTest(size=size):
+                result = PassManager(HoareOptimizer(size=size)).run(circuit)
+                self.assertEqual(result.data[-1], circuit.data[-1])
+                self.assertTrue(
+                    expected.equiv(
+                        Statevector.from_instruction(
+                            result.remove_final_measurements(inplace=False)
+                        )
+                    )
+                )
+
+    def test_issue_14969_shared_cache_entries(self):
+        """Shared cache entries in the October 2026 reproducer can be evicted safely."""
+        # Reduced HHL example reported by karineek:
+        # https://github.com/Qiskit/qiskit/issues/14969#issuecomment-6081522377
+        for reverse in (False, True):
+            system = QuantumRegister(1, "sys")
+            phase = QuantumRegister(10, "phase_0")
+            ancilla = QuantumRegister(1, "ancilla")
+            classical = ClassicalRegister(1, "c")
+            circuit = QuantumCircuit(system, phase, ancilla, classical)
+            circuit.x(system[0])
+            for i in sorted(range(1, 10), reverse=reverse):
+                circuit.h(phase[i])
+            for i in range(1, 10):
+                circuit.cp(0.0, phase[i], system[0])
+            circuit.append(QuantumCircuit(10, name="func1").to_gate(), phase)
+            for i in range(10):
+                circuit.cry(pi if i < 9 else 1.2, phase[i], ancilla[0])
+            circuit.append(QuantumCircuit(10, name="func2").to_gate(), phase)
+            circuit.cp(0.0, phase[0], system[0])
+            circuit.measure(system[0], classical[0])
+
+            expected = Statevector.from_instruction(
+                circuit.remove_final_measurements(inplace=False)
+            )
+            for size in (2, 3, 5, 10, 20):
+                with self.subTest(size=size, reverse=reverse):
+                    result = PassManager(HoareOptimizer(size=size)).run(circuit)
+                    self.assertEqual(result.data[-1], circuit.data[-1])
+                    self.assertTrue(
+                        expected.equiv(
+                            Statevector.from_instruction(
+                                result.remove_final_measurements(inplace=False)
+                            )
+                        )
+                    )
 
     def test_targetsuccessive_identity_removal(self):
         """Should remove pair of controlled target successive

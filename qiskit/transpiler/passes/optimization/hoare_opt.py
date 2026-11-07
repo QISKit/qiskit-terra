@@ -366,10 +366,21 @@ class HoareOptimizer(TransformationPass):
 
         for node in gates_tbr:
             # for rec call, only look at qubits that haven't been optimized yet
-            new_qb = [x for x in node.qargs if x not in dnt_rec]
-            dnt_rec.update(new_qb)
-            for qbt in new_qb:
-                idx = self.gatecache[qbt].index(node)
+            candidate_qb = [x for x in node.qargs if x not in dnt_rec]
+            valid_qb = []
+            for qbt in candidate_qb:
+                try:
+                    idx = self.gatecache[qbt].index(node)
+                except ValueError:
+                    # This gate has already been evicted from this qubit's cache.
+                    # Leave the qubit unvisited: later gates may still need to recurse on it.
+                    continue
+                else:
+                    valid_qb.append((qbt, idx))
+
+            dnt_rec.update(qbt for qbt, _ in valid_qb)
+
+            for qbt, idx in valid_qb:
                 # recursive chain to optimize all gates in this qubit's cache
                 self._multigate_opt(dag, qbt, max_idx=idx, dnt_rec=dnt_rec)
         # truncate gatecache for this qubit to after above gate

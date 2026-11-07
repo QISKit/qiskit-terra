@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a :exc:`ValueError` in :class:`.HoareOptimizer` when recursive cache
+    eviction encounters a gate that has already been evicted from another
+    qubit's cache. This addresses the crashes reported in
+    `#14969 <https://github.com/Qiskit/qiskit/issues/14969>`__.
