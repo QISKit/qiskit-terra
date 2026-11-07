@@ -13,21 +13,34 @@
 """Tests for python write/rust read flow and vice versa"""
 
 import io
+import sys
+import unittest
 import uuid
 
 from ddt import ddt, idata, unpack
 
-from qiskit.circuit import QuantumCircuit, QuantumRegister, ClassicalRegister, Duration
-from qiskit.circuit.library import PauliEvolutionGate
+from qiskit.circuit import (
+    AnnotatedOperation,
+    QuantumCircuit,
+    QuantumRegister,
+    ClassicalRegister,
+    Duration,
+    Instruction,
+    ControlledGate,
+    Gate,
+)
+from qiskit.circuit.library import PauliEvolutionGate, XGate
 from qiskit.circuit.random import random_circuit
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.parametervector import ParameterVector
 from qiskit.quantum_info import SparsePauliOp, SparseObservable
-from qiskit.circuit.classical import expr
+from qiskit.circuit.classical import expr, types
+from qiskit.circuit.controlflow import IfElseOp
 from qiskit.synthesis import LieTrotter
 from qiskit.qpy.common import QPY_RUST_READ_MIN_VERSION, QPY_RUST_WRITE_MIN_VERSION, QPY_VERSION
 from qiskit.qpy.binary_io import write_circuit
 from qiskit.qpy import dump, load
+from qiskit.qpy import interface
 from qiskit.qpy import UnsupportedFeatureForVersion
 from test import QiskitTestCase
 from unittest.mock import patch
@@ -316,3 +329,155 @@ class TestQPYRoundtrip(QiskitTestCase):
         qc = QuantumCircuit(op.num_qubits)
         qc.append(evo, range(op.num_qubits))
         self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+    def test_recursion_limit(self):
+        depth = 5
+        body = QuantumCircuit(1, 1)
+        for _ in range(depth):
+            qc = QuantumCircuit(1, 1)
+            qc.append(IfElseOp((qc.clbits[0], 1), body), [0], [0])
+            body = qc
+        with io.BytesIO() as buf:
+            dump(qc, buf)
+            buf.seek(0)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(buf)
+
+    def test_parameter_expression_deep_recursion(self):
+        depth = 1000
+        qc = QuantumCircuit(1)
+        a = Parameter("a")
+        b = Parameter("b")
+        expr = a + b + 2
+        for i in range(depth):
+            new_param = Parameter("A" + str(i))
+            new_sub_expr = a + new_param
+            expr = expr.subs({a: new_sub_expr})
+            a = new_param
+        qc.rz(expr, 0)
+        with io.BytesIO() as buf:
+            dump(qc, buf)
+            buf.seek(0)
+            output = load(buf)[0]
+        # The equality comparison on large parameter expressions is too slow currently to
+        # run in tests. Just validate the circuit looks correct to validate the round trip
+        self.assertIsInstance(output, QuantumCircuit)
+        self.assertEqual(len(output.data), 1)
+        self.assertTrue(output.data[0].is_parameterized())
+        self.assertEqual(output.data[0].name, "rz")
+
+    def test_expression_recursion_limit(self):
+        qc = QuantumCircuit(2)
+        a = qc.add_input("a", types.Float())
+        depth = 200
+        for i in range(depth):
+            a = expr.negate(expr.negate(a))
+
+        with qc.if_test(expr.equal(a, 2.0)):
+            qc.cx(0, 1)
+        with io.BytesIO() as buf:
+            dump(qc, buf)
+            buf.seek(0)
+            with self.assertRaises(RecursionError):
+                load(buf)
+
+    def test_tuple_param_recursion_limit(self):
+        tup = ()
+        depth = 5
+        for _ in range(depth):
+            tup = (tup,)
+
+        qc = QuantumCircuit(1)
+        qc.append(Instruction("my", 1, 0, [tup]), [0])
+
+        with io.BytesIO() as fptr:
+            dump(qc, fptr)
+            fptr.seek(0)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(fptr)
+
+    def test_controlled_gate_recursion_limit(self):
+        class MyControlled(ControlledGate):
+            mutable = False
+
+            def params(self):
+                return []
+
+            def copy(self):
+                return self
+
+        g = MyControlled("my", 2, [], base_gate=XGate())
+        g._definition = QuantumCircuit()
+        depth = 5
+        for i in range(depth):
+            g = MyControlled("my", 3 + i, [], base_gate=g)
+            g._definition = QuantumCircuit()
+
+        qc = QuantumCircuit(g.num_qubits)
+        qc.append(g, qc.qubits)
+
+        with io.BytesIO() as fptr:
+            dump(qc, fptr)
+            fptr.seek(0)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(fptr)
+
+    def test_annoted_operation_recursion_limit(self):
+        class MyAnnotated(AnnotatedOperation):
+            @property
+            def num_qubits(self):
+                return 1
+
+            @property
+            def num_clbits(self):
+                return 0
+
+            @property
+            def params(self):
+                return []
+
+        depth = 5
+        g = MyAnnotated(XGate(), [])
+        for i in range(depth):
+            g = MyAnnotated(g, [])
+
+        qc = QuantumCircuit(g.num_qubits)
+        qc.append(g, qc.qubits)
+
+        with io.BytesIO() as fptr:
+            dump(qc, fptr)
+            fptr.seek(0)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(fptr)
+
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "The stack limit on windows prevents calling qpy.dump() with the recursive custom gates.",
+    )
+    def test_custom_instruction(self):
+        depth = 5
+        gate = Gate("custom", 1, [])
+        for i in range(depth):
+            g = Gate(f"custom{i}", 1, [])
+            qc = QuantumCircuit(1)
+            qc.append(gate, [0])
+            g._definition = qc
+            gate = g
+
+        qc = QuantumCircuit(1)
+        qc.append(gate, [0])
+        with io.BytesIO() as fptr:
+            dump(qc, fptr)
+            fptr.seek(0)
+            with patch.object(interface, "_get_recursion_limit") as patched:
+                patched.return_value = 3
+                with self.assertRaises(RecursionError):
+                    load(fptr)

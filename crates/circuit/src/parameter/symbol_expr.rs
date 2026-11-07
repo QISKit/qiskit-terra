@@ -485,11 +485,11 @@ impl SymbolExpr {
             SymbolExpr::Value(e) => SymbolExpr::Value(*e),
             SymbolExpr::Unary { op, expr } => SymbolExpr::Unary {
                 op: op.clone(),
-                expr: Arc::new(expr.bind(maps)),
+                expr: Arc::new(crate::stack::grow(|| expr.bind(maps))),
             },
             SymbolExpr::Binary { op, lhs, rhs } => {
-                let new_lhs = lhs.bind(maps);
-                let new_rhs = rhs.bind(maps);
+                let new_lhs = crate::stack::grow(|| lhs.bind(maps));
+                let new_rhs = crate::stack::grow(|| rhs.bind(maps));
                 match op {
                     BinaryOp::Add => new_lhs + new_rhs,
                     BinaryOp::Sub => new_lhs - new_rhs,
@@ -513,11 +513,11 @@ impl SymbolExpr {
             SymbolExpr::Value(e) => SymbolExpr::Value(*e),
             SymbolExpr::Unary { op, expr } => SymbolExpr::Unary {
                 op: op.clone(),
-                expr: Arc::new(expr.subs(maps)),
+                expr: Arc::new(crate::stack::grow(|| expr.subs(maps))),
             },
             SymbolExpr::Binary { op, lhs, rhs } => {
-                let new_lhs = lhs.subs(maps);
-                let new_rhs = rhs.subs(maps);
+                let new_lhs = crate::stack::grow(|| lhs.subs(maps));
+                let new_rhs = crate::stack::grow(|| rhs.subs(maps));
                 match op {
                     BinaryOp::Add => new_lhs + new_rhs,
                     BinaryOp::Sub => new_lhs - new_rhs,
@@ -807,7 +807,7 @@ impl SymbolExpr {
         match self {
             SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => Ok(SymbolExpr::Value(Value::Real(0.0))),
             SymbolExpr::Unary { op, expr } => {
-                let expr_d = expr.derivative(param)?;
+                let expr_d = crate::stack::grow(|| expr.derivative(param))?;
                 match op {
                     UnaryOp::Abs => Ok(&(expr.as_ref() * &expr_d)
                         / &SymbolExpr::Unary {
@@ -877,12 +877,16 @@ impl SymbolExpr {
                 }
             }
             SymbolExpr::Binary { op, lhs, rhs } => match op {
-                BinaryOp::Add => Ok(lhs.derivative(param)? + rhs.derivative(param)?),
-                BinaryOp::Sub => Ok(lhs.derivative(param)? - rhs.derivative(param)?),
-                BinaryOp::Mul => Ok(&(&lhs.derivative(param)? * rhs.as_ref())
-                    + &(lhs.as_ref() * &rhs.derivative(param)?)),
-                BinaryOp::Div => Ok(&(&(&(&lhs.derivative(param)? * rhs.as_ref())
-                    - &(lhs.as_ref() * &rhs.derivative(param)?))
+                BinaryOp::Add => Ok(crate::stack::grow(|| lhs.derivative(param))?
+                    + crate::stack::grow(|| rhs.derivative(param))?),
+                BinaryOp::Sub => Ok(crate::stack::grow(|| lhs.derivative(param))?
+                    - crate::stack::grow(|| rhs.derivative(param))?),
+                BinaryOp::Mul => Ok(&(&crate::stack::grow(|| lhs.derivative(param))?
+                    * rhs.as_ref())
+                    + &(lhs.as_ref() * &crate::stack::grow(|| rhs.derivative(param))?)),
+                BinaryOp::Div => Ok(&(&(&(&crate::stack::grow(|| lhs.derivative(param))?
+                    * rhs.as_ref())
+                    - &(lhs.as_ref() * &crate::stack::grow(|| rhs.derivative(param))?))
                     / rhs.as_ref())
                     / rhs.as_ref()),
                 BinaryOp::Pow => {
@@ -903,7 +907,7 @@ impl SymbolExpr {
                                         expr: Arc::new(lhs.as_ref().clone()),
                                     },
                                 ),
-                                rhs.derivative(param)?,
+                                crate::stack::grow(|| rhs.derivative(param))?,
                             ))
                         }
                     } else if !rhs.has_symbol(param) {
@@ -917,7 +921,7 @@ impl SymbolExpr {
                                         rhs.as_ref() - &SymbolExpr::Value(Value::Real(1.0)),
                                     ),
                                 },
-                            lhs.derivative(param)?,
+                            crate::stack::grow(|| lhs.derivative(param))?,
                         ))
                     } else {
                         let new_expr = SymbolExpr::Unary {
@@ -930,7 +934,7 @@ impl SymbolExpr {
                                 rhs.as_ref().clone(),
                             )),
                         };
-                        new_expr.derivative(param)
+                        crate::stack::grow(|| new_expr.derivative(param))
                     }
                 }
             },
@@ -939,6 +943,10 @@ impl SymbolExpr {
 
     /// expand the equation
     pub fn expand(&self) -> SymbolExpr {
+        crate::stack::grow(|| self.expand_inner())
+    }
+
+    fn expand_inner(&self) -> SymbolExpr {
         match self {
             SymbolExpr::Symbol(_) => self.clone(),
             SymbolExpr::Value(_) => self.clone(),
@@ -1031,16 +1039,8 @@ impl SymbolExpr {
     }
 
     /// Iterate over all symbols this equation contains.
-    pub fn iter_symbols(&self) -> Box<dyn Iterator<Item = &Symbol> + '_> {
-        // This could maybe be more elegantly resolved with a SymbolIter type>
-        match self {
-            SymbolExpr::Symbol(e) => Box::new(::std::iter::once(e.as_ref())),
-            SymbolExpr::Value(_) => Box::new(::std::iter::empty()),
-            SymbolExpr::Unary { op: _, expr } => expr.iter_symbols(),
-            SymbolExpr::Binary { op: _, lhs, rhs } => {
-                Box::new(lhs.iter_symbols().chain(rhs.iter_symbols()))
-            }
-        }
+    pub fn iter_symbols(&self) -> super::iter::IterSymbols<'_> {
+        super::iter::IterSymbols::new(self)
     }
 
     /// Map of parameter name to the parameter.
@@ -1055,10 +1055,10 @@ impl SymbolExpr {
         match self {
             SymbolExpr::Symbol(_) => Vec::<Value>::new(),
             SymbolExpr::Value(v) => Vec::<Value>::from([*v]),
-            SymbolExpr::Unary { op: _, expr } => expr.values(),
+            SymbolExpr::Unary { op: _, expr } => crate::stack::grow(|| expr.values()),
             SymbolExpr::Binary { op: _, lhs, rhs } => {
-                let mut l = lhs.values();
-                let r = rhs.values();
+                let mut l = crate::stack::grow(|| lhs.values());
+                let r = crate::stack::grow(|| rhs.values());
                 l.extend(r);
                 l
             }
@@ -1070,8 +1070,11 @@ impl SymbolExpr {
         match self {
             SymbolExpr::Symbol(e) => e.as_ref().eq(param),
             SymbolExpr::Value(_) => false,
-            SymbolExpr::Unary { op: _, expr } => expr.has_symbol(param),
-            SymbolExpr::Binary { op: _, lhs, rhs } => lhs.has_symbol(param) | rhs.has_symbol(param),
+            SymbolExpr::Unary { op: _, expr } => crate::stack::grow(|| expr.has_symbol(param)),
+            SymbolExpr::Binary { op: _, lhs, rhs } => {
+                crate::stack::grow(|| lhs.has_symbol(param))
+                    | crate::stack::grow(|| rhs.has_symbol(param))
+            }
         }
     }
 
@@ -1115,12 +1118,12 @@ impl SymbolExpr {
             },
             SymbolExpr::Unary { op, expr } => SymbolExpr::Unary {
                 op: op.clone(),
-                expr: Arc::new(expr.conjugate()),
+                expr: Arc::new(crate::stack::grow(|| expr.conjugate())),
             },
             SymbolExpr::Binary { op, lhs, rhs } => SymbolExpr::Binary {
                 op: op.clone(),
-                lhs: Arc::new(lhs.conjugate()),
-                rhs: Arc::new(rhs.conjugate()),
+                lhs: Arc::new(crate::stack::grow(|| lhs.conjugate())),
+                rhs: Arc::new(crate::stack::grow(|| rhs.conjugate())),
             },
         }
     }
@@ -1183,12 +1186,15 @@ impl SymbolExpr {
             SymbolExpr::Symbol(_) => false,
             SymbolExpr::Unary { op, expr } => match op {
                 UnaryOp::Abs => false,
-                UnaryOp::Neg => !expr.is_negative(),
+                UnaryOp::Neg => !crate::stack::grow(|| expr.is_negative()),
                 _ => false, // TO DO add heuristic determination
             },
             SymbolExpr::Binary { op, lhs, rhs } => match op {
-                BinaryOp::Mul | BinaryOp::Div => lhs.is_negative() ^ rhs.is_negative(),
-                BinaryOp::Add | BinaryOp::Sub => lhs.is_negative(),
+                BinaryOp::Mul | BinaryOp::Div => {
+                    crate::stack::grow(|| lhs.is_negative())
+                        ^ crate::stack::grow(|| rhs.is_negative())
+                }
+                BinaryOp::Add | BinaryOp::Sub => crate::stack::grow(|| lhs.is_negative()),
                 _ => false, // TO DO add heuristic determination for pow
             },
         }
@@ -1201,7 +1207,7 @@ impl SymbolExpr {
             SymbolExpr::Unary {
                 op: UnaryOp::Abs | UnaryOp::Neg,
                 expr,
-            } => expr.abs(),
+            } => crate::stack::grow(|| expr.abs()),
             _ => SymbolExpr::Unary {
                 op: UnaryOp::Abs,
                 expr: Arc::new(self.clone()),
@@ -1304,6 +1310,10 @@ impl SymbolExpr {
 
     // Add with heuristic optimization
     fn add_opt(&self, rhs: &SymbolExpr, recursive: bool) -> Option<SymbolExpr> {
+        crate::stack::grow(|| self.add_opt_inner(rhs, recursive))
+    }
+
+    fn add_opt_inner(&self, rhs: &SymbolExpr, recursive: bool) -> Option<SymbolExpr> {
         if self.is_zero() {
             Some(rhs.clone())
         } else if rhs.is_zero() {
@@ -1707,6 +1717,10 @@ impl SymbolExpr {
 
     /// Sub with heuristic optimization
     fn sub_opt(&self, rhs: &SymbolExpr, recursive: bool) -> Option<SymbolExpr> {
+        crate::stack::grow(|| self.sub_opt_inner(rhs, recursive))
+    }
+
+    fn sub_opt_inner(&self, rhs: &SymbolExpr, recursive: bool) -> Option<SymbolExpr> {
         if self.is_zero() {
             match rhs.neg_opt() {
                 Some(e) => Some(e),
@@ -2124,6 +2138,10 @@ impl SymbolExpr {
 
     /// Mul with heuristic optimization
     fn mul_opt(&self, rhs: &SymbolExpr, recursive: bool) -> Option<SymbolExpr> {
+        crate::stack::grow(|| self.mul_opt_inner(rhs, recursive))
+    }
+
+    fn mul_opt_inner(&self, rhs: &SymbolExpr, recursive: bool) -> Option<SymbolExpr> {
         if self.is_zero() {
             Some(self.clone())
         } else if rhs.is_zero() || self.is_one() {
@@ -2453,6 +2471,10 @@ impl SymbolExpr {
     }
     /// expand with optimization for mul operation
     fn mul_expand(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        crate::stack::grow(|| self.mul_expand_inner(rhs))
+    }
+
+    fn mul_expand_inner(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         if let SymbolExpr::Binary {
             op: rop,
             lhs: r_lhs,
@@ -2612,6 +2634,10 @@ impl SymbolExpr {
 
     /// Div with heuristic optimization
     fn div_opt(&self, rhs: &SymbolExpr, recursive: bool) -> Option<SymbolExpr> {
+        crate::stack::grow(|| self.div_opt_inner(rhs, recursive))
+    }
+
+    fn div_opt_inner(&self, rhs: &SymbolExpr, recursive: bool) -> Option<SymbolExpr> {
         if rhs.is_zero() {
             // return inf to detect divide by zero without panic
             Some(SymbolExpr::Value(Value::Real(f64::INFINITY)))
@@ -2806,6 +2832,10 @@ impl SymbolExpr {
 
     /// expand with optimization for div operation
     fn div_expand(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        crate::stack::grow(|| self.div_expand_inner(rhs))
+    }
+
+    fn div_expand_inner(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match self {
             SymbolExpr::Unary { op, expr } => match op {
                 UnaryOp::Neg => match expr.div_expand(rhs) {
@@ -2862,6 +2892,10 @@ impl SymbolExpr {
 
     /// optimization for neg
     fn neg_opt(&self) -> Option<SymbolExpr> {
+        crate::stack::grow(|| self.neg_opt_inner())
+    }
+
+    fn neg_opt_inner(&self) -> Option<SymbolExpr> {
         match self {
             SymbolExpr::Value(v) => Some(SymbolExpr::Value(-v)),
             SymbolExpr::Unary {
@@ -2903,7 +2937,7 @@ impl SymbolExpr {
             SymbolExpr::Value(_) => self.clone(),
             SymbolExpr::Symbol(_) => self.clone(),
             SymbolExpr::Unary { op, expr } => {
-                let opt = expr.optimize();
+                let opt = crate::stack::grow(|| expr.optimize());
                 match op {
                     UnaryOp::Neg => match opt.neg_opt() {
                         Some(e) => e,
@@ -2916,8 +2950,8 @@ impl SymbolExpr {
                 }
             }
             SymbolExpr::Binary { op, lhs, rhs } => {
-                let opt_lhs = lhs.optimize();
-                let opt_rhs = rhs.optimize();
+                let opt_lhs = crate::stack::grow(|| lhs.optimize());
+                let opt_rhs = crate::stack::grow(|| rhs.optimize());
                 match op {
                     BinaryOp::Add => match opt_lhs.add_opt(&opt_rhs, true) {
                         Some(e) => e,
@@ -2943,10 +2977,10 @@ impl SymbolExpr {
 
     fn repr(&self, with_uuid: bool) -> String {
         match self {
-            SymbolExpr::Symbol(e) => e.repr(with_uuid),
+            SymbolExpr::Symbol(e) => crate::stack::grow(|| e.repr(with_uuid)),
             SymbolExpr::Value(e) => e.to_string(),
             SymbolExpr::Unary { op, expr } => {
-                let s = expr.repr(with_uuid);
+                let s = crate::stack::grow(|| expr.repr(with_uuid));
                 match op {
                     UnaryOp::Abs => format!("abs({s})"),
                     UnaryOp::Neg => match expr.as_ref() {
@@ -2970,8 +3004,8 @@ impl SymbolExpr {
                 }
             }
             SymbolExpr::Binary { op, lhs, rhs } => {
-                let s_lhs = lhs.repr(with_uuid);
-                let s_rhs = rhs.repr(with_uuid);
+                let s_lhs = crate::stack::grow(|| lhs.repr(with_uuid));
+                let s_rhs = crate::stack::grow(|| rhs.repr(with_uuid));
                 let op_lhs = match lhs.as_ref() {
                     SymbolExpr::Binary { op: lop, .. } => {
                         matches!(lop, BinaryOp::Add | BinaryOp::Sub)
@@ -3289,13 +3323,15 @@ impl PartialOrd for SymbolExpr {
             SymbolExpr::Symbol(l) => match rhs {
                 SymbolExpr::Value(_) => Some(Ordering::Greater),
                 SymbolExpr::Symbol(r) => l.partial_cmp(r),
-                SymbolExpr::Unary { op: _, expr } => self.partial_cmp(expr),
+                SymbolExpr::Unary { op: _, expr } => crate::stack::grow(|| self.partial_cmp(expr)),
                 _ => Some(Ordering::Less),
             },
             SymbolExpr::Unary { op: _, expr } => match rhs {
                 SymbolExpr::Value(_) => Some(Ordering::Greater),
-                SymbolExpr::Unary { op: _, expr: rexpr } => expr.partial_cmp(rexpr),
-                _ => (expr.as_ref()).partial_cmp(rhs),
+                SymbolExpr::Unary { op: _, expr: rexpr } => {
+                    crate::stack::grow(|| expr.partial_cmp(rexpr))
+                }
+                _ => crate::stack::grow(|| (expr.as_ref()).partial_cmp(rhs)),
             },
             SymbolExpr::Binary {
                 op,
@@ -3306,7 +3342,7 @@ impl PartialOrd for SymbolExpr {
                     BinaryOp::Mul | BinaryOp::Div | BinaryOp::Pow => Some(Ordering::Greater),
                     _ => Some(Ordering::Equal),
                 },
-                SymbolExpr::Unary { op: _, expr } => self.partial_cmp(expr),
+                SymbolExpr::Unary { op: _, expr } => crate::stack::grow(|| self.partial_cmp(expr)),
                 SymbolExpr::Binary {
                     op: _,
                     lhs: rl,
@@ -3665,7 +3701,7 @@ impl Value {
                 expr,
             } => {
                 let l = SymbolExpr::Value(-self);
-                match l.mul_opt(expr, recursive) {
+                match crate::stack::grow(|| l.mul_opt(expr, recursive)) {
                     Some(e) => Some(e),
                     None => Some(_mul(l, expr.as_ref().clone())),
                 }
@@ -3673,16 +3709,15 @@ impl Value {
             SymbolExpr::Binary { op, lhs: l, rhs: r } => {
                 if recursive {
                     match op {
-                        BinaryOp::Mul => match self.mul_opt(l, recursive) {
-                            Some(e) => match e.mul_opt(r, recursive) {
+                        BinaryOp::Mul => match crate::stack::grow(|| self.mul_opt(l, recursive)) {
+                            Some(e) => match crate::stack::grow(|| e.mul_opt(r, recursive)) {
                                 Some(ee) => Some(ee),
                                 None => Some(_mul(e, r.as_ref().clone())),
                             },
-                            None => self
-                                .mul_opt(r, recursive)
+                            None => crate::stack::grow(|| self.mul_opt(r, recursive))
                                 .map(|e| _mul(e, l.as_ref().clone())),
                         },
-                        BinaryOp::Div => match self.mul_opt(l, recursive) {
+                        BinaryOp::Div => match crate::stack::grow(|| self.mul_opt(l, recursive)) {
                             Some(e) => Some(_div(e, r.as_ref().clone())),
                             None => self
                                 .div_opt(r, recursive)
@@ -3728,7 +3763,7 @@ impl Value {
                 expr,
             } => {
                 if recursive {
-                    self.div_opt(expr, recursive).map(_neg)
+                    crate::stack::grow(|| self.div_opt(expr, recursive)).map(_neg)
                 } else {
                     None
                 }
@@ -4495,5 +4530,307 @@ mod test {
             5,
         );
         assert!(!extend_rhs(left_mid, 5).eq_exact(&extend_rhs(right_mid, 5)));
+    }
+
+    #[test]
+    fn test_recursive_optimization_grows_stack() {
+        let leaf = Arc::new(SymbolExpr::Symbol(Arc::new(Symbol::standalone(
+            "x".to_owned(),
+            None,
+        ))));
+        let mut deep = Arc::clone(&leaf);
+        for _ in 0..BIG_CALL_STACK {
+            deep = Arc::new(SymbolExpr::Binary {
+                op: BinaryOp::Add,
+                lhs: Arc::clone(&leaf),
+                rhs: deep,
+            });
+        }
+
+        // This walks the entire right spine recursively while attempting to simplify.
+        let value = SymbolExpr::Value(Value::Int(1));
+        assert!(value.add_opt(&deep, true).is_none());
+    }
+
+    #[test]
+    fn test_repr_deep_unary() {
+        let make_big = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Unary {
+                    op: UnaryOp::Neg,
+                    expr: Arc::new(expr),
+                };
+            }
+            expr
+        };
+        let symbol = SymbolExpr::Symbol(Arc::new(Symbol::standalone("A".to_string(), None)));
+        let expr = make_big(symbol);
+        let mut expected: String = "-".repeat(BIG_CALL_STACK);
+        expected.push('A');
+        assert_eq!(expr.repr(false), expected);
+    }
+
+    #[test]
+    fn test_repr_deep_binary() {
+        let make_big_lhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(expr),
+                    rhs: Arc::new(SymbolExpr::Value(Value::Int(2))),
+                }
+            }
+            expr
+        };
+        let make_big_rhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(SymbolExpr::Value(Value::Int(2))),
+                    rhs: Arc::new(expr),
+                }
+            }
+            expr
+        };
+        let symbol = SymbolExpr::Symbol(Arc::new(Symbol::standalone("A".to_string(), None)));
+        let lhs = make_big_lhs(symbol.clone());
+        let rhs = make_big_rhs(symbol.clone());
+        let mut lhs_expected: String = [
+            "(".repeat(BIG_CALL_STACK - 1),
+            "A".to_string(),
+            "**2)".repeat(BIG_CALL_STACK),
+        ]
+        .into_iter()
+        .collect();
+        let _ = lhs_expected.pop();
+        let rhs_expected: String = [
+            "2**".to_string(),
+            "(2**".repeat(BIG_CALL_STACK - 1),
+            "A".to_string(),
+            ")".repeat(BIG_CALL_STACK - 1),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(lhs.repr(false), lhs_expected);
+        assert_eq!(rhs.repr(false), rhs_expected);
+    }
+
+    #[test]
+    fn test_bind_deep_unary() {
+        let make_big = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Unary {
+                    op: UnaryOp::Neg,
+                    expr: Arc::new(expr),
+                };
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let expr = make_big(SymbolExpr::Symbol(Arc::new(symbol.clone())));
+        let mut map = HashMap::new();
+        map.insert(&symbol, Value::Real(2.4));
+        let res = expr.bind(&map);
+        assert_eq!(res, 2.4);
+    }
+
+    #[test]
+    fn test_bind_deep_binary() {
+        let make_big_lhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(expr),
+                    rhs: Arc::new(SymbolExpr::Value(Value::Int(2))),
+                }
+            }
+            expr
+        };
+        let make_big_rhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(SymbolExpr::Value(Value::Int(1))),
+                    rhs: Arc::new(expr),
+                }
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let start_expr = SymbolExpr::Symbol(Arc::new(symbol.clone()));
+        let lhs = make_big_lhs(start_expr.clone());
+        let rhs = make_big_rhs(start_expr.clone());
+        let mut map = HashMap::new();
+        map.insert(&symbol, Value::Real(1.0));
+        let lhs_res = lhs.bind(&map);
+        let rhs_res = rhs.bind(&map);
+        assert_eq!(lhs_res, 1.0);
+        assert_eq!(rhs_res, 1.0);
+    }
+
+    #[test]
+    fn test_iter_symbols_deep_unary() {
+        let make_big = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Unary {
+                    op: UnaryOp::Neg,
+                    expr: Arc::new(expr),
+                };
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let expr = make_big(SymbolExpr::Symbol(Arc::new(symbol.clone())));
+        let expected = vec![&symbol];
+        let res: Vec<_> = expr.iter_symbols().collect();
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_values_deep_unary() {
+        let make_big = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Unary {
+                    op: UnaryOp::Neg,
+                    expr: Arc::new(expr),
+                };
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let expr = make_big(SymbolExpr::Symbol(Arc::new(symbol.clone())));
+        let res = expr.values();
+        assert_eq!(res, Vec::<Value>::new());
+    }
+
+    #[test]
+    fn test_values_deep_binary() {
+        let make_big_lhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(expr),
+                    rhs: Arc::new(SymbolExpr::Value(Value::Int(2))),
+                }
+            }
+            expr
+        };
+        let make_big_rhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(SymbolExpr::Value(Value::Int(2))),
+                    rhs: Arc::new(expr),
+                }
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let start_expr = SymbolExpr::Symbol(Arc::new(symbol.clone()));
+        let lhs = make_big_lhs(start_expr.clone());
+        let rhs = make_big_rhs(start_expr.clone());
+        let lhs_res = lhs.values();
+        let rhs_res = rhs.values();
+        assert_eq!(lhs_res, vec![Value::Int(2); BIG_CALL_STACK]);
+        assert_eq!(rhs_res, vec![Value::Int(2); BIG_CALL_STACK]);
+    }
+
+    #[test]
+    fn test_has_symbol_deep_unary() {
+        let make_big = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Unary {
+                    op: UnaryOp::Neg,
+                    expr: Arc::new(expr),
+                };
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let expr = make_big(SymbolExpr::Symbol(Arc::new(symbol.clone())));
+        assert!(expr.has_symbol(&symbol));
+        assert!(!expr.has_symbol(&Symbol::standalone("B".to_string(), None)));
+    }
+
+    #[test]
+    fn test_has_symbol_deep_binary() {
+        let make_big_lhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(expr),
+                    rhs: Arc::new(SymbolExpr::Value(Value::Int(2))),
+                }
+            }
+            expr
+        };
+        let make_big_rhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(SymbolExpr::Value(Value::Int(2))),
+                    rhs: Arc::new(expr),
+                }
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let start_expr = SymbolExpr::Symbol(Arc::new(symbol.clone()));
+        let lhs = make_big_lhs(start_expr.clone());
+        let rhs = make_big_rhs(start_expr.clone());
+        assert!(lhs.has_symbol(&symbol));
+        assert!(!lhs.has_symbol(&Symbol::standalone("B".to_string(), None)));
+        assert!(rhs.has_symbol(&symbol));
+        assert!(!rhs.has_symbol(&Symbol::standalone("B".to_string(), None)));
+    }
+
+    #[test]
+    fn test_abs_deep_unary() {
+        let make_big = |mut expr| {
+            for _ in 0..BIG_CALL_STACK + 1 {
+                expr = SymbolExpr::Unary {
+                    op: UnaryOp::Neg,
+                    expr: Arc::new(expr),
+                };
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let expr = make_big(SymbolExpr::Symbol(Arc::new(symbol.clone())));
+        let mut map = HashMap::new();
+        map.insert(&symbol, Value::Real(1.0));
+        assert_eq!(expr.abs().bind(&map), 1.0);
+    }
+
+    #[test]
+    fn test_abs_deep_binary() {
+        let make_big_lhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(expr),
+                    rhs: Arc::new(SymbolExpr::Value(Value::Int(2))),
+                }
+            }
+            expr
+        };
+        let make_big_rhs = |mut expr| {
+            for _ in 0..BIG_CALL_STACK {
+                expr = SymbolExpr::Binary {
+                    op: BinaryOp::Pow,
+                    lhs: Arc::new(SymbolExpr::Value(Value::Int(1))),
+                    rhs: Arc::new(expr),
+                }
+            }
+            expr
+        };
+        let symbol = Symbol::standalone("A".to_string(), None);
+        let start_expr = SymbolExpr::Symbol(Arc::new(symbol.clone()));
+        let lhs = make_big_lhs(start_expr.clone());
+        let rhs = make_big_rhs(start_expr.clone());
+        let mut map = HashMap::new();
+        map.insert(&symbol, Value::Real(1.0));
+        assert_eq!(lhs.abs().bind(&map), 1.0);
+        assert_eq!(rhs.abs().bind(&map), 1.0);
     }
 }

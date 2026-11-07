@@ -275,6 +275,10 @@ pub struct QpyLoadedCircuits {
 /// extension module you should use the Python function
 /// @verbatim embed:rst:inline :func:`.qpy.dump` @endverbatim instead to avoid this limitation.
 ///
+/// Certain aspects of QPY payload deserialization are recursive, and this function will return
+/// an Error if anything requires excessive depth to evaluate. The recusion limit is hard coded
+/// to a depth of 100 (30 on Windows).
+///
 /// # Safety
 /// ``filename`` must point to a valid nul-terminated string; ``circuits`` must be valid non-null,
 /// aligned valid pointer to a `QpyLoadedCircuits` or behavior is undefined. ``error`` must be null
@@ -405,6 +409,10 @@ pub unsafe extern "C" fn qk_qpy_dump_buffer_with_version(
 /// the `QkCircuit` object. If you are using this function in a Python extension module you should use
 /// the Python function @verbatim embed:rst:inline :func:`.qpy.dump` @endverbatim instead to avoid
 /// this limitation.
+///
+/// Certain aspects of QPY payload deserialization are recursive, and this function will return
+/// an Error if anything requires excessive depth to evaluate. The recusion limit is hard coded
+/// to a depth of 100 (30 on Windows).
 ///
 /// # Safety
 /// ``buffer`` must be valid for reads of ``size`` bytes; ``circuits`` must be valid non-null,
