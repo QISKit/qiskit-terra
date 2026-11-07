@@ -29,19 +29,53 @@ _CUTOFF_PRECISION = 1e-5
 
 
 class CommutativeCancellation(TransformationPass):
-    """Cancel the redundant (self-adjoint) gates through commutation relations.
+    r"""Cancel self-adjoint gates and merge rotations by exploiting commutation relations.
 
-    Pass for cancelling self-inverse gates/rotations. The cancellation utilizes
-    the commutation relations in the circuit. Gates considered include::
+    This pass uses commutation rules to apply the following optimizations
+    to a sequence of gate:
 
-        H, X, Y, Z, CX, CY, CZ
+    * **Self-inverse gates** (``h, y, cx, cy, cz``): if an even number of copies
+      of the *same* self-inverse gate on the *same* qubit(s) commute together, they
+      cancel completely; an odd number leaves a single copy behind.
+    * **Same-axis rotations**: consecutive Z-rotations (``z, p, u1, rz, s, sdg, t, tdg``)
+      or X-rotations (``x, rx, sx, sxdg``) on a qubit are summed into a single gate.
+      A total angle that is a multiple of :math:`2\pi` removes all of them entirely
+      (up to global phase), so inverse pairs like ``t`` + ``tdg`` cancel out naturally.
+
+    Merging of Y-rotations is out of scope for this pass. Gates with symbolic
+    (:class:`~.Parameter`) angles are also never merged.
+
+    This pass is multithreaded and will potentially launch a thread pool with threads
+    equal to the number of CPUs by default. Tune the number of threads with the
+    ``RAYON_NUM_THREADS`` environment variable, e.g. ``RAYON_NUM_THREADS=4``.
+
+    Example:
+        the two ``cx`` gates below commute past the ``z`` gate (which acts
+        only on the control qubit) and cancel each other, leaving just the ``z``::
+
+                      ┌───┐            ┌───┐
+            q_0: ──■──┤ Z ├──■──   ->  ┤ Z ├
+                 ┌─┴─┐└-──┘┌─┴─┐       └───┘
+            q_1: ┤ X ├─────┤ X ├   ->  ──────
+                 └───┘     └───┘
 
 
-    This pass is multithreaded and will potentially launch a thread pool
-    with threads equal to the number of CPUs by default. You can tune the
-    number of threads with the ``RAYON_NUM_THREADS`` environment variable.
-    For example, setting ``RAYON_NUM_THREADS=4`` would limit the thread pool
-    to 4 threads.
+        .. code-block:: python
+
+            from qiskit import QuantumCircuit
+            from qiskit.transpiler.passes import CommutativeCancellation
+
+            qc = QuantumCircuit(2)
+            qc.cx(0, 1)
+            qc.z(0)
+            qc.cx(0, 1)  # commutes past `z` and cancels the first `cx`
+
+            optimized = CommutativeCancellation()(qc)
+            optimized.count_ops()  # {'z': 1}
+
+    See also :class:`.CommutativeOptimization`, which unifies and extends this pass's
+    functionality together with :class:`.CommutativeInverseCancellation` — cancelling
+    commuting inverse pairs beyond this pass's fixed self-inverse/rotation sets.
     """
 
     def __init__(
@@ -54,17 +88,30 @@ class CommutativeCancellation(TransformationPass):
         CommutativeCancellation initializer.
 
         Args:
-            basis_gates (list[str]): Basis gates to consider, e.g.
-                ``['u3', 'cx']``. For the effects of this pass, the basis is
-                the set intersection between the ``basis_gates`` parameter
-                and the gates in the dag.
-            target (Target): The :class:`~.Target` representing the target backend, if both
-                ``basis_gates`` and ``target`` are specified then this argument will take
-                precedence and ``basis_gates`` will be ignored.
-            approximation_degree: The threshold used in the average gate fidelity
-                computation to decide whether pairs of gates can be considered as
-                canceling or commuting. A floating point value between 0 and 1,
-                where ``1.0`` means no approximation (default).
+            basis_gates (list[str]): Specifies which gate to use when writing back a
+                merged same-axis rotation result, but only when the circuit itself does
+                not already contain a suitable gate for that — the circuit always takes
+                precedence over this list. For Z-rotations, the pass looks for ``rz``,
+                ``p``, or ``u1``; if none of those is found in the circuit or in this
+                list, Z-rotation merging is skipped entirely. For X-rotations, the pass
+                looks for ``x`` or ``sx``; if neither is found, X-rotation merging still
+                happens, just written as ``rx`` instead. Has no effect on which gates are
+                eligible for cancellation in the first place; that set is fixed.
+            target (Target): The :class:`~.Target` representing the target backend.
+                Its operation names are extracted and used exactly like ``basis_gates``
+                above — as a source of gate names for choosing the merged-rotation
+                output gate. When both ``basis_gates`` and ``target`` are provided,
+                ``target`` takes precedence and ``basis_gates`` is ignored entirely.
+            approximation_degree: Threshold for treating two gates as commuting or
+                cancelling even when they only do so approximately. It sets a
+                tolerance of ``max(1e-12, 1 - approximation_degree)`` on the average
+                gate fidelity between the two gate orderings; anything within that
+                tolerance counts as commuting. The default, ``1.0``, means exact
+                commutativity (up to floating-point rounding). Lowering it below
+                ``1.0`` lets more gates be grouped and cancelled, at the cost of a
+                small unitary error. This doesn't affect the separate, fixed check for
+                whether a merged angle is close enough to 2π to drop.
+
         """
         super().__init__()
         if basis_gates:
