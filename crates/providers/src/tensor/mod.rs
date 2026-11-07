@@ -15,6 +15,7 @@
 //! A value is a dense array over one of a fixed set of [`DType`]s. Its type pairs a dtype with a
 //! shape whose axes are each either a fixed size or a size bounded above ([`Dim`]).
 
+mod bits;
 mod broadcast;
 mod dtype;
 mod error;
@@ -22,6 +23,7 @@ mod rng;
 mod tensor_type;
 mod value;
 
+pub use bits::BitTensor;
 pub use broadcast::broadcast_shape;
 pub use dtype::{DType, promotion};
 pub use error::TensorError;
