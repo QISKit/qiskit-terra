@@ -1,24 +1,5 @@
 ---
-# We use quotes around users who don`t want a GitHub notification,
-# but whom we still want their name in the Qiskit Bot message so
-# people know they are relevant.
-notifications:
-    ".*":
-        - "`@Qiskit/terra-core`"
-    "qpy":
-        - "`@mtreinish`"
-    "two_qubit_decompose":
-        - "`@levbishop`"
-    "circuit/library":
-        - "`@Cryoris`"
-        - "`@ajavadia`"
-    "primitives":
-        - "`@t-imamichi`"
-        - "`@ajavadia`"
-        - "`@levbishop`"
-    "visualization":
-        - "@enavarro51"
-always_notify: true
+always_notify: false
 
 # Set the headings in the GitHub Releases release notes.
 categories:
