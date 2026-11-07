@@ -3170,6 +3170,40 @@ pub(crate) unsafe fn ptr_to_params_owned<B>(
     }
 }
 
+/// @ingroup QkCircuit
+///
+/// Retrieves a ``QkCustomOperation`` from a circuit. This operation instance
+/// represents data within the specific instance of ``QkCircuit`` and should not
+/// be used with ``qk_circuit_custom_operation`` or any function that consumes
+/// the data inside this pointer.
+///
+/// @param circuit A pointer to the circuit instance
+/// @param index The index in which the instruction is located.
+///
+/// @return A pointer to the ``QkCustomOperation`` instance stored within the
+/// ``QkCircuit`` or a `NULL` pointer if the operation is not custom.
+///
+/// # Safety
+///
+/// Undefined behavior may happen if the `circuit` pointer is null or unaligned.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_circuit_get_custom_operation(
+    circuit: *const CircuitData,
+    index: usize,
+) -> *const BoxedCustomOperation {
+    let circuit_borrowed = unsafe { &*circuit };
+
+    let Some(operation) = &circuit_borrowed.data().get(index) else {
+        return std::ptr::null();
+    };
+
+    let Ok(custom): Result<&'_ BoxedCustomOperation, _> = (&operation.op).try_into() else {
+        return std::ptr::null();
+    };
+
+    custom
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

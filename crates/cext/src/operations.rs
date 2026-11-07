@@ -10,6 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+use core::slice;
 use std::{
     ffi::{CStr, c_char, c_void},
     num::NonZero,
@@ -689,4 +690,403 @@ pub unsafe extern "C" fn qk_custom_operation_vtable_free(v_table: *const CustomO
     // SAFETY: if `v_table` is not nul, then it is an owned pointer as per documentation
     // all owned pointers can be given to `steal`.
     _ = (!v_table.is_null()).then(|| unsafe { CustomOpVtable::steal(v_table.cast_mut()) })
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the name of an instance of ``QkCustomOp``.
+///
+/// The returned string is allocated in memory and needs to be freed via
+/// `qk_str_free`.
+///
+/// This method is guaranteed to return a string containing the operation name
+/// as it is a required method for any defined operation.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return The instruction's name.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_name(
+    inst: *const BoxedCustomOperation,
+) -> *mut c_char {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    if let Some(as_custom_op) = borrowed_inst.downcast_ref::<CustomOp>() {
+        // Use vtable directly to avoid converting
+        // SAFETY: As per construction of a `QkCustomOpVtable`, the name attribute
+        // should point to a valid function that returns a pointer to a `char` array.
+        let string = unsafe { CStr::from_ptr((as_custom_op.v_table.name)(as_custom_op.orig)) };
+        string.to_owned().into_raw()
+    } else {
+        crate::util::cstring_from_utf8_lossy(borrowed_inst.name()).into_raw()
+    }
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the number of qubits an instance of ``QkCustomOp`` can operate on.
+///
+/// This method is guaranteed to return a number of qubits or 0, as it is a
+/// required method for any defined operation.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return The number of classical bits the operation supports.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_num_qubits(inst: *const BoxedCustomOperation) -> u32 {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    borrowed_inst.num_qubits()
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the number of classical bits (clbits) an instance of ``QkCustomOp`` can operate with.
+///
+/// This method is guaranteed to return a number of clbits or 0, as it is a
+/// required method for any defined operation.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return The number of classical bits the operation supports.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_num_clbits(inst: *const BoxedCustomOperation) -> u32 {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    borrowed_inst.num_clbits()
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the number of parameters an instance of ``QkCustomOp`` can operate with.
+///
+/// This method is guaranteed to return a number of parameters or 0, as it is a
+/// required method for any defined operation.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return The number of parameters this operation supports.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_num_params(inst: *const BoxedCustomOperation) -> u32 {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    borrowed_inst.num_params()
+}
+
+/// @ingroup QkCustomOp
+///
+/// Checks whether an instance of ``QkCustomOp`` is a directive or not.
+///
+/// Directives are operations to the quantum stack meant to be interpreted by
+/// the backed or the transpiler.
+///
+/// This method is guaranteed to return a boolean as it is a required method
+/// for any defined operation.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return `true` if this instruction is a directive, otherwise `false`.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_directive(inst: *const BoxedCustomOperation) -> bool {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    borrowed_inst.directive()
+}
+
+/// @ingroup QkCustomOp
+///
+/// Checks whether an instance of ``QkCustomOp`` is a unitary operation or not.
+///
+/// A unitary operation is represented by a unitary matrix which is a complex square
+/// invertible matrix.
+///
+/// Unitary operations (or gates) operate exclusively on quantum resources
+/// and therefore should always have ``qk_custom_operation_num_clbits`` return ``0``
+/// and they cannot be directives.
+///
+/// This method is guaranteed to return a boolean as it is a required method
+/// for any defined operation.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return `true` if the instruction is defined as unitary
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_is_unitary(inst: *const BoxedCustomOperation) -> bool {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    borrowed_inst.is_unitary()
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the number of control qubits supported by this ``QkCustomOp``
+/// instance, if it is a controlled operation.
+///
+/// This method is not required for every ``QkCustomOp`` definition. Therefore,
+/// it will return ``0`` by default unless otherwise specified.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return The number of supported control qubits, otherwise ``0``.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_num_ctrl_qubits(
+    inst: *const BoxedCustomOperation,
+) -> u32 {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    if let Some(number) = borrowed_inst.num_ctrl_qubits() {
+        number.into()
+    } else {
+        0
+    }
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the label of an instance of ``QkCustomOp`` .
+///
+/// The returned string is allocated in memory and needs to be freed via
+/// `qk_str_free`.
+///
+/// This method is not required for every ``QkCustomOp`` definition. Therefoere,
+/// it may return a null pointer instead of a string.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return The instruction's label, if defined, otherwise `NULL`.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_label(
+    inst: *const BoxedCustomOperation,
+) -> *mut c_char {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    if let Some(as_custom_op) = borrowed_inst.downcast_ref::<CustomOp>() {
+        // Use vtable directly to avoid converting
+        // SAFETY: As per construction of a vtable, the label attribute should point
+        // to a valid function that returns a pointer to a `char` array.
+        let label = unsafe { (as_custom_op.v_table.label)(as_custom_op.orig) };
+        if label.is_null() {
+            return null_mut();
+        }
+        // SAFETY: Label should point to a nul-terminated valid `char` pointer.
+        let label = unsafe { CStr::from_ptr(label) };
+        label.to_owned().into_raw()
+    } else if let Some(label) = borrowed_inst.label() {
+        crate::util::cstring_from_utf8_lossy(label).into_raw()
+    } else {
+        null_mut()
+    }
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the definition of an instance of `QkCustomOp` if the correct
+/// parameters are provided.
+///
+/// When an operation is structurally complex, it may be broken down into a
+/// `QkCircuit` made of other operations that perform the same transformations
+/// and result in the same state. This is what we call the gate's deifnition.
+///
+/// This method is not required for every ``QkCustomOp``. Therefoere,
+/// it may return a null pointer instead of a Circuit.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+/// @param params A pointer to an array of `QkParam` pointers. The number of
+/// parameters must be checked to match the return value of calling
+/// ``qk_custom_operation_num_params`` on the ``QkCustomOp`` instance.
+///
+/// @return The instruction's definition if it was defined and the correct
+/// parameters are passed, otherwise, a `NULL` pointer.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_definition(
+    inst: *const BoxedCustomOperation,
+    params: *const *const Param,
+) -> *mut CircuitData {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+
+    if let Some(as_custom_op) = borrowed_inst.downcast_ref::<CustomOp>() {
+        // Use vtable directly to avoid converting
+        unsafe { (as_custom_op.v_table.definition)(as_custom_op.orig, params) }
+    } else {
+        let parsed_params: Vec<Param> =
+            unsafe { slice::from_raw_parts(params, borrowed_inst.num_params() as usize) }
+                .iter()
+                .map(|&ptr| unsafe { &*ptr }.clone())
+                .collect();
+
+        match borrowed_inst.definition(&parsed_params) {
+            Some(circ) => Box::into_raw(Box::new(circ)),
+            None => null_mut(),
+        }
+    }
+}
+
+/// @ingroup QkCustomOp
+///
+/// Compares two different instances of ``QkCustomOp``.
+///
+/// If the user defined a method to compare between instances, it will be used
+/// to perform this comparison. Otherwise, the comparison will be based on the
+/// memory addresses passed on.
+///
+/// By default, this method will try to downcast the original pointer to its
+/// type of origin and use the provided `eq` method to compare between the two.
+/// If it's unable to downcast, it will return ``false``.
+///
+/// This method is not required for every ``QkCustomOp``. Therefoere,
+/// it may perform comparison via memory addresses.
+///
+/// @param inst A pointer to the ``QkCustomOp``  instance.
+/// @param other A pointer to another ``QkCustomOp``  instance to compare.
+///
+/// @return Whether these instructions are the same.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_eq(
+    inst: *const BoxedCustomOperation,
+    other: *const BoxedCustomOperation,
+) -> bool {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_other = unsafe { &*other };
+
+    **borrowed_inst == **borrowed_other
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the `type_id` discriminant for this ``QkCustomOp`` if it
+/// originates from C. Otherwise it returns ``UINT64_MAX``.
+///
+/// If the user plans on casting the original pointer back to its original
+/// type for additional functionality, the user must keep track of the ``type_id``
+/// of the operation in question.
+///
+/// In this case the `type_id` will match the memory address of the operation's
+/// `QkCustomOpVTable vtable` as the same v-table should always be used with every
+/// instance of the same operation.
+///
+/// This method should only work with gates defined in C. For any other case the return
+/// value will always be ``UINT64_MAX``.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return The operation's `type_id` discriminant.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_type_id(inst: *const BoxedCustomOperation) -> u64 {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+    let Some(op): Option<&CustomOp> = borrowed_inst.downcast_ref() else {
+        return u64::MAX;
+    };
+
+    op.v_table.as_ref() as *const _ as u64
+}
+
+/// @ingroup QkCustomOp
+///
+/// Returns the original pointer to the operation enclosed within.
+///
+/// Users are expected to use ``qk_custom_operation_type_id`` to discriminate the object
+/// based on its ``type_id``.
+///
+/// This method should only work with gates defined in C. For any other case the return
+/// value will always be ``NULL``.
+///
+/// @param inst A pointer to the ``QkCustomOp`` instance.
+///
+/// @return The operation's original raw pointer.
+///
+/// # Safety
+///
+/// Behavior is undefined if the `inst` pointer is not a valid non-null and
+/// allgined pointer to a ``QkCustomOp`` instance.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_custom_operation_raw(
+    inst: *const BoxedCustomOperation,
+) -> *const c_void {
+    // SAFETY: As per the docstring, this is a non-null
+    // and alligned pointer to a `QkCustomOp` instance.
+    let borrowed_inst = unsafe { &*inst };
+    let Some(op): Option<&CustomOp> = borrowed_inst.downcast_ref() else {
+        return null();
+    };
+
+    op.orig.cast_const()
 }

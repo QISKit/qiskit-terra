@@ -1,0 +1,9 @@
+---
+features_c:
+  - |
+    On top of having custom operations be defined via the C API, now any operation defined
+    in Rust or C (as an implementor of `CustomOperation`) can now be retreived via the C API.
+    See :ref:`capi-operations` for more information on these methods.
+  - |
+    Add :c:func:`qk_circuit_get_custom_operation` and :c:func:`qk_dag_get_custom_operation`
+    to fetch a custom operation from a circuit.

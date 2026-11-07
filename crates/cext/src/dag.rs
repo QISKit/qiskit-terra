@@ -10,6 +10,8 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+use std::ptr::null;
+
 use anyhow::Error;
 use hashbrown::HashMap;
 use num_complex::Complex64;
@@ -2041,4 +2043,38 @@ pub unsafe extern "C" fn qk_dag_apply_custom_operation(
         Err(DAGError::WireOutOfRange(_wire, _size)) => ExitCode::MismatchedQubits,
         Err(_) => ExitCode::DagError,
     }
+}
+
+/// @ingroup QkDag
+///
+/// Retrieves a ``QkCustomOperation`` from a dag. This operation instance
+/// represents data within the specific instance of ``QkDag`` and should not
+/// be used with ``qk_dag_apply_custom_operation`` or any function that consumes
+/// the data inside this pointer.
+///
+/// @param dag A pointer to the dag instance
+/// @param index The index in which the instruction is located.
+///
+/// @return A pointer to the ``QkCustomOperation`` instance stored within the
+/// ``QkDag`` or a `NULL` pointer if the operation is not custom.
+///
+/// # Safety
+///
+/// Undefined behavior may happen if the `dag` pointer is null or unaligned.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qk_dag_get_custom_operation(
+    dag: *mut DAGCircuit,
+    index: u32,
+) -> *const BoxedCustomOperation {
+    let dag_borrowed = unsafe { &*dag };
+
+    let NodeType::Operation(operation) = &dag_borrowed.dag()[NodeIndex::from(index)] else {
+        return null();
+    };
+
+    let Ok(custom): Result<&'_ BoxedCustomOperation, _> = (&operation.op).try_into() else {
+        return null();
+    };
+
+    custom
 }
