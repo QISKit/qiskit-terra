@@ -20,8 +20,11 @@ from qiskit.circuit import QuantumRegister, AncillaRegister, QuantumCircuit, Bit
 def adder_ripple_v95(num_state_qubits: int, kind: str = "half") -> QuantumCircuit:
     r"""The VBE ripple carry adder [1].
 
-    This method uses :math:`4n + O(1)` CCX gates and :math:`4n + 1` CX gates at a depth
-    of :math:`6n - 2` [2].
+    This method uses :math:`4n + O(1)` RCCX gates, at most two CCX gates, and
+    :math:`4n + O(1)` CX gates at a depth of :math:`6n + O(1)` [2]. The relative
+    phases introduced while computing the carry bits cancel during uncomputation.
+    The two exact CCX gates are only required when writing a carry-out bit; a
+    fixed-sized adder uses no exact CCX gates.
 
     This circuit performs inplace addition of two equally-sized quantum registers.
     As an example, a classical adder circuit that performs full addition (i.e. including
@@ -29,25 +32,26 @@ def adder_ripple_v95(num_state_qubits: int, kind: str = "half") -> QuantumCircui
 
     .. parsed-literal::
 
-                  ┌────────┐                       ┌───────────┐┌──────┐
-           cin_0: ┤0       ├───────────────────────┤0          ├┤0     ├
-                  │        │                       │           ││      │
-             a_0: ┤1       ├───────────────────────┤1          ├┤1     ├
-                  │        │┌────────┐     ┌──────┐│           ││  Sum │
-             a_1: ┤        ├┤1       ├──■──┤1     ├┤           ├┤      ├
-                  │        ││        │  │  │      ││           ││      │
-             b_0: ┤2 Carry ├┤        ├──┼──┤      ├┤2 Carry_dg ├┤2     ├
-                  │        ││        │┌─┴─┐│      ││           │└──────┘
-             b_1: ┤        ├┤2 Carry ├┤ X ├┤2 Sum ├┤           ├────────
-                  │        ││        │└───┘│      ││           │
-          cout_0: ┤        ├┤3       ├─────┤      ├┤           ├────────
-                  │        ││        │     │      ││           │
-        helper_0: ┤3       ├┤0       ├─────┤0     ├┤3          ├────────
-                  └────────┘└────────┘     └──────┘└───────────┘
+                  ┌───────────┐                       ┌──────────────┐┌──────┐
+           cin_0: ┤0          ├───────────────────────┤0             ├┤0     ├
+                  │           │                       │              ││      │
+             a_0: ┤1          ├───────────────────────┤1             ├┤1     ├
+                  │           │┌────────┐     ┌──────┐│              ││  Sum │
+             a_1: ┤           ├┤1       ├──■──┤1     ├┤              ├┤      ├
+                  │           ││        │  │  │      ││              ││      │
+             b_0: ┤2 Carry_rp ├┤        ├──┼──┤      ├┤2 Carry_rp_dg ├┤2     ├
+                  │           ││        │┌─┴─┐│      ││              │└──────┘
+             b_1: ┤           ├┤2 Carry ├┤ X ├┤2 Sum ├┤              ├────────
+                  │           ││        │└───┘│      ││              │
+          cout_0: ┤           ├┤3       ├─────┤      ├┤              ├────────
+                  │           ││        │     │      ││              │
+        helper_0: ┤3          ├┤0       ├─────┤0     ├┤3             ├────────
+                  └───────────┘└────────┘     └──────┘└──────────────┘└──────┘
 
 
     Here *Carry* and *Sum* gates correspond to the gates introduced in [1].
-    *Carry_dg* correspond to the inverse of the *Carry* gate. Note that
+    *Carry_rp* is a relative-phase implementation of *Carry*, and *Carry_rp_dg*
+    is its inverse. Note that
     in this implementation the input register qubits are ordered as all qubits from
     the first input register, followed by all qubits from the second input register.
     This is different ordering as compared to Figure 2 in [1], which leads to a different
@@ -111,7 +115,14 @@ def adder_ripple_v95(num_state_qubits: int, kind: str = "half") -> QuantumCircui
     qc_carry.cx(1, 2)
     qc_carry.ccx(0, 2, 3)
     carry_gate = qc_carry.to_gate()
-    carry_gate_dg = carry_gate.inverse()
+
+    # Relative-phase Carry gates can be used whenever the carry is later uncomputed.
+    qc_carry_rp = QuantumCircuit(4, name="Carry_rp")
+    qc_carry_rp.rccx(1, 2, 3)
+    qc_carry_rp.cx(1, 2)
+    qc_carry_rp.rccx(0, 2, 3)
+    carry_gate_rp = qc_carry_rp.to_gate()
+    carry_gate_rp_dg = carry_gate_rp.inverse()
 
     # corresponds to Sum gate in [1]
     qc_sum = QuantumCircuit(3, name="Sum")
@@ -123,23 +134,31 @@ def adder_ripple_v95(num_state_qubits: int, kind: str = "half") -> QuantumCircui
     i = 0
     if kind == "half":
         i += 1
-        circuit.ccx(qr_a[0], qr_b[0], carries[0])
+        if num_state_qubits == 1:
+            circuit.ccx(qr_a[0], qr_b[0], carries[0])
+        else:
+            circuit.rccx(qr_a[0], qr_b[0], carries[0])
     elif kind == "fixed":
         i += 1
         if num_state_qubits == 1:
             circuit.cx(qr_a[0], qr_b[0])
         else:
-            circuit.ccx(qr_a[0], qr_b[0], carries[0])
+            circuit.rccx(qr_a[0], qr_b[0], carries[0])
 
     for inp, out in zip(carries[:-1], carries[1:]):
-        circuit.append(carry_gate, [inp, qr_a[i], qr_b[i], out])
+        # A Carry that writes the carry-out is not uncomputed, so it must remain exact.
+        gate = carry_gate if kind in ["full", "half"] and out == qr_cout[0] else carry_gate_rp
+        circuit.append(gate, [inp, qr_a[i], qr_b[i], out])
         i += 1
 
     if kind in ["full", "half"]:  # final CX (cancels for the 'fixed' case)
         circuit.cx(qr_a[-1], qr_b[-1])
 
-    if len(carries) > 1:
-        circuit.append(sum_gate, [carries[-2], qr_a[-1], qr_b[-1]])
+    if carries and (kind == "fixed" or len(carries) > 1):
+        # Fixed adders have no carry-out, so their last helper is the carry into
+        # the most-significant bit. Otherwise, that carry is the penultimate one.
+        carry = carries[-1] if kind == "fixed" else carries[-2]
+        circuit.append(sum_gate, [carry, qr_a[-1], qr_b[-1]])
 
     i -= 2
     for j, (inp, out) in enumerate(zip(reversed(carries[:-1]), reversed(carries[1:]))):
@@ -148,12 +167,12 @@ def adder_ripple_v95(num_state_qubits: int, kind: str = "half") -> QuantumCircui
                 i += 1
             else:
                 continue
-        circuit.append(carry_gate_dg, [inp, qr_a[i], qr_b[i], out])
+        circuit.append(carry_gate_rp_dg, [inp, qr_a[i], qr_b[i], out])
         circuit.append(sum_gate, [inp, qr_a[i], qr_b[i]])
         i -= 1
 
     if kind in ["half", "fixed"] and num_state_qubits > 1:
-        circuit.ccx(qr_a[0], qr_b[0], carries[0])
+        circuit.rccx(qr_a[0], qr_b[0], carries[0])
         circuit.cx(qr_a[0], qr_b[0])
 
     return circuit

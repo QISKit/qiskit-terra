@@ -21,7 +21,7 @@ from ddt import data, ddt, unpack
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library.arithmetic.adders import ModularAdderGate
 from qiskit.circuit.library.arithmetic.multipliers import MultiplierGate
-from qiskit.synthesis.arithmetic import adder_modular_v17
+from qiskit.synthesis.arithmetic import adder_modular_v17, adder_ripple_v95
 from qiskit.transpiler import (
     generate_preset_clifford_t_pass_manager,
     generate_preset_pass_manager,
@@ -39,6 +39,9 @@ class TestAdderSynthesisCounts(QiskitTestCase):
         # Need optimization level 2 for small modular adder counts
         self.pm = generate_preset_pass_manager(
             optimization_level=2, basis_gates=["u", "cx"], seed_transpiler=12345
+        )
+        self.clifford_t_pm = generate_preset_clifford_t_pass_manager(
+            optimization_level=2, seed_transpiler=12345
         )
 
     @data(
@@ -67,6 +70,22 @@ class TestAdderSynthesisCounts(QiskitTestCase):
         cx_count = transpiled.count_ops().get("cx", 0)
         self.assertLessEqual(cx_count, 16 * num_qubits - 13)
         self.assertEqual(transpiled.num_qubits, 2 * num_qubits)
+
+    @data(
+        ("fixed", 2, -23, -16),
+        ("half", 2, -15, -4),
+        ("full", 1, -6, 0),
+    )
+    @unpack
+    def test_vbe_adder_counts(self, kind, min_num_qubits, cx_offset, t_offset):
+        """Test CX and T-count upper bounds of the optimized VBE adder."""
+        for num_qubits in range(min_num_qubits, 17):
+            circuit = adder_ripple_v95(num_qubits, kind=kind)
+            cx_count = self.pm.run(circuit).count_ops().get("cx", 0)
+            clifford_t_ops = self.clifford_t_pm.run(circuit).count_ops()
+            t_count = clifford_t_ops.get("t", 0) + clifford_t_ops.get("tdg", 0)
+            self.assertLessEqual(cx_count, 16 * num_qubits + cx_offset)
+            self.assertLessEqual(t_count, 12 * num_qubits + t_offset)
 
 
 @ddt

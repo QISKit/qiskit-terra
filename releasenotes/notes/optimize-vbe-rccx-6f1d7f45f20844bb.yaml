@@ -1,0 +1,15 @@
+---
+features_synthesis:
+  - |
+    Updated :func:`.adder_ripple_v95` to use relative-phase Toffoli gates for
+    carry computations that are later uncomputed. For an :math:`n`-bit full
+    adder, this reduces the CX count from :math:`24n - 14` to
+    :math:`16n - 6` and the T-count from :math:`22n - 10` to :math:`12n` at
+    optimization level 2, without changing the implemented unitary. Half and
+    fixed-sized VBE adders receive analogous reductions; the exact Toffoli gates
+    that write a carry-out bit are preserved.
+fixes:
+  - |
+    Corrected :func:`.adder_ripple_v95` for ``kind="fixed"`` to add the final
+    carry into the most-significant sum bit. Previously, fixed-sized VBE adders
+    with at least two state qubits implemented an incorrect permutation.

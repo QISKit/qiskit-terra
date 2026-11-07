@@ -62,9 +62,9 @@ class TestAdder(QiskitTestCase):
     ):
         """Assert that adder correctly implements the summation.
 
-        This test prepares a equal superposition state in both input registers, then performs
-        the addition on the superposition and checks that the output state is the expected
-        superposition of all possible additions.
+        This test prepares a superposition with a distinct amplitude for every input, then
+        performs the addition and checks the output state. The distinct amplitudes ensure
+        that both the input-output mapping and relative phases are verified.
 
         Args:
             num_state_qubits: The number of bits in the numbers that are added.
@@ -75,26 +75,22 @@ class TestAdder(QiskitTestCase):
                 into a third register of appropriate size.
             kind: The kind of adder; "fixed", "half", or "full".
         """
-        circuit = QuantumCircuit(*adder.qregs)
-
-        # create equal superposition
         if kind == "full":
             num_superpos_qubits = 2 * num_state_qubits + 1
         else:
             num_superpos_qubits = 2 * num_state_qubits
-        circuit.h(range(num_superpos_qubits))
 
-        # apply adder circuit
-        circuit.compose(adder, inplace=True)
-
-        # obtain the statevector and the probabilities, we don't trace out the ancilla qubits
-        # as we verify that all ancilla qubits have been uncomputed to state 0 again
-        statevector = Statevector(circuit)
-        probabilities = statevector.probabilities()
-        pad = "0" * circuit.num_ancillas  # state of the ancillas
+        # Use a distinct positive amplitude for each input basis state. Input qubits are
+        # the least-significant qubits and all output and helper qubits start in state 0.
+        amplitudes = np.arange(1, 2**num_superpos_qubits + 1, dtype=float)
+        amplitudes /= np.linalg.norm(amplitudes)
+        initial_state = np.zeros(2**adder.num_qubits, dtype=complex)
+        initial_state[: len(amplitudes)] = amplitudes
+        statevector = Statevector(initial_state).evolve(adder)
+        pad = "0" * adder.num_ancillas  # state of the ancillas
 
         # compute the expected results
-        expectations = np.zeros_like(probabilities)
+        expected_state = np.zeros_like(statevector.data)
         num_bits_sum = num_state_qubits + 1
         # iterate over all possible inputs
         for x in range(2**num_state_qubits):
@@ -112,6 +108,11 @@ class TestAdder(QiskitTestCase):
                 bin_y = bin(y)[2:].zfill(num_state_qubits)
 
                 for i, addition in enumerate(additions):
+                    if kind == "full":
+                        input_index = i | (x << 1) | (y << (num_state_qubits + 1))
+                    else:
+                        input_index = x | (y << num_state_qubits)
+
                     bin_res = bin(addition)[2:].zfill(num_bits_sum)
                     if kind == "full":
                         cin = str(i)
@@ -126,9 +127,9 @@ class TestAdder(QiskitTestCase):
                         )
 
                     index = int(bin_index, 2)
-                    expectations[index] += 1 / 2**num_superpos_qubits
+                    expected_state[index] = initial_state[input_index]
 
-        np.testing.assert_array_almost_equal(expectations, probabilities)
+        np.testing.assert_array_almost_equal(expected_state, statevector.data)
 
     @data(
         (3, "cdkm", "half"),
@@ -176,7 +177,22 @@ class TestAdder(QiskitTestCase):
                     with self.assertWarns(DeprecationWarning):
                         circuit = ADDER_CIRCUITS[adder](num_state_qubits, kind)
 
-        self.assertAdditionIsCorrect(num_state_qubits, circuit, True, kind)
+                self.assertAdditionIsCorrect(num_state_qubits, circuit, True, kind)
+
+    @data(
+        ("full", 8, 2),
+        ("half", 6, 2),
+        ("fixed", 6, 0),
+    )
+    @unpack
+    def test_vbe_relative_phase_toffoli_counts(self, kind, expected_rccx, expected_ccx):
+        """Test that only carry-out computations use exact Toffoli gates."""
+        circuit = adder_ripple_v95(3, kind=kind).decompose(
+            gates_to_decompose=["Carry", "Carry_rp", "Carry_rp_dg", "Sum"]
+        )
+        counts = circuit.count_ops()
+        self.assertEqual(counts.get("rccx", 0), expected_rccx)
+        self.assertEqual(counts.get("ccx", 0), expected_ccx)
 
     @data(
         adder_ripple_c04,
@@ -214,7 +230,7 @@ class TestAdder(QiskitTestCase):
         # an operation we expect to be in the circuit with given plugin name
         expected_ops = {
             "ripple_c04": "MAJ",
-            "ripple_v95": "Carry",
+            "ripple_v95": "Carry_rp",
             "ripple_r25": "ccx",
             "qft_d00": "cp",
             "modular_v17": "rccx",

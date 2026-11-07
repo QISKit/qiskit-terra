@@ -19,6 +19,10 @@ from .adder import Adder
 class VBERippleCarryAdder(Adder):
     r"""The VBE ripple carry adder [1].
 
+    Carry computations that are later uncomputed use relative-phase Toffoli gates,
+    whose phases cancel with their inverse. The final carry computation remains exact
+    when the circuit has a carry-out qubit.
+
     This circuit performs inplace addition of two equally-sized quantum registers.
     As an example, a classical adder circuit that performs full addition (i.e. including
     a carry-in bit) on two 2-qubit sized registers is as follows:
