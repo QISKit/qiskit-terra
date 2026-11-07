@@ -26,7 +26,9 @@ use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::classical::expr::{Expr, Stretch, Var};
 use qiskit_circuit::classical::types::Type;
 use qiskit_circuit::duration::Duration;
-use qiskit_circuit::operations::{ForCollection, OperationRef, PyInstruction, PyOpKind, PyRange};
+use qiskit_circuit::operations::{
+    ArrayType, ForCollection, OperationRef, Param, PyInstruction, PyOpKind, PyRange,
+};
 use qiskit_circuit::packed_instruction::PackedOperation;
 use qiskit_circuit::parameter::parameter_expression::ParameterExpression;
 use qiskit_circuit::parameter::symbol_expr::{Symbol, SymbolVector};
@@ -46,6 +48,7 @@ use crate::params::{
 };
 use crate::py_methods::{py_pack_modifier, py_unpack_modifier};
 
+use nalgebra::{Matrix2, Matrix4};
 use ndarray::Array2;
 use npyz::{NpyFile, WriterBuilder};
 use num_bigint::BigUint;
@@ -77,6 +80,65 @@ impl QpyCaller {
         }
         Python::attach(f)
     }
+}
+
+// Easy string storage when the string size is u16
+#[binrw]
+#[brw(big)]
+#[derive(Debug)]
+pub struct StringU16Pack {
+    #[br(temp)]
+    #[bw(try_calc = u16::try_from(value.len()))]
+    size: u16,
+
+    #[br(count = size, try_map = String::from_utf8)]
+    #[bw(map = |value| value.as_bytes())]
+    pub value: String,
+}
+
+// Packing for Complex64 numbers to avoid serializing them into bytes
+#[binrw]
+#[brw(big)]
+#[derive(Clone, Copy, Debug)]
+pub struct Complex64Pack {
+    pub re: f64,
+    pub im: f64,
+}
+
+// For matrices occurring in quantum computing, the most common sizes are 2x2 and 4x4
+// It's more compact to handle this case separately
+#[binrw]
+#[brw(big)]
+#[derive(Clone, Debug)]
+pub enum Complex64MatrixPack {
+    #[brw(magic = b'o')]
+    OneQubit([Complex64Pack; 4]),
+    #[brw(magic = b't')]
+    TwoQubit([Complex64Pack; 16]),
+    #[brw(magic = b'g')]
+    GeneralMatrix(Complex64GeneralMatrixPack),
+}
+
+// A struct for general-size matrix
+#[binrw]
+#[brw(big)]
+#[derive(Clone, Debug)]
+pub struct Complex64GeneralMatrixPack {
+    rows: u32,
+    cols: u32,
+
+    #[bw(ignore)]
+    #[br(
+        temp,
+        try_calc = rows
+            .checked_mul(cols)
+            .and_then(|count| usize::try_from(count).ok())
+            .ok_or("matrix dimensions exceed the supported size")
+    )]
+    count: usize, // temp field to enable raising error if we overflow
+
+    #[br(count = count)]
+    values: Vec<Complex64Pack>,
 }
 
 /// Endianness selector for QPY value serialization and deserialization.
@@ -199,6 +261,22 @@ pub(crate) fn pack_biguint(bigint: &BigUint) -> BigIntPack {
 pub(crate) fn unpack_biguint(big_int_pack: BigIntPack) -> BigUint {
     BigUint::from_bytes_be(&big_int_pack.bytes)
 }
+
+impl formats::GlobalPhasePack {
+    #[allow(dead_code)] // Used by the QPY 19 reader.
+    pub(crate) fn to_param(&self, qpy_data: &mut QPYReadData) -> Result<Param, QpyError> {
+        let expression = match self {
+            Self::Float(value) => return Ok(Param::Float(*value)),
+            Self::Parameter(pack) => ParameterExpression::from_symbol(unpack_symbol(pack)),
+            Self::ParameterVectorElement(pack) => {
+                ParameterExpression::from_symbol(unpack_parameter_vector(pack, qpy_data)?)
+            }
+            Self::ParameterExpression(pack) => unpack_parameter_expression(pack, qpy_data)?,
+        };
+        Ok(Param::ParameterExpression(Arc::new(expression)))
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ParameterVectorTableBuilder {
     /// Vector root UUID to its index in `vectors`.
@@ -249,7 +327,7 @@ pub struct QPYWriteData<'a> {
     pub standalone_var_indices: HashMap<u128, u16>, // mapping from the variable's UUID to its index in the standalone variables list
     pub parameter_vectors: ParameterVectorTableBuilder,
     pub annotation_handler: AnnotationHandler,
-    custom_gate_counter: u32,
+    pub custom_gate_counter: u32,
 }
 
 impl<'a> QPYWriteData<'a> {
@@ -506,6 +584,46 @@ pub trait FromGenericValue: Sized {
 }
 
 impl GenericValue {
+    /// Normalize a parameter expression into the most specific generic value.
+    ///
+    /// A `ParameterExpression` can represent a standalone parameter, a parameter-vector
+    /// element, or an actual expression.  Keeping that distinction here lets concrete QPY
+    /// formats reuse the classification without first serializing through `GenericDataPack`.
+    pub(crate) fn from_parameter_expression(exp: &ParameterExpression) -> Self {
+        if let Ok(symbol) = exp.try_to_symbol().map(Arc::new) {
+            match &*symbol {
+                Symbol::Standalone { .. } => Self::ParameterExpressionSymbol(symbol),
+                Symbol::Element { .. } => Self::ParameterExpressionVectorSymbol(symbol),
+            }
+        } else {
+            Self::ParameterExpression(Arc::new(exp.clone()))
+        }
+    }
+
+    #[allow(dead_code)] // Used by the QPY 19 writer.
+    pub(crate) fn pack_global_phase(
+        &self,
+        qpy_data: &mut QPYWriteData,
+    ) -> Result<formats::GlobalPhasePack, QpyError> {
+        match self {
+            Self::Float64(value) => Ok(formats::GlobalPhasePack::Float(*value)),
+            Self::ParameterExpressionSymbol(symbol) => {
+                Ok(formats::GlobalPhasePack::Parameter(pack_symbol(symbol)))
+            }
+            Self::ParameterExpressionVectorSymbol(symbol) => {
+                Ok(formats::GlobalPhasePack::ParameterVectorElement(
+                    pack_parameter_vector(symbol, qpy_data)?,
+                ))
+            }
+            Self::ParameterExpression(exp) => Ok(formats::GlobalPhasePack::ParameterExpression(
+                pack_parameter_expression(exp, qpy_data)?,
+            )),
+            _ => Err(QpyError::ConversionError(
+                "value cannot be encoded as a global phase".to_owned(),
+            )),
+        }
+    }
+
     pub(crate) fn as_typed<T: FromGenericValue>(&self) -> Result<Option<T>, QpyError> {
         T::from_generic(self)
     }
@@ -997,6 +1115,10 @@ pub(crate) fn get_circuit_type_key(
                     PyOpKind::Operation => {
                         if ob.is_instance(imports::ANNOTATED_OPERATION.get_bound(py))? {
                             Ok(CircuitInstructionType::AnnotatedOperation)
+                        } else if ob.is_instance(imports::CLIFFORD.get_bound(py))? {
+                            // Clifford implements Operation directly, but QPY has historically
+                            // encoded it using the generic instruction type key.
+                            Ok(CircuitInstructionType::Instruction)
                         } else {
                             Err(QpyError::InvalidInstruction(format!(
                                 "Unable to determine circuit type key for {ob:?}"
@@ -1018,21 +1140,17 @@ pub(crate) fn get_circuit_type_key(
 
 pub(crate) fn serialize_expression(exp: &Expr, qpy_data: &QPYWriteData) -> Result<Bytes, QpyError> {
     let packed_expression = formats::ExpressionPack {
-        expression: exp.clone(),
-        _phantom: Default::default(),
+        expression: crate::expr::pack_expression(exp, qpy_data)?,
     };
-    serialize_with_args(&packed_expression, (qpy_data,))
+    serialize(&packed_expression)
 }
 
 pub(crate) fn deserialize_expression(
     raw_expression: &Bytes,
     qpy_data: &QPYReadData,
 ) -> Result<Expr, QpyError> {
-    let (exp_pack, _) = deserialize_with_args::<formats::ExpressionPack, (&QPYReadData,)>(
-        raw_expression,
-        (qpy_data,),
-    )?;
-    Ok(exp_pack.expression)
+    let (exp_pack, _) = deserialize::<formats::ExpressionPack>(raw_expression)?;
+    crate::expr::unpack_expression(exp_pack.expression, qpy_data)
 }
 
 pub(crate) fn pack_standalone_var(
@@ -1244,11 +1362,129 @@ pub(crate) fn creg_by_name(
         })
 }
 
+#[allow(dead_code)] // Used by the QPY 19 writer.
+pub fn pack_array_type(array: &ArrayType) -> Result<Complex64MatrixPack, QpyError> {
+    match array {
+        ArrayType::OneQ(matrix) => {
+            let values = std::array::from_fn(|index| {
+                let value = matrix[(index / 2, index % 2)];
+                Complex64Pack {
+                    re: value.re,
+                    im: value.im,
+                }
+            });
+            Ok(Complex64MatrixPack::OneQubit(values))
+        }
+        ArrayType::TwoQ(matrix) => {
+            let values = std::array::from_fn(|index| {
+                let value = matrix[(index / 4, index % 4)];
+                Complex64Pack {
+                    re: value.re,
+                    im: value.im,
+                }
+            });
+            Ok(Complex64MatrixPack::TwoQubit(values))
+        }
+        ArrayType::NDArray(matrix) => {
+            let [rows, cols] = matrix.shape().try_into().map_err(|_| {
+                QpyError::SerializationError("matrix must be two-dimensional".into())
+            })?;
+            let values = (0..rows)
+                .flat_map(|row| {
+                    let matrix = &matrix;
+                    (0..cols).map(move |col| {
+                        let value = matrix[(row, col)];
+                        Complex64Pack {
+                            re: value.re,
+                            im: value.im,
+                        }
+                    })
+                })
+                .collect();
+            let matrix_pack = Complex64GeneralMatrixPack {
+                rows: u32::try_from(rows)?,
+                cols: u32::try_from(cols)?,
+                values,
+            };
+            Ok(Complex64MatrixPack::GeneralMatrix(matrix_pack))
+        }
+    }
+}
+
+#[allow(dead_code)] // Used by the QPY 19 reader.
+pub fn unpack_array_type(matrix: Complex64MatrixPack) -> Result<ArrayType, QpyError> {
+    match matrix {
+        Complex64MatrixPack::OneQubit(values) => {
+            let values = values.map(|value| Complex64::new(value.re, value.im));
+            Ok(ArrayType::OneQ(Matrix2::from_row_slice(&values)))
+        }
+        Complex64MatrixPack::TwoQubit(values) => {
+            let values = values.map(|value| Complex64::new(value.re, value.im));
+            Ok(ArrayType::TwoQ(Matrix4::from_row_slice(&values)))
+        }
+        Complex64MatrixPack::GeneralMatrix(matrix) => {
+            let rows = usize::try_from(matrix.rows)?;
+            let cols = usize::try_from(matrix.cols)?;
+            let values = matrix
+                .values
+                .into_iter()
+                .map(|value| Complex64::new(value.re, value.im))
+                .collect();
+            let matrix = Array2::from_shape_vec((rows, cols), values).map_err(|error| {
+                QpyError::DeserializationError(format!("invalid matrix dimensions: {error}"))
+            })?;
+            Ok(ArrayType::NDArray(matrix))
+        }
+    }
+}
+
 #[cfg(test)]
 // Tests are allowed to unwrap; the crate-level deny exists for the deserializer, not for fixtures.
 #[allow(clippy::unwrap_used)]
 mod qpy_value_tests {
     use super::*;
+
+    #[test]
+    fn array_type_pack_roundtrip() -> Result<(), QpyError> {
+        let one_qubit = Matrix2::from_row_slice(&[
+            Complex64::new(1.0, 2.0),
+            Complex64::new(3.0, 4.0),
+            Complex64::new(5.0, 6.0),
+            Complex64::new(7.0, 8.0),
+        ]);
+        let ArrayType::OneQ(unpacked) =
+            unpack_array_type(pack_array_type(&ArrayType::OneQ(one_qubit))?)?
+        else {
+            return Err(QpyError::DeserializationError(
+                "expected a one-qubit matrix".into(),
+            ));
+        };
+        assert_eq!(unpacked, one_qubit);
+
+        let two_qubit =
+            Matrix4::from_fn(|row, col| Complex64::new((row * 4 + col) as f64, (row + col) as f64));
+        let ArrayType::TwoQ(unpacked) =
+            unpack_array_type(pack_array_type(&ArrayType::TwoQ(two_qubit))?)?
+        else {
+            return Err(QpyError::DeserializationError(
+                "expected a two-qubit matrix".into(),
+            ));
+        };
+        assert_eq!(unpacked, two_qubit);
+
+        let general = Array2::from_shape_fn((3, 5), |(row, col)| {
+            Complex64::new((row * 5 + col) as f64, (row + col) as f64)
+        });
+        let ArrayType::NDArray(unpacked) =
+            unpack_array_type(pack_array_type(&ArrayType::NDArray(general.clone()))?)?
+        else {
+            return Err(QpyError::DeserializationError(
+                "expected a general matrix".into(),
+            ));
+        };
+        assert_eq!(unpacked, general);
+        Ok(())
+    }
 
     #[test]
     fn boolean_vec_numpy_object_roundtrip() {

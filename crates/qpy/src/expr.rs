@@ -11,23 +11,21 @@
 // that they have been altered from the originals.
 
 // methods for serialization/deserialization of Expression
-use crate::error::{QpyError, to_binrw_error};
+use crate::error::QpyError;
 use crate::formats::{
-    ExpressionElementPack, ExpressionTypePack, ExpressionValueElementPack,
-    ExpressionVarElementPack, ExpressionVarRegisterPack,
+    ExpressionTypePack, ExpressionValueElementPack, ExpressionVarElementPack,
+    ExpressionVarRegisterPack, PackedExpression,
 };
 use crate::value::{
     QPYReadData, QPYWriteData, clbit_at, clbit_index, creg_by_name, pack_biguint, pack_duration,
     unpack_biguint, unpack_duration,
 };
-use binrw::{BinRead, BinResult, BinWrite, Endian, Error};
 use num_bigint::BigUint;
 use qiskit_circuit::classical::expr::{
     Binary, BinaryOp, Cast, Expr, Index, Unary, UnaryOp, Value, Var,
 };
 use qiskit_circuit::classical::types::Type;
 use qiskit_circuit::duration::Duration;
-use std::io::{Read, Seek, Write};
 
 // packed expression types implicitly contain the magic number identifying them in the qpy file
 pub(crate) fn pack_expression_type(ty: &Type) -> ExpressionTypePack {
@@ -51,7 +49,7 @@ pub(crate) fn unpack_expression_type(type_pack: ExpressionTypePack) -> Type {
 pub(crate) fn pack_expression_value(
     value: &Value,
     qpy_data: &QPYWriteData,
-) -> Result<ExpressionElementPack, QpyError> {
+) -> Result<PackedExpression, QpyError> {
     let (ty, value_pack) = match value {
         Value::Uint { raw, ty } => {
             match ty {
@@ -75,7 +73,7 @@ pub(crate) fn pack_expression_value(
             )
         }
     };
-    Ok(ExpressionElementPack::Value(
+    Ok(PackedExpression::Value(
         pack_expression_type(ty),
         value_pack,
     ))
@@ -105,7 +103,7 @@ pub(crate) fn unpack_expression_value(
 pub(crate) fn pack_expression_var(
     var: &Var,
     qpy_data: &QPYWriteData,
-) -> Result<ExpressionElementPack, QpyError> {
+) -> Result<PackedExpression, QpyError> {
     let (ty, value_pack) = match var {
         Var::Bit { bit } => (
             &Type::Bool,
@@ -129,10 +127,7 @@ pub(crate) fn pack_expression_var(
             )?),
         ),
     };
-    Ok(ExpressionElementPack::Var(
-        pack_expression_type(ty),
-        value_pack,
-    ))
+    Ok(PackedExpression::Var(pack_expression_type(ty), value_pack))
 }
 
 pub(crate) fn unpack_expression_var(
@@ -168,88 +163,66 @@ pub(crate) fn unpack_expression_var(
     }
 }
 
-pub(crate) fn write_expression<W: Write + Seek>(
+pub(crate) fn pack_expression(
     exp: &Expr,
-    writer: &mut W,
-    endian: Endian,
-    (qpy_data,): (&QPYWriteData,),
-) -> binrw::BinResult<()> {
-    match exp {
-        Expr::Value(val) => {
-            pack_expression_value(val, qpy_data)
-                .map_err(|e| to_binrw_error(writer, e))?
-                .write_options(writer, endian, ())?;
-        }
-        Expr::Var(var) => {
-            pack_expression_var(var, qpy_data)
-                .map_err(|e| to_binrw_error(writer, e))?
-                .write_options(writer, endian, ())?;
-        }
-        Expr::Stretch(stretch) => {
-            ExpressionElementPack::Stretch(
-                ExpressionTypePack::Duration,
-                qpy_data.standalone_var_indices[&stretch.uuid],
-            )
-            .write_options(writer, endian, ())?;
-        }
-        Expr::Index(index_node) => {
-            ExpressionElementPack::Index(pack_expression_type(&index_node.ty)).write_options(
-                writer,
-                endian,
-                (),
-            )?;
-            write_expression(&index_node.target, writer, endian, (qpy_data,))?;
-            write_expression(&index_node.index, writer, endian, (qpy_data,))?;
-        }
-        Expr::Cast(cast_node) => {
-            ExpressionElementPack::Cast(
-                pack_expression_type(&cast_node.ty),
-                cast_node.implicit as u8,
-            )
-            .write_options(writer, endian, ())?;
-            write_expression(&cast_node.operand, writer, endian, (qpy_data,))?;
-        }
-        Expr::Unary(unary_node) => {
-            ExpressionElementPack::Unary(pack_expression_type(&unary_node.ty), unary_node.op as u8)
-                .write_options(writer, endian, ())?;
-            write_expression(&unary_node.operand, writer, endian, (qpy_data,))?;
-        }
-        Expr::Binary(binary_node) => {
-            ExpressionElementPack::Binary(
-                pack_expression_type(&binary_node.ty),
-                binary_node.op as u8,
-            )
-            .write_options(writer, endian, ())?;
-            write_expression(&binary_node.left, writer, endian, (qpy_data,))?;
-            write_expression(&binary_node.right, writer, endian, (qpy_data,))?;
-        }
-    };
-    Ok(())
+    qpy_data: &QPYWriteData,
+) -> Result<PackedExpression, QpyError> {
+    Ok(match exp {
+        Expr::Value(value) => pack_expression_value(value, qpy_data)?,
+        Expr::Var(var) => pack_expression_var(var, qpy_data)?,
+        Expr::Stretch(stretch) => PackedExpression::Stretch(
+            ExpressionTypePack::Duration,
+            *qpy_data
+                .standalone_var_indices
+                .get(&stretch.uuid)
+                .ok_or_else(|| {
+                    QpyError::InvalidParameter(format!(
+                        "Could not find standalone stretch {:?} in the qpy data",
+                        stretch.name
+                    ))
+                })?,
+        ),
+        Expr::Index(node) => PackedExpression::Index(
+            pack_expression_type(&node.ty),
+            Box::new(pack_expression(&node.target, qpy_data)?),
+            Box::new(pack_expression(&node.index, qpy_data)?),
+        ),
+        Expr::Cast(node) => PackedExpression::Cast(
+            pack_expression_type(&node.ty),
+            node.implicit as u8,
+            Box::new(pack_expression(&node.operand, qpy_data)?),
+        ),
+        Expr::Unary(node) => PackedExpression::Unary(
+            pack_expression_type(&node.ty),
+            node.op as u8,
+            Box::new(pack_expression(&node.operand, qpy_data)?),
+        ),
+        Expr::Binary(node) => PackedExpression::Binary(
+            pack_expression_type(&node.ty),
+            node.op as u8,
+            Box::new(pack_expression(&node.left, qpy_data)?),
+            Box::new(pack_expression(&node.right, qpy_data)?),
+        ),
+    })
 }
 
-pub(crate) fn read_expression<R: Read + Seek>(
-    reader: &mut R,
-    endian: Endian,
-    (qpy_data,): (&QPYReadData,),
-) -> BinResult<Expr> {
-    let exp_element = ExpressionElementPack::read_options(reader, endian, ())?;
-    match exp_element {
-        ExpressionElementPack::Value(value_type_pack, value_element_pack) => Ok(Expr::Value(
+pub(crate) fn unpack_expression(
+    packed: PackedExpression,
+    qpy_data: &QPYReadData,
+) -> Result<Expr, QpyError> {
+    match packed {
+        PackedExpression::Value(value_type_pack, value_element_pack) => Ok(Expr::Value(
             unpack_expression_value(value_type_pack, value_element_pack),
         )),
-        ExpressionElementPack::Var(var_type_pack, var_element_pack) => Ok(Expr::Var(
-            unpack_expression_var(var_type_pack, var_element_pack, qpy_data)
-                .map_err(|e| to_binrw_error(reader, e))?,
+        PackedExpression::Var(var_type_pack, var_element_pack) => Ok(Expr::Var(
+            unpack_expression_var(var_type_pack, var_element_pack, qpy_data)?,
         )),
-        ExpressionElementPack::Stretch(_stretch_type_pack, key) => {
+        PackedExpression::Stretch(_stretch_type_pack, key) => {
             let stretch = qpy_data.standalone_stretches.get(&key).ok_or_else(|| {
-                to_binrw_error(
-                    reader,
-                    QpyError::InvalidParameter(format!(
-                        "Standalone stretch with key {} not found in qpy data",
-                        key
-                    )),
-                )
+                QpyError::InvalidParameter(format!(
+                    "Standalone stretch with key {} not found in qpy data",
+                    key
+                ))
             })?;
             Ok(Expr::Stretch(
                 qpy_data
@@ -258,19 +231,14 @@ pub(crate) fn read_expression<R: Read + Seek>(
                     .stretches()
                     .get(*stretch)
                     .ok_or_else(|| {
-                        to_binrw_error(
-                            reader,
-                            QpyError::InvalidParameter(
-                                "Stretch not found in circuit data".to_string(),
-                            ),
-                        )
+                        QpyError::InvalidParameter("Stretch not found in circuit data".to_string())
                     })?
                     .clone(),
             )) // TODO: can we avoid cloning?
         }
-        ExpressionElementPack::Index(index_type_pack) => {
-            let target = read_expression(reader, endian, (qpy_data,))?;
-            let index = read_expression(reader, endian, (qpy_data,))?;
+        PackedExpression::Index(index_type_pack, target, index) => {
+            let target = unpack_expression(*target, qpy_data)?;
+            let index = unpack_expression(*index, qpy_data)?;
             let constant = target.is_const() && index.is_const();
             Ok(Expr::Index(Box::new(Index {
                 target,
@@ -279,8 +247,8 @@ pub(crate) fn read_expression<R: Read + Seek>(
                 constant,
             })))
         }
-        ExpressionElementPack::Cast(cast_type_pack, implicit) => {
-            let operand = read_expression(reader, endian, (qpy_data,))?;
+        PackedExpression::Cast(cast_type_pack, implicit, operand) => {
+            let operand = unpack_expression(*operand, qpy_data)?;
             let constant = operand.is_const();
             Ok(Expr::Cast(Box::new(Cast {
                 operand,
@@ -289,22 +257,28 @@ pub(crate) fn read_expression<R: Read + Seek>(
                 implicit: implicit != 0,
             })))
         }
-        ExpressionElementPack::Unary(unary_type_pack, op) => {
-            let operand = read_expression(reader, endian, (qpy_data,))?;
+        PackedExpression::Unary(unary_type_pack, op, operand) => {
+            let operand = unpack_expression(*operand, qpy_data)?;
             let constant = operand.is_const();
             Ok(Expr::Unary(Box::new(Unary {
-                op: UnaryOp::try_from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
+                op: UnaryOp::try_from_u8(op).map_err(|_| QpyError::InvalidValueType {
+                    expected: "classical unary operator".to_string(),
+                    actual: op.to_string(),
+                })?,
                 operand,
                 ty: unpack_expression_type(unary_type_pack),
                 constant,
             })))
         }
-        ExpressionElementPack::Binary(binary_type_pack, op) => {
-            let left = read_expression(reader, endian, (qpy_data,))?;
-            let right = read_expression(reader, endian, (qpy_data,))?;
+        PackedExpression::Binary(binary_type_pack, op, left, right) => {
+            let left = unpack_expression(*left, qpy_data)?;
+            let right = unpack_expression(*right, qpy_data)?;
             let constant = left.is_const() && right.is_const();
             Ok(Expr::Binary(Box::new(Binary {
-                op: BinaryOp::try_from_u8(op).map_err(|_| Error::NoVariantMatch { pos: (0) })?,
+                op: BinaryOp::try_from_u8(op).map_err(|_| QpyError::InvalidValueType {
+                    expected: "classical binary operator".to_string(),
+                    actual: op.to_string(),
+                })?,
                 left,
                 right,
                 ty: unpack_expression_type(binary_type_pack),
