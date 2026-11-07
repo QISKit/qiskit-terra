@@ -272,6 +272,8 @@ class HoareOptimizer(TransformationPass):
                 i += 1
                 for node in seq:
                     dag.remove_op_node(node)
+                    for qbt in node.qargs:
+                        self.varnum[qbt].pop(node, None)
                     if from_idx is None or self.gatecache[qubit].index(node) > from_idx:
                         for qbt in node.qargs:
                             self.gatecache[qbt].remove(node)

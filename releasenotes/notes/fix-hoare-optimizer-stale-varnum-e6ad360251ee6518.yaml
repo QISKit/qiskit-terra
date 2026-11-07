@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a bug in the :class:`.HoareOptimizer` transpiler pass where qubit states
+    are not fully erased when qubit gates are cancelled and removed, which could
+    cause a change of the semantics of the circuit.
+
+    See `#16977 <https://github.com/Qiskit/qiskit/issues/16977>`__.

@@ -17,7 +17,7 @@ from numpy import pi
 
 from qiskit.utils import optionals
 from qiskit.transpiler.passes import HoareOptimizer
-from qiskit.converters import circuit_to_dag
+from qiskit.converters import circuit_to_dag, dag_to_circuit
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import XGate, RZGate, CSwapGate, SwapGate
 from qiskit.dagcircuit import DAGOpNode
@@ -695,6 +695,37 @@ class TestHoareOptimizer(QiskitTestCase):
         expected.x(2)
 
         self.assertEqual(simplified, expected)
+
+    def test_reused_node_index_does_not_drop_nontrivial_gate(self):
+        """A pair of canceling gates removed by ``_remove_successive_identity``
+        must not leave behind a stale ``varnum`` entry. Otherwise a later gate
+        whose DAG node reuses the deleted node's graph index can incorrectly
+        be identified as trivial and removed.
+        See: https://github.com/Qiskit/qiskit/issues/16977
+        """
+        #           ┌───┐┌───┐┌───┐┌───┐┌───┐┌───┐
+        # q_0: ─────┤ X ├┤ X ├┤ H ├┤ X ├┤ Z ├┤ H ├
+        #      ┌───┐└─┬─┘└─┬─┘└───┘└─┬─┘└───┘└───┘
+        # q_1: ┤ X ├──■────■─────────■────────────
+        #      └───┘
+        circuit = QuantumCircuit(2)
+        circuit.x(1)
+        circuit.cx(1, 0)
+        circuit.cx(1, 0)
+        circuit.h(0)
+        circuit.cx(1, 0)
+        circuit.z(0)
+        circuit.h(0)
+
+        pass_ = HoareOptimizer(size=3)
+        optimized = dag_to_circuit(pass_.run(circuit_to_dag(circuit)))
+
+        # HoareOptimizer should preserve the circuit semantics, so the output
+        # state should be equivalent to the original up to global phase.
+        expected = Statevector.from_instruction(circuit)
+        actual = Statevector.from_instruction(optimized)
+
+        self.assertTrue(expected.equiv(actual))
 
 
 if __name__ == "__main__":
