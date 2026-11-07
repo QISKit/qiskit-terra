@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Fixed :meth:`.QuantumChannel.is_tp` and the non-TP diagnostics from
+    :func:`.process_fidelity` for generalized Kraus maps whose partial-trace
+    residual is non-Hermitian. See `#17094 <https://github.com/Qiskit/qiskit/issues/17094>`__.

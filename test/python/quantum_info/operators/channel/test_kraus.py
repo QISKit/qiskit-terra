@@ -117,6 +117,15 @@ class TestKraus(ChannelTestCase):
         self.assertFalse(Kraus(([self.UI], [self.UX])).is_cptp())
         self.assertFalse(Kraus([self.UI, self.UX]).is_cptp())
 
+    def test_is_tp_rejects_nonhermitian_partial_trace(self):
+        """A non-Hermitian partial trace cannot satisfy trace preservation."""
+        identity = np.eye(2, dtype=complex)
+        right = identity.copy()
+        right[0, 1] = 1e-3
+        channel = Kraus(([identity], [right]))
+
+        self.assertFalse(channel.is_tp(atol=1e-8, rtol=0))
+
     def test_conjugate(self):
         """Test conjugate method."""
         kraus_l, kraus_r = self.rand_kraus(2, 4, 4), self.rand_kraus(2, 4, 4)

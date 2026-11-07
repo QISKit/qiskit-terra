@@ -277,9 +277,11 @@ class QuantumChannel(LinearOp):
         # Check if the partial trace is the identity matrix
         d_in, d_out = self.dim
         mat = np.trace(np.reshape(choi, (d_in, d_out, d_in, d_out)), axis1=1, axis2=3)
-        tp_cond = np.linalg.eigvalsh(mat - np.eye(len(mat)))
-        zero = np.isclose(tp_cond, 0, atol=atol, rtol=rtol)
-        return np.all(zero)
+        residual = mat - np.eye(len(mat))
+        if np.allclose(residual, residual.conj().T, atol=atol, rtol=rtol):
+            tp_cond = np.linalg.eigvalsh(residual)
+            return np.all(np.isclose(tp_cond, 0, atol=atol, rtol=rtol))
+        return np.allclose(residual, 0, atol=atol, rtol=rtol)
 
     def _format_state(self, state, density_matrix=False):
         """Format input state so it is statevector or density matrix"""

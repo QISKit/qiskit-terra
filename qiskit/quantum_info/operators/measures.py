@@ -108,12 +108,14 @@ def process_fidelity(
                     cp_cond[neg],
                 )
         if chan is not None and require_tp:
-            tp_cond = _tp_condition(chan)
+            tp_cond = _tp_condition(chan, atol=chan.atol, rtol=chan.rtol)
             non_zero = np.logical_not(np.isclose(tp_cond, 0, atol=chan.atol, rtol=chan.rtol))
             if np.any(non_zero):
+                diagnostic = "eigenvalues" if tp_cond.ndim == 1 else "entries"
                 logger.warning(
-                    "%s channel is not TP. Tr_2[Choi] - I has non-zero eigenvalues: %s",
+                    "%s channel is not TP. Tr_2[Choi] - I has non-zero %s: %s",
                     label,
+                    diagnostic,
                     tp_cond[non_zero],
                 )
 
@@ -402,8 +404,8 @@ def _cp_condition(channel):
     return np.tensordot(unitary, unitary.conj(), axes=([0, 1], [0, 1])).real
 
 
-def _tp_condition(channel):
-    """Return partial tr Choi-matrix eigenvalues for checking if channel is TP"""
+def _tp_condition(channel, atol=None, rtol=None):
+    """Return TP diagnostics, using eigenvalues for Hermitian residuals."""
     if isinstance(channel, QuantumChannel):
         if not isinstance(channel, Choi):
             channel = Choi(channel)
@@ -414,4 +416,11 @@ def _tp_condition(channel):
     else:
         unitary = Operator(channel).data
         tr_choi = np.tensordot(unitary, unitary.conj(), axes=(0, 0))
-    return np.linalg.eigvalsh(tr_choi - np.eye(len(tr_choi)))
+    residual = tr_choi - np.eye(len(tr_choi))
+    if atol is None:
+        atol = channel.atol
+    if rtol is None:
+        rtol = channel.rtol
+    if np.allclose(residual, residual.conj().T, atol=atol, rtol=rtol):
+        return np.linalg.eigvalsh(residual)
+    return residual

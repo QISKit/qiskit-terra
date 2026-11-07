@@ -16,7 +16,7 @@ from ddt import ddt
 
 import numpy as np
 
-from qiskit.quantum_info import Operator, Choi
+from qiskit.quantum_info import Operator, Choi, Kraus
 from qiskit.quantum_info import process_fidelity
 from qiskit.quantum_info import average_gate_fidelity
 from qiskit.quantum_info import gate_error
@@ -82,9 +82,22 @@ class TestOperatorMeasures(QiskitTestCase):
     def test_nontp_process_fidelity(self):
         """Test process_fidelity for non-TP channel"""
         chan = 0.99 * Choi(Operator.from_label("X"))
-        fid = process_fidelity(chan)
-        self.assertLogs("qiskit.quantum_info.operators.measures", level="WARNING")
+        with self.assertLogs("qiskit.quantum_info.operators.measures", level="WARNING") as logs:
+            fid = process_fidelity(chan)
+        self.assertTrue(any("non-zero eigenvalues" in message for message in logs.output))
         self.assertAlmostEqual(fid, 0, places=15)
+
+    def test_nontp_process_fidelity_warns_for_nonhermitian_partial_trace(self):
+        """Non-Hermitian TP errors must not be hidden by an eigenvalue check."""
+        identity = np.eye(2, dtype=complex)
+        right = identity.copy()
+        right[0, 1] = 1e-3
+        chan = Kraus(([identity], [right]))
+
+        with self.assertLogs("qiskit.quantum_info.operators.measures", level="WARNING") as logs:
+            process_fidelity(chan, require_cp=False, require_tp=True)
+
+        self.assertTrue(any("non-zero entries" in message for message in logs.output))
 
     def test_operator_average_gate_fidelity(self):
         """Test the average_gate_fidelity function for operator inputs"""
