@@ -22,13 +22,14 @@ from math import pi
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit, qasm2
 from qiskit.circuit import Parameter, Qubit, Clbit, Gate, library as lib
 from qiskit.circuit.classical import expr
-from test import QiskitTestCase
+
+from . import Qasm2TestCase
 
 # Regex pattern to match valid OpenQASM identifiers
 VALID_QASM2_IDENTIFIER = re.compile("[a-z][a-zA-Z_0-9]*")
 
 
-class TestQASM2Export(QiskitTestCase):
+class TestQASM2Export(Qasm2TestCase):
     # We test most of the export by looking at `dumps` because it's easier just to compare strings.
 
     def test_basic_output(self):
@@ -207,7 +208,7 @@ grandparent_circ q[0],q[1],q[2],q[3];"""
         circuit.u(2 * pi, 3 * pi, -5 * pi, 0)
         self.assertEqual(
             circuit,
-            qasm2.loads(qasm2.dumps(circuit), custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS),
+            self.loads(qasm2.dumps(circuit), custom_instructions=qasm2.LEGACY_CUSTOM_INSTRUCTIONS),
         )
 
     def test_composite_circuit_with_one_param(self):
@@ -381,7 +382,7 @@ custom q\[0\];""",
         qc = QuantumCircuit(2)
         qc.ch(0, 1, ctrl_state=0)
         qasm_str = qasm2.dumps(qc)
-        self.assertEqual(Operator(qc), Operator(qasm2.loads(qasm_str)))
+        self.assertEqual(Operator(qc), Operator(self.loads(qasm_str)))
 
     def test_mcx_gate(self):
 
@@ -814,7 +815,7 @@ rx(1.e-06) q[0];"""
         self.assertEqual(qasm2.dumps(qc), expected)
 
 
-class TestDumpStream(QiskitTestCase):
+class TestDumpStream(Qasm2TestCase):
     """Specific tests for the stream handling in `dump`."""
 
     def test_can_write_to_filename(self):
@@ -833,7 +834,7 @@ class TestDumpStream(QiskitTestCase):
                     written = fptr.read()
             finally:
                 os.chdir(prevdir)
-        self.assertEqual(qasm2.loads(written), qc)
+        self.assertEqual(self.loads(written), qc)
 
     def test_can_write_to_pathlike(self):
         qc = QuantumCircuit(2, 2)
@@ -851,7 +852,7 @@ class TestDumpStream(QiskitTestCase):
                     written = fptr.read()
             finally:
                 os.chdir(prevdir)
-        self.assertEqual(qasm2.loads(written), qc)
+        self.assertEqual(self.loads(written), qc)
 
     def test_can_write_to_stream(self):
         qc = QuantumCircuit(2, 2)
@@ -862,7 +863,7 @@ class TestDumpStream(QiskitTestCase):
         with io.StringIO() as stream:
             qasm2.dump(qc, stream)
             written = stream.getvalue()
-        self.assertEqual(qasm2.loads(written), qc)
+        self.assertEqual(self.loads(written), qc)
 
     def test_measure_can_be_conditioned(self):
         qr = QuantumRegister(1, "qr")

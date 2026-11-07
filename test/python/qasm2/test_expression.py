@@ -18,14 +18,15 @@ import sys
 import ddt
 
 import qiskit.qasm2
-from test import QiskitTestCase
+
+from . import Qasm2TestCase
 
 
 @ddt.ddt
-class TestSimple(QiskitTestCase):
+class TestSimple(Qasm2TestCase):
     def test_unary_constants(self):
         program = "qreg q[1]; U(-(0.5 + 0.5), +(+1 - 2), -+-+2) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         expected = [-1.0, -1.0, 2.0]
         self.assertEqual(list(parsed.data[0].operation.params), expected)
 
@@ -37,7 +38,7 @@ class TestSimple(QiskitTestCase):
             qreg q[1];
             u(0.5, 1.0, 2.0) q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         expected = [-1.0, -1.0, 2.0]
         actual = [float(x) for x in parsed.data[0].operation.definition.data[0].operation.params]
         self.assertEqual(list(actual), expected)
@@ -52,7 +53,7 @@ class TestSimple(QiskitTestCase):
     @ddt.unpack
     def test_binary_constants(self, str_op, py_op):
         program = f"qreg q[1]; U(0.25{str_op}0.5, 1.0{str_op}0.5, 3.2{str_op}-0.8) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         expected = [py_op(0.25, 0.5), py_op(1.0, 0.5), py_op(3.2, -0.8)]
         # These should be bit-for-bit exact.
         self.assertEqual(list(parsed.data[0].operation.params), expected)
@@ -73,7 +74,7 @@ class TestSimple(QiskitTestCase):
             qreg q[1];
             u(1.0, 2.0, 3.0) q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         outer = [1.0, 2.0, 3.0]
         abstract_op = parsed.data[0].operation
         self.assertEqual(list(abstract_op.params), outer)
@@ -92,7 +93,7 @@ class TestSimple(QiskitTestCase):
     @ddt.unpack
     def test_function_constants(self, function_str, function_py):
         program = f"qreg q[1]; U({function_str}(0.5),{function_str}(1.0),{function_str}(pi)) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         expected = [function_py(0.5), function_py(1.0), function_py(math.pi)]
         # These should be bit-for-bit exact.
         self.assertEqual(list(parsed.data[0].operation.params), expected)
@@ -114,7 +115,7 @@ class TestSimple(QiskitTestCase):
             qreg q[1];
             u(0.5, 1.0, pi) q[0];
         """
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         outer = [0.5, 1.0, math.pi]
         abstract_op = parsed.data[0].operation
         self.assertEqual(list(abstract_op.params), outer)
@@ -130,7 +131,7 @@ class TestSimple(QiskitTestCase):
         # point (which it should be - it's a power of two with fewer than 11 bits of exponent).
         self.assertEqual(int(float(bigint)), bigint)
         program = f"qreg q[1]; U({bigint}, -{bigint}, {bigint} * 2.0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         parameters = list(parsed.data[0].operation.params)
         self.assertEqual([bigint, -bigint, 2 * bigint], parameters)
 
@@ -139,7 +140,7 @@ class TestSimple(QiskitTestCase):
         segfault."""
         expr = "-" * 100_000 + "2.0"
         program = f"qreg q[1]; U({expr}, -{expr}, 0.0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(list(parsed.data[0].operation.params), [2.0, -2.0, 0.0])
 
     def test_excessive_depth_binary(self):
@@ -149,25 +150,25 @@ class TestSimple(QiskitTestCase):
         # implementation will be effectively iterative anyway.
         expr = "1.0+(" * 100_000 + "1.0" + ")" * 100_000
         program = f"qreg q[1]; U({expr}, 0.0, 0.0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(list(parsed.data[0].operation.params), [100_001.0, 0.0, 0.0])
 
     def test_parenthesised_lhs_followed_by_infix(self):
         """A parenthesised subexpression on the left of an infix operator should evaluate
         correctly regardless of the relative precedences involved."""
         program = "qreg q[1]; U((1.0 + 2.0) + 3.0, (1.0 * 2.0) + 3.0, (4.0 / 2.0) * 3.0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(list(parsed.data[0].operation.params), [6.0, 5.0, 6.0])
 
 
-class TestPrecedenceAssociativity(QiskitTestCase):
+class TestPrecedenceAssociativity(Qasm2TestCase):
     def test_precedence(self):
         # OQ3's precedence rules are the same as Python's, so we can effectively just eval.
         expr = "   1.0 + 2.0 * -3.0  ^ 1.5 - 0.5 / +0.25"
         expected = 1.0 + 2.0 * -(3.0**1.5) - 0.5 / +0.25
 
         program = f"qreg q[1]; U({expr}, 0, 0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(parsed.data[0].operation.params[0], expected)
 
     def test_addition_left(self):
@@ -177,7 +178,7 @@ class TestPrecedenceAssociativity(QiskitTestCase):
         # the second will do `(eps / 2) + (eps / 2) = eps`, then `eps + 1` will be different.
         eps = sys.float_info.epsilon
         program = f"qreg q[1]; U(1 + {eps / 2} + {eps / 2}, {eps / 2} + {eps / 2} + 1, 0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertNotEqual(1.0 + eps, 1.0)  # Sanity check for the test.
         self.assertEqual(list(parsed.data[0].operation.params), [1.0, 1.0 + eps, 0.0])
 
@@ -186,29 +187,29 @@ class TestPrecedenceAssociativity(QiskitTestCase):
         # then `(0.5 * 2.0 * fmax)` is `inf`, otherwise it's `fmax`.
         fmax = sys.float_info.max
         program = f"qreg q[1]; U({fmax} * 0.5 * 2.0, 2.0 * 0.5 * {fmax}, 2.0 * {fmax} * 0.5) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(list(parsed.data[0].operation.params), [fmax, fmax, math.inf])
 
     def test_subtraction_left(self):
         # If subtraction associated right, we'd accidentally get 2.
         program = "qreg q[1]; U(2.0 - 1.0 - 1.0, 0, 0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(list(parsed.data[0].operation.params), [0.0, 0.0, 0.0])
 
     def test_division_left(self):
         # If division associated right, we'd accidentally get 4.
         program = "qreg q[1]; U(4.0 / 2.0 / 2.0, 0, 0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(list(parsed.data[0].operation.params), [1.0, 0.0, 0.0])
 
     def test_power_right(self):
         # If the power operator associated left, we'd accidentally get 64 instead.
         program = "qreg q[1]; U(2.0 ^ 3.0 ^ 2.0, 0, 0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(list(parsed.data[0].operation.params), [512.0, 0.0, 0.0])
 
 
-class TestCustomClassical(QiskitTestCase):
+class TestCustomClassical(Qasm2TestCase):
     def test_evaluation_order(self):
         """We should be evaluating all functions, including custom user ones the exact number of
         times we expect, and left-to-right in parameter lists."""
@@ -222,7 +223,7 @@ class TestCustomClassical(QiskitTestCase):
             qreg q[1];
             U(f(), 2 * f() + f(), atan2(f(), f()) - f()) q[0];
         """
-        parsed = qiskit.qasm2.loads(
+        parsed = self.loads(
             program,
             custom_classical=[
                 qiskit.qasm2.CustomClassical("f", 0, f),
@@ -236,36 +237,36 @@ class TestCustomClassical(QiskitTestCase):
 
 
 @ddt.ddt
-class TestErrors(QiskitTestCase):
+class TestErrors(Qasm2TestCase):
     @ddt.data("0.0", "(1.0 - 1.0)")
     def test_refuses_to_divide_by_zero(self, denom):
         program = f"qreg q[1]; U(2.0 / {denom}, 0.0, 0.0) q[0];"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "divide by zero"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
         program = f"gate rx(a) q {{ U(a / {denom}, 0.0, 0.0) q; }}"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "divide by zero"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
     @ddt.data("0.0", "1.0 - 1.0", "-2.0", "2.0 - 3.0")
     def test_refuses_to_ln_non_positive(self, operand):
         program = f"qreg q[1]; U(ln({operand}), 0.0, 0.0) q[0];"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "ln of non-positive"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
         program = f"gate rx(a) q {{ U(a + ln({operand}), 0.0, 0.0) q; }}"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "ln of non-positive"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
     @ddt.data("-2.0", "2.0 - 3.0")
     def test_refuses_to_sqrt_negative(self, operand):
         program = f"qreg q[1]; U(sqrt({operand}), 0.0, 0.0) q[0];"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "sqrt of negative"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
         program = f"gate rx(a) q {{ U(a + sqrt({operand}), 0.0, 0.0) q; }}"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "sqrt of negative"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
     @ddt.data(
         ("a / (a - a)", "cannot divide by zero"),
@@ -279,7 +280,7 @@ class TestErrors(QiskitTestCase):
         # parameter, so unlike the cases above they are caught by the runtime evaluator when the
         # definition is first built, rather than by `loads` itself.
         program = f"qreg q[1]; gate g(a) qq {{ U({expression}, 0.0, 0.0) qq; }} g(1.0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, message):
             _ = parsed.data[0].operation.definition
 
@@ -287,24 +288,24 @@ class TestErrors(QiskitTestCase):
     def test_cannot_use_nonunary_operators_in_unary_position(self, operator):
         program = f"qreg q[1]; U({operator}1.0, 0.0, 0.0) q[0];"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "not a valid unary operator"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
     @ddt.data("+", "-", "*", "/", "^")
     def test_missing_binary_operand_errors(self, operator):
         program = f"qreg q[1]; U(1.0 {operator}, 0.0, 0.0) q[0];"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "missing operand"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
         program = f"qreg q[1]; U((1.0 {operator}), 0.0, 0.0) q[0];"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "missing operand"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
     def test_parenthesis_must_be_closed(self):
         program = "qreg q[1]; U((1 + 1 2), 3, 2) q[0];"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "needed a closing parenthesis"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)
 
     def test_premature_right_parenthesis(self):
         program = "qreg q[1]; U(sin(), 0.0, 0.0) q[0];"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "did not find an .* expression"):
-            qiskit.qasm2.loads(program)
+            self.loads(program)

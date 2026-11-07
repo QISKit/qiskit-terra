@@ -10,12 +10,31 @@
 # copyright notice, and modified files need to carry a notice indicating
 # that they have been altered from the originals.
 
-"""Common utility function."""
+"""Common utilities for the OpenQASM 2 tests."""
 
 from collections.abc import Iterable
 from qiskit.circuit import QuantumCircuit, Parameter
 
 import qiskit.qasm2
+
+from test import QiskitTestCase
+
+
+class Qasm2TestCase(QiskitTestCase):
+    """Base class for the OpenQASM 2 tests.
+
+    The tests take their importer from this class rather than calling the public functions
+    directly, so a subclass can run the same tests against a different OpenQASM 2 importer.
+
+    Motivation: https://github.com/Qiskit/qiskit/pull/16926#discussion_r4372620593"""
+
+    def load(self, path, **kwargs):
+        """Load a circuit from the file at ``path``."""
+        return qiskit.qasm2.load(path, **kwargs)
+
+    def loads(self, program, **kwargs):
+        """Load a circuit from the program string ``program``."""
+        return qiskit.qasm2.loads(program, **kwargs)
 
 
 def gate_builder(name: str, parameters: Iterable[Parameter], definition: QuantumCircuit):

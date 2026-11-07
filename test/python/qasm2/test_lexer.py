@@ -14,11 +14,12 @@
 import ddt
 
 import qiskit.qasm2
-from test import QiskitTestCase
+
+from . import Qasm2TestCase
 
 
 @ddt.ddt
-class TestLexer(QiskitTestCase):
+class TestLexer(Qasm2TestCase):
     # Most of the lexer is fully exercised in the parser tests.  These tests here are really mopping
     # up some error messages and whatnot that might otherwise be missed.
 
@@ -53,7 +54,7 @@ b{h a;cx a //,,,,
 
             2];bell q[0],//
 q[1];creg c[2];measure q->c;"""
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         expected_unrolled = qiskit.QuantumCircuit(
             qiskit.QuantumRegister(2, "q"), qiskit.ClassicalRegister(2, "c")
         )
@@ -65,7 +66,7 @@ q[1];creg c[2];measure q->c;"""
     @ddt.data("0.25", "00.25", "2.5e-1", "2.5e-01", "0.025E+1", ".25", ".025e1", "25e-2")
     def test_float_lexes(self, number):
         program = f"qreg q[1]; U({number}, 0, 0) q[0];"
-        parsed = qiskit.qasm2.loads(program)
+        parsed = self.loads(program)
         self.assertEqual(list(parsed.data[0].operation.params), [0.25, 0, 0])
 
     def test_no_decimal_float_rejected_in_strict_mode(self):
@@ -73,19 +74,19 @@ q[1];creg c[2];measure q->c;"""
             qiskit.qasm2.QASM2ParseError,
             r"\[strict\] all floats must include a decimal point",
         ):
-            qiskit.qasm2.loads("OPENQASM 2.0; qreg q[1]; U(25e-2, 0, 0) q[0];", strict=True)
+            self.loads("OPENQASM 2.0; qreg q[1]; U(25e-2, 0, 0) q[0];", strict=True)
 
     @ddt.data("", "qre", "cre", ".")
     def test_non_ascii_bytes_error(self, prefix):
         token = f"{prefix}\xff"
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "encountered a non-ASCII byte"):
-            qiskit.qasm2.loads(token)
+            self.loads(token)
 
     def test_integers_cannot_start_with_zero(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, "integers cannot have leading zeroes"
         ):
-            qiskit.qasm2.loads("0123")
+            self.loads("0123")
 
     @ddt.data("", "+", "-")
     def test_float_exponents_must_have_a_digit(self, sign):
@@ -93,78 +94,78 @@ q[1];creg c[2];measure q->c;"""
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, "needed to see an integer exponent"
         ):
-            qiskit.qasm2.loads(token)
+            self.loads(token)
 
     def test_non_builtins_cannot_be_capitalised(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, "identifiers cannot start with capital"
         ):
-            qiskit.qasm2.loads("Qubit")
+            self.loads("Qubit")
 
     def test_unterminated_filename_is_invalid(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, "unexpected end-of-file while lexing string literal"
         ):
-            qiskit.qasm2.loads('include "qelib1.inc')
+            self.loads('include "qelib1.inc')
 
     def test_filename_with_linebreak_is_invalid(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, "unexpected line break while lexing string literal"
         ):
-            qiskit.qasm2.loads('include "qe\nlib1.inc";')
+            self.loads('include "qe\nlib1.inc";')
 
     def test_strict_single_quoted_path_rejected(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"\[strict\] paths must be in double quotes"
         ):
-            qiskit.qasm2.loads("OPENQASM 2.0; include 'qelib1.inc';", strict=True)
+            self.loads("OPENQASM 2.0; include 'qelib1.inc';", strict=True)
 
     def test_version_must_have_word_boundary_after(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"expected a word boundary after a version"
         ):
-            qiskit.qasm2.loads("OPENQASM 2a;")
+            self.loads("OPENQASM 2a;")
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"expected a word boundary after a version"
         ):
-            qiskit.qasm2.loads("OPENQASM 2.0a;")
+            self.loads("OPENQASM 2.0a;")
 
     def test_no_boundary_float_in_version_position(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"expected a word boundary after a float"
         ):
-            qiskit.qasm2.loads("OPENQASM .5a;")
+            self.loads("OPENQASM .5a;")
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"expected a word boundary after a float"
         ):
-            qiskit.qasm2.loads("OPENQASM 0.2e1a;")
+            self.loads("OPENQASM 0.2e1a;")
 
     def test_integers_must_have_word_boundaries_after(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"expected a word boundary after an integer"
         ):
-            qiskit.qasm2.loads("OPENQASM 2.0; qreg q[2a];")
+            self.loads("OPENQASM 2.0; qreg q[2a];")
 
     def test_floats_must_have_word_boundaries_after(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"expected a word boundary after a float"
         ):
-            qiskit.qasm2.loads("OPENQASM 2.0; qreg q[1]; U(2.0a, 0, 0) q[0];")
+            self.loads("OPENQASM 2.0; qreg q[1]; U(2.0a, 0, 0) q[0];")
 
     def test_single_equals_is_rejected(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"single equals '=' is never valid"
         ):
-            qiskit.qasm2.loads("if (a = 2) U(0, 0, 0) q[0];")
+            self.loads("if (a = 2) U(0, 0, 0) q[0];")
 
     def test_bare_dot_is_not_valid_float(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"expected a numeric fractional part"
         ):
-            qiskit.qasm2.loads("qreg q[0]; U(2 + ., 0, 0) q[0];")
+            self.loads("qreg q[0]; U(2 + ., 0, 0) q[0];")
 
     def test_invalid_token(self):
         with self.assertRaisesRegex(
             qiskit.qasm2.QASM2ParseError, r"encountered '!', which doesn't match"
         ):
-            qiskit.qasm2.loads("!")
+            self.loads("!")
