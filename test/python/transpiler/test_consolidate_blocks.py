@@ -15,11 +15,12 @@ Tests for the ConsolidateBlocks transpiler pass.
 """
 
 import numpy as np
-from ddt import ddt, data
+from ddt import ddt, data, unpack
 
 from qiskit.circuit import QuantumCircuit, QuantumRegister, IfElseOp, Gate, Parameter
 from qiskit.circuit.library import (
     U2Gate,
+    iSwapGate,
     SwapGate,
     CXGate,
     CZGate,
@@ -850,6 +851,53 @@ class TestConsolidateBlocks(QiskitTestCase):
             # cx appears first in KAK_GATE_NAMES
             pass_ = ConsolidateBlocks(basis_gates=["ecr", "cx", "cz"])
             self.assertEqual(pass_.basis_gate_name, "cz")
+
+    @data(CXGate, CZGate, ECRGate, iSwapGate)
+    def test_consolidate_with_kak_basis_gate(self, basis_gate):
+        """Test that ConsolidateBlocks works with a kak_basis_gate."""
+        qc = QuantumCircuit(2)
+        qc.cz(0, 1)
+        qc.x(0)
+        qc.h(1)
+        qc.z(1)
+        qc.t(1)
+        qc.h(0)
+        qc.t(0)
+        qc.cz(1, 0)
+        qc.sx(0)
+        qc.sx(1)
+        qc.cz(0, 1)
+        qc.sx(0)
+        qc.sx(1)
+        qc.cz(1, 0)
+        qc.x(0)
+        qc.h(1)
+        qc.z(1)
+        qc.t(1)
+        qc.h(0)
+        qc.t(0)
+        qc.cz(0, 1)
+        consolidate_pass = ConsolidateBlocks(kak_basis_gate=basis_gate())
+        res = consolidate_pass(qc)
+        self.assertEqual({"unitary": 1}, res.count_ops())
+        self.assertEqual(Operator.from_circuit(qc), Operator(res.data[0].operation.params[0]))
+
+    @data((CXGate, 1), (iSwapGate, 2))
+    @unpack
+    def test_consolidate_with_kak_basis_gate_estimated_basis_count(self, basis_gate, expected):
+        """Test that ConsolidateBlocks works with a kak_basis_gate as expected with CNOT and iSwap gates."""
+        qc = QuantumCircuit(2)
+        qc.cx(0, 1)
+        qc.cx(0, 1)
+        qc.cx(0, 1)
+        qc.iswap(0, 1)
+        qc.iswap(0, 1)
+        qc.z(0)
+        qc.z(1)
+        consolidate_pass = ConsolidateBlocks(kak_basis_gate=basis_gate())
+        unitary = Operator.from_circuit(qc)
+        num_basis_gates = consolidate_pass.decomposer.num_basis_gates(unitary=unitary)
+        self.assertEqual(num_basis_gates, expected)
 
 
 class TestCollect1qRuns(QiskitTestCase):
