@@ -199,7 +199,7 @@ impl BitTensor {
         shape.remove(axis);
         if axis + 1 == self.shape.len() {
             // Reducing the row itself, so each row contributes one bit of a repacked result.
-            let parities = self.popcount().into_iter().map(|count| count % 2 == 1);
+            let parities = self.popcount().map(|count| count % 2 == 1);
             return pack(parities, shape);
         }
         // A leading axis indexes whole rows, so the reduction is a byte-wise XOR.
@@ -213,10 +213,9 @@ impl BitTensor {
     }
 
     /// Return the number of set bits in each row, in row-major order of the leading axes.
-    fn popcount(&self) -> Vec<usize> {
+    fn popcount(&self) -> impl ExactSizeIterator<Item = u32> {
         self.rows()
-            .map(|row| row.iter().map(|byte| byte.count_ones() as usize).sum())
-            .collect()
+            .map(|row| row.iter().map(|byte| byte.count_ones()).sum())
     }
 
     /// Return a tensor of logical shape `shape` over `bytes`, which must be packed for it.
@@ -236,20 +235,20 @@ impl BitTensor {
     }
 
     /// Return an iterator over the rows of the packed buffer.
-    fn rows(&self) -> impl Iterator<Item = &[u8]> {
+    fn rows(&self) -> impl ExactSizeIterator<Item = &[u8]> {
         let bytes_per_row = self.bytes_per_row();
         let bytes = self.as_bytes();
         (0..num_rows(&self.shape))
             .map(move |row| &bytes[row * bytes_per_row..(row + 1) * bytes_per_row])
     }
 
-    /// Return whether the padding bits of every row are zero.
+    /// Verify that the padding bits of every row are zero.
     fn padding_is_zero(&self) -> bool {
         let Some(mask) = final_byte_mask(self.num_bits()) else {
             return true;
         };
         self.rows()
-            .all(|row| row.last().is_none_or(|byte| byte & !mask == 0))
+            .all(|row| row.last().expect("a padded row must have a byte") & !mask == 0)
     }
 
     /// Return this tensor with its bit axis broadcast to `num_bits`, or `None` if not possible.
@@ -705,16 +704,21 @@ mod test {
             false, false, false, //
             true, true, true,
         ];
-        assert_eq!(bits(&values, &[3, 3]).popcount(), [2, 0, 3]);
+        assert_eq!(
+            bits(&values, &[3, 3]).popcount().collect::<Vec<_>>(),
+            [2, 0, 3]
+        );
     }
 
     #[test]
     fn test_popcount_spans_the_bytes_of_a_wide_row() {
         assert_eq!(
-            row(100, &(0..100).step_by(3).collect::<Vec<_>>()).popcount(),
+            row(100, &(0..100).step_by(3).collect::<Vec<_>>())
+                .popcount()
+                .collect::<Vec<_>>(),
             [34]
         );
-        assert_eq!(bits(&[], &[2, 0]).popcount(), [0, 0]);
-        assert_eq!(bits(&[true], &[]).popcount(), [1]);
+        assert_eq!(bits(&[], &[2, 0]).popcount().collect::<Vec<_>>(), [0, 0]);
+        assert_eq!(bits(&[true], &[]).popcount().collect::<Vec<_>>(), [1]);
     }
 }
