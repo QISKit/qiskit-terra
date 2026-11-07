@@ -1,0 +1,23 @@
+---
+fixes:
+  - |
+    Fixed a bug where integer-valued :class:`.ParameterExpression` arithmetic
+    could overflow the internal 64-bit integer representation.  Binding a
+    parameter to a large integer and then adding, subtracting, multiplying,
+    negating or exponentiating it (for example via :meth:`.QuantumCircuit.assign_parameters`,
+    the ``global_phase`` of a circuit, or :meth:`.ParameterExpression.numeric`)
+    would panic in debug builds and silently wrap around to an incorrect value
+    in release builds.  An integer raised to an integral floating-point power
+    (such as ``2 ** 70.0``) saturated to the largest 64-bit integer, and exact
+    integer division of values above ``2**53`` could round to the wrong integer.
+    Integer division is now computed exactly, and the other operations fall
+    back to a floating-point result when the exact integer result does not fit
+    in a 64-bit integer, for example::
+
+        from qiskit import QuantumCircuit
+        from qiskit.circuit import Parameter
+
+        p = Parameter("p")
+        qc = QuantumCircuit(1)
+        qc.global_phase = p * 2
+        qc.assign_parameters({p: 2**62})  # previously panicked or wrapped

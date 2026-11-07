@@ -2161,6 +2161,38 @@ class TestParameterExpressions(QiskitTestCase):
         with self.assertRaisesRegex(TypeError, "unbound parameters"):
             (a + b).numeric()
 
+    def test_integer_overflow_falls_back_to_float(self):
+        """Integer results outside 64 bits become floats instead of panicking or wrapping.
+
+        See https://github.com/Qiskit/qiskit/issues/17217.
+        """
+        p, q = Parameter("p"), Parameter("q")
+        i64_min = -(2**63)
+
+        qc = QuantumCircuit(1)
+        qc.global_phase = p * 2
+        bound = qc.assign_parameters({p: 2**62})
+        self.assertAlmostEqual(bound.global_phase, float(2**63) % (2 * math.pi))
+
+        cases = [
+            ((p + 1).assign(p, 2**63 - 1), float(2**63)),
+            ((p - 1).assign(p, i64_min), -float(2**63) - 1),
+            ((p * 2).assign(p, 2**62), float(2**63)),
+            ((-p).assign(p, i64_min), float(2**63)),
+            ((p**q).assign(p, 3).assign(q, 40), float(3**40)),
+            ((p**q).assign(p, 2).assign(q, 70.0), float(2**70)),
+        ]
+        for expr, expected in cases:
+            with self.subTest(expr=expr):
+                self.assertIsInstance(expr.numeric(), float)
+                self.assertEqual(expr.numeric(), expected)
+
+        # In-range integer arithmetic stays exact, including quotients above 2**53.
+        quotient = (p / q).assign(p, 3 * 2**60 + 3).assign(q, 3)
+        self.assertIsInstance(quotient.numeric(), int)
+        self.assertEqual(quotient.numeric(), 2**60 + 1)
+        self.assertEqual((p * 2).assign(p, 2**61).numeric(), 2**62)
+
     def test_repeat_with_parameterized_gates(self):
         """Tests that repeating a circuit with parameterized gates
         handles parameters correctly.

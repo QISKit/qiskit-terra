@@ -3547,7 +3547,10 @@ impl Value {
                     } else {
                         let t = (*e as f64).powf(*r);
                         let d = t.floor() - t;
-                        if (-SYMEXPR_EPSILON..SYMEXPR_EPSILON).contains(&d) {
+                        // `as i64` saturates, so only narrow to an integer when it fits.
+                        if (-SYMEXPR_EPSILON..SYMEXPR_EPSILON).contains(&d)
+                            && (i64::MIN as f64..i64::MAX as f64).contains(&t)
+                        {
                             Value::Int(t as i64)
                         } else {
                             Value::Real(t)
@@ -3558,7 +3561,10 @@ impl Value {
                     if *r < 0 {
                         Value::Real(*e as f64).pow(p)
                     } else {
-                        Value::Int(e.pow(*r as u32))
+                        match u32::try_from(*r).ok().and_then(|exp| e.checked_pow(exp)) {
+                            Some(v) => Value::Int(v),
+                            None => Value::Real((*e as f64).powf(*r as f64)),
+                        }
                     }
                 }
                 Value::Complex(_) => Value::Complex(Complex64::from(*e as f64)).pow(p),
@@ -3819,7 +3825,10 @@ impl Add for Value {
             },
             Value::Int(l) => match rhs {
                 Value::Real(r) => Value::Real(l as f64 + r),
-                Value::Int(r) => Value::Int(l + r),
+                Value::Int(r) => match l.checked_add(r) {
+                    Some(v) => Value::Int(v),
+                    None => Value::Real(l as f64 + r as f64),
+                },
                 Value::Complex(r) => Value::Complex(l as f64 + r),
             },
             Value::Complex(l) => match rhs {
@@ -3853,7 +3862,10 @@ impl Sub for Value {
             },
             Value::Int(l) => match rhs {
                 Value::Real(r) => Value::Real(l as f64 - r),
-                Value::Int(r) => Value::Int(l - r),
+                Value::Int(r) => match l.checked_sub(r) {
+                    Some(v) => Value::Int(v),
+                    None => Value::Real(l as f64 - r as f64),
+                },
                 Value::Complex(r) => Value::Complex(l as f64 - r),
             },
             Value::Complex(l) => match rhs {
@@ -3887,7 +3899,10 @@ impl Mul for Value {
             },
             Value::Int(l) => match rhs {
                 Value::Real(r) => Value::Real(l as f64 * r),
-                Value::Int(r) => Value::Int(l * r),
+                Value::Int(r) => match l.checked_mul(r) {
+                    Some(v) => Value::Int(v),
+                    None => Value::Real(l as f64 * r as f64),
+                },
                 Value::Complex(r) => Value::Complex(l as f64 * r),
             },
             Value::Complex(l) => match rhs {
@@ -3925,15 +3940,12 @@ impl Div for Value {
                 }
                 match rhs {
                     Value::Real(r) => Value::Real(l as f64 / r),
-                    Value::Int(r) => {
-                        let t = l as f64 / r as f64;
-                        let d = t.floor() - t;
-                        if (-SYMEXPR_EPSILON..SYMEXPR_EPSILON).contains(&d) {
-                            Value::Int(t as i64)
-                        } else {
-                            Value::Real(t)
-                        }
-                    }
+                    // Divide in integers so large quotients stay exact; `i64::MIN / -1` overflows
+                    // `checked_rem`/`checked_div` and falls back to a float like the other operators.
+                    Value::Int(r) => match (l.checked_rem(r), l.checked_div(r)) {
+                        (Some(0), Some(v)) => Value::Int(v),
+                        _ => Value::Real(l as f64 / r as f64),
+                    },
                     Value::Complex(r) => Value::Complex(l as f64 / r),
                 }
             }
@@ -3962,7 +3974,10 @@ impl Neg for Value {
     fn neg(self) -> Value {
         match self {
             Value::Real(v) => Value::Real(-v),
-            Value::Int(v) => Value::Int(-v),
+            Value::Int(v) => match v.checked_neg() {
+                Some(n) => Value::Int(n),
+                None => Value::Real(-(v as f64)),
+            },
             Value::Complex(v) => Value::Complex(-v),
         }
     }
@@ -4495,5 +4510,44 @@ mod test {
             5,
         );
         assert!(!extend_rhs(left_mid, 5).eq_exact(&extend_rhs(right_mid, 5)));
+    }
+
+    /// Integer arithmetic on [Value] must not overflow (which panics in debug builds and wraps
+    /// silently in release builds); it should fall back to a float result at the `i64` boundary.
+    #[test]
+    fn test_value_int_arithmetic_saturates_to_real() {
+        let max = Value::Int(i64::MAX);
+        let min = Value::Int(i64::MIN);
+        let two = Value::Int(2);
+        assert_eq!(max + Value::Int(1), Value::Real(i64::MAX as f64 + 1.0));
+        assert_eq!(min - Value::Int(1), Value::Real(i64::MIN as f64 - 1.0));
+        assert_eq!(max * two, Value::Real(i64::MAX as f64 * 2.0));
+        assert_eq!(-min, Value::Real(-(i64::MIN as f64)));
+        // Result overflows `i64` but is finite as a float (3^40 > i64::MAX).
+        assert_eq!(
+            Value::Int(3).pow(&Value::Int(40)),
+            Value::Real(3f64.powf(40.0))
+        );
+        // Exponent too large for `u32`: must fall back rather than truncating the exponent.
+        assert_eq!(Value::Int(1).pow(&Value::Int(1 << 40)), Value::Real(1.0));
+        // The only `Int / Int` quotient outside `i64`.
+        assert_eq!(min / Value::Int(-1), Value::Real(-(i64::MIN as f64)));
+        // Exact above 2^53, where a float quotient would round.
+        assert_eq!(
+            Value::Int(3 * (1 << 60) + 3) / Value::Int(3),
+            Value::Int((1 << 60) + 1)
+        );
+        // Integral float powers outside `i64` must not saturate.
+        assert_eq!(
+            Value::Int(2).pow(&Value::Real(70.0)),
+            Value::Real(2f64.powf(70.0))
+        );
+        // Values that stay in range are unchanged.
+        assert_eq!(Value::Int(3) + Value::Int(4), Value::Int(7));
+        assert_eq!(Value::Int(12) / Value::Int(4), Value::Int(3));
+        assert_eq!(Value::Int(7) / Value::Int(2), Value::Real(3.5));
+        assert_eq!(Value::Int(2).pow(&Value::Real(10.0)), Value::Int(1024));
+        assert_eq!(Value::Int(3) * Value::Int(4), Value::Int(12));
+        assert_eq!(Value::Int(2).pow(&Value::Int(10)), Value::Int(1024));
     }
 }
