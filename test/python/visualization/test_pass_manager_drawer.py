@@ -13,6 +13,7 @@
 """Tests for pass manager visualization tool."""
 
 import unittest
+import unittest.mock
 import os
 
 from qiskit.transpiler import CouplingMap, Layout
@@ -97,6 +98,28 @@ class TestPassManagerDrawer(QiskitVisualizationTestCase):
             self.assertFilesAreEqual(filename, path_to_diagram_reference("pass_manager_style.dot"))
         finally:
             os.remove(filename)
+
+    def test_pass_manager_drawer_closes_temporary_image(self):
+        """Test that the temporary image file is closed, so it can be removed on Windows."""
+        # pylint: disable=import-outside-toplevel
+        from PIL import Image
+
+        opened = []
+        real_open = Image.open
+
+        def recording_open(*args, **kwargs):
+            img = real_open(*args, **kwargs)
+            opened.append(img)
+            return img
+
+        with unittest.mock.patch.object(Image, "open", recording_open):
+            image = self.pass_manager.draw()
+
+        self.assertIsNotNone(image)
+        self.assertEqual(len(opened), 1)
+        # A closed file-backed image has no file pointer left.
+        self.assertIsNone(opened[0].fp)
+        image.load()
 
 
 if __name__ == "__main__":

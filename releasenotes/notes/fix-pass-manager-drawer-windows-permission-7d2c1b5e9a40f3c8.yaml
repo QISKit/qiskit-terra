@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed a ``PermissionError`` on Windows when calling :func:`.pass_manager_drawer` or
+    :func:`.staged_pass_manager_drawer` (and the corresponding ``draw`` methods) without
+    ``raw=True``. The temporary image file was still open when its directory was removed;
+    it is now closed first.
+    Fixed `#15472 <https://github.com/Qiskit/qiskit/issues/15472>`__.
