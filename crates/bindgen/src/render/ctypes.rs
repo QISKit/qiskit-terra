@@ -161,7 +161,7 @@ mod parse {
 
     pub fn r#type(
         mut ty: &ir::Type,
-        mut override_fn: impl FnMut(&str) -> Option<Primitive>,
+        override_fn: &mut dyn FnMut(&str) -> Option<Primitive>,
     ) -> anyhow::Result<simple_ir::Type<Primitive>> {
         let mut ptrs = Vec::new();
         let base = loop {
@@ -198,7 +198,36 @@ mod parse {
                     break TypeKind::Builtin(Primitive::try_from_cbindgen_primitive(ty)?);
                 }
                 ir::Type::Array(..) => bail!("array types not yet handled"),
-                ir::Type::FuncPtr { .. } => bail!("funcptrs not yet handled"),
+                ir::Type::FuncPtr {
+                    ret,
+                    args,
+                    is_nullable,
+                    never_return,
+                } => {
+                    if *is_nullable {
+                        bail!("nullability of funcptrs is not yet handled");
+                    }
+                    if *never_return {
+                        bail!("diverging functions not yet handled");
+                    }
+                    let mut parsed_args = Vec::with_capacity(args.len());
+                    for (name, ty) in args {
+                        parsed_args.push(simple_ir::FunctionArg {
+                            name: name.clone(),
+                            ty: r#type(ty, override_fn)?,
+                        });
+                    }
+                    let ret = if **ret == VOID {
+                        None
+                    } else {
+                        Some(r#type(ret, override_fn)?)
+                    };
+                    break TypeKind::FuncPtr(Box::new(simple_ir::Function {
+                        name: String::new(), // no function name for function pointers
+                        args: parsed_args,
+                        ret,
+                    }));
+                }
             }
         };
         Ok(simple_ir::Type { ptrs, base })
@@ -223,7 +252,7 @@ mod parse {
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
         let ret = (func.ret != VOID)
-            .then(|| r#type(&func.ret, override_fn))
+            .then(|| r#type(&func.ret, &mut override_fn))
             .transpose()?;
         Ok(simple_ir::Function { name, args, ret })
     }
@@ -268,6 +297,17 @@ mod parse {
         })
     }
 
+    pub fn r#typedef(
+        val: &ir::Typedef,
+        mut override_fn: impl FnMut(&str) -> Option<Primitive>,
+    ) -> anyhow::Result<simple_ir::Typedef<Primitive>> {
+        let ty = r#type(&val.aliased, &mut override_fn)?;
+        Ok(simple_ir::Typedef {
+            name: val.export_name.clone(),
+            ty,
+        })
+    }
+
     /// Extract all objects from a set of `cbindgen::Bindings`, adding them to ourselves.
     ///
     /// This fails if the bindings contain any unsupported constructs.
@@ -299,9 +339,10 @@ mod parse {
                 ir::ItemContainer::Union(item) => items
                     .unions
                     .push(r#union(item, |path| overrides.get(path).copied())?),
-                ir::ItemContainer::Constant(_)
-                | ir::ItemContainer::Static(_)
-                | ir::ItemContainer::Typedef(_) => {
+                ir::ItemContainer::Typedef(item) => items
+                    .typedefs
+                    .push(r#typedef(item, |path| overrides.get(path).copied())?),
+                ir::ItemContainer::Constant(_) | ir::ItemContainer::Static(_) => {
                     bail!("unhandled item: {item:?}");
                 }
             }
@@ -323,14 +364,25 @@ mod export {
 
     /// Write this type into an existing string.
     fn render_type(ty: &simple_ir::Type<Primitive>, out: &mut String) {
-        let name = match &ty.base {
-            TypeKind::Builtin(p) => p.qualname(),
-            TypeKind::Custom(c) => c.as_str(),
-        };
         for _ in &ty.ptrs {
             out.push_str("ctypes.POINTER(");
         }
-        out.push_str(name);
+        match &ty.base {
+            TypeKind::Builtin(p) => out.push_str(p.qualname()),
+            TypeKind::Custom(c) => out.push_str(c),
+            TypeKind::FuncPtr(func) => {
+                out.push_str("ctypes.CFUNCTYPE(");
+                match func.ret.as_ref() {
+                    Some(ret) => render_type(ret, out),
+                    None => out.push_str("None"),
+                }
+                for arg in &func.args {
+                    out.push_str(", ");
+                    render_type(&arg.ty, out);
+                }
+                out.push(')');
+            }
+        }
         for _ in &ty.ptrs {
             out.push(')');
         }
@@ -527,6 +579,7 @@ impl Items {
             structs: vec![complex],
             functions: vec![],
             unions: vec![],
+            typedefs: vec![],
         }
     }
 

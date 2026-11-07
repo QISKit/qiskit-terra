@@ -199,7 +199,36 @@ mod parse {
                     break TypeKind::Builtin(Primitive::try_from_cbindgen_primitive(ty)?);
                 }
                 ir::Type::Array(..) => bail!("array types not yet handled"),
-                ir::Type::FuncPtr { .. } => bail!("funcptrs not yet handled"),
+                ir::Type::FuncPtr {
+                    ret,
+                    args,
+                    is_nullable,
+                    never_return,
+                } => {
+                    if *is_nullable {
+                        bail!("nullability of funcptrs is not yet handled");
+                    }
+                    if *never_return {
+                        bail!("diverging functions not yet handled");
+                    }
+                    let args = args
+                        .iter()
+                        .map(|(name, ty)| {
+                            Ok(simple_ir::FunctionArg {
+                                name: name.clone(),
+                                ty: r#type(ty)?,
+                            })
+                        })
+                        .collect::<anyhow::Result<Vec<_>>>()?;
+                    let ret = (**ret != ir::Type::Primitive(ir::PrimitiveType::Void))
+                        .then(|| r#type(ret))
+                        .transpose()?;
+                    break TypeKind::FuncPtr(Box::new(simple_ir::Function {
+                        name: String::new(),
+                        args,
+                        ret,
+                    }));
+                }
             }
         };
         Ok(simple_ir::Type { ptrs, base })
@@ -261,6 +290,13 @@ mod parse {
         })
     }
 
+    pub fn r#typedef(val: &ir::Typedef) -> anyhow::Result<simple_ir::Typedef<Primitive>> {
+        Ok(simple_ir::Typedef {
+            name: val.export_name.clone(),
+            ty: r#type(&val.aliased)?,
+        })
+    }
+
     /// Extract all objects from a set of `cbindgen::Bindings`, adding them to ourselves.
     ///
     /// This fails if the bindings contain any unsupported constructs.
@@ -278,9 +314,8 @@ mod parse {
                     .push(simple_ir::Struct::opaque(item.export_name.clone())),
                 ir::ItemContainer::Struct(item) => items.structs.push(r#struct(item)?),
                 ir::ItemContainer::Union(item) => items.unions.push(r#union(item)?),
-                ir::ItemContainer::Constant(_)
-                | ir::ItemContainer::Static(_)
-                | ir::ItemContainer::Typedef(_) => {
+                ir::ItemContainer::Typedef(item) => items.typedefs.push(r#typedef(item)?),
+                ir::ItemContainer::Constant(_) | ir::ItemContainer::Static(_) => {
                     bail!("unhandled item: {item:?}");
                 }
             }
@@ -310,6 +345,21 @@ mod export {
         match &ty.base {
             TypeKind::Builtin(ty) => out.push_str(ty.qualname()),
             TypeKind::Custom(name) => out.push_str(name),
+            TypeKind::FuncPtr(func) => {
+                out.push_str("extern \"C\" fn(");
+                if let Some((first, rest)) = func.args.split_first() {
+                    render_type(&first.ty, out);
+                    for arg in rest {
+                        out.push_str(", ");
+                        render_type(&arg.ty, out);
+                    }
+                }
+                out.push(')');
+                if let Some(ret) = func.ret.as_ref() {
+                    out.push_str(" -> ");
+                    render_type(ret, out);
+                }
+            }
         }
     }
 
