@@ -1,0 +1,4 @@
+---
+features_transpiler:
+  - The argument ``"target_basis"`` in :class:`.BasisTranslator` is now
+    optional if a non-empty ``"target"`` is also provided.

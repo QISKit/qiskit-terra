@@ -536,6 +536,11 @@ class TestBasisTranslator(QiskitTestCase):
         inst = std_eq_lib._get_equivalences(rx_key)[0].circuit.data[0]
         self.assertEqual(inst.params, inst.operation.params)
 
+    def test_no_targets_raises(self):
+        """Test passing neither ``target`` nor ``target_basis`` raises."""
+        with self.assertRaisesRegex(TranspilerError, "`target` or `target_basis` must be set"):
+            _ = BasisTranslator(std_eq_lib)
+
 
 class TestUnrollerCompatability(QiskitTestCase):
     """Tests backward compatibility with the Unroller pass.
@@ -1122,7 +1127,7 @@ class TestBasisTranslatorWithTarget(QiskitTestCase):
         qc = QuantumCircuit(2)
         qc.cz(0, 1)
 
-        bt_pass = BasisTranslator(std_eqlib, target_basis=None, target=self.target)
+        bt_pass = BasisTranslator(std_eqlib, target=self.target)
         output = bt_pass(qc)
         # We need a second run of BasisTranslator to correct gates outside
         # the target basis. This is a known issue, see:
@@ -1259,7 +1264,7 @@ class TestBasisTranslatorWithTarget(QiskitTestCase):
             with else2:
                 pass
 
-        transpiled = BasisTranslator(std_eqlib, target_basis=None, target=target)(qc)
+        transpiled = BasisTranslator(std_eqlib, target=target)(qc)
 
         expected_qc = QuantumCircuit(3, 1)
         with expected_qc.if_test((0, False)) as else_:

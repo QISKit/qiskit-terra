@@ -39,7 +39,7 @@ labeljust=l;
 12 [color=blue, fontname=helvetica, label=BasisTranslator, shape=rectangle];
 13 [color=black, fontname=helvetica, fontsize=10, label="equivalence_library", shape=ellipse, style=solid];
 13 -> 12;
-14 [color=black, fontname=helvetica, fontsize=10, label="target_basis", shape=ellipse, style=solid];
+14 [color=black, fontname=helvetica, fontsize=10, label="target_basis", shape=ellipse, style=dashed];
 14 -> 12;
 15 [color=black, fontname=helvetica, fontsize=10, label=target, shape=ellipse, style=dashed];
 15 -> 12;

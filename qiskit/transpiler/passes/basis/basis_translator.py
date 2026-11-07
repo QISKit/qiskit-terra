@@ -14,8 +14,13 @@
 """Translates gates to a target basis using a given equivalence library."""
 
 import logging
+import typing
 
+from collections.abc import Iterable
 from qiskit.transpiler.basepasses import TransformationPass
+from qiskit.transpiler.target import Target
+from qiskit.circuit.equivalence import EquivalenceLibrary
+from qiskit.dagcircuit import DAGCircuit
 from qiskit._accelerate.basis_translator import base_run
 
 logger = logging.getLogger(__name__)
@@ -84,18 +89,47 @@ class BasisTranslator(TransformationPass):
     :ref:`custom_basis_gates` for details on adding custom equivalence rules.
     """
 
-    def __init__(self, equivalence_library, target_basis, target=None, min_qubits=0):
-        """Initialize a BasisTranslator instance.
+    @typing.overload
+    def __init__(
+        self,
+        equivalence_library: EquivalenceLibrary,
+        target_basis: Iterable[str],
+        target: None = None,
+        min_qubits: int = 0,
+    ) -> None: ...
 
-        Args:
-            equivalence_library (EquivalenceLibrary): The equivalence library
-                which will be used by the BasisTranslator pass. (Instructions in
-                this library will not be unrolled by this pass.)
-            target_basis (list[str]): Target basis names to unroll to, e.g. ``['u3', 'cx']``.
-            target (Target): The backend compilation target
-            min_qubits (int): The minimum number of qubits for operations in the input
-                dag to translate.
+    @typing.overload
+    def __init__(
+        self,
+        equivalence_library: EquivalenceLibrary,
+        target_basis: None = None,
+        target: Target = ...,
+        min_qubits: int = 0,
+    ) -> None: ...
+
+    def __init__(
+        self,
+        equivalence_library: EquivalenceLibrary,
+        target_basis: Iterable[str] | None = None,
+        target: Target | None = None,
+        min_qubits: int = 0,
+    ) -> None:
         """
+        Args:
+            equivalence_library: The equivalence library which will be used by this pass.
+                (Instructions in this library will not be unrolled by this pass.)
+            target_basis: Target basis names to unroll to, e.g. ``['u3', 'cx']``. This or
+                ``target`` must be set.
+            target: The backend compilation target. This or ``target_basis`` must be set.
+            min_qubits: The minimum number of qubits for operations in the input
+                dag to translate.
+
+        Raises:
+            TranspilerError: If neither ``target`` nor ``target_basis`` are given.
+        """
+        if target is None and target_basis is None:
+            raise TypeError("A non-empty `target` or `target_basis` must be set.")
+
         super().__init__()
         self._equiv_lib = equivalence_library
         self._target_basis = target_basis
@@ -104,17 +138,17 @@ class BasisTranslator(TransformationPass):
         self._target = target if target is not None and len(target.operation_names) > 0 else None
         self._min_qubits = min_qubits
 
-    def run(self, dag):
+    def run(self, dag: DAGCircuit) -> DAGCircuit:
         """Translate an input DAGCircuit to the target basis.
 
         Args:
-            dag (DAGCircuit): input dag
+            dag: The input dag.
 
         Raises:
             TranspilerError: if the target basis cannot be reached
 
         Returns:
-            DAGCircuit: translated circuit.
+            The translated circuit.
         """
 
         out = base_run(
