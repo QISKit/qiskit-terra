@@ -291,7 +291,11 @@ manylinux-ppc64le-image = "manylinux_2_28"
 manylinux-s390x-image = "manylinux_2_28"
 build = ["cp3??-*"]
 skip = ["*-win32", "*_i686", "*_universal2", "*-musllinux_*"]
-test-command = "cp -r {project}/test . && QISKIT_PARALLEL=FALSE stestr --test-path test/python run --abbreviate"
+test-command = [
+    "cp -r {project}/test .",
+    "stestr --test-path test/python run --abbreviate",
+]
+test-environment = { QISKIT_PARALLEL = "FALSE" }
 test-groups = ["test"]
 test-skip = ["*ppc64le", "*s390x"]
 # We need to use pre-built versions of Numpy and Scipy in the tests; we don't configure
@@ -302,20 +306,33 @@ before-test = "pip install --only-binary=numpy,scipy numpy scipy -c constraints.
 # specific job override is needed. For example tier 1 platforms locally override
 # the before-build and environment configuration to enable PGO,
 # see: .github/workflows/wheels.yml for the jobs where this is done
-environment = 'RUSTUP_TOOLCHAIN="stable" QISKIT_BUILD_WITH_MIMALLOC=1'
+environment = { RUSTUP_TOOLCHAIN = "stable", QISKIT_BUILD_WITH_MIMALLOC = 1 }
 
 [tool.cibuildwheel.linux]
-before-all = "dnf install -y wget && {package}/tools/install_rust.sh"
-environment = 'PATH="$PATH:$HOME/.cargo/bin" CARGO_NET_GIT_FETCH_WITH_CLI="true" RUSTUP_TOOLCHAIN="stable" QISKIT_BUILD_WITH_MIMALLOC=1'
-repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel} && pipx run abi3audit --strict --report {wheel}"
+before-all = [
+    "dnf install -y wget",
+    "{package}/tools/install_rust.sh",
+]
+inherit.environment = "prepend"
+environment = { PATH = "$PATH:$HOME/.cargo/bin",  CARGO_NET_GIT_FETCH_WITH_CLI = "true" }
+repair-wheel-command =  [
+    "auditwheel repair -w {dest_dir} {wheel}",
+    "pipx run abi3audit --strict --report {wheel}",
+]
 
 [tool.cibuildwheel.macos]
-repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel} && pipx run abi3audit --strict --report {wheel}"
-environment = "MACOSX_DEPLOYMENT_TARGET='10.12' RUSTUP_TOOLCHAIN=stable QISKIT_BUILD_WITH_MIMALLOC=1"
+repair-wheel-command = [
+    "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}",
+    "pipx run abi3audit --strict --report {wheel}",
+]
+inherit.environment = "prepend"
+environment = { MACOSX_DEPLOYMENT_TARGET = '10.12' }
 
 [tool.cibuildwheel.windows]
-test-command = "cp -r {project}/test . && stestr --test-path test/python run --abbreviate"
-repair-wheel-command = "cp {wheel} {dest_dir}/. && pipx run abi3audit --strict --report {wheel}"
+repair-wheel-command =  [
+    "cp {wheel} {dest_dir}/.",
+    "pipx run abi3audit --strict --report {wheel}",
+]
 
 [tool.ruff]
 line-length = 110
