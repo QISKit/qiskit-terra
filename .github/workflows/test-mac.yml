@@ -33,6 +33,8 @@ jobs:
       QISKIT_TEST_CAPTURE_STREAMS: 1
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Set up Python ${{ inputs.python-version }}
         uses: actions/setup-python@v7
         with:

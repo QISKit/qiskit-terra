@@ -17,10 +17,13 @@ concurrency:
   group: ${{ github.repository }}-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   config:
     name: Configure
-    uses: ./.github/workflows/config.yml
+    uses: $/.github/workflows/config.yml
 
   # This 'finalize' job is a no-op; its sole purpose is to depend on all the other jobs and provide
   # a single in-code determination of whether the branch-protection rules have been passed.  The
@@ -60,16 +63,15 @@ jobs:
   docs:
     name: Documentation
     needs: config
-    uses: ./.github/workflows/docs.yml
+    uses: $/.github/workflows/docs.yml
     with:
       python-version: ${{ needs.config.outputs.python-new }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
-    secrets: inherit
 
   lint:
     name: Lint
     needs: config
-    uses: ./.github/workflows/lint.yml
+    uses: $/.github/workflows/lint.yml
     with:
       python-version: ${{ needs.config.outputs.python-old }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
@@ -77,14 +79,14 @@ jobs:
   pyo3-ffi:
     name: pyo3-ffi
     needs: config
-    uses: ./.github/workflows/pyo3-ffi.yml
+    uses: $/.github/workflows/pyo3-ffi.yml
     with:
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
 
   test-linux:
     name: Unit Python / Linux / ${{ matrix.config.id }} - ${{ matrix.runner }}
     needs: config
-    uses: ./.github/workflows/test-linux.yml
+    uses: $/.github/workflows/test-linux.yml
     with:
       runner: ${{ matrix.runner }}
       python-version: ${{ matrix.config.python }}
@@ -113,7 +115,7 @@ jobs:
   test-macos:
     name: Unit Python / macOS / ${{ matrix.config.id }}
     needs: config
-    uses: ./.github/workflows/test-mac.yml
+    uses: $/.github/workflows/test-mac.yml
     with:
       runner: ${{ needs.config.outputs.runner-macos-arm64 }}
       python-version: ${{ matrix.config.python }}
@@ -133,7 +135,7 @@ jobs:
   test-windows:
     name: Unit Python / Windows / ${{ matrix.config.id }}
     needs: config
-    uses: ./.github/workflows/test-windows.yml
+    uses: $/.github/workflows/test-windows.yml
     with:
       runner: ${{ needs.config.outputs.runner-windows-x86_64 }}
       python-version: ${{ matrix.config.python }}
@@ -153,21 +155,21 @@ jobs:
   test-rust:
     name: Unit Rust
     needs: config
-    uses: ./.github/workflows/rust-tests.yml
+    uses: $/.github/workflows/rust-tests.yml
     with:
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
 
   miri:
     name: Miri
     needs: config
-    uses: ./.github/workflows/miri.yml
+    uses: $/.github/workflows/miri.yml
     with:
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
 
   test-c-defaults:
     name: Unit C / Defaults / ${{ matrix.runner }}
     needs: config
-    uses: ./.github/workflows/ctests.yml
+    uses: $/.github/workflows/ctests.yml
     with:
       python-version: ${{ needs.config.outputs.python-new }}
       runner: ${{ matrix.runner }}
@@ -183,7 +185,7 @@ jobs:
   test-c-versions:
     name: Unit C / Versions / ${{ matrix.extensions && 'gnu' || 'c' }}${{ matrix.version }}
     needs: config
-    uses: ./.github/workflows/ctests.yml
+    uses: $/.github/workflows/ctests.yml
     with:
       python-version: ${{ needs.config.outputs.python-new }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
@@ -202,7 +204,7 @@ jobs:
   test-images:
     name: Image
     needs: config
-    uses: ./.github/workflows/image-tests.yml
+    uses: $/.github/workflows/image-tests.yml
     with:
       python-version: ${{ needs.config.outputs.python-old }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
@@ -210,7 +212,7 @@ jobs:
   qpy:
     name: QPY
     needs: config
-    uses: ./.github/workflows/qpy.yml
+    uses: $/.github/workflows/qpy.yml
     with:
       python-version: ${{ needs.config.outputs.python-old }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}

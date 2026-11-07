@@ -14,7 +14,7 @@ jobs:
   copy_metadata:
     name: Copy metadata from base PR
     runs-on: ubuntu-latest
-    if: github.repository == 'Qiskit/qiskit' && github.actor == 'mergify[bot]'
+    if: github.repository == 'Qiskit/qiskit' && github.event.pull_request.user.login == 'mergify[bot]'
 
     permissions:
       pull-requests: write

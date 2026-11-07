@@ -26,6 +26,7 @@ jobs:
         with:
           # We need to fetch the whole history so 'reno' can do its job and we can inspect tags.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7

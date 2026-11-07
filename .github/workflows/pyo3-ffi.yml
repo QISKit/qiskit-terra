@@ -15,6 +15,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Prepare package
         run: make qiskit-pyo3-ffi
       - name: Package

@@ -16,6 +16,8 @@ jobs:
     runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Install Rust
         run: rustup toolchain install --profile minimal --no-self-update
       - name: Standalone checks for all crates

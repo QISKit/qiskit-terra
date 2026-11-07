@@ -15,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Select Rust version
         run: echo "RUSTUP_TOOLCHAIN=$(tools/miri.bash -t)" >> "$GITHUB_ENV"

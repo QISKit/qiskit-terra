@@ -70,10 +70,13 @@ on:
         required: false
 
 
+permissions:
+  contents: read
+
 jobs:
   config_pre:
     name: "Configure"
-    uses: ./.github/workflows/config.yml
+    uses: $/.github/workflows/config.yml
 
   config:
     # We set the Python versions to build and test using our configured values in GitHub Actions,
@@ -114,6 +117,8 @@ jobs:
           - ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
@@ -167,6 +172,8 @@ jobs:
     needs: [config]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         name: Install Python
         with:
@@ -194,6 +201,8 @@ jobs:
     needs: [config]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Install Rust
         run: rustup toolchain install 1.98 --override --profile minimal --no-self-update
 
@@ -216,6 +225,8 @@ jobs:
     needs: [config]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Install Rust
         run: rustup toolchain install 1.98 --override --profile minimal --no-self-update
 
@@ -238,6 +249,8 @@ jobs:
     needs: [config]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}

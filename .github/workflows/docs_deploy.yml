@@ -8,10 +8,13 @@ on:
       - "*"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   config:
     name: Configure
-    uses: ./.github/workflows/config.yml
+    uses: $/.github/workflows/config.yml
 
   resolve:
     if: github.repository_owner == 'Qiskit'
@@ -40,9 +43,8 @@ jobs:
     if: github.repository_owner == 'Qiskit'
     needs: [config, resolve]
     name: Build documentation
-    uses: ./.github/workflows/docs.yml
+    uses: $/.github/workflows/docs.yml
     with:
       python-version: ${{ needs.config.outputs.python-new }}
       runner: ${{ needs.config.outputs.runner-linux-x86_64 }}
       base-branch: ${{ needs.resolve.outputs.base-branch }}
-    secrets: inherit

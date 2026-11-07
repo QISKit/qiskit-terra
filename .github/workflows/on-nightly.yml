@@ -13,10 +13,13 @@ concurrency:
   group: ${{ github.repository }}-${{ github.ref }}-${{ github.head_ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   nightly-linux:
     if: ${{ github.repository_owner == 'Qiskit'}}
-    uses: ./.github/workflows/test-linux.yml
+    uses: $/.github/workflows/test-linux.yml
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
@@ -27,7 +30,7 @@ jobs:
       runner: ${{ matrix.runner }}
   nightly-mac:
     if: ${{ github.repository_owner == 'Qiskit'}}
-    uses: ./.github/workflows/test-mac.yml
+    uses: $/.github/workflows/test-mac.yml
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
@@ -39,7 +42,7 @@ jobs:
       runner: ${{ matrix.runner }}
   nightly-windows:
     if: ${{ github.repository_owner == 'Qiskit'}}
-    uses: ./.github/workflows/test-windows.yml
+    uses: $/.github/workflows/test-windows.yml
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
@@ -53,6 +56,8 @@ jobs:
     if: ${{ github.repository_owner == 'Qiskit' && failure() }}
     runs-on: ubuntu-latest
     needs: [nightly-linux, nightly-mac, nightly-linux]
+    permissions:
+      issues: write  # comments on an issue to report the failure
     steps:
       - name: "Create comment on failed test run"
         run: gh issue comment "$NUMBER" --body "$BODY"

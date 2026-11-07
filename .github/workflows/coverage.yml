@@ -8,6 +8,11 @@ concurrency:
   # Only cancel in PR mode.  In push mode, don't cancel so we don't see spurious test "failures",
   # and we get coverage reports on Coveralls for every push.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: write # comments on PRs for coverage reports
+
 jobs:
   coverage:
     if: github.repository_owner == 'Qiskit'
@@ -16,6 +21,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         name: Install Python
         with:
