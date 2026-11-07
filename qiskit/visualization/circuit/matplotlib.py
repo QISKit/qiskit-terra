@@ -469,7 +469,7 @@ class MatplotlibDrawer:
                 )
 
                 # mandatory check for vertical label compatibility, when vertical_labels is True
-                node_data[node]._effectively_vertical = self._is_vertical_label(
+                node_data[node]._effectively_vertical, span = self._is_vertical_label(
                     node, gate_text, wire_map
                 )
 
@@ -714,7 +714,8 @@ class MatplotlibDrawer:
         return layer_widths
 
     def _is_vertical_label(self, node, gate_text, wire_map):
-        """Return whether the label belongs to a multiqubit gate and should have vertical text."""
+        """Return whether the label belongs to a multiqubit gate and should have vertical text
+        and also the wire span of the gate."""
         num_ctrl_qubits = getattr(node.op, "num_ctrl_qubits", 0)
         if getattr(node.op, "modifiers", None):
             num_ctrl_qubits = sum(
@@ -735,7 +736,8 @@ class MatplotlibDrawer:
             and gate_text
             and len(gate_text) > 3
             and gate_text.count("$") == 0
-            and not isinstance(op, (SwapGate, RZZGate))
+            and not isinstance(op, (SwapGate, RZZGate)),
+            span,
         )
 
     def _vertical_label_lines(self, gate_text_original, full_text_width, available_height):
