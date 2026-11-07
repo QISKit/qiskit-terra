@@ -576,6 +576,17 @@ class TestCliffordGates(QiskitTestCase):
             cliff = Clifford(perm)
             self.assertTrue(Operator(cliff).equiv(Operator(perm)))
 
+    def test_from_permutation_and_linear_function_compose(self):
+        """Test tableau dtype is bool and compose is correct (gh-17402)."""
+        perm = Clifford(PermutationGate([1, 2, 0]))
+        lin = Clifford(LinearFunction([[1, 1, 0], [0, 1, 0], [0, 0, 1]]))
+        for cliff in (perm, lin):
+            self.assertEqual(cliff.tableau.dtype, np.dtype(bool))
+            for seed in range(30):
+                other = random_clifford(3, seed=seed)
+                expected = Operator(cliff).compose(Operator(other))
+                self.assertTrue(cliff.compose(other).to_operator().equiv(expected))
+
     def test_from_circuit_with_permutation_gate(self):
         """Test initialization from a quantum circuit that contains a permutation gate."""
         qc = QuantumCircuit(5)
