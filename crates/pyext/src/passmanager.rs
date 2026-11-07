@@ -14,10 +14,10 @@ use std::any::Any;
 use std::mem;
 use std::sync::{Arc, RwLock};
 
-use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyTypeError};
+use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::gc::PyVisit;
 use pyo3::prelude::*;
-use pyo3::types::PyType;
+use pyo3::types::{PyDict, PyList, PyType};
 use pyo3::{PyTraverseError, import_exception, intern};
 
 use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
@@ -189,6 +189,18 @@ fn ir_exposer(mut ty: Bound<PyType>) -> PyResult<Box<dyn PyIrExposer>> {
 /// Private Rust-Python boundary object that represents a handle to a pass coming from Python.
 #[pyclass(module = "qiskit._accelerate.passmanager")]
 pub struct PyPass(Option<PyPassInner>);
+impl PyPass {
+    /// Take the inner pass out of the handle.
+    ///
+    /// [`PyPassInner`] owns a boxed exposer, so it cannot be cloned out and has to be moved.
+    /// Callers must pass a freshly constructed handle, which makes the failure unreachable.
+    fn steal(slf: &Bound<Self>) -> PyResult<PyPassInner> {
+        slf.borrow_mut()
+            .0
+            .take()
+            .ok_or_else(|| PyRuntimeError::new_err("pass was already consumed"))
+    }
+}
 #[pymethods]
 impl PyPass {
     #[new]
@@ -207,6 +219,13 @@ impl PyPass {
         Ok(Self(Some(inner)))
     }
 
+    fn __repr__(&self) -> String {
+        match self.0.as_ref() {
+            None => "<PyPass: consumed>".to_owned(),
+            Some(inner) => format!("<PyPass: {}>", inner.name),
+        }
+    }
+
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         let Some(inner) = self.0.as_ref() else {
             return Ok(());
@@ -218,6 +237,106 @@ impl PyPass {
     }
     // We are not required to do anything in `__clear__` because our Python references are all
     // immutable.
+}
+
+static NATIVE_PASS: ImportOnceCell = ImportOnceCell::new(
+    "qiskit.passmanager.lowering_passmanager",
+    "_native_pass_from_lowering_pass",
+);
+static PASS: ImportOnceCell = ImportOnceCell::new("qiskit.passmanager", "Pass");
+static TASK_SEQUENCE: ImportOnceCell = ImportOnceCell::new("qiskit.passmanager", "TaskSequence");
+static TASK_STAGES: ImportOnceCell = ImportOnceCell::new("qiskit.passmanager", "TaskStages");
+
+/// The deepest task tree that can be converted to or from Python.
+///
+/// Python task containers are arbitrarily nestable, including recursively so.
+const MAX_TASK_DEPTH: usize = 1000;
+
+/// Build the native task that corresponds to a `qiskit.passmanager` object.
+///
+/// The set of [`Task`] variants is closed, so the accepted Python types are exactly `Pass`,
+/// `TaskSequence` and `TaskStages`.  This is the inverse of [`task_to_py`].
+fn task_from_py(ob: &Bound<PyAny>) -> PyResult<Task> {
+    task_from_py_inner(ob, 0)
+}
+
+fn task_from_py_inner(ob: &Bound<PyAny>, depth: usize) -> PyResult<Task> {
+    let py = ob.py();
+    if depth >= MAX_TASK_DEPTH {
+        return Err(PyValueError::new_err(format!(
+            "tasks are nested deeper than the maximum of {MAX_TASK_DEPTH}"
+        )));
+    }
+    if ob.is_instance(PASS.get_bound(py))? {
+        // Python owns the interpretation of the `Pass` protocol, including any
+        // calling-convention resolution, and hands back a `PyPass` handle.
+        let handle = NATIVE_PASS.get_bound(py).call1((ob,))?;
+        let pass = PyPass::steal(handle.cast::<PyPass>()?)?;
+        return Ok(Task::Transformation(Box::new(pass)));
+    }
+    if ob.is_instance(TASK_SEQUENCE.get_bound(py))? {
+        let tasks = ob
+            .getattr(intern!(py, "tasks"))?
+            .try_iter()?
+            .map(|task| task_from_py_inner(&task?, depth + 1))
+            .collect::<PyResult<Vec<_>>>()?;
+        return Ok(Task::Sequence(tasks));
+    }
+    if ob.is_instance(TASK_STAGES.get_bound(py))? {
+        let stages = ob
+            .getattr(intern!(py, "stages"))?
+            .cast_into::<PyDict>()?
+            .iter()
+            .map(|(name, task)| {
+                Ok((
+                    name.extract::<String>()?,
+                    task_from_py_inner(&task, depth + 1)?,
+                ))
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        return Ok(Task::Stages(stages));
+    }
+    Err(PyTypeError::new_err(format!(
+        "expected a Pass, TaskSequence or TaskStages, got {}: {}",
+        ob.get_type().name()?,
+        ob.repr()?
+    )))
+}
+
+/// Expose a native task to Python as the corresponding `qiskit.passmanager` object.
+fn task_to_py<'py>(py: Python<'py>, task: &Task) -> PyResult<Bound<'py, PyAny>> {
+    match task {
+        Task::Transformation(pass) => {
+            let Some(inner) = (pass.as_ref() as &dyn Any).downcast_ref::<PyPassInner>() else {
+                return Err(PyRuntimeError::new_err(format!(
+                    "the pass '{}' did not come from Python",
+                    pass.name()
+                )));
+            };
+            Ok(inner.ob.bind(py).clone())
+        }
+        Task::Sequence(tasks) => {
+            let children = tasks
+                .iter()
+                .map(|task| task_to_py(py, task))
+                .collect::<PyResult<Vec<_>>>()?;
+            TASK_SEQUENCE
+                .get_bound(py)
+                .call1((PyList::new(py, children)?,))
+        }
+        Task::Stages(stages) => {
+            let children = stages
+                .iter()
+                .map(|(name, task)| Ok((name, task_to_py(py, task)?)))
+                .collect::<PyResult<Vec<_>>>()?;
+            TASK_STAGES
+                .get_bound(py)
+                .call1((PyList::new(py, children)?,))
+        }
+        _ => Err(PyRuntimeError::new_err(format!(
+            "this task has no Python representation: {task:?}"
+        ))),
+    }
 }
 
 /// The actual logic of Rust wrapping passes that come from Python.  This is what implements `Pass`.
@@ -418,27 +537,47 @@ impl PyPassManager {
     pub fn py_new() -> Self {
         Self(Default::default())
     }
-    pub fn push_pass(&mut self, outer: &mut PyPass) -> PyResult<()> {
-        let pass = outer
-            .0
-            .take()
-            .ok_or_else(|| PyRuntimeError::new_err("pass was already consumed"))?;
-        match self.0.try_push_task(Task::Transformation(Box::new(pass))) {
+
+    /// Push a task onto the end of the pass manager.
+    ///
+    /// The task is validated recursively, and its input type is checked against the output type of
+    /// the pipeline so far.  The pass manager is left unmodified if either check fails.
+    ///
+    /// Raises:
+    ///     TypeError: if `task` is not a `Pass`, `TaskSequence` or `TaskStages`, if it is
+    ///         ill-typed internally, or if it does not follow on from the pipeline so far.
+    pub fn push_task(&mut self, task: &Bound<PyAny>) -> PyResult<()> {
+        match self.0.try_push_task(task_from_py(task)?) {
             Ok(()) => Ok(()),
-            Err((task, err)) => {
-                let Task::Transformation(pass) = task else {
-                    panic!("internal logic error: we got back something we didn't put in");
-                };
-                // Restore the object to Python space, to assist debugging.
-                outer.0 = Some(
-                    *(pass as Box<dyn Any>)
-                        .downcast::<PyPassInner>()
-                        .expect("this came from a `PyPassInner`"),
-                );
-                Err(PyTypeError::new_err(err.to_string()))
-            }
+            Err((_task, err)) => Err(PyTypeError::new_err(err.to_string())),
         }
     }
+
+    fn __repr__(&self) -> String {
+        match self.0.num_tasks() {
+            1 => "<LoweringPassManager: 1 task>".to_owned(),
+            n => format!("<LoweringPassManager: {n} tasks>"),
+        }
+    }
+
+    /// Convert the pipeline into the corresponding `qiskit.passmanager` container objects.
+    ///
+    /// Raises:
+    ///     RuntimeError: if any pass did not come from Python, or if a task has no Python
+    ///         representation.
+    pub fn to_py_tasks<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        (0..self.0.num_tasks())
+            .map(|index| {
+                task_to_py(
+                    py,
+                    self.0
+                        .get_task(index)
+                        .expect("index is below the task count"),
+                )
+            })
+            .collect()
+    }
+
     pub fn run_simple<'py>(&self, ir: Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = ir.py();
         let exposer_in = ir_exposer(ir.get_type())?;

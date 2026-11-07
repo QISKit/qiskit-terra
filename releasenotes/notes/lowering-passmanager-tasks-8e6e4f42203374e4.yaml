@@ -1,0 +1,19 @@
+---
+features:
+  - |
+    Added support for structured tasks to :class:`.LoweringPassManager`:
+    
+    * :class:`.TaskSequence` runs a sequence of tasks in order
+    * :class:`.TaskStages` runs a sequence of _named_ tasks in order
+    
+    These new classes are mutable containers that can be nested arbitrarily. 
+    Type consistency of IRs that they accept and return during execution
+    is validated for correctness when they are used to construct a pass 
+    manager, or appended to an existing pass manager. Before then, however,
+    they are allowed to be ill-typed to ease the process of their assembly.
+  - |
+    Added a method :meth:`.LoweringPassManager.to_task_sequence` to return a
+    :class:`.TaskSequence` of the tasks that a pass manager runs. This value 
+    can be arbitrarily modified and then used to construct a new 
+    :class:`.LoweringPassManager` that is effectively a modified version of 
+    the original.

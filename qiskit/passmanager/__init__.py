@@ -287,13 +287,51 @@ The "new" Qiskit pass manager is :class:`LoweringPassManager`.  This is newly de
 intention to permit native interoperation between compiled code and Python, and to permit a
 pipeline to lower through a series of intermediate representations (IRs).
 
-From a user perspective, you will create a :class:`LoweringPassManager`, populate it with a series
-of :class:`Pass` instances, each of which defines which :class:`IR` it accepts and returns, and then
-simply :meth:`~LoweringPassManager.run` the pipeline.  Alternatively, you may receive a
-:class:`LoweringPassManager` from a constructor function, which builds a preconfigured pipeline for
-you.
+A :class:`~.LoweringPassManager` executes a sequence of *tasks*.  A task is either a
+single :class:`~.Pass`, which is an atomic execution that declares the :class:`~.IR`\\s that it
+accepts and returns, or a (possibly nested) structure that holds tasks and specifies their
+flow of execution.
+
+While task structures like :class:`~.TaskSequence` are being constructed and mutated there are no
+checks to ensure that they specify valid :class:`~.IR`\\s transitions between passes; task container
+types generally allow being ill-typed. However, whenever a task is added to a pass manager, or
+whenever the task structure of a pass manager is mutated in any way, the pass manager checks at
+every boundary that one task's output IR is the next one's input, raising an error if the
+possibility of a bad :class:`~.IR` handover is detected.
+
+.. code-block:: python
+
+    from qiskit.passmanager import LoweringPassManager, TaskSequence, TaskStages
+
+    # These named stages will be run in order
+    stages = TaskStages(lower=TaskSequence([MyLoweringPass()]), optimize=TaskSequence())
+
+    stages["optimize"].append(MyOptimizationPass())
+    stages["lower"].append(AnotherLoweringPass())
+
+    # The next line checks the validity of the given sequence of tasks
+    pass_manager = LoweringPassManager([stages])
+    out = pass_manager.run(circuit)
+
 
 .. autoclass:: LoweringPassManager
+
+:class:`~.TaskSequence` is a :class:`~collections.abc.MutableSequence` of a sequence of tasks to be
+unconditionally executed in order. :class:`TaskStages` is a
+:class:`~collections.abc.MutableMapping` and also specifies a sequence of tasks to be
+unconditionally executed in order, but where each task must be assigned a name.
+
+.. autoclass:: LoweringTask
+.. autoclass:: TaskSequence
+    :members:
+    :special-members: __add__, __delitem__, __eq__, __getitem__, __len__, __radd__, __setitem__
+    :undoc-members:
+.. autoclass:: TaskStages
+    :members:
+    :special-members: __add__, __delitem__, __eq__, __getitem__, __iadd__, __iter__, __len__,
+        __radd__, __setitem__
+    :undoc-members:
+.. autodata:: StagesLike
 
 Developers will need to implement passes, and potentially introduce new IRs.  Both of these base
 objects define their subclass interfaces.
