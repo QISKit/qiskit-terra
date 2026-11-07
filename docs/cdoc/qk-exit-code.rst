@@ -47,3 +47,6 @@ Values
     Mismatching number of qubits.
 
     Value: 201
+
+Functions
+---------
