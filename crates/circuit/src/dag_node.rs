@@ -17,10 +17,9 @@ use std::sync::OnceLock;
 use crate::TupleLikeArg;
 use crate::circuit_data::CircuitData;
 use crate::circuit_instruction::{CircuitInstruction, OperationFromPython, extract_params};
-use crate::operations::{Operation, OperationRef, Param};
+use crate::operations::{Operation, OperationRef};
 
 use ahash::AHasher;
-use approx::relative_eq;
 use num_complex::Complex64;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 
@@ -186,29 +185,7 @@ impl DAGOpNode {
                 let other_params = borrowed_other.instruction.params_view();
                 let mut params_eq = true;
                 for (a, b) in slf_params.iter().zip(other_params) {
-                    let res = match [a, b] {
-                        [Param::Float(float_a), Param::Float(float_b)] => {
-                            relative_eq!(float_a, float_b, max_relative = 1e-10)
-                        }
-                        [
-                            Param::ParameterExpression(param_a),
-                            Param::ParameterExpression(param_b),
-                        ] => param_a == param_b,
-                        [Param::Obj(param_a), Param::Obj(param_b)] => {
-                            param_a.bind(py).eq(param_b)?
-                        }
-                        [Param::Int(param_a), Param::Int(param_b)] => param_a == param_b,
-                        [Param::ParameterExpression(_), Param::Int(_)]
-                        | [Param::Int(_), Param::ParameterExpression(_)] => false,
-                        [Param::ParameterExpression(_), Param::Float(_)]
-                        | [Param::Float(_), Param::ParameterExpression(_)] => false,
-                        [Param::Int(_), Param::Float(_)] | [Param::Float(_), Param::Int(_)] => {
-                            false
-                        }
-                        [Param::Obj(obj_a), param_a] | [param_a, Param::Obj(obj_a)] => {
-                            obj_a.bind(py).eq(param_a)?
-                        }
-                    };
+                    let res = a.is_close_strict(b, 1e-10)?;
                     if !res {
                         params_eq = false;
                         break;

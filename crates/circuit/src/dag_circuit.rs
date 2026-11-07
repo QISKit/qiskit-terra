@@ -10,7 +10,6 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter::zip;
@@ -1853,7 +1852,7 @@ impl PyDAGCircuit {
                 [Param::Float(self_phase), Param::Float(other_phase)] => {
                     Ok(phase_is_close(self_phase, other_phase))
                 }
-                _ => slf.global_phase.eq(&other.global_phase),
+                _ => slf.global_phase.eval_eq(&other.global_phase),
             }?;
             if !phase_eq {
                 return Ok(false);
@@ -2594,17 +2593,11 @@ impl PyDAGCircuit {
         if self.inner.cregs != other.inner.cregs {
             return Ok(false);
         }
-        // This is a stricter check than `Param::eq`, since we don't allow equality between explicit
-        // floats and Python-object representations of the same float.
-        let param_eq = |left: &Param, right: &Param| -> PyResult<bool> {
-            match (left, right) {
-                (Param::Float(a), Param::Float(b)) => Ok(a.total_cmp(b) == Ordering::Equal),
-                (Param::ParameterExpression(a), Param::ParameterExpression(b)) => Ok(a.eq(b)),
-                (Param::Obj(a), Param::Obj(b)) => Python::attach(|py| a.bind(py).eq(b.bind(py))),
-                _ => Ok(false),
-            }
-        };
-        if !param_eq(&self.inner.global_phase, &other.inner.global_phase)? {
+        if !self
+            .inner
+            .global_phase
+            .typed_eq(&other.inner.global_phase)?
+        {
             return Ok(false);
         }
         // This is stricter than `PackedInstruction::py_op_eq` because it doesn't allow equality
@@ -2635,7 +2628,7 @@ impl PyDAGCircuit {
                 return Ok(false);
             }
             for (left, right) in from_self_params.iter().zip(from_other_params.iter()) {
-                if !param_eq(left, right)? {
+                if !left.typed_eq(right)? {
                     return Ok(false);
                 }
             }

@@ -57,7 +57,7 @@ fn compare_params(params1: &[Param], params2: &[Param]) -> PyResult<bool> {
     }
 
     for (p1, p2) in params1.iter().zip(params2.iter()) {
-        let eq = p1.eq(p2)?;
+        let eq = p1.eval_eq(p2)?;
         if !eq {
             return Ok(false);
         }

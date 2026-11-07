@@ -45,11 +45,12 @@ pub(crate) fn compute_estimated_duration(dag: &PyDAGCircuit, target: &Target) ->
                             return if unit == DelayUnit::DT {
                                 if let Some(dt) = dt {
                                     match dur {
-                                        Param::Float(val) => Ok(val * dt),
-                                        Param::Obj(val) => Python::attach(|py| {
-                                            let dur_float: f64 = val.extract(py)?;
-                                            Ok(dur_float * dt)
-                                        }),
+                                        Param::Float(_) => Err(QiskitError::new_err(
+                                            "Circuit contains non-int dt delays, can't compute a duration estimate with this circuit",
+                                        )),
+                                        Param::Obj(_) => Err(QiskitError::new_err(
+                                            "Circuit contains non-int dt delays, can't compute a duration estimate with this circuit",
+                                        )),
                                         Param::ParameterExpression(_) => Err(QiskitError::new_err(
                                             "Circuit contains parameterized delays, can't compute a duration estimate with this circuit",
                                         )),

@@ -980,7 +980,7 @@ pub unsafe extern "C" fn qk_param_equal(lhs: *const Param, rhs: *const Param) ->
     let lhs = unsafe { &*lhs };
     let rhs = unsafe { &*rhs };
 
-    lhs.eq(rhs).unwrap()
+    lhs.eval_eq(rhs).unwrap()
 }
 
 /// @ingroup QkParam
@@ -1171,6 +1171,6 @@ mod test {
             .cast::<u8>()
             .wrapping_add(qk_param_stride())
             .cast::<Param>();
-        assert!(params[1].eq(unsafe { &*middle_ptr }).unwrap());
+        assert!(params[1].eval_eq(unsafe { &*middle_ptr }).unwrap());
     }
 }

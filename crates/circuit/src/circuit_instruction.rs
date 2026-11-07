@@ -35,7 +35,6 @@ use crate::operations::{
     PyOpKind, StandardGate, StandardInstruction, StandardInstructionType, Store, UnitaryGate,
 };
 use crate::packed_instruction::PackedOperation;
-use crate::parameter::parameter_expression::ParameterExpression;
 use nalgebra::{Dyn, MatrixView2, MatrixView4};
 use num_complex::Complex64;
 use smallvec::{SmallVec, smallvec};
@@ -438,39 +437,7 @@ impl CircuitInstruction {
                         return Ok(false);
                     }
                     for (left, right) in left.iter().zip(right) {
-                        let eq = match left {
-                            Param::Float(left) => match right {
-                                Param::Float(right) => left == right,
-                                Param::ParameterExpression(right) => {
-                                    &ParameterExpression::from_f64(*left) == right.as_ref()
-                                }
-                                Param::Obj(right) => right.bind(py).eq(left)?,
-                                Param::Int(_) => false,
-                            },
-                            Param::ParameterExpression(left) => match right {
-                                Param::Float(right) => {
-                                    left.as_ref() == &ParameterExpression::from_f64(*right)
-                                }
-                                Param::ParameterExpression(right) => left == right,
-                                Param::Obj(right) => right.bind(py).eq(left.as_ref().clone())?,
-                                Param::Int(right) => {
-                                    let right_val: crate::parameter::symbol_expr::Value =
-                                        (*right).into();
-                                    left.as_ref() == &ParameterExpression::from(right_val)
-                                }
-                            },
-                            Param::Obj(left) => left.bind(py).eq(right)?,
-                            Param::Int(left) => match right {
-                                Param::Float(_) => false,
-                                Param::ParameterExpression(right) => {
-                                    let left_val: crate::parameter::symbol_expr::Value =
-                                        (*left).into();
-                                    &ParameterExpression::from(left_val) == right.as_ref()
-                                }
-                                Param::Obj(right) => right.bind(py).eq(left)?,
-                                Param::Int(right) => left == right,
-                            },
-                        };
+                        let eq = left.eval_eq(right)?;
                         if !eq {
                             return Ok(false);
                         }
