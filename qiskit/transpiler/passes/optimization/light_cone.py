@@ -83,7 +83,10 @@ class LightCone(TransformationPass):
                 )
             lightcone_qubits = [dag.qubits[i] for i in self.indices]
             # `lightcone_operations` is a list of tuples, each containing (operation, list_of_qubits)
-            lightcone_operations = [(PauliGate(self.bit_terms), lightcone_qubits)]
+            # `bit_terms` uses sparse positional ordering (`bit_terms[i]` acts on
+            # `indices[i]`), while `PauliGate` uses dense ordering where the
+            # rightmost character acts on local qubit 0, so reverse the label.
+            lightcone_operations = [(PauliGate(self.bit_terms[::-1]), lightcone_qubits)]
 
         return set(lightcone_qubits), lightcone_operations
 

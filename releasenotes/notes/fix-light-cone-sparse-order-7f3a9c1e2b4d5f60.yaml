@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    Fixed a bug in :class:`.LightCone` where the positional association between
+    multi-qubit sparse ``bit_terms`` and ``indices`` was reversed when
+    constructing the initial observable. Asymmetric observables could therefore
+    cause incorrect gate removal and change expectation values. The
+    ``bit_terms[i]`` to ``indices[i]`` association is now preserved correctly.
+    Fixed `#16866 <https://github.com/Qiskit/qiskit/issues/16866>`__.

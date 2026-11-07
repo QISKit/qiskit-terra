@@ -155,9 +155,27 @@ class TestLightConePass(QiskitTestCase):
         expected.cx(2, 3)
         expected.ry(theta[8], 0)
         expected.ry(theta[10], 2)
-        expected.rz(theta[14], 2)
+        # "IZIX" is X(q0) Z(q2): RZ on q0 anticommutes (kept) while RZ on
+        # q2 commutes (dropped). Pre-gh-16866 reversal kept rz(theta[14], 2).
+        expected.rz(theta[12], 0)
 
         self.assertEqual(expected, new_circuit)
+
+    def test_asymmetric_xz_preserves_bit_term_order(self):
+        """Regression test for gh-16866: `bit_terms[i]` must act on `indices[i]`."""
+        # Sparse "XZ" on [0, 1] means X(q0) Z(q1), so Z(q0) does not
+        # commute with the observable and must be retained. Reversing the
+        # association would wrongly interpret it as Z(q0) X(q1) and drop Z(q0).
+        light_cone = LightCone(bit_terms="XZ", indices=[0, 1])
+        pm = PassManager([light_cone])
+
+        qc = QuantumCircuit(2)
+        qc.h(0)
+        qc.z(0)
+
+        new_circuit = pm.run(qc)
+
+        self.assertEqual(qc, new_circuit)
 
     def test_all_commuting(self):
         """Test for a circuit that fully commutes with an observable."""
@@ -312,7 +330,14 @@ class TestLightConePass(QiskitTestCase):
 
         new_circuit = pm.run(qc)
 
-        expected = QuantumCircuit(15)
+        if pauli_string == "YYYYYZXYYYYYYYY":
+            # Correct sparse association gives Y(q5) Y(q6), which does not
+            # commute with CX(5, 6), so it must be retained. The pre-gh-16866
+            # reversal mirrored the observable to Z(q5) X(q6), which commutes
+            # and wrongly expected an empty circuit.
+            expected = qc
+        else:
+            expected = QuantumCircuit(15)
 
         self.assertEqual(expected, new_circuit)
 
