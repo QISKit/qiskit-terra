@@ -265,6 +265,13 @@ class TestScoping(QiskitTestCase):
         with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "already defined"):
             qiskit.qasm2.loads(program)
 
+    @ddt.data("qreg q[4294967296];", "creg c[4294967296];")
+    def test_register_too_large(self, program):
+        # The circuit model indexes bits with a `u32`, so this is a parse error rather than a
+        # silently truncated register.
+        with self.assertRaisesRegex(qiskit.qasm2.QASM2ParseError, "does not fit in a circuit"):
+            qiskit.qasm2.loads(program)
+
     def test_qelib1_not_implicit(self):
         program = """
             OPENQASM 2.0;

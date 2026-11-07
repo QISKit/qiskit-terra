@@ -40,18 +40,64 @@ pub mod var_stretch_container;
 mod variable_mapper;
 pub mod vf2;
 
+use std::ops::Add;
+
 use bytemuck::{Pod, Zeroable};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PySequence, PyString, PyTuple};
 
-#[derive(Copy, Clone, Debug, Hash, Ord, PartialOrd, Eq, PartialEq, FromPyObject, Zeroable, Pod)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    FromPyObject,
+    Zeroable,
+    Pod,
+    IntoPyObject,
+    IntoPyObjectRef,
+)]
 #[repr(transparent)]
 pub struct Qubit(pub u32);
 
-#[derive(Copy, Clone, Debug, Hash, Ord, PartialOrd, Eq, PartialEq, FromPyObject, Zeroable, Pod)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Hash,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    FromPyObject,
+    Zeroable,
+    Pod,
+    IntoPyObject,
+    IntoPyObjectRef,
+)]
 #[repr(transparent)]
 pub struct Clbit(pub u32);
+
+impl Add<usize> for Qubit {
+    type Output = Self;
+
+    fn add(self, by: usize) -> Self {
+        Self(self.0 + by as u32)
+    }
+}
+
+impl Add<usize> for Clbit {
+    type Output = Self;
+
+    fn add(self, by: usize) -> Self {
+        Self(self.0 + by as u32)
+    }
+}
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Var(u32);

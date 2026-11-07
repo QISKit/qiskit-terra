@@ -13,11 +13,12 @@
 use num_bigint::BigUint;
 #[cfg(feature = "py")]
 use pyo3::prelude::*;
+use qiskit_circuit::{Clbit, Qubit};
 
 use crate::error::ParseError;
 use crate::expr::Expr;
 use crate::ext::ClassicalEvaluator;
-use crate::parse::{ClbitId, CregId, GateId, QubitId, State};
+use crate::parse::{CregId, GateId, State};
 
 /// An internal representation of the bytecode that will later be converted to the more free-form
 /// [Bytecode] Python-space objects.  This is fairly tightly coupled to Python space; the intent is
@@ -34,35 +35,35 @@ pub enum InternalBytecode {
     Gate {
         id: GateId,
         arguments: Vec<f64>,
-        qubits: Vec<QubitId>,
+        qubits: Vec<Qubit>,
     },
     ConditionedGate {
         id: GateId,
         arguments: Vec<f64>,
-        qubits: Vec<QubitId>,
+        qubits: Vec<Qubit>,
         creg: CregId,
         value: BigUint,
     },
     Measure {
-        qubit: QubitId,
-        clbit: ClbitId,
+        qubit: Qubit,
+        clbit: Clbit,
     },
     ConditionedMeasure {
-        qubit: QubitId,
-        clbit: ClbitId,
+        qubit: Qubit,
+        clbit: Clbit,
         creg: CregId,
         value: BigUint,
     },
     Reset {
-        qubit: QubitId,
+        qubit: Qubit,
     },
     ConditionedReset {
-        qubit: QubitId,
+        qubit: Qubit,
         creg: CregId,
         value: BigUint,
     },
     Barrier {
-        qubits: Vec<QubitId>,
+        qubits: Vec<Qubit>,
     },
     DeclareQreg {
         name: String,
@@ -80,7 +81,7 @@ pub enum InternalBytecode {
     GateInBody {
         id: GateId,
         arguments: Vec<Expr>,
-        qubits: Vec<QubitId>,
+        qubits: Vec<Qubit>,
     },
     EndDeclareGate {},
     DeclareOpaque {
