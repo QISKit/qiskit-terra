@@ -11,6 +11,7 @@ name = "qiskit_providers"
 [dependencies]
 num-complex.workspace = true
 thiserror.workspace = true
+uuid.workspace = true
 qiskit-circuit.workspace = true
 
 [dev-dependencies]
