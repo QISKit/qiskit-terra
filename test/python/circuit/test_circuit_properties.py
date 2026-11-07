@@ -506,6 +506,202 @@ class TestCircuitProperties(QiskitTestCase):
         self.assertIsInstance(result, dict)
         self.assertEqual(expected, result)
 
+    def test_count_ops_empty_circuit_returns_empty_dict(self):
+        """Test count_ops with an empty circuit."""
+        qc = QuantumCircuit(3)
+        self.assertEqual(qc.count_ops(), {})
+
+    def test_count_ops_multi_qubit_gates_counts_each_gate(self):
+        """Test count_ops with gates acting on multiple qubits."""
+        qc = QuantumCircuit(3)
+        qc.cx(0, 1)
+        qc.ccx(0, 1, 2)
+
+        result = qc.count_ops()
+
+        self.assertEqual(result, {"ccx": 1, "cx": 1})
+
+    def test_count_ops_non_gate_instructions_counts_each_instruction(self):
+        """Test count_ops with non-gate instructions."""
+        qc = QuantumCircuit(2, 1)
+        qc.measure(0, 0)
+        qc.barrier()
+        qc.reset(1)
+
+        result = qc.count_ops()
+
+        self.assertEqual(result, {"measure": 1, "barrier": 1, "reset": 1})
+
+    def test_count_ops_repeated_single_gate_accumulates_count(self):
+        """Test count_ops with repeated gates."""
+        qc = QuantumCircuit(1)
+        qc.x(0)
+        qc.x(0)
+        qc.x(0)
+
+        self.assertEqual(dict(qc.count_ops()), {"x": 3})
+
+    def test_count_ops_per_qubit_no_qubits_returns_empty_list(self):
+        """Test count_ops_per_qubit with a circuit containing no qubits."""
+        qc = QuantumCircuit()
+
+        self.assertEqual(qc.count_ops_per_qubit(), [])
+
+    def test_count_ops_per_qubit_qubits_without_gates_returns_empty_dicts(self):
+        """Test count_ops_per_qubit with qubits but no gates."""
+        qc = QuantumCircuit(3)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(result, [{}, {}, {}])
+
+    def test_count_ops_per_qubit_single_qubit_gates_counts_operations_per_qubit(
+        self,
+    ):
+        """Test count_ops_per_qubit with single-qubit gates."""
+        q = QuantumRegister(4, "q")
+        qc = QuantumCircuit(q)
+        qc.h(q)
+        qc.x(q[1:3])
+        qc.y(q[2:])
+        qc.z(q[3])
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(result[0], {"h": 1})
+        self.assertEqual(result[1], {"h": 1, "x": 1})
+        self.assertEqual(result[2], {"h": 1, "x": 1, "y": 1})
+        self.assertEqual(result[3], {"h": 1, "y": 1, "z": 1})
+
+    def test_count_ops_per_qubit_two_qubit_gates_counts_operations_per_qubit(self):
+        """Test count_ops_per_qubit with two-qubit gates."""
+        qc = QuantumCircuit(4)
+        qc.cx(0, 1)
+        qc.cx(0, 1)
+        qc.cx(1, 2)
+        qc.cy(1, 2)
+        qc.cz(2, 3)
+        qc.ch(0, 3)
+        qc.swap(1, 3)
+        qc.ecr(0, 2)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(result[0], {"cx": 2, "ch": 1, "ecr": 1})
+        self.assertEqual(result[1], {"cx": 3, "cy": 1, "swap": 1})
+        self.assertEqual(result[2], {"cx": 1, "cy": 1, "cz": 1, "ecr": 1})
+        self.assertEqual(result[3], {"cz": 1, "ch": 1, "swap": 1})
+    def test_count_ops_per_qubit_three_qubit_gates_counts_operations_per_qubit(self):
+        """Test count_ops_per_qubit with three-qubit gates."""
+        qc = QuantumCircuit(5)
+        qc.ccx(0, 1, 2)
+        qc.ccx(0, 1, 2)
+        qc.ccx(2, 3, 4)
+        qc.ccz(1, 2, 3)
+        qc.cswap(2, 3, 4)
+        qc.rccx(0, 3, 4)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 5)
+        self.assertEqual(result[0], {"ccx": 2, "rccx": 1})
+        self.assertEqual(result[1], {"ccx": 2, "ccz": 1})
+        self.assertEqual(result[2], {"ccx": 3, "ccz": 1, "cswap": 1})
+        self.assertEqual(result[3], {"ccx": 1, "ccz": 1, "cswap": 1, "rccx": 1})
+        self.assertEqual(result[4], {"ccx": 1, "cswap": 1, "rccx": 1})
+
+    def test_count_ops_per_qubit_non_gate_instructions_counts_operations_per_qubit(self):
+        """Test count_ops_per_qubit with non-gate instructions."""
+        qc = QuantumCircuit(3, 1)
+        qc.measure(0, 0)
+        qc.reset(1)
+        qc.delay(100, 2)
+        qc.barrier(0, 2)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], {"measure": 1, "barrier": 1})
+        self.assertEqual(result[1], {"reset": 1})
+        self.assertEqual(result[2], {"delay": 1, "barrier": 1})
+
+    def test_count_ops_per_qubit_counts_barrier_on_all_qubits(self):
+        """Test that count_ops_per_qubit counts a barrier on every qubit when called without explicit qubit arguments."""
+        qc = QuantumCircuit(4)
+        qc.h(1)
+        qc.barrier()
+        qc.cx(1, 2)
+        qc.barrier(0, 2)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 4)
+        self.assertEqual(result[0], {"barrier": 2})
+        self.assertEqual(result[1], {"h": 1, "barrier": 1, "cx": 1})
+        self.assertEqual(result[2], {"barrier": 2, "cx": 1})
+        self.assertEqual(result[3], {"barrier": 1})
+
+    def test_count_ops_per_qubit_repeated_operations_accumulates_count(self):
+        """Test count_ops_per_qubit with repeated operations."""
+        qc = QuantumCircuit(1)
+        qc.x(0)
+        qc.x(0)
+        qc.x(0)
+        qc.h(0)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], {"x": 3, "h": 1})
+
+    def test_count_ops_per_qubit_unused_middle_qubit_returns_empty_dict(self):
+        """Test count_ops_per_qubit with an unused qubit."""
+        qc = QuantumCircuit(3)
+        qc.h(0)
+        qc.cx(0, 2)
+        qc.x(2)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], {"h": 1, "cx": 1})
+        self.assertEqual(result[1], {})
+        self.assertEqual(result[2], {"cx": 1, "x": 1})
+
+    def test_count_ops_per_qubit_custom_gate_counts_gate_on_each_target_qubit(self):
+        """Test count_ops_per_qubit with a custom gate."""
+        inner = QuantumCircuit(2, name="bill_gate")
+        inner.h(0)
+        inner.cx(0, 1)
+        custom = inner.to_gate()
+        qc = QuantumCircuit(3)
+        qc.append(custom, [0, 1])
+        qc.x(2)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], {"bill_gate": 1})
+        self.assertEqual(result[1], {"bill_gate": 1})
+        self.assertEqual(result[2], {"x": 1})
+
+    def test_count_ops_per_qubit_control_flow_counts_if_else_at_surface_level(self):
+        """Test count_ops_per_qubit with control-flow instructions."""
+        qc = QuantumCircuit(2, 1)
+        qc.measure(0, 0)
+
+        with qc.if_test((qc.clbits[0], True)):
+            qc.x(0)
+            qc.x(1)
+
+        result = qc.count_ops_per_qubit()
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], {"measure": 1, "if_else": 1})
+        self.assertEqual(result[1], {"if_else": 1})
+
     def test_circuit_nonlocal_gates(self):
         """Test num_nonlocal_gates."""
 
