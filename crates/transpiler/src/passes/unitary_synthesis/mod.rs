@@ -25,6 +25,7 @@ use std::hash;
 use thread_local::ThreadLocal;
 
 use numpy::PyReadonlyArray2;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::{intern, wrap_pyfunction};
 
@@ -35,7 +36,9 @@ use crate::QiskitError;
 use crate::target::Target;
 use qiskit_circuit::bit::QuantumRegister;
 use qiskit_circuit::circuit_data::CircuitData;
-use qiskit_circuit::dag_circuit::{DAGCircuit, DAGCircuitBuilder, NodeType, PyDAGCircuit};
+use qiskit_circuit::dag_circuit::{
+    DAGCircuit, DAGCircuitBuilder, DAGError, NodeType, PyDAGCircuit,
+};
 use qiskit_circuit::instruction::Parameters;
 use qiskit_circuit::operations::{Operation, OperationRef, Param, PythonOperation, StandardGate};
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
@@ -43,13 +46,53 @@ use qiskit_circuit::{BlocksMode, PhysicalQubit, Qubit, VarsMode};
 use qiskit_synthesis::euler_one_qubit_decomposer::{
     OneQubitGateSequence, unitary_to_gate_sequence_inner,
 };
-use qiskit_synthesis::qsd::quantum_shannon_decomposition;
+use qiskit_synthesis::qsd::{QSDError, quantum_shannon_decomposition};
 use qiskit_synthesis::two_qubit_decompose::TwoQubitGateSequence;
 use qiskit_util::getenv_use_multiple_threads;
 
 #[cfg(feature = "cache_pygates")]
 use std::sync::OnceLock;
 
+/// Errors that can be thrown by UnitarySynthesis
+#[derive(Debug, thiserror::Error)]
+pub enum UnitarySynthesisError {
+    #[error(
+        "No preferred direction of gate on qubits {0:?} could be determined from coupling map or gate lengths / gate errors."
+    )]
+    NoPreferredDirection([PhysicalQubit; 2]),
+    #[error("requested synthesis fidelity is out of range: {0}")]
+    SynthesisFidelityOutOfRange(f64),
+    #[error(transparent)]
+    QSD(#[from] QSDError),
+    #[error(transparent)]
+    DAGCircuit(#[from] DAGError),
+    // TODO: Remove once XXDecomposer is in Rust.
+    #[error(transparent)]
+    XXDecomposer(PyErr),
+    // TODO: Replace with Rust native versions of errors for Decomposer2q
+    #[error(transparent)]
+    Decomposer2q(PyErr),
+    #[error(transparent)]
+    PyGate(PyErr),
+}
+
+impl From<UnitarySynthesisError> for PyErr {
+    fn from(value: UnitarySynthesisError) -> Self {
+        match value {
+            UnitarySynthesisError::NoPreferredDirection(_) => {
+                QiskitError::new_err(value.to_string())
+            }
+            UnitarySynthesisError::SynthesisFidelityOutOfRange(_) => {
+                PyValueError::new_err(value.to_string())
+            }
+            UnitarySynthesisError::DAGCircuit(error) => error.into(),
+            UnitarySynthesisError::XXDecomposer(py_err) => py_err,
+            UnitarySynthesisError::QSD(qsderror) => qsderror.into(),
+            UnitarySynthesisError::Decomposer2q(py_err) => py_err,
+            UnitarySynthesisError::PyGate(py_err) => py_err,
+        }
+    }
+}
 /// Threshold in number of gates to synthesize to run the pass multithreaded
 /// vs serially. At smaller gate counts the overhead of multithreading outweighs the speedup
 const PARALLEL_THRESHOLD: usize = 50;
@@ -330,36 +373,39 @@ fn parallel_synthesis(
     constraint: QpuConstraint,
     state: &mut UnitarySynthesisState,
     min_qubits: usize,
-) -> PyResult<HashMap<NodeIndex, SynthesisOutput>> {
+) -> Result<HashMap<NodeIndex, SynthesisOutput>, UnitarySynthesisError> {
     let thread_local_states = ThreadLocal::new();
     (0..dag.dag().node_bound())
         .into_par_iter()
-        .filter_map(|idx| -> Option<PyResult<(NodeIndex, SynthesisOutput)>> {
-            let index = NodeIndex::new(idx);
-            let synthesis_state: &RefCell<UnitarySynthesisState> =
-                thread_local_states.get_or(|| RefCell::new(state.clone()));
-            let Some(NodeType::Operation(inst)) = dag.dag().node_weight(index) else {
-                return None;
-            };
-            if !(synth_gates.contains(inst.op.name()) && inst.op.num_qubits() >= min_qubits as u32)
-            {
-                return None;
-            }
-            let unitary = inst.try_cow_array()?;
-            let result = synthesize_matrix(
-                unitary,
-                qubit_indices,
-                dag.get_qargs(inst.qubits),
-                &mut synthesis_state.borrow_mut(),
-                constraint,
-            )
-            .transpose()?;
-            match result {
-                Ok(result) => Some(Ok((index, result))),
-                Err(e) => Some(Err(e)),
-            }
-        })
-        .collect::<PyResult<_>>()
+        .filter_map(
+            |idx| -> Option<Result<(NodeIndex, SynthesisOutput), UnitarySynthesisError>> {
+                let index = NodeIndex::new(idx);
+                let synthesis_state: &RefCell<UnitarySynthesisState> =
+                    thread_local_states.get_or(|| RefCell::new(state.clone()));
+                let Some(NodeType::Operation(inst)) = dag.dag().node_weight(index) else {
+                    return None;
+                };
+                if !(synth_gates.contains(inst.op.name())
+                    && inst.op.num_qubits() >= min_qubits as u32)
+                {
+                    return None;
+                }
+                let unitary = inst.try_cow_array()?;
+                let result = synthesize_matrix(
+                    unitary,
+                    qubit_indices,
+                    dag.get_qargs(inst.qubits),
+                    &mut synthesis_state.borrow_mut(),
+                    constraint,
+                )
+                .transpose()?;
+                match result {
+                    Ok(result) => Some(Ok((index, result))),
+                    Err(e) => Some(Err(e)),
+                }
+            },
+        )
+        .collect::<Result<_, UnitarySynthesisError>>()
 }
 
 /// Return a new DAG that takes a mapping as returned by [`parallel_synthesis`] and replaces those
@@ -372,7 +418,7 @@ fn apply_synthesis(
     min_qubits: usize,
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
-) -> PyResult<DAGCircuit> {
+) -> Result<DAGCircuit, UnitarySynthesisError> {
     let rebuilder_callback =
         |out: &mut DAGCircuitBuilder, inst: &PackedInstruction, node_index: NodeIndex| {
             let Some(cf) = dag.try_view_control_flow(inst) else {
@@ -416,7 +462,7 @@ fn apply_synthesis(
                         }
                     })
                 })
-                .collect::<PyResult<_>>()?;
+                .collect::<Result<_, UnitarySynthesisError>>()?;
             out.push_back(PackedInstruction::from_control_flow(
                 inst.op.control_flow().clone(),
                 blocks,
@@ -463,7 +509,7 @@ pub fn run_unitary_synthesis(
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
     force_serial: bool,
-) -> PyResult<Option<DAGCircuit>> {
+) -> Result<Option<DAGCircuit>, UnitarySynthesisError> {
     let op_counts = dag.count_ops(true)?;
     let gate_counts: usize = synth_gates
         .iter()
@@ -515,14 +561,14 @@ fn serial_run_unitary_synthesis(
     qubit_indices: &[PhysicalQubit],
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
-) -> PyResult<DAGCircuit> {
+) -> Result<DAGCircuit, UnitarySynthesisError> {
     // This method is the actual distribution logic of unitary synthesis, but there are several
     // paths through it that return `Ok(false)`, meaning "no error and no synthesis needed", so the
     // caller is responsible for propagating the old instruction through to wherever is necessary.
     let synthesize_onto = |out: &mut DAGCircuitBuilder,
                            state: &mut UnitarySynthesisState,
                            inst: &PackedInstruction|
-     -> PyResult<bool> {
+     -> Result<bool, UnitarySynthesisError> {
         if !(synth_gates.contains(inst.op.name()) && inst.op.num_qubits() >= min_qubits as u32) {
             return Ok(false);
         }
@@ -576,7 +622,7 @@ fn serial_run_unitary_synthesis(
                         }
                     })
                 })
-                .collect::<PyResult<_>>()?;
+                .collect::<Result<_, UnitarySynthesisError>>()?;
             out.push_back(PackedInstruction::from_control_flow(
                 inst.op.control_flow().clone(),
                 blocks,
@@ -596,7 +642,7 @@ fn synthesize_matrix(
     qubits_local: &[Qubit],
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
-) -> PyResult<Option<SynthesisOutput>> {
+) -> Result<Option<SynthesisOutput>, UnitarySynthesisError> {
     let num_qubits = qubits_local.len();
     debug_assert_eq!(unitary.shape(), &[1 << num_qubits, 1 << num_qubits]);
     match *qubits_local {
@@ -633,7 +679,7 @@ fn apply_matrix_result_onto(
     result: SynthesisOutput,
     out: &mut DAGCircuitBuilder,
     qubits_virt: &[Qubit],
-) -> PyResult<()> {
+) -> Result<(), UnitarySynthesisError> {
     match result {
         SynthesisOutput::Phase(phase) => {
             out.add_global_phase(&Param::Float(phase))?;
@@ -701,7 +747,8 @@ fn apply_matrix_result_onto(
                         let gate = py_gate.py_copy(py)?;
                         gate.ob.setattr(py, intern!(py, "params"), params)?;
                         Ok(gate.into())
-                    })?,
+                    })
+                    .map_err(UnitarySynthesisError::PyGate)?,
                     _ => panic!("internal logic error: decomposed sequence contains a non-gate"),
                 };
                 let params = (!params.is_empty()).then(|| {
@@ -742,7 +789,7 @@ fn synthesize_matrix_onto(
     qubits_local: &[Qubit],
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
-) -> PyResult<bool> {
+) -> Result<bool, UnitarySynthesisError> {
     let num_qubits = qubits_local.len();
     debug_assert_eq!(unitary.shape(), &[1 << num_qubits, 1 << num_qubits]);
     match *qubits_local {
@@ -785,7 +832,7 @@ fn synthesize_1q_matrix(
     qubit_phys: PhysicalQubit,
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
-) -> PyResult<Option<SynthesisOutput>> {
+) -> Result<Option<SynthesisOutput>, UnitarySynthesisError> {
     if let Some(sk) = state.cache.try_solovay_kitaev(qubit_phys, constraint) {
         let circuit = sk
             .synthesize_matrix(&Matrix2::from_fn(|i, j| unitary[[i, j]]), 5)
@@ -815,7 +862,7 @@ fn synthesize_1q_matrix_onto(
     qubit_virt: Qubit,
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
-) -> PyResult<bool> {
+) -> Result<bool, UnitarySynthesisError> {
     // TODO: we possibly want to invert this logic and do Euler synthesis if possible, and SK only
     // if we have to.  If nothing else, it simplifies the logic of `try_solovay_kitaev` - instead of
     // "is this _only_ Clifford+T?" it can become "does this permit a Clifford+T decomposition",
@@ -951,7 +998,7 @@ pub(crate) fn synthesize_2q_matrix<F, S>(
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
     mut fidelity_calculation: F,
-) -> PyResult<Option<TwoQSynthesisResult<S>>>
+) -> Result<Option<TwoQSynthesisResult<S>>, UnitarySynthesisError>
 where
     F: FnMut(&Direction2q, &TwoQubitGateSequence, &QpuConstraint, [PhysicalQubit; 2]) -> S,
     S: PartialOrd,
@@ -971,14 +1018,15 @@ where
     };
     let mut sequences = decomposer_cache
         .get_2q(qargs_phys, config, constraint)?
-        .map(|(decomposer, flip)| -> PyResult<_> {
+        .map(|(decomposer, flip)| -> Result<_, UnitarySynthesisError> {
             match flip {
                 FlipDirection::No => single_decomposition(decomposer, Direction2q::Forwards)
                     .map(|seq| (Direction2q::Forwards, seq)),
                 FlipDirection::Yes => single_decomposition(decomposer, Direction2q::Backwards)
                     .map(|seq| (Direction2q::Backwards, seq)),
                 FlipDirection::Ensure(dir) => {
-                    let normal = single_decomposition(decomposer, Direction2q::Forwards)?;
+                    let normal = single_decomposition(decomposer, Direction2q::Forwards)
+                        .map_err(UnitarySynthesisError::Decomposer2q)?;
                     if normal
                         .gates()
                         .iter()
@@ -996,6 +1044,7 @@ where
                     }
                 }
             }
+            .map_err(UnitarySynthesisError::Decomposer2q)
         });
 
     let Some(first) = sequences.next().transpose()? else {
@@ -1042,7 +1091,7 @@ fn synthesize_2q_matrix_onto(
     qargs_virt: [Qubit; 2],
     state: &mut UnitarySynthesisState,
     constraint: QpuConstraint,
-) -> PyResult<bool> {
+) -> Result<bool, UnitarySynthesisError> {
     let Some(result) =
         synthesize_2q_matrix(unitary, qargs_phys, state, constraint, fidelity_2q_sequence)?
     else {
@@ -1072,7 +1121,8 @@ fn synthesize_2q_matrix_onto(
                 let inst = inst.py_copy(py)?;
                 inst.ob.setattr(py, intern!(py, "params"), params)?;
                 Ok(inst.into())
-            })?,
+            })
+            .map_err(UnitarySynthesisError::PyGate)?,
             _ => panic!("internal logic error: decomposed sequence contains a non-gate"),
         };
         let params = (!params.is_empty()).then(|| {

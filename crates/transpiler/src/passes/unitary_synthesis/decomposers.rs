@@ -38,8 +38,8 @@ use super::{
     Approximation, DecompositionDirection2q, NormalizedFidelity, QpuConstraint, QpuConstraintKind,
     UnitarySynthesisConfig, UsePulseOptimizer,
 };
-use crate::QiskitError;
 use crate::passes::optimize_clifford_t::CLIFFORD_T_GATE_NAMES;
+use crate::passes::unitary_synthesis::UnitarySynthesisError;
 use crate::target::{NormalOperation, Target, TargetOperation};
 use qiskit_circuit::circuit_data::{CircuitData, PyCircuitData};
 use qiskit_circuit::instruction::Instruction;
@@ -481,7 +481,8 @@ impl DecomposerCache {
         qubits: [PhysicalQubit; 2],
         config: &UnitarySynthesisConfig,
         constraint: QpuConstraint,
-    ) -> PyResult<impl ExactSizeIterator<Item = (&Decomposer2q, FlipDirection)>> {
+    ) -> Result<impl ExactSizeIterator<Item = (&Decomposer2q, FlipDirection)>, UnitarySynthesisError>
+    {
         // We can't use `Entry::or_insert_with` because our creator function is fallible and we
         // might have to propagate its error.
         let entry = match self.decomposers_2q.entry(qubits) {
@@ -520,7 +521,7 @@ fn get_2q_decomposers(
     qubits: [PhysicalQubit; 2],
     config: &UnitarySynthesisConfig,
     constraint: QpuConstraint,
-) -> PyResult<Vec<(usize, FlipDirection)>> {
+) -> Result<Vec<(usize, FlipDirection)>, UnitarySynthesisError> {
     let choose_flip =
         |direction: AllowedDirection2q, constructor: &Decomposer2qConstructor| -> FlipDirection {
             match direction {
@@ -561,13 +562,7 @@ fn get_2q_decomposers(
                 DecompositionDirection2q::UniquelyBestValid
                     if direction == AllowedDirection2q::Both =>
                 {
-                    return Err(QiskitError::new_err(format!(
-                        concat!(
-                            "No preferred direction of gate on qubits {:?} ",
-                            "could be determined from coupling map or gate lengths / gate errors."
-                        ),
-                        qubits
-                    )));
+                    return Err(UnitarySynthesisError::NoPreferredDirection(qubits));
                 }
                 DecompositionDirection2q::UniquelyBestValid
                 | DecompositionDirection2q::BestValid => direction,
@@ -607,11 +602,10 @@ fn get_2q_decomposers(
                     gate: kak_gate.into(),
                     params: smallvec![],
                 };
-                let fidelity = config.approximation.synthesis_fidelity(0.0).map_err(|e| {
-                    PyValueError::new_err(format!(
-                        "requested synthesis fidelity is out of range: {e}"
-                    ))
-                })?;
+                let fidelity = config
+                    .approximation
+                    .synthesis_fidelity(0.0)
+                    .map_err(UnitarySynthesisError::SynthesisFidelityOutOfRange)?;
                 let constructor = Decomposer2qConstructor::StaticKak(StaticKakConstructor {
                     source,
                     euler,
@@ -705,11 +699,7 @@ fn get_2q_decomposers(
                 let fidelity = config
                     .approximation
                     .synthesis_fidelity(candidate.error)
-                    .map_err(|e| {
-                        PyValueError::new_err(format!(
-                            "requested synthesis fidelity is out of range: {e}"
-                        ))
-                    })?;
+                    .map_err(UnitarySynthesisError::SynthesisFidelityOutOfRange)?;
                 // TODO: the 2q decomposers internally already do everything that's needed to handle
                 // _all_ of the 1q bases simultaneously without further decompositions, but don't
                 // expose that functionality.  This wastes huge amounts of time and needs a fix.
@@ -742,6 +732,7 @@ fn get_2q_decomposers(
                     get_xx_decomposers(py, cache, &euler_bases, &candidates_2q, config)
                 })
                 .map(|maybe| maybe.into_iter().collect())
+                .map_err(UnitarySynthesisError::XXDecomposer)
             } else {
                 Ok(Default::default())
             }
