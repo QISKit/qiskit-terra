@@ -31,7 +31,7 @@ pub use cast::Cast;
 pub use constant::Constant;
 pub use error::MathOpError;
 pub use program_op::{BoxedOpError, BoxedProgramOp, ErasedProgramOp, ProgramOp, QISKIT};
-pub use random::{CounterUnit, Entropy, RandomOpError, Split};
+pub use random::{CounterUnit, Entropy, RandomBits, RandomOpError, Split};
 
 pub use reduction::{Mean, Std, Variance};
 pub use shot_loop::{ShotLoop, ShotLoopError};
