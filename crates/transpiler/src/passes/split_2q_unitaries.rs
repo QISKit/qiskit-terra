@@ -18,12 +18,33 @@ use pyo3::prelude::*;
 use rustworkx_core::petgraph::stable_graph::NodeIndex;
 use smallvec::{SmallVec, smallvec};
 
-use qiskit_circuit::dag_circuit::{DAGCircuit, DAGCircuitBuilder, NodeType, PyDAGCircuit, Wire};
+use qiskit_circuit::dag_circuit::{
+    DAGCircuit, DAGCircuitBuilder, DAGError, NodeType, PyDAGCircuit, Wire,
+};
 use qiskit_circuit::operations::{ArrayType, Operation, OperationRef, Param, UnitaryGate};
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
 use qiskit_circuit::{BlocksMode, Qubit, VarsMode};
 
 use qiskit_synthesis::two_qubit_decompose::{Specialization, TwoQubitWeylDecomposition};
+
+/// Possible errors to be returned by the `Split2QUnitaries` pass.
+#[derive(Debug, thiserror::Error)]
+pub enum Split2QUnitariesError {
+    #[error(transparent)]
+    DAGCircuit(#[from] DAGError),
+    // TODO: Replace with Rust-native error
+    #[error(transparent)]
+    WeylDecomposition(PyErr),
+}
+
+impl From<Split2QUnitariesError> for PyErr {
+    fn from(value: Split2QUnitariesError) -> Self {
+        match value {
+            Split2QUnitariesError::DAGCircuit(dag_error) => dag_error.into(),
+            Split2QUnitariesError::WeylDecomposition(py_err) => py_err,
+        }
+    }
+}
 
 #[pyfunction]
 #[pyo3(name = "split_2q_unitaries")]
@@ -49,7 +70,7 @@ pub fn run_split_2q_unitaries(
     dag: &mut DAGCircuit,
     requested_fidelity: f64,
     split_swaps: bool,
-) -> PyResult<Option<(DAGCircuit, Vec<usize>)>> {
+) -> Result<Option<(DAGCircuit, Vec<usize>)>, Split2QUnitariesError> {
     if !dag.get_op_counts().contains_key("unitary") {
         return Ok(None);
     }
@@ -70,7 +91,8 @@ pub fn run_split_2q_unitaries(
             let qubits: [Qubit; 2] = [temp[0], temp[1]];
             let matrix = unitary_gate.matrix_view();
             let decomp =
-                TwoQubitWeylDecomposition::new_inner(matrix, Some(requested_fidelity), None)?;
+                TwoQubitWeylDecomposition::new_inner(matrix, Some(requested_fidelity), None)
+                    .map_err(Split2QUnitariesError::WeylDecomposition)?;
             if matches!(decomp.specialization, Specialization::SWAPEquiv) {
                 has_swaps = true;
             }
@@ -126,7 +148,8 @@ pub fn run_split_2q_unitaries(
                     unitary_gate.matrix_view(),
                     Some(requested_fidelity),
                     None,
-                )?;
+                )
+                .map_err(Split2QUnitariesError::WeylDecomposition)?;
                 if matches!(decomp.specialization, Specialization::SWAPEquiv) {
                     let k1r_arr = decomp.k1r_view();
                     let k1r_mat: Matrix2<Complex64> = [
