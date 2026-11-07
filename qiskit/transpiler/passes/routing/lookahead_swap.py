@@ -152,10 +152,17 @@ class LookaheadSwap(TransformationPass):
                 self.search_width,
             )
 
-            if best_step is None:
-                raise TranspilerError(
-                    "Lookahead failed to find a swap which mapped gates or improved layout score."
-                )
+            # The search can settle in a local minimum of the layout-distance heuristic, where the
+            # best step it finds neither maps a gate nor improves the layout (e.g. a swap followed
+            # by its own inverse).  Accepting such a step would leave the state unchanged and loop
+            # forever.  Like Sabre's release valve, we instead discard it and force progress.  Every
+            # accepted step strictly decreases ``(len(gates_remaining), layout distance)``, so the
+            # loop always terminates.
+            if best_step is None or not _step_makes_progress(
+                best_step, current_state, gates_remaining
+            ):
+                logger.debug("Lookahead search made no progress; forcing the closest gate.")
+                best_step = _route_closest_gate(current_state, gates_remaining)
 
             logger.debug(
                 "Found best step: mapped %d gates. Added swaps: %s.",
@@ -273,6 +280,71 @@ def _search_forward_n_swaps(state, gates, depth, width):
     )
     logger.debug("At depth %d, best_swap set: %s.", depth, out.swaps_added)
     return out
+
+
+def _step_makes_progress(step, state, gates):
+    """Return whether ``step`` maps a gate or strictly improves the layout distance of ``gates``.
+
+    If no gates were mapped then ``step.gates_remaining`` holds the same gates as ``gates``, so the
+    two layout distances are measured over the same gates and are directly comparable.
+    """
+    if len(step.gates_remaining) < len(gates):
+        return True
+    return _calc_layout_distance(step.gates_remaining, step.state) < _calc_layout_distance(
+        gates, state
+    )
+
+
+def _route_closest_gate(state, gates):
+    """Insert SWAPs along a shortest path to make the closest front-layer two-qubit gate executable.
+
+    This ignores the lookahead heuristic, and is used as a fallback to guarantee that each routing
+    step maps at least one gate, in the same manner as Sabre's release valve.
+
+    Args:
+        state (_SystemState): The current state of the physical system.
+        gates (list): Gates to be mapped.
+
+    Returns:
+        _Step: a step that maps at least one gate of ``gates``.
+    """
+    gates_mapped, gates_remaining = _map_free_gates(state, gates)
+    if not gates_remaining:
+        return _Step(state, [], gates_mapped, gates_remaining)
+
+    layout_map = state.layout._v2p
+    # A remaining two-qubit gate is in the front layer if no earlier remaining gate touches its
+    # qubits.  The first remaining gate always qualifies, since it was only left unmapped because
+    # its qubits are not adjacent.
+    front_qubits = []
+    blocked_qubits = set()
+    for gate in gates_remaining:
+        qubits = gate["partition"][0] if gate["partition"] else _first_op_node(gate["graph"]).qargs
+        if len(qubits) == 2 and blocked_qubits.isdisjoint(qubits):
+            front_qubits.append(qubits)
+        blocked_qubits.update(qubits)
+    closest = min(
+        front_qubits,
+        key=lambda qubits: state.coupling_map.distance(
+            layout_map[qubits[0]], layout_map[qubits[1]]
+        ),
+    )
+    path = state.coupling_map.shortest_undirected_path(
+        layout_map[closest[0]], layout_map[closest[1]]
+    )
+    # Move both ends towards the middle of the path to minimise depth; the ``len(path) - 2`` swaps
+    # leave the two qubits on adjacent physical qubits.
+    num_forward = (len(path) - 1) // 2
+    swaps = [(path[i], path[i + 1]) for i in range(num_forward)]
+    swaps += [(path[-1 - i], path[-2 - i]) for i in range(len(path) - 2 - num_forward)]
+
+    layout = state.layout.copy()
+    for swap in swaps:
+        layout.swap(*swap)
+        gates_mapped.extend(_swap_ops_from_edge(swap, state))
+    new_state = state._replace(layout=layout)
+    new_gates_mapped, gates_remaining = _map_free_gates(new_state, gates_remaining)
+    return _Step(new_state, swaps, gates_mapped + new_gates_mapped, gates_remaining)
 
 
 def _map_free_gates(state, gates):

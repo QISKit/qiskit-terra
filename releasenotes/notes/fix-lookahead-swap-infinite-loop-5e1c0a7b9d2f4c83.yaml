@@ -1,0 +1,11 @@
+---
+fixes:
+  - |
+    Fixed an issue where :class:`.LookaheadSwap` could enter an infinite loop, for example when
+    using ``routing_method="lookahead"`` in :func:`.transpile`.  The lookahead search could settle
+    in a local minimum of its heuristic, where the best step it found neither mapped a gate nor
+    improved the layout (such as a swap followed by its own inverse), and this step was repeated
+    forever.  The pass now only accepts a search step that makes progress, and otherwise inserts
+    swaps along a shortest path to execute the closest pending two-qubit gate, in the same manner
+    as the escape mechanism of :class:`.SabreSwap`.  This guarantees termination, and the pass no
+    longer raises a :class:`.TranspilerError` when the lookahead search fails to find a step.

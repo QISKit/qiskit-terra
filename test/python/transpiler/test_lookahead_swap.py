@@ -13,21 +13,56 @@
 """Test the LookaheadSwap pass"""
 
 import unittest
+
+import ddt
+import numpy as np
 from numpy import pi
 
 from qiskit.dagcircuit import DAGCircuit
-from qiskit.transpiler.passes import LookaheadSwap
+from qiskit.transpiler.passes import LookaheadSwap, CheckMap
 from qiskit.transpiler import CouplingMap, Target
-from qiskit.converters import circuit_to_dag
-from qiskit.circuit.library import CXGate
-from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit
+from qiskit.converters import circuit_to_dag, dag_to_circuit
+from qiskit.circuit.library import CXGate, PermutationGate
+from qiskit.quantum_info import Operator
+from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, transpile
 from test import QiskitTestCase
 
 from ..legacy_cmaps import MELBOURNE_CMAP
 
 
+def _issue_reproducer():
+    """Circuit and coupling map on which LookaheadSwap used to loop forever."""
+    coupling_map = CouplingMap([(0, 6), (0, 4), (1, 6), (1, 7), (2, 7), (3, 4), (5, 7)])
+    coupling_map.make_symmetric()
+    circuit = QuantumCircuit(QuantumRegister(8, "q"))
+    for a, b in [(0, 2), (0, 3), (0, 4), (1, 4), (1, 5), (3, 5)]:
+        circuit.cz(a, b)
+    return circuit, coupling_map
+
+
+@ddt.ddt
 class TestLookaheadSwap(QiskitTestCase):
     """Tests the LookaheadSwap pass."""
+
+    def assertRoutedEquivalent(self, circuit, coupling_map, search_depth=4, search_width=4):
+        """Route ``circuit`` and check the output respects ``coupling_map``, keeps every
+        non-swap operation and, after undoing the final layout, implements the same unitary."""
+        pass_ = LookaheadSwap(coupling_map, search_depth=search_depth, search_width=search_width)
+        mapped_dag = pass_.run(circuit_to_dag(circuit))
+
+        check_map = CheckMap(coupling_map)
+        check_map.run(mapped_dag)
+        self.assertTrue(check_map.property_set["is_swap_mapped"])
+
+        mapped_ops = dict(mapped_dag.count_ops())
+        mapped_ops.pop("swap", None)
+        self.assertEqual(mapped_ops, dict(circuit.count_ops()))
+
+        mapped = dag_to_circuit(mapped_dag)
+        final_layout = pass_.property_set["final_layout"]
+        mapped.append(PermutationGate([final_layout[q] for q in mapped.qubits]), mapped.qubits)
+        self.assertTrue(Operator(mapped).equiv(Operator(circuit)))
+        return mapped_dag
 
     def test_lookahead_swap_doesnt_modify_mapped_circuit(self):
         """Test that lookahead swap is idempotent.
@@ -314,6 +349,105 @@ class TestLookaheadSwap(QiskitTestCase):
         self.assertEqual(
             mapped_dag.count_ops().get("swap", 0), dag_circuit.count_ops().get("swap", 0) + 1
         )
+
+    def test_lookahead_swap_terminates_on_issue_reproducer(self):
+        """Test the reported circuit that made LookaheadSwap loop forever is routed correctly.
+
+        The search used to settle in a local minimum of the layout heuristic and return a swap
+        followed by its own inverse forever, without ever mapping a gate.
+        """
+        circuit, coupling_map = _issue_reproducer()
+        transpiled = transpile(
+            circuit,
+            coupling_map=coupling_map,
+            layout_method="trivial",
+            routing_method="lookahead",
+            optimization_level=0,
+        )
+        self.assertEqual(transpiled.count_ops()["cz"], 6)
+        check_map = CheckMap(coupling_map)
+        check_map.run(circuit_to_dag(transpiled))
+        self.assertTrue(check_map.property_set["is_swap_mapped"])
+        self.assertTrue(Operator.from_circuit(transpiled).equiv(Operator(circuit)))
+
+    @ddt.data((1, 1), (2, 2), (4, 4), (5, 6))
+    @ddt.unpack
+    def test_lookahead_swap_issue_reproducer_search_settings(self, search_depth, search_width):
+        """Test the reported circuit is routed correctly for a range of search settings."""
+        circuit, coupling_map = _issue_reproducer()
+        self.assertRoutedEquivalent(circuit, coupling_map, search_depth, search_width)
+
+    def test_lookahead_swap_escapes_local_minimum_on_grid(self):
+        """Test a grid circuit whose lookahead search makes no progress is still routed."""
+        circuit = QuantumCircuit(QuantumRegister(9, "q"))
+        for a, b in [(2, 8), (5, 2), (8, 5), (6, 1), (5, 6)]:
+            circuit.cx(a, b)
+        self.assertRoutedEquivalent(circuit, CouplingMap.from_grid(3, 3), 2, 2)
+
+    @ddt.data((1, 1), (2, 2), (4, 4))
+    @ddt.unpack
+    def test_lookahead_swap_reversing_a_swap(self, search_depth, search_width):
+        """Test a circuit whose routing moves a qubit away for one gate and back for the next."""
+        circuit = QuantumCircuit(QuantumRegister(4, "q"))
+        circuit.cx(0, 1)
+        circuit.cx(1, 3)
+        circuit.cx(2, 3)
+        circuit.cx(1, 2)
+        circuit.cx(0, 3)
+        self.assertRoutedEquivalent(circuit, CouplingMap.from_line(4), search_depth, search_width)
+
+    @ddt.data(
+        ("line", CouplingMap.from_line(6)),
+        ("ring", CouplingMap.from_ring(8)),
+        ("grid", CouplingMap.from_grid(3, 3)),
+        ("tree", CouplingMap([(0, 1), (1, 2), (1, 3), (3, 4), (3, 5), (5, 6)])),
+    )
+    @ddt.unpack
+    def test_lookahead_swap_already_routable_on_topology(self, _, coupling_map):
+        """Test a circuit with gates only on coupled qubits needs no swaps on various topologies."""
+        circuit = QuantumCircuit(QuantumRegister(coupling_map.size(), "q"))
+        for a, b in coupling_map.get_edges():
+            circuit.cx(a, b)
+        mapped_dag = self.assertRoutedEquivalent(circuit, coupling_map)
+        self.assertEqual(mapped_dag, circuit_to_dag(circuit))
+
+    @ddt.idata(
+        (name, coupling_map, depth, width, seed)
+        for name, coupling_map in [
+            ("line", CouplingMap.from_line(6)),
+            ("ring", CouplingMap.from_ring(8)),
+            ("grid", CouplingMap.from_grid(3, 3)),
+            ("tree", CouplingMap([(0, 1), (1, 2), (1, 3), (3, 4), (3, 5), (5, 6)])),
+        ]
+        for depth, width in [(2, 2), (4, 4)]
+        for seed in range(2)
+    )
+    @ddt.unpack
+    def test_lookahead_swap_random_circuits_on_topology(self, _, coupling_map, depth, width, seed):
+        """Test circuits with many blocked gates are routed correctly on various topologies."""
+        rng = np.random.default_rng(seed)
+        num_qubits = coupling_map.size()
+        circuit = QuantumCircuit(QuantumRegister(num_qubits, "q"))
+        for i in range(25):
+            a, b = rng.choice(num_qubits, 2, replace=False)
+            circuit.cx(int(a), int(b))
+            if i % 5 == 0:
+                circuit.h(int(rng.integers(num_qubits)))
+            if i % 10 == 9:
+                circuit.barrier()
+        self.assertRoutedEquivalent(circuit, coupling_map, depth, width)
+
+    def test_lookahead_swap_disconnected_coupling_map(self):
+        """Test routing within the components of a disconnected coupling map."""
+        coupling_map = CouplingMap([(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7)])
+        circuit = QuantumCircuit(QuantumRegister(8, "q"))
+        circuit.cx(0, 3)
+        circuit.cx(4, 7)
+        circuit.cx(1, 3)
+        circuit.cx(7, 5)
+        circuit.cx(0, 2)
+        circuit.cx(6, 4)
+        self.assertRoutedEquivalent(circuit, coupling_map, 2, 2)
 
 
 if __name__ == "__main__":
