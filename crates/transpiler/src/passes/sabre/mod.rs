@@ -34,5 +34,6 @@ pub fn sabre(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<heuristic::BasicHeuristic>()?;
     m.add_class::<heuristic::LookaheadHeuristic>()?;
     m.add_class::<heuristic::DecayHeuristic>()?;
+    m.add_class::<heuristic::WaitTimeHeuristic>()?;
     Ok(())
 }

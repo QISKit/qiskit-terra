@@ -77,7 +77,7 @@ class SabreSwap(TransformationPass):
         Args:
             coupling_map (Union[CouplingMap, Target]): CouplingMap of the target backend.
             heuristic (str): The type of heuristic to use when deciding best
-                swap strategy ('basic' or 'lookahead' or 'decay').
+                swap strategy ('basic', 'lookahead', 'decay' or 'wait_time').
             seed (int): random seed used to tie-break among candidate swaps.
             fake_run (bool): if true, it only pretend to do routing, i.e., no
                 swap is effectively added.
@@ -133,6 +133,23 @@ class SabreSwap(TransformationPass):
                     \frac{1}{\left|{F}\right|} \sum_{gate \in F} D[\pi(gate.q_1)][\pi(gate.q2)]\\
                     + W *\frac{1}{\left|{E}\right|} \sum_{gate \in E} D[\pi(gate.q_1)][\pi(gate.q2)]
                     }
+
+            - 'wait_time':
+
+            This is the same as 'decay', with an additional term that charges each candidate
+            SWAP for the estimated number of two-qubit layers it must wait before both of its
+            physical qubits are free.  Each two-qubit interaction routed by Sabre occupies one
+            layer (consecutive gates on the same pair of qubits are routed as a single
+            interaction, so they count once) and an inserted SWAP three.  With the preset weight
+            V = 0.0025 the term acts as a tie-break between equally scored SWAPs, preferring
+            wires that are idle.
+
+            .. math::
+
+                H_{wait} = max(decay(SWAP.q_1), decay(SWAP.q_2)) {
+                    \frac{1}{\left|{F}\right|} \sum_{gate \in F} D[\pi(gate.q_1)][\pi(gate.q2)]\\
+                    + W *\frac{1}{\left|{E}\right|} \sum_{gate \in E} D[\pi(gate.q_1)][\pi(gate.q2)]
+                    } + V * max(ready(SWAP.q_1), ready(SWAP.q_2))
         """
         super().__init__()
         self._routing_target = None
@@ -225,6 +242,13 @@ class SabreSwap(TransformationPass):
                 .with_basic(1.0, SetScaling.Constant)
                 .with_lookahead([0.5 / num_coupling_qubits], SetScaling.Constant)
                 .with_decay(0.001, 5)
+            )
+        elif self.heuristic == "wait_time":
+            heuristic = (
+                Heuristic(attempt_limit=10 * num_dag_qubits)
+                .with_basic(1.0, SetScaling.Constant)
+                .with_lookahead([0.5 / num_coupling_qubits], SetScaling.Constant)
+                .with_wait_time(0.0025)
             )
         else:
             raise TranspilerError(f"Heuristic {self.heuristic} not recognized.")

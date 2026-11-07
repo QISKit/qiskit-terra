@@ -139,8 +139,9 @@ impl LookaheadHeuristic {
 
 /// Define the characteristics of the "decay" heuristic.  In this, each physical qubit has a
 /// multiplier associated with it, beginning at 1.0, and has :attr:`increment` added to it each time
-/// the qubit is involved in a swap.  The final heuristic is calculated by multiplying all other
-/// components by the maximum multiplier involved in a given swap.
+/// the qubit is involved in a swap.  The final heuristic is calculated by multiplying the
+/// ``basic`` and ``lookahead`` components by the maximum multiplier involved in a given swap;
+/// the "wait time" component, if present, is added after this scaling and is not multiplied.
 #[pyclass(from_py_object)]
 #[pyo3(module = "qiskit._accelerate.sabre", frozen)]
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -174,6 +175,46 @@ impl DecayHeuristic {
     }
 }
 
+/// Define the characteristics of the "wait time" heuristic.  Each physical qubit tracks the
+/// estimated time at which it next becomes free: a routed two-qubit node has unit cost
+/// (even when it represents several contracted gates on the same pair) and an inserted swap
+/// has cost `swap_cost`.  A candidate swap's score is increased by `weight` times the later of
+/// its two qubits' ready times, so swaps on idle wires are preferred.  The term is added after
+/// the decay multiplier (if any), so it is not scaled by it.
+#[pyclass(from_py_object)]
+#[pyo3(module = "qiskit._accelerate.sabre", frozen)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct WaitTimeHeuristic {
+    /// Score added per unit of waiting, relative to the ``basic`` weight.
+    pub weight: f64,
+    /// Expected cost of a swap relative to an arbitrary two-qubit node in the SabreDAG.
+    pub swap_cost: u32,
+}
+impl_intopyobject_for_copy_pyclass!(WaitTimeHeuristic);
+#[pymethods]
+impl WaitTimeHeuristic {
+    #[new]
+    #[pyo3(signature = (weight, swap_cost=3))]
+    pub fn new(weight: f64, swap_cost: u32) -> Self {
+        Self { weight, swap_cost }
+    }
+
+    pub fn __getnewargs__(&self, py: Python) -> PyResult<Py<PyAny>> {
+        (self.weight, self.swap_cost).into_py_any(py)
+    }
+
+    pub fn __eq__(&self, py: Python, other: Py<PyAny>) -> bool {
+        other.extract::<Self>(py).is_ok_and(|other| self == &other)
+    }
+
+    pub fn __repr__(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let fmt = "WaitTimeHeuristic(weight={!r}, swap_cost={!r})";
+        PyString::new(py, fmt)
+            .call_method1("format", (self.weight, self.swap_cost))?
+            .into_py_any(py)
+    }
+}
+
 /// A complete description of the heuristic that Sabre will use.  See the individual elements for a
 /// greater description.
 ///
@@ -190,6 +231,7 @@ pub struct Heuristic {
     pub basic: Option<BasicHeuristic>,
     pub lookahead: Option<LookaheadHeuristic>,
     pub decay: Option<DecayHeuristic>,
+    pub wait_time: Option<WaitTimeHeuristic>,
     pub best_epsilon: f64,
     pub attempt_limit: usize,
 }
@@ -210,11 +252,12 @@ impl Heuristic {
     ///     best_epsilon (float): the floating-point epsilon to use when comparing scores to find
     ///         the best value.
     #[new]
-    #[pyo3(signature = (basic=None, lookahead=None, decay=None, attempt_limit=1000, best_epsilon=1e-10))]
+    #[pyo3(signature = (basic=None, lookahead=None, decay=None, wait_time=None, attempt_limit=1000, best_epsilon=1e-10))]
     pub fn new(
         basic: Option<BasicHeuristic>,
         lookahead: Option<LookaheadHeuristic>,
         decay: Option<DecayHeuristic>,
+        wait_time: Option<WaitTimeHeuristic>,
         attempt_limit: Option<usize>,
         best_epsilon: f64,
     ) -> Self {
@@ -222,6 +265,7 @@ impl Heuristic {
             basic,
             lookahead,
             decay,
+            wait_time,
             best_epsilon,
             attempt_limit: attempt_limit.unwrap_or(usize::MAX),
         }
@@ -232,6 +276,7 @@ impl Heuristic {
             self.basic,
             self.lookahead.clone(),
             self.decay,
+            self.wait_time,
             self.attempt_limit,
             self.best_epsilon,
         )
@@ -270,8 +315,20 @@ impl Heuristic {
         }
     }
 
+    /// Set the weight of the ``wait_time`` heuristic: the score added per unit of time
+    /// that a swap must wait before both of its physical qubits are free.  This should be
+    /// small relative to ``basic``; the ``"wait_time"`` preset of :class:`.SabreSwap` uses
+    /// ``0.0025``.  ``swap_cost`` is the expected cost of a swap relative to a two-qubit DAG node.
+    #[pyo3(signature = (weight, swap_cost=3))]
+    pub fn with_wait_time(&self, weight: f64, swap_cost: u32) -> Self {
+        Self {
+            wait_time: Some(WaitTimeHeuristic { weight, swap_cost }),
+            ..self.clone()
+        }
+    }
+
     pub fn __repr__(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let fmt = "Heuristic(basic={!r}, lookahead={!r}, decay={!r}, attempt_limit={!r}, best_epsilon={!r})";
+        let fmt = "Heuristic(basic={!r}, lookahead={!r}, decay={!r}, wait_time={!r}, attempt_limit={!r}, best_epsilon={!r})";
         PyString::new(py, fmt)
             .call_method1(
                 "format",
@@ -279,6 +336,7 @@ impl Heuristic {
                     self.basic,
                     self.lookahead.clone(),
                     self.decay,
+                    self.wait_time,
                     self.attempt_limit,
                     self.best_epsilon,
                 ),

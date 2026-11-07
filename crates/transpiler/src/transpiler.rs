@@ -462,6 +462,7 @@ pub fn get_sabre_heuristic(target: &Target) -> Result<sabre::Heuristic> {
         None,
         None,
         None,
+        None,
         target.num_qubits.map(|x| (x * 10) as usize),
         1e-10,
     )

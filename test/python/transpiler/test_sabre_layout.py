@@ -13,10 +13,12 @@
 """Test the SabreLayout pass"""
 
 import unittest
+from unittest.mock import patch
 
 import math
 
 from qiskit import QuantumRegister, QuantumCircuit
+from qiskit._accelerate.sabre import Heuristic, SetScaling, sabre_layout_and_routing
 from qiskit.circuit import library as lib, Parameter
 from qiskit.circuit.classical import expr, types
 from qiskit.circuit.library import efficient_su2, quantum_volume
@@ -26,6 +28,7 @@ from qiskit.transpiler.exceptions import TranspilerError
 from qiskit.converters import circuit_to_dag
 from qiskit.compiler.transpiler import transpile
 from qiskit.providers.fake_provider import GenericBackendV2
+from qiskit.quantum_info import Operator
 from qiskit.transpiler.passes.layout.sabre_pre_layout import SabrePreLayout
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from test import QiskitTestCase, slow_test
@@ -370,6 +373,108 @@ barrier q18585[5],q18585[2],q18585[8],q18585[3],q18585[6];
         for target in range(1, qc.num_qubits):
             expected.cx(0, target)
         self.assertEqual(out, expected)
+
+
+class TestSabreLayoutHeuristic(QiskitTestCase):
+    """Custom heuristics retain layout/routing semantics and remain opt-in."""
+
+    def setUp(self):
+        super().setUp()
+        self.coupling = CouplingMap.from_line(4)
+        self.circuit = QuantumCircuit(4)
+        self.circuit.h(0)
+        self.circuit.rz(0.37, 3)
+        self.circuit.global_phase = 0.23
+        for control, target in [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2)]:
+            self.circuit.cx(control, target)
+        self.decay = (
+            Heuristic(attempt_limit=40)
+            .with_basic(1.0, SetScaling.Constant)
+            .with_lookahead([0.5 / 4], SetScaling.Constant)
+            .with_decay(0.001, 5)
+        )
+
+    def test_default_heuristic_is_unchanged(self):
+        """Omitting the override and passing None both retain decay without wait time."""
+        for skip_routing in (False, True):
+            reference = None
+            for options in ({}, {"heuristic": None}, {"heuristic": self.decay}):
+                with self.subTest(skip_routing=skip_routing, options=options):
+                    pass_ = SabreLayout(
+                        self.coupling,
+                        seed=7,
+                        swap_trials=2,
+                        layout_trials=2,
+                        skip_routing=skip_routing,
+                        **options,
+                    )
+                    with patch(
+                        "qiskit.transpiler.passes.layout.sabre_layout.sabre_layout_and_routing",
+                        wraps=sabre_layout_and_routing,
+                    ) as run_native:
+                        output = pass_(self.circuit)
+                    self.assertEqual(run_native.call_args.args[2], self.decay)
+                    result = (
+                        output,
+                        pass_.property_set["layout"],
+                        pass_.property_set["final_layout"],
+                    )
+                    if reference is None:
+                        reference = result
+                    else:
+                        self.assertEqual(result, reference)
+
+    def test_wait_time_heuristic(self):
+        """The requested heuristic is executed while preserving the circuit and connectivity."""
+        heuristic = self.decay.with_wait_time(0.0025)
+        for skip_routing in (False, True):
+            with self.subTest(skip_routing=skip_routing):
+                pass_ = SabreLayout(
+                    self.coupling,
+                    seed=7,
+                    swap_trials=2,
+                    layout_trials=2,
+                    skip_routing=skip_routing,
+                    heuristic=heuristic,
+                )
+                with patch(
+                    "qiskit.transpiler.passes.layout.sabre_layout.sabre_layout_and_routing",
+                    wraps=sabre_layout_and_routing,
+                ) as run_native:
+                    output = pass_(self.circuit)
+                self.assertEqual(run_native.call_args.args[2], heuristic)
+                layout = pass_.property_set["layout"]
+                self.assertEqual(set(layout.get_virtual_bits()), set(self.circuit.qubits))
+                self.assertEqual(set(layout.get_physical_bits()), set(range(4)))
+                if skip_routing:
+                    self.assertEqual(output, self.circuit)
+                    self.assertIsNone(pass_.property_set["final_layout"])
+                else:
+                    self.assertEqual(Operator.from_circuit(output), Operator(self.circuit))
+                    self.assertGreater(output.count_ops().get("swap", 0), 0)
+                    self.assertIsNotNone(pass_.property_set["final_layout"])
+                    edges = set(self.coupling.get_edges())
+                    for instruction in output.data:
+                        if instruction.operation.num_qubits == 2:
+                            self.assertIn(
+                                tuple(output.find_bit(q).index for q in instruction.qubits), edges
+                            )
+
+    def test_invalid_heuristic(self):
+        """An override must be a Heuristic object, not a string preset or another type."""
+        for heuristic in ("wait_time", True, 1.0, object()):
+            with self.subTest(heuristic=heuristic):
+                with self.assertRaises(TranspilerError):
+                    SabreLayout(self.coupling, heuristic=heuristic)
+
+    def test_heuristic_conflicts_with_routing_pass(self):
+        """An explicit routing pass must not silently ignore a heuristic override."""
+        with self.assertRaisesRegex(TranspilerError, "routing_pass"):
+            SabreLayout(
+                self.coupling,
+                routing_pass=BasicSwap(self.coupling),
+                heuristic=self.decay.with_wait_time(0.0025),
+            )
 
 
 class DensePartialSabreTrial(AnalysisPass):

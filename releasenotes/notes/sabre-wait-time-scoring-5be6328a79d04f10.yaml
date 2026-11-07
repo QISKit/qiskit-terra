@@ -1,0 +1,42 @@
+features_transpiler:
+  - |
+    Added an opt-in "wait time" component to the SABRE routing heuristic.  When enabled, each
+    physical qubit tracks the estimated two-qubit layer at which it next becomes free, and each
+    candidate SWAP is charged a small score per layer it would wait for its qubits, so SWAPs on
+    idle wires are preferred among otherwise equal choices.  Each two-qubit interaction routed by
+    SABRE occupies one layer (consecutive gates on the same pair of qubits are routed as a single
+    interaction, so they count once) and an inserted SWAP occupies three.  Select it in
+    :class:`.SabreSwap` with the new ``heuristic="wait_time"`` string, which is the ``"decay"``
+    preset plus this term, or add it to a custom ``qiskit._accelerate.sabre.Heuristic`` with
+    ``with_wait_time(weight)``::
+
+        from qiskit.transpiler import CouplingMap
+        from qiskit.transpiler.passes import SabreSwap
+
+        routing = SabreSwap(CouplingMap.from_line(5), heuristic="wait_time", seed=0)
+
+    :class:`.SabreLayout` now accepts an optional ``heuristic`` argument to configure both
+    layout search and integrated routing. It takes a complete
+    ``qiskit._accelerate.sabre.Heuristic`` object; for example, to add wait time to the
+    default decay configuration::
+
+        from qiskit._accelerate.sabre import Heuristic, SetScaling
+        from qiskit.transpiler.passes import SabreLayout
+
+        coupling_map = CouplingMap.from_line(5)
+        width = coupling_map.size()
+        heuristic = (
+            Heuristic(attempt_limit=10 * width)
+            .with_basic(1.0, SetScaling.Constant)
+            .with_lookahead([0.5 / width], SetScaling.Constant)
+            .with_decay(0.001, 5)
+            .with_wait_time(0.0025)
+        )
+        layout_and_routing = SabreLayout(
+            coupling_map, heuristic=heuristic, seed=0, layout_trials=20, swap_trials=20
+        )
+
+    The override also applies to layout search with ``skip_routing=True``, and cannot be
+    combined with ``routing_pass``. Omitting ``heuristic`` or passing ``None`` retains the
+    existing decay configuration with wait-time scoring disabled. Existing heuristic
+    defaults and preset pass managers are unchanged.
