@@ -18,6 +18,7 @@ import numpy as np
 from qiskit.exceptions import QiskitError
 from qiskit.quantum_info.states.statevector import Statevector
 from qiskit.quantum_info.states.densitymatrix import DensityMatrix
+from qiskit.quantum_info.states.stabilizerstate import StabilizerState
 from qiskit.quantum_info.states.utils import (
     partial_trace,
     shannon_entropy,
@@ -27,7 +28,9 @@ from qiskit.quantum_info.states.utils import (
 
 
 def state_fidelity(
-    state1: Statevector | DensityMatrix, state2: Statevector | DensityMatrix, validate: bool = True
+    state1: Statevector | DensityMatrix | StabilizerState,
+    state2: Statevector | DensityMatrix | StabilizerState,
+    validate: bool = True,
 ) -> float:
     r"""Return the state fidelity between two quantum states.
 
@@ -42,8 +45,8 @@ def state_fidelity(
     :math:`\rho_1 = |\psi_1\rangle\!\langle\psi_1|`.
 
     Args:
-        state1 (Statevector or DensityMatrix): the first quantum state.
-        state2 (Statevector or DensityMatrix): the second quantum state.
+        state1: the first quantum state.
+        state2: the second quantum state.
         validate (bool): check if the inputs are valid quantum states
                          [Default: True]
 
@@ -54,6 +57,24 @@ def state_fidelity(
         QiskitError: if ``validate=True`` and the inputs are invalid quantum states.
     """
     # convert input to numpy arrays
+
+    # Handle fidelity between two StabilizerStates using Clifford operations
+    if isinstance(state1, StabilizerState) and isinstance(state2, StabilizerState):
+        combined_state = state2.evolve(state1.clifford.adjoint())
+        return float(
+            combined_state.probabilities_dict_from_bitstring("0" * combined_state.num_qubits).get(
+                "0" * combined_state.num_qubits, 0.0
+            )
+        )
+
+    # Convert StabilizerState inputs to Statevector for mixed-state fidelity
+    if isinstance(state1, StabilizerState):
+        state1 = Statevector.from_instruction(state1.clifford.to_circuit())
+
+    if isinstance(state2, StabilizerState):
+        state2 = Statevector.from_instruction(state2.clifford.to_circuit())
+
+    # Format input states
     state1 = _format_state(state1, validate=validate)
     state2 = _format_state(state2, validate=validate)
 

@@ -1,0 +1,4 @@
+features:
+  - |
+    Added support for computing the fidelity between two
+    ``StabilizerState`` objects using ``state_fidelity``.
