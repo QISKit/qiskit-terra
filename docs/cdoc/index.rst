@@ -71,7 +71,6 @@ Quantum information
    qk-obs-term
    qk-bit-term
    qk-complex64
-   qk-exit-code
 
 ----------
 Transpiler
@@ -92,7 +91,6 @@ results transpiling circuits from Python via the C API.
    qk-dag
    qk-transpiler
    qk-target
-   qk-target-entry
    qk-neighbors
    qk-transpile-layout
    qk-transpiler-passes
@@ -110,3 +108,11 @@ Utilities
    config
    dynamic-types
    version
+
+----------
+Exit codes
+----------
+.. toctree::
+   :maxdepth: 1
+   
+   qk-exit-code

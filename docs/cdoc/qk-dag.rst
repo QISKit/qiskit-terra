@@ -1,12 +1,10 @@
 .. _capi-dag:
 
-=====
-QkDag
-=====
+============================
+DAGCircuit (:c:type:`QkDag`)
+============================
 
-.. code-block:: c
-
-   typedef struct QkDag QkDag
+.. c:type:: struct QkDag QkDag
 
 The ``QkDag`` struct  exposes a low level interface to the Qiskit transpiler's
 directed acyclic graph (DAG) representation of a quantum circuit for use in

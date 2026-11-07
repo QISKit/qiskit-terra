@@ -1,12 +1,10 @@
 .. _capi-obs:
 
-=====
-QkObs
-=====
+===================================
+SparseObservable (:c:type:`QkObs`)
+===================================
 
-.. code-block:: c
-
-   typedef struct QkObs QkObs
+.. c:type:: struct QkObs QkObs
 
 An observable over Pauli bases that stores its data in a qubit-sparse format.
 
@@ -29,35 +27,35 @@ Pauli operators and the Pauli-eigenstate projection operators.  Explicitly, thes
 .. _qkobs-alphabet:
 .. table:: Alphabet of single-qubit terms used in ``QkObs``
 
-  +----------------------------------------+--------------------+----------------+
-  | Operator                               | ``QkBitTerm``      | Numeric value  |
-  +========================================+====================+================+
-  | :math:`I` (identity)                   | Not stored.        | Not stored.    |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`X` (Pauli X)                    | ``QkBitTerm_X``    | ``0b0010`` (2) |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`Y` (Pauli Y)                    | ``QkBitTerm_Y``    | ``0b0011`` (3) |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`Z` (Pauli Z)                    | ``QkBitTerm_Z``    | ``0b0001`` (1) |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`\lvert+\rangle\langle+\rvert`   | ``QkBitTerm_Plus`` | ``0b1010`` (10)|
-  | (projector to positive eigenstate of X)|                    |                |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`\lvert-\rangle\langle-\rvert`   | ``QkBitTerm_Minus``| ``0b0110`` (6) |
-  | (projector to negative eigenstate of X)|                    |                |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`\lvert r\rangle\langle r\rvert` | ``QkBitTerm_Right``| ``0b1011`` (11)|
-  | (projector to positive eigenstate of Y)|                    |                |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`\lvert l\rangle\langle l\rvert` | ``QkBitTerm_Left`` | ``0b0111`` (7) |
-  | (projector to negative eigenstate of Y)|                    |                |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`\lvert0\rangle\langle0\rvert`   | ``QkBitTerm_Zero`` | ``0b1001`` (9) |
-  | (projector to positive eigenstate of Z)|                    |                |
-  +----------------------------------------+--------------------+----------------+
-  | :math:`\lvert1\rangle\langle1\rvert`   | ``QkBitTerm_One``  | ``0b0101`` (5) |
-  | (projector to negative eigenstate of Z)|                    |                |
-  +----------------------------------------+--------------------+----------------+
+  +----------------------------------------+--------------------------------+----------------+
+  | Operator                               | :c:enum:`QkBitTerm`            | Numeric value  |
+  +========================================+================================+================+
+  | :math:`I` (identity)                   | Not stored.                    | Not stored.    |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`X` (Pauli X)                    | :c:enumerator:`QkBitTerm_X`    | ``0b0010`` (2) |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`Y` (Pauli Y)                    | :c:enumerator:`QkBitTerm_Y`    | ``0b0011`` (3) |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`Z` (Pauli Z)                    | :c:enumerator:`QkBitTerm_Z`    | ``0b0001`` (1) |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`\lvert+\rangle\langle+\rvert`   | :c:enumerator:`QkBitTerm_Plus` | ``0b1010`` (10)|
+  | (projector to positive eigenstate of X)|                                |                |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`\lvert-\rangle\langle-\rvert`   | :c:enumerator:`QkBitTerm_Minus`| ``0b0110`` (6) |
+  | (projector to negative eigenstate of X)|                                |                |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`\lvert r\rangle\langle r\rvert` | :c:enumerator:`QkBitTerm_Right`| ``0b1011`` (11)|
+  | (projector to positive eigenstate of Y)|                                |                |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`\lvert l\rangle\langle l\rvert` | :c:enumerator:`QkBitTerm_Left` | ``0b0111`` (7) |
+  | (projector to negative eigenstate of Y)|                                |                |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`\lvert0\rangle\langle0\rvert`   | :c:enumerator:`QkBitTerm_Zero` | ``0b1001`` (9) |
+  | (projector to positive eigenstate of Z)|                                |                |
+  +----------------------------------------+--------------------------------+----------------+
+  | :math:`\lvert1\rangle\langle1\rvert`   | :c:enumerator:`QkBitTerm_One`  | ``0b0101`` (5) |
+  | (projector to negative eigenstate of Z)|                                |                |
+  +----------------------------------------+--------------------------------+----------------+
 
 Due to allowing both the Paulis and their projectors, the allowed alphabet forms an overcomplete
 basis of the operator space.  This means that there is not a unique summation to represent a

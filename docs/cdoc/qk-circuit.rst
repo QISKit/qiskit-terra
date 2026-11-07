@@ -1,12 +1,10 @@
 .. _capi-circuit:
 
-=========
-QkCircuit
-=========
+====================================
+QuantumCircuit (:c:type:`QkCircuit`)
+====================================
 
-.. code-block:: c
-
-   typedef struct QkCircuit QkCircuit
+.. c:type:: struct QkCircuit QkCircuit
 
 The fundamental element of quantum computing is the *quantum circuit*.  This is a computational
 routine that can be run, one shot at a time, on a quantum processing unit (QPU).  A circuit will act

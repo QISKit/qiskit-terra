@@ -8,9 +8,7 @@ The Qiskit C API for control flow provides facilities for inspecting control flo
 You can query the type of control flow instruction, access nested circuit blocks, inspect conditions and loop parameters, 
 and retrieve qubit and classical bit mappings between nested blocks and the top-level circuit.
 
-.. code-block:: c
-
-   typedef struct QkControlFlowInstruction QkControlFlowInstruction
+.. c:type:: struct QkControlFlowInstruction QkControlFlowInstruction
 
 The ``QkControlFlowInstruction`` opaque struct is the primary handle used by the C API to represent and reason about control-flow 
 instructions within a circuit. It is obtained by a call to :c:func:`qk_circuit_get_control_flow_instruction` and must be freed with a call 

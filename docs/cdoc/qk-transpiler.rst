@@ -1,8 +1,8 @@
 .. _capi-transpiler:
 
-============
-QkTranspiler
-============
+==========
+Transpiler
+==========
 
 The :c:func:`qk_transpile` function exposes Qiskit's tranpsiler (:py:mod:`qiskit.transpiler`) to C.
 The basic functionality is using the same underlying code as the Python-space version, but the transpiler as
@@ -22,7 +22,7 @@ Data Types
 .. doxygenstruct:: QkTranspileOptions
    :members:
 
-.. c:struct:: QkTranspilerStageState
+.. c:type:: struct QkTranspilerStageState QkTranspilerStageState
 
 A container collecting individual attributes shared by the transpiler stages.
 When transpiling correctly, each individual stage writes specific attributes

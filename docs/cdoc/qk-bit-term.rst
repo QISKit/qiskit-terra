@@ -1,63 +1,70 @@
 .. _capi-bit-term:
 
-=========
-QkBitTerm
-=========
+=============================
+BitTerm (:c:enum:`QkBitTerm`)
+=============================
 
 ..
     This is documented manually here because the C-space `enum` is generated
     programmatically from Rust and is not the correct C-level documentation.
 
-.. code-block:: c
-
-   enum QkBitTerm
+.. c:enum:: QkBitTerm
 
 An enum that to represent each of the single-qubit alphabet terms enumerated below.
 
 Values
 ------
 
-* ``QkBitTerm_X`` 
+.. c:enumerator:: QkBitTerm_X 
+   
    The Pauli :math:`X` operator. 
 
    Value: 2 (``0b0010``)
 
-* ``QkBitTerm_Y``
+.. c:enumerator:: QkBitTerm_Y
+   
    The Pauli :math:`Y` operator.
    
    Value: 3 (``0b0011``)
 
-* ``QkBitTerm_Z``
+.. c:enumerator:: QkBitTerm_Z
+   
    The Pauli :math:`Z` operator.
    
    Value: 1 (``0b0001``)
 
-* ``QkBitTerm_Plus``
+.. c:enumerator:: QkBitTerm_Plus
+   
    The projector :math:`\lvert +\rangle\langle +\rvert` to the positive :math:`X` eigenstate.
    
    Value: 10 (``0b1010``)
 
-* ``QkBitTerm_Minus``
+.. c:enumerator:: QkBitTerm_Minus
+   
    The projector :math:`\lvert -\rangle\langle -\rvert` to the negative :math:`X` eigenstate.
    
    Value: 6 (``0b0110``)
 
-* ``QkBitTerm_Right``
+.. c:enumerator:: QkBitTerm_Right
+   
    The projector :math:`\lvert r\rangle\langle r\rvert` to the positive :math:`Y` eigenstate.
 
    Value: 11 (``0b1011``)
 
-* ``QkBitTerm_Left``
+.. c:enumerator:: QkBitTerm_Left
+   
    The projector :math:`\lvert l\rangle\langle l\rvert` to the negative :math:`Y` eigenstate.
   
    Value: 7 (``0b0111``)
 
-* ``QkBitTerm_Zero``
+.. c:enumerator:: QkBitTerm_Zero
+   
    The projector :math:`\lvert 0\rangle\langle 0\rvert` to the positive :math:`Z` eigenstate.
    
    Value: 9 (``0b1001``)
 
-* ``QkBitTerm_One``
+.. c:enumerator:: QkBitTerm_One
+   
    The projector :math:`\lvert 1\rangle\langle 1\rvert` to the negative :math:`Z` eigenstate.
    
    Value: 5 (``0b0101``)

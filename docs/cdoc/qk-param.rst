@@ -1,8 +1,10 @@
 .. _capi-param:
 
-=======
-QkParam
-=======
+=============================
+Parameter (:c:type:`QkParam`)
+=============================
+
+.. c:type:: struct QkParam QkParam
 
 Represents a circuit parameter which may hold real or symbolic values.
 

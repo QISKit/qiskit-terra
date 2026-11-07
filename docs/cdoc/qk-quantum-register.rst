@@ -1,12 +1,10 @@
 .. _capi-quantum-register:
 
-=================
-QkQuantumRegister
-=================
+==============================================
+Quantum Register (:c:type:`QkQuantumRegister`)
+==============================================
 
-.. code-block:: c
-
-   typedef struct QkQuantumRegister QkQuantumRegister
+.. c:type:: struct QkQuantumRegister QkQuantumRegister
 
 A common way to instantiate several bits at once is to create a register. A
 register is a named collection of bits. Creating a register enables giving a

@@ -1,8 +1,8 @@
 .. _capi-neighbors:
 
-===========
-QkNeighbors
-===========
+=================================
+Neighbors (:c:type:`QkNeighbors`)
+=================================
 
 .. doxygenstruct:: QkNeighbors
    :members:

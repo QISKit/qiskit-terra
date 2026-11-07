@@ -1,15 +1,15 @@
 .. _capi-complex64:
 
-===========
-QkComplex64
-===========
+=========================================
+Complex Numbers (:c:struct:`QkComplex64`)
+=========================================
 
 A complex, double-precision number representation. This data type is used to safely
 use complex numbers within Qiskit, but is not necessarily designed for easy manipulation
 on user-side. Instead, we provide functions to convert from compiler-native representation
 (e.g. ``complex double`` for GNU or Clang compilers), which allow for ergonomic handling,
-to Qiskit's ``QkComplex64`` representation, which is meant for passing into Qiskit functions
-and structs.
+to Qiskit's :c:struct:`QkComplex64` representation, which is meant for passing into Qiskit
+functions and structs.
 
 Explicitly, Qiskit assumes the compiler-native complex number type in C to be
 ``_Dcomplex`` for Windows MSVC (if ``_MSC_VER`` is defined) and ``double _Complex`` otherwise.
@@ -31,7 +31,7 @@ Functions
 
 .. c:function:: static CMPLX_DOUBLE qk_complex64_to_native(QkComplex64 *value)
 
-   Convert a ``QkComplex64`` to a compiler-native complex number representation.
+   Convert a :c:struct:`QkComplex64` to a compiler-native complex number representation.
    Note that ``CMPLX_DOUBLE`` is a placeholder for the compiler-native complex number type,
    see the top of the page for more details.
 
@@ -48,10 +48,10 @@ Assuming a GNU/clang compiler with ``complex double`` as native complex number, 
 Safety
 ------
 
-Behavior is undefined if ``value`` is not a valid, non-null pointer to a ``QkComplex64``.
+Behavior is undefined if ``value`` is not a valid, non-null pointer to a :c:struct:`QkComplex64`.
 
 :Parameters:
-    **value** – A pointer to the ``QkComplex64`` to convert.
+    **value** – A pointer to the :c:struct:`QkComplex64` to convert.
 
 :Returns:
     A native representation of the complex number.
@@ -59,7 +59,7 @@ Behavior is undefined if ``value`` is not a valid, non-null pointer to a ``QkCom
 
 .. c:function:: static QkComplex64 qk_complex64_from_native(CMPLX_DOUBLE *value)
 
-   Convert a compiler-native complex number to a ``QkComplex64``.
+   Convert a compiler-native complex number to a :c:struct:`QkComplex64`.
    Note that ``CMPLX_DOUBLE`` is a placeholder for the compiler-native complex number type,
    see the top of the page for more details.
 
@@ -76,11 +76,11 @@ Assuming a GNU/clang compiler with ``complex double`` as native complex number, 
 Safety
 ------
 
-Behavior is undefined if ``value`` is not a valid, non-null pointer to a ``QkComplex64``.
+Behavior is undefined if ``value`` is not a valid, non-null pointer to a :c:struct:`QkComplex64`.
 
 :Parameters:
     **value** – A pointer to the native complex number.
 
 :Returns:
-    A ``QkComplex64`` representation of the complex number.
+    A :c:struct:`QkComplex64` representation of the complex number.
 

@@ -1,12 +1,10 @@
 .. _capi-classical-register:
 
-===================
-QkClassicalRegister
-===================
+==================================================
+Classical Register (:c:type:`QkClassicalRegister`)
+==================================================
 
-.. code-block:: c
-
-   typedef struct QkClassicalRegister QkClassicalRegister
+.. c:type:: struct QkClassicalRegister QkClassicalRegister
 
 A common way to instantiate several bits at once is to create a register. A
 register is a named collection of bits. Creating a register enables giving a

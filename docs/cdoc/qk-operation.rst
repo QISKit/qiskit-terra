@@ -1,19 +1,17 @@
 .. _capi-operations:
 
-=================
-QkCustomOp
-=================
+========================================
+Custom Operations (:c:type:`QkCustomOp`)
+========================================
 
-.. code-block:: c
-
-   typedef struct QkCustomOp QkCustomOp
+.. c:type:: struct QkCustomOp QkCustomOp
 
 A representation of an operation that has been defined in C.
 
 This operation object contains the minimal functionality an object
-should adhere to in order operate on a ``QkCircuit``.
+should adhere to in order operate on a :c:type:`QkCircuit`.
 
-Any object that can be implemented using ``QkCustomOp`` will be
+Any object that can be implemented using :c:type:`QkCustomOp` will be
 dynamically dispatched to be added to the circuit. In other words,
 the circuit is unaware of the type of object it is accepting, but
 it will work with it as long as it has the functionality expected
@@ -81,7 +79,8 @@ Here's a quick example of what that looks like:
 
 Data Types
 ==========
-
+.. doxygentypedef:: QkCustomOpVtable
+   
 .. doxygenenum:: QkCustomOpSlot
 
 Functions

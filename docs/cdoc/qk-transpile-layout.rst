@@ -1,14 +1,12 @@
 .. _capi-transpile-layout:
 
-=================
-QkTranspileLayout
-=================
+==============================================
+Transpile Layout (:c:type:`QkTranspileLayout`)
+==============================================
 
-.. code-block:: c
+.. c:type:: struct QkTranspileLayout QkTranspileLayout
 
-   typedef struct QkTranspileLayout QkTranspileLayout
-
-The ``QkTranspileLayout`` type is used to model the permutations introduced by
+The :c:type:`QkTranspileLayout` type is used to model the permutations introduced by
 the transpiler. In general Qiskit's transpiler is unitary-preserving up to the
 initial layout and output permutations. The initial layout is the mapping
 from virtual circuit qubits to physical qubits on the target and the output
@@ -94,7 +92,7 @@ number of qubits in the input circuit and output circuit respectively. Additiona
 ``qk_transpile_layout_initial_layout`` and ``qk_transpile_layout_final_layout``
 functions take an argument to filter ancillas from the output array. If set to true
 the output array will be filtered to just the virtual qubits in the original input circuit
-to the transpiler call that generated the ``QkTranspileLayout``.
+to the transpiler call that generated the :c:type:`QkTranspileLayout`.
 
 Functions
 =========
