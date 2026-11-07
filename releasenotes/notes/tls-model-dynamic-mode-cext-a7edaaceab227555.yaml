@@ -1,0 +1,10 @@
+---
+build:
+  - Added a new Rust feature for the ``cext`` crate ``tls_local_dynamic`` to
+    set the TLS model used by the allocator to a local-dynamic when building
+    the C API in standalone mode. By default the standalone C shared library
+    will be built with an initial-exec TLS model. This flag can be set on
+    the ``cargo`` call to build the crate with ``--features=tls_local_dynamic``
+    or by setting the environment variable ``QISKIT_TLS_LOCAL_DYNAMIC_MODEL=1``
+    when running GNU Make. This option will also enable building with mimalloc
+    do not set this new option if you don't want to build with mimalloc.

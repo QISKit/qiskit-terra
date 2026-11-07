@@ -32,7 +32,7 @@ hashbrown.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
 anyhow.workspace = true
-mimalloc = { workspace = true, optional = true, features = ["local_dynamic_tls"] }
+mimalloc = { workspace = true, optional = true }
 uuid.workspace = true
 num-bigint.workspace = true
 num-traits.workspace = true
@@ -44,3 +44,4 @@ cache_pygates = [
     "qiskit-circuit/cache_pygates",
     "qiskit-transpiler/cache_pygates",
 ]
+tls_local_dynamic = ["mimalloc/local_dynamic_tls"]
