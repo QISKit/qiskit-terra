@@ -382,6 +382,23 @@ class TestOptimizeSwapBeforeMeasureFixedPoint(QiskitTestCase):
 
         self.assertEqual(expected, after)
 
+    def test_measurement_order_preserved_for_shared_clbit(self):
+        """Measurements writing to the same clbit keep their order (gh-17408)."""
+        circuit = QuantumCircuit(2, 1)
+        circuit.x(1)
+        circuit.swap(0, 1)
+        circuit.measure(0, 0)
+        circuit.measure(1, 0)
+
+        expected = QuantumCircuit(2, 1)
+        expected.x(1)
+        expected.measure(1, 0)
+        expected.measure(0, 0)
+
+        for _ in range(20):
+            after = PassManager([OptimizeSwapBeforeMeasure()]).run(circuit)
+            self.assertEqual(expected, after)
+
 
 if __name__ == "__main__":
     unittest.main()
