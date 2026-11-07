@@ -18,7 +18,20 @@ from enum import Enum
 
 
 class PropertySet(dict):
-    """A default dictionary-like object."""
+    """A default dictionary-like context object, shared among compiler passes.
+
+    A single instance is created when a pass manager starts running and is handed from pass to
+    pass, so they can use it to communicate: a pass can read what earlier passes recorded and writes
+    in place what later passes might need.
+
+    Keys are free-form, so a pass should document whatever it reads and writes.  Qiskit's preset
+    pass managers may rely on some by convention, such as ``"layout"`` and ``"original_qubit_indices"`` from the
+    layout stage, ``"final_layout"`` from routing, and ``"node_start_time"`` from scheduling
+    analysis; see :ref:`transpiler-preset-stage-layout` and
+    :ref:`transpiler-preset-stage-scheduling`.
+
+    Looking up a missing key returns ``None`` by default.
+    """
 
     def __missing__(self, key):
         return None
