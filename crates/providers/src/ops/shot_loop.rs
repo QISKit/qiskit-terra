@@ -16,6 +16,7 @@
 use qiskit_circuit::circuit_data::CircuitData;
 use thiserror::Error;
 
+use super::inference::{float, leading_axes};
 use super::{ProgramOp, QISKIT};
 use crate::tensor::{DType, Dim, Tensor, TensorType};
 
@@ -114,12 +115,15 @@ impl ProgramOp for ShotLoop {
         let mut outputs = Vec::with_capacity(self.circuits.len());
         for (index, (circuit, operand)) in self.circuits.iter().zip(inputs).enumerate() {
             let parameters = circuit.num_parameters();
-            let batch =
-                leading_axes(parameters, operand).ok_or_else(|| ShotLoopError::ParameterType {
-                    circuit: index,
-                    parameters,
-                    actual: operand.clone(),
-                })?;
+            let refuse = || ShotLoopError::ParameterType {
+                circuit: index,
+                parameters,
+                actual: operand.clone(),
+            };
+            if !float(operand.dtype) {
+                return Err(refuse());
+            }
+            let batch = leading_axes(&operand.shape, parameters).ok_or_else(refuse)?;
             for register in circuit.cregs() {
                 let mut shape = batch.to_vec();
                 shape.push(Dim::Fixed(self.shots));
@@ -134,15 +138,6 @@ impl ProgramOp for ShotLoop {
     }
     fn eval(&self, _args: &[Tensor]) -> Result<Vec<Tensor>, Self::Error> {
         Err(ShotLoopError::NoBuiltinEval)
-    }
-}
-
-/// Strip out the leading axes, assuming the last axis matches the number of parameters.
-fn leading_axes(parameters: usize, operand: &TensorType) -> Option<&[Dim]> {
-    let float = matches!(operand.dtype, DType::F32 | DType::F64);
-    match operand.shape.split_last() {
-        Some((&Dim::Fixed(values), batch)) if float && values == parameters => Some(batch),
-        _ => None,
     }
 }
 

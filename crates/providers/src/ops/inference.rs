@@ -26,6 +26,11 @@ pub(super) fn promotable(dtype: DType) -> bool {
     promotion(dtype, dtype).is_some()
 }
 
+/// Admit the floating-point dtypes.
+pub(super) fn float(dtype: DType) -> bool {
+    matches!(dtype, DType::F32 | DType::F64)
+}
+
 /// Infer the result type of an elementwise operation over two operands.
 ///
 /// The operand dtypes promote and the shapes broadcast. `accepts` is checked against the promoted
@@ -81,6 +86,14 @@ pub(super) fn broadcast_to(x: &TensorType, target: &[Dim]) -> Result<TensorType,
         dtype: x.dtype,
         shape: broadcast_dims_to(&x.shape, target)?,
     })
+}
+
+/// Return the axes of `shape` before its last, if that last axis is `len` long.
+pub(super) fn leading_axes(shape: &[Dim], len: usize) -> Option<&[Dim]> {
+    match shape.split_last() {
+        Some((&Dim::Fixed(size), leading)) if size == len => Some(leading),
+        _ => None,
+    }
 }
 
 /// Validate that a single operand's dtype is admitted.
@@ -362,5 +375,34 @@ mod test {
             MathOpError::Tensor(TensorError::DimShapeMismatch { lhs, rhs })
                 if lhs == [Dim::Fixed(2)] && rhs == target
         ));
+    }
+
+    #[test]
+    fn test_leading_axes_splits_off_the_trailing_axis() {
+        assert_eq!(
+            leading_axes(&ty(DType::F64, &[2]).shape, 2),
+            Some(&[] as &[Dim]),
+            "a shape of one axis has no leading axes"
+        );
+        assert_eq!(
+            leading_axes(&ty(DType::F32, &[5, 3, 2]).shape, 2).unwrap(),
+            [Dim::Fixed(5), Dim::Fixed(3)]
+        );
+        assert_eq!(
+            leading_axes(&[Dim::Bounded { max: 4 }, Dim::Fixed(0)], 0).unwrap(),
+            [Dim::Bounded { max: 4 }],
+            "a leading axis passes through whatever it is, and a trailing axis may be empty"
+        );
+    }
+
+    #[test]
+    fn test_leading_axes_refuses_a_trailing_axis_of_another_length() {
+        assert_eq!(leading_axes(&[Dim::Fixed(3)], 2), None);
+        assert_eq!(leading_axes(&[], 0), None, "there is no trailing axis");
+        assert_eq!(
+            leading_axes(&[Dim::Bounded { max: 2 }], 2),
+            None,
+            "a bounded axis is not known to be two long"
+        );
     }
 }
