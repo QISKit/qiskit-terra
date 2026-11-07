@@ -647,6 +647,37 @@ class TestLoadFromQPY(QiskitTestCase):
         self.assertIs(new_circ.data[1].operation.definition, None)
         self.assertDeprecatedBitProperties(qc, new_circ)
 
+    @ddt.idata(range(17, QPY_VERSION + 1))
+    def test_custom_gate_definition_layout(self, version):
+        """Test that the layout of a custom gate definition is preserved."""
+        from qiskit.transpiler import Layout, TranspileLayout
+
+        definition = QuantumCircuit(1, name="definition with layout")
+        definition.x(0)
+        input_qubit = Qubit()
+        initial_layout = Layout.from_qubit_list([input_qubit])
+        definition._layout = TranspileLayout(
+            initial_layout,
+            input_qubit_mapping={input_qubit: 0},
+            final_layout=None,
+        )
+
+        custom_gate = Gate("gate_with_definition_layout", 1, [])
+        custom_gate.definition = definition
+        circuit = QuantumCircuit(1)
+        circuit.append(custom_gate, [0])
+
+        with io.BytesIO() as qpy_file:
+            dump(circuit, qpy_file, version=version)
+            qpy_file.seek(0)
+            loaded = load(qpy_file)[0]
+
+        loaded_definition = loaded.data[0].operation.definition
+        loaded_layout = loaded_definition.layout
+        loaded_input_qubit = loaded_layout.initial_layout.get_physical_bits()[0]
+        self.assertEqual(loaded_definition.name, definition.name)
+        self.assertEqual(loaded_layout.input_qubit_mapping, {loaded_input_qubit: 0})
+
     def test_standard_gate_with_label(self):
         """Test a standard gate with a label."""
         qc = QuantumCircuit(1)

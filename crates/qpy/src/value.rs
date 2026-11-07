@@ -847,7 +847,13 @@ pub(crate) fn serialize_generic_value(
                 qpy_data.annotation_handler.child()?,
                 qpy_data.caller,
             )?;
-            (ValueType::Circuit, serialize(&packed_circuit)?)
+            (
+                ValueType::Circuit,
+                serialize_with_args::<formats::QPYCircuit, (u8,)>(
+                    &packed_circuit,
+                    (qpy_data.version,),
+                )?,
+            )
         }
         GenericValue::NumpyObject(bytes) => (ValueType::NumpyObject, bytes.clone()),
         GenericValue::Range(py_range) => {

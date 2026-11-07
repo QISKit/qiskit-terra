@@ -1224,17 +1224,20 @@ fn pack_custom_instruction(
                 &definition.data,
                 qpy_data.version,
             )?;
-            Some(serialize(&pack_circuit(
-                &definition.data,
-                ExtraCircuitData {
-                    name: definition.name,
-                    metadata,
-                    layout: Some(layout),
-                },
-                qpy_data.version,
-                qpy_data.annotation_handler.child()?,
-                qpy_data.caller,
-            )?)?)
+            Some(serialize_with_args::<formats::QPYCircuit, (u8,)>(
+                &pack_circuit(
+                    &definition.data,
+                    ExtraCircuitData {
+                        name: definition.name,
+                        metadata,
+                        layout: Some(layout),
+                    },
+                    qpy_data.version,
+                    qpy_data.annotation_handler.child()?,
+                    qpy_data.caller,
+                )?,
+                (qpy_data.version,),
+            )?)
         }
         CircuitInstructionType::AnnotatedOperation => {
             base_gate = inst.ob.bind(py).getattr("base_op")?.clone();
@@ -1257,7 +1260,9 @@ fn pack_custom_instruction(
                     qpy_data.annotation_handler.child()?,
                     qpy_data.caller,
                 )
-                .and_then(|fmt| serialize(&fmt))
+                .and_then(|fmt| {
+                    serialize_with_args::<formats::QPYCircuit, (u8,)>(&fmt, (qpy_data.version,))
+                })
             })
             .transpose()?,
     };

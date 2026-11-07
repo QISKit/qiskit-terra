@@ -1,0 +1,8 @@
+---
+fixes:
+  - |
+    Fixed an issue in the QPY component where layouts in custom operation
+    definitions were packed according to an older QPY version than the one
+    used by the file. The QPY 18 reader also recovers the invalid anonymous-bit
+    input mappings produced by Qiskit 2.6.0rc1 and 2.6.0 as a result of this
+    issue.

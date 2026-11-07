@@ -44,6 +44,8 @@ pub struct LoadedCircuit {
     pub circuit_data: CircuitData,
     /// The packed representation containing data needed for Python circuit construction.
     pub packed_circuit: QPYCircuit,
+    /// The QPY version of the payload containing this circuit.
+    pub qpy_version: u8,
 }
 
 /// Data associated with a circuit that is not stored in native [`CircuitData`].
@@ -359,6 +361,7 @@ pub fn load_qpy(
             circuits.push(LoadedCircuit {
                 circuit_data,
                 packed_circuit,
+                qpy_version: qpy_file_header.qpy_version,
             });
         }
     } else {
@@ -382,6 +385,7 @@ pub fn load_qpy(
             circuits.push(LoadedCircuit {
                 circuit_data,
                 packed_circuit,
+                qpy_version: qpy_file_header.qpy_version,
             });
         }
     }
@@ -423,6 +427,7 @@ pub fn py_load_qpy<'py>(
                 py,
                 loaded.circuit_data,
                 &loaded.packed_circuit,
+                loaded.qpy_version,
                 metadata_deserializer.as_ref().map(Bound::as_ref),
             )
         })
