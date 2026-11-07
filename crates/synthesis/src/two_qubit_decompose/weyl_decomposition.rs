@@ -1140,7 +1140,7 @@ impl TwoQubitWeylDecomposition {
                 &[Qubit(0)],
             )?;
         }
-        global_phase += c2r.global_phase;
+        global_phase += c1r.global_phase;
         let c1l = unitary_to_gate_sequence_inner(
             nalgebra_array_view::<Complex64, U2, U2>(self.K1l.as_view()),
             &target_1q_basis_list,
@@ -1157,6 +1157,7 @@ impl TwoQubitWeylDecomposition {
                 &[Qubit(1)],
             )?;
         }
+        global_phase += c1l.global_phase;
         gate_sequence.set_global_phase_f64(global_phase);
         Ok(gate_sequence.into())
     }
