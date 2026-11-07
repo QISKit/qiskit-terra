@@ -522,6 +522,34 @@ class TestDisjointDeviceSabreLayout(QiskitTestCase):
         self.assertEqual(out.layout.initial_index_layout(filter_ancillas=False), [4, 5, 3, 0, 1, 2])
         self.assertEqual(out.layout.final_index_layout(filter_ancillas=False), [3, 5, 4, 0, 1, 2])
 
+    def test_active_qubits_fit_in_one_component_with_idle_qubits(self):
+        """Test idle qubits are preserved when the active qubits fit in one component."""
+        qc = QuantumCircuit(4)
+        qc.h(0)
+        qc.h(2)
+        qc.cx(0, 2)
+
+        disjoint = CouplingMap([(0, 1), (2, 3)])
+        layout_routing_pass = SabreLayout(disjoint, seed=42, swap_trials=1, layout_trials=1)
+        out = layout_routing_pass(qc)
+
+        layout_qubits = list(range(qc.num_qubits))
+        self.assertCountEqual(
+            out.layout.initial_index_layout(filter_ancillas=False),
+            layout_qubits,
+        )
+        self.assertCountEqual(
+            out.layout.final_index_layout(filter_ancillas=False),
+            layout_qubits,
+        )
+        cx_qubits = [
+            {out.find_bit(qubit).index for qubit in instruction.qubits}
+            for instruction in out.data
+            if instruction.operation.name == "cx"
+        ]
+        self.assertEqual(len(cx_qubits), 1)
+        self.assertIn(cx_qubits[0], [{0, 1}, {2, 3}])
+
     def test_sabre_layout_global_1q(self):
         """Test that the pass runs with a globally defined 1q gate."""
         target = Target(num_qubits=3)

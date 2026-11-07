@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed a Rust panic in :class:`.SabreLayout` for circuits with idle qubits
+    on disconnected coupling maps when the active qubits fit in a component
+    that is too small for the full circuit. See
+    `#15841 <https://github.com/Qiskit/qiskit/issues/15841>`__.

@@ -182,20 +182,18 @@ pub fn distribute_components(dag: &mut DAGCircuit, target: &Target) -> PyResult<
         }
         return Ok(DisjointSplit::NoneNeeded);
     }
-    if let Some(largest_component) = cmap_components.iter().max_by_key(|x| x.len()) {
-        let num_active_qubits = dag
-            .qubit_io_map()
-            .iter()
-            .filter(|[source, target]| dag.dag().find_edge(*source, *target).is_none())
-            .count();
-        if largest_component.len() >= num_active_qubits {
-            return Ok(DisjointSplit::TargetSubset(
-                largest_component
-                    .iter()
-                    .map(|x| PhysicalQubit(x.index() as u32))
-                    .collect(),
-            ));
-        }
+    // TargetSubset runs the full DAG on one component, including idle qubits.
+    // If only the active qubits fit, keep their sub-DAGs and virtual-qubit mappings
+    // so Sabre can assign the idle qubits to unused physical qubits.
+    if let Some(largest_component) = cmap_components.iter().max_by_key(|x| x.len())
+        && largest_component.len() >= dag.num_qubits()
+    {
+        return Ok(DisjointSplit::TargetSubset(
+            largest_component
+                .iter()
+                .map(|x| PhysicalQubit(x.index() as u32))
+                .collect(),
+        ));
     }
     let dag_components = separate_dag(dag)?;
     let mapped_components = map_components(&dag_components, &cmap_components)?;
@@ -260,15 +258,6 @@ pub fn distribute_components(dag: &mut DAGCircuit, target: &Target) -> PyResult<
             Ok((out_dag, subgraph))
         })
         .collect::<PyResult<Vec<_>>>()?;
-    if out_component_pairs.len() == 1 {
-        return Ok(DisjointSplit::TargetSubset(
-            out_component_pairs[0]
-                .1
-                .node_weights()
-                .map(|x| PhysicalQubit::new(x.index() as u32))
-                .collect(),
-        ));
-    }
     Ok(DisjointSplit::Arbitrary(
         out_component_pairs
             .into_iter()
