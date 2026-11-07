@@ -16,7 +16,7 @@
 import logging
 import os
 from time import time
-from typing import Any, TypeVar
+from typing import Any, SupportsIndex, TypeVar
 from collections.abc import Callable
 
 from qiskit import user_config
@@ -47,7 +47,7 @@ def transpile(
     scheduling_method: str | None = None,
     dt: float | None = None,
     approximation_degree: float | None = 1.0,
-    seed_transpiler: int | None = None,
+    seed_transpiler: SupportsIndex | None = None,
     optimization_level: int | None = None,
     callback: Callable[[BasePass, DAGCircuit, float, PropertySet, int], Any] | None = None,
     output_name: str | list[str] | None = None,

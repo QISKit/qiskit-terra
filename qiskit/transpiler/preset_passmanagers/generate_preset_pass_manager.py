@@ -21,7 +21,6 @@ import os
 import warnings
 import typing
 
-
 from qiskit.circuit.controlflow import CONTROL_FLOW_OP_NAMES, get_control_flow_name_mapping
 from qiskit.circuit.library.standard_gates import get_standard_gate_name_mapping
 from qiskit.circuit import Qubit
@@ -68,7 +67,7 @@ def generate_preset_pass_manager(
     translation_method: str | None = None,
     scheduling_method: str | None = None,
     approximation_degree: float | None = 1.0,
-    seed_transpiler: int | None = None,
+    seed_transpiler: typing.SupportsIndex | None = None,
     unitary_synthesis_method: str = "default",
     unitary_synthesis_plugin_config: dict | None = None,
     hls_config: HLSConfig | None = None,
@@ -297,7 +296,7 @@ def generate_preset_clifford_t_pass_manager(
     coupling_map: CouplingMap | list | None = None,
     initial_layout: Layout | list[int] = None,
     approximation_degree: float | None = 1.0,
-    seed_transpiler: int | None = None,
+    seed_transpiler: typing.SupportsIndex | None = None,
     unitary_synthesis_method: str = "default",
     unitary_synthesis_plugin_config: dict | None = None,
     hls_config: HLSConfig | None = None,
@@ -576,7 +575,7 @@ def _parse_approximation_degree(approximation_degree):
 def _parse_seed_transpiler(seed_transpiler):
     if seed_transpiler is None:
         return None
-    if not isinstance(seed_transpiler, int) or seed_transpiler < 0:
+    if not isinstance(seed_transpiler, typing.SupportsIndex) or seed_transpiler < 0:
         raise ValueError("Expected non-negative integer as seed for transpiler.")
     return seed_transpiler
 
@@ -588,7 +587,7 @@ def _parse_common_options(
     coupling_map: CouplingMap | list | None = None,
     initial_layout: Layout | list[int] = None,
     approximation_degree: float | None = 1.0,
-    seed_transpiler: int | None = None,
+    seed_transpiler: typing.SupportsIndex | None = None,
     unitary_synthesis_method: str = "default",
     unitary_synthesis_plugin_config: dict | None = None,
     hls_config: HLSConfig | None = None,

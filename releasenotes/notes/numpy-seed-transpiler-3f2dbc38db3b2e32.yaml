@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    The ``seed_transpiler`` argument of :func:`.transpile`,
+    :func:`.generate_preset_pass_manager` and
+    :func:`.generate_preset_clifford_t_pass_manager` now accepts any non-negative
+    integer type, including NumPy integers.
