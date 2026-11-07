@@ -252,8 +252,7 @@ impl BitTensor {
             .all(|row| row.last().is_none_or(|byte| byte & !mask == 0))
     }
 
-    /// Return this tensor with each of its rows stretched to `num_bits` bits, or `None` if a row
-    /// does not hold the single bit that one is stretched from.
+    /// Return this tensor with its bit axis broadcast to `num_bits`, or `None` if not possible.
     fn stretch_row(&self, num_bits: usize) -> Option<Self> {
         if !self.shape.is_empty() && self.num_bits() == num_bits {
             return Some(self.clone());
@@ -267,20 +266,20 @@ impl BitTensor {
             None => shape.push(num_bits),
         }
         let bytes_per_row = num_bits.div_ceil(8);
-        let mask = final_byte_mask(num_bits);
         let mut bytes = Vec::with_capacity(num_rows(&shape) * bytes_per_row);
         for row in self.rows() {
             let fill = if row[0] & 1 == 1 { u8::MAX } else { 0 };
             bytes.extend(repeat_n(fill, bytes_per_row));
-            if let Some(mask) = mask {
-                *bytes.last_mut().expect("a padded row holds a byte") &= mask;
+        }
+        if let Some(mask) = final_byte_mask(num_bits) {
+            for row in 0..num_rows(&shape) {
+                bytes[(row + 1) * bytes_per_row - 1] &= mask;
             }
         }
         Some(Self::new(bytes, shape))
     }
 
-    /// Return the result of applying `op` to the bytes of two tensors, broadcast against one
-    /// another NumPy-style.
+    /// Return the result of applying `op` to the bytes of two tensors, with broadcasting.
     fn zip_bytes(&self, rhs: &Self, op: impl Fn(u8, u8) -> u8) -> Result<Self, TensorError> {
         let shape = broadcast_shape(&self.shape, &rhs.shape)?;
         let lhs = self.broadcast_to(&shape)?;
@@ -297,7 +296,8 @@ impl BitTensor {
 
 /// Pack `bits`, taken in row-major order, into a tensor of logical shape `shape`.
 fn pack(bits: impl IntoIterator<Item = bool>, shape: Vec<usize>) -> BitTensor {
-    let (num_bits, bytes_per_row) = (num_bits(&shape), bytes_per_row(&shape));
+    let num_bits = num_bits(&shape);
+    let bytes_per_row = bytes_per_row(&shape);
     let mut bytes = vec![0u8; num_rows(&shape) * bytes_per_row];
     let mut bits = bits.into_iter();
     for row in 0..num_rows(&shape) {
