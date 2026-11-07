@@ -2496,6 +2496,8 @@ dependencies = [
  "num-complex",
  "num-traits",
  "qiskit-circuit",
+ "rand 0.10.3",
+ "rand_philox",
  "rustworkx-core",
  "thiserror 2.0.21",
 ]
@@ -2802,6 +2804,15 @@ name = "rand_pcg"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a"
+dependencies = [
+ "rand_core 0.10.1",
+]
+
+[[package]]
+name = "rand_philox"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58bdd129512111be1936edc001113ba844f0fd1aa58b34b2752af62454788805"
 dependencies = [
  "rand_core 0.10.1",
 ]

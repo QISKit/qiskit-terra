@@ -20,6 +20,7 @@ mod constant;
 mod error;
 mod inference;
 mod program_op;
+mod random;
 mod reduction;
 mod shot_loop;
 
@@ -30,6 +31,7 @@ pub use cast::Cast;
 pub use constant::Constant;
 pub use error::MathOpError;
 pub use program_op::{BoxedOpError, BoxedProgramOp, ErasedProgramOp, ProgramOp, QISKIT};
+pub use random::{CounterUnit, Entropy, RandomOpError, Split};
 
 pub use reduction::{Mean, Std, Variance};
 pub use shot_loop::{ShotLoop, ShotLoopError};

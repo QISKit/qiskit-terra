@@ -39,6 +39,7 @@ nom-language = "0.1"
 rand = "0.10"
 rand_pcg = "0.10"
 rand_distr = "0.6"
+rand_philox = "0.2"
 num-traits = "0.2"
 uuid = { version = "1.23", features = [
     "v4",
