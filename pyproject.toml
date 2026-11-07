@@ -67,7 +67,7 @@ crosstalk-pass = [
     "z3-solver >= 4.7",
 ]
 csp-layout-pass = [
-    "python-constraint >= 1.4",
+    "python-constraint2 >= 2.0",
 ]
 qpy-compat = [
     "symengine>=0.11,<0.14",
@@ -242,7 +242,7 @@ optionals-interactive = [
 optionals-functional = [
     "qiskit-aer",
     "qiskit-qasm3-import>=0.5.0",
-    "python-constraint>=1.4",
+    "python-constraint2>=2.0",
     "cvxpy",
     "scikit-learn>=0.20.0",
     "z3-solver>=4.7",

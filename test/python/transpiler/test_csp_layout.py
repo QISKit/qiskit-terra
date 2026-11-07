@@ -26,7 +26,7 @@ from test import QiskitTestCase
 from ..legacy_cmaps import TENERIFE_CMAP, RUESCHLIKON_CMAP, TOKYO_CMAP, YORKTOWN_CMAP
 
 
-@unittest.skipUnless(optionals.HAS_CONSTRAINT, "needs python-constraint")
+@unittest.skipUnless(optionals.HAS_CONSTRAINT, "needs python-constraint2")
 class TestCSPLayout(QiskitTestCase):
     """Tests the CSPLayout pass"""
 

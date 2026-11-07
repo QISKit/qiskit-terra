@@ -51,7 +51,7 @@ External Python Libraries
 
 .. py:data:: HAS_CONSTRAINT
 
-    `python-constraint <https://github.com/python-constraint/python-constraint>`__ is a
+    `python-constraint2 <https://github.com/python-constraint/python-constraint>`__ is a
     constraint satisfaction problem solver, used in the :class:`~.CSPLayout` transpiler pass.
 
 .. py:data:: HAS_CPLEX
@@ -272,8 +272,8 @@ HAS_TOQM = _LazyImportTester("qiskit_toqm", name="Qiskit TOQM", install="pip ins
 
 HAS_CONSTRAINT = _LazyImportTester(
     "constraint",
-    name="python-constraint",
-    install="pip install python-constraint",
+    name="python-constraint2",
+    install="pip install python-constraint2",
 )
 
 HAS_CPLEX = _LazyImportTester(

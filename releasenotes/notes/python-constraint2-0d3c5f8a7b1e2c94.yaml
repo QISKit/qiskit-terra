@@ -1,0 +1,9 @@
+---
+upgrade_transpiler:
+  - |
+    The optional dependency used by the :class:`.CSPLayout` transpiler pass is now
+    `python-constraint2 <https://pypi.org/project/python-constraint2/>`__, the actively
+    maintained successor to ``python-constraint``.  The ``csp-layout-pass`` extra
+    (``pip install qiskit[csp-layout-pass]``) now installs ``python-constraint2``.  Both
+    packages provide the same ``constraint`` module, so an existing installation of
+    ``python-constraint`` will continue to work, but it is no longer the recommended package.
