@@ -228,6 +228,10 @@ class TestSparsePauliOpConversions(QiskitTestCase):
         expected = SparsePauliOp.from_list([("IXYI", 0.5j)])
         self.assertEqual(SparsePauliOp.from_operator(operator, 0.26), expected)
 
+        # rtol is deprecated and has no effect. test that it warn.
+        with self.assertWarns(DeprecationWarning):
+            SparsePauliOp.from_operator(operator, 0.26, rtol=1e-3)
+
     def test_from_list(self):
         """Test from_list method."""
         labels = ["XXZ", "IXI", "YZZ", "III"]
@@ -1646,6 +1650,10 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         op = SparsePauliOp(["XX"] * 10, [1e-9] * 10)
         res = op.simplify(atol=2e-9)
         self.assertEqual(SparsePauliOp.from_list([("XX", 1.0e-08 + 0.0j)]), res)
+
+        # rtol is deprecated and has no effect. test that it warn.
+        with self.assertWarns(DeprecationWarning):
+            op.simplify(atol=1e-3, rtol=1e-3)
 
     def test_simplify_sum_below_tolerance(self):
         """Test that simplify sums duplicates before applying atol threshold."""

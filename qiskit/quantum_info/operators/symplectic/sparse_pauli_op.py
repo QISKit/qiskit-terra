@@ -43,6 +43,7 @@ from qiskit.quantum_info.operators.operator import Operator
 from qiskit.quantum_info.operators.symplectic.pauli import BasePauli
 from qiskit.quantum_info.operators.symplectic.pauli_list import PauliList
 from qiskit.quantum_info.operators.symplectic.pauli import Pauli
+from qiskit.utils.deprecation import deprecate_arg
 
 if TYPE_CHECKING:
     from qiskit.quantum_info.operators.symplectic.clifford import Clifford
@@ -500,7 +501,7 @@ class SparsePauliOp(LinearOp):
             rtol = self.rtol
 
         # Compose with adjoint
-        val = self.compose(self.adjoint()).simplify(atol=atol, rtol=rtol)
+        val = self.compose(self.adjoint()).simplify(atol=atol)
         # See if the result is an identity
         return (
             val.size == 1
@@ -509,23 +510,25 @@ class SparsePauliOp(LinearOp):
             and not np.any(val.paulis.z)
         )
 
+    @deprecate_arg(
+        name="rtol",
+        since="2.7",
+        additional_msg="simplify function compares against zero, therefore relative tolerance never affect comparison. Use atol instead.",
+    )
     def simplify(self, atol: float | None = None, rtol: float | None = None) -> SparsePauliOp:
         """Simplify PauliList by combining duplicates and removing zeros.
 
         Args:
             atol (float): Optional. Absolute tolerance for checking if
                           coefficients are zero (Default: 1e-8).
-            rtol (float): Optional. relative tolerance for checking if
-                          coefficients are zero (Default: 1e-5).
+            rtol (float): Optional. Deprecated and has no effect. See deprection note.
 
         Returns:
             SparsePauliOp: the simplified SparsePauliOp operator.
         """
-        # Get default atol and rtol
+        # Get default atol
         if atol is None:
             atol = self.atol
-        if rtol is None:
-            rtol = self.rtol
 
         paulis_x = self.paulis.x
         paulis_z = self.paulis.z
@@ -553,18 +556,16 @@ class SparsePauliOp(LinearOp):
                     return np.nan
 
             non_zero = np.logical_not(
-                np.isclose([to_complex(x) for x in self.coeffs], 0, atol=atol, rtol=rtol)
+                np.isclose([to_complex(x) for x in self.coeffs], 0, atol=atol)
             )
         else:
-            non_zero = np.logical_not(np.isclose(self.coeffs, 0, atol=atol, rtol=rtol))
+            non_zero = np.logical_not(np.isclose(self.coeffs, 0, atol=atol))
 
         # Delete zero coefficient rows
         if self.coeffs.dtype == object:
-            is_zero = np.array(
-                [np.isclose(to_complex(coeff), 0, atol=atol, rtol=rtol) for coeff in coeffs]
-            )
+            is_zero = np.array([np.isclose(to_complex(coeff), 0, atol=atol) for coeff in coeffs])
         else:
-            is_zero = np.isclose(coeffs, 0, atol=atol, rtol=rtol)
+            is_zero = np.isclose(coeffs, 0, atol=atol)
         # Check edge case that we deleted all Paulis
         # In this case we return an identity Pauli with a zero coefficient
         if np.all(is_zero):
@@ -799,8 +800,12 @@ class SparsePauliOp(LinearOp):
     # ---------------------------------------------------------------------
     # Additional conversions
     # ---------------------------------------------------------------------
-
     @staticmethod
+    @deprecate_arg(
+        name="rtol",
+        since="2.7",
+        additional_msg="from_operator compares against zero, therefore relative tolerance never affect comparison. Use atol instead.",
+    )
     def from_operator(
         obj: Operator, atol: float | None = None, rtol: float | None = None
     ) -> SparsePauliOp:
@@ -815,11 +820,8 @@ class SparsePauliOp(LinearOp):
         Args:
             obj (Operator): an N-qubit operator.
             atol (float): Optional. Absolute tolerance for checking if coefficients are zero
-                (Default: 1e-8).  Since the comparison is to zero, in effect the tolerance used is
-                the maximum of ``atol`` and ``rtol``.
-            rtol (float): Optional. relative tolerance for checking if coefficients are zero
-                (Default: 1e-5).  Since the comparison is to zero, in effect the tolerance used is
-                the maximum of ``atol`` and ``rtol``.
+                (Default: 1e-8).
+            rtol (float): Optional. Deprecated and has no effect. See deprection note.
 
         Returns:
             SparsePauliOp: the SparsePauliOp representation of the operator.
@@ -827,12 +829,9 @@ class SparsePauliOp(LinearOp):
         Raises:
             QiskitError: if the input operator is not an N-qubit operator.
         """
-        # Get default atol and rtol
+        # Get default atol
         if atol is None:
             atol = SparsePauliOp.atol
-        if rtol is None:
-            rtol = SparsePauliOp.rtol
-        tol = max((atol, rtol))
 
         if not isinstance(obj, Operator):
             obj = Operator(obj)
@@ -841,7 +840,7 @@ class SparsePauliOp(LinearOp):
         num_qubits = obj.num_qubits
         if num_qubits is None:
             raise QiskitError("Input Operator is not an N-qubit operator.")
-        zx_paulis = decompose_dense(obj.data, tol)
+        zx_paulis = decompose_dense(obj.data, atol)
         # Indirection through `BasePauli` is because we're already supplying the phase in the ZX
         # convention.
         pauli_list = PauliList(BasePauli(zx_paulis.z, zx_paulis.x, zx_paulis.phases))

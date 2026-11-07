@@ -1,0 +1,8 @@
+---
+deprecations_quantum_info:
+  - |
+    The ``rtol`` argument of :meth:`.SparsePauliOp.simplify` and
+    :meth:`.SparsePauliOp.from_operator` is deprecated, and has no effect. Use ``atol``
+    instead. 
+
+    See `#13383 <https://github.com/Qiskit/qiskit/issues/13383>`__.
