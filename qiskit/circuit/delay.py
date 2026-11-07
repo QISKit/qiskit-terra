@@ -18,34 +18,28 @@ import numpy as np
 from qiskit.circuit.classical import expr, types
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.circuit.instruction import Instruction
-from qiskit.circuit.gate import Gate
-from qiskit.circuit import _utils
 from qiskit.circuit.parameterexpression import ParameterExpression
 from qiskit._accelerate.circuit import StandardInstructionType
 
 
-@_utils.with_gate_array(np.eye(2, dtype=complex))
 class Delay(Instruction):
     """Do nothing and just delay/wait/idle for a specified duration."""
 
     _standard_instruction_type = StandardInstructionType.Delay
 
-    def __init__(self, duration, unit=None):
+    def __init__(self, duration, unit=None, num_qubits=1):
         """
         Args:
-            duration: the length of time of the duration. If this is an
-                :class:`~.expr.Expr`, it must be a constant expression of type
-                :class:`~.types.Duration` and the ``unit`` parameter should be
-                omitted (or MUST be "expr" if it is specified).
-            unit: the unit of the duration, if ``duration`` is a numeric
-                value. Must be ``"dt"``, an SI-prefixed seconds unit, or "expr".
-
-        Raises:
-            CircuitError: A ``duration`` expression was specified with a resolved
-                type that is not timing-based, or the ``unit`` was improperly specified.
+            duration: the length of time of the duration.
+                If this is an :class:`~.expr.Expr`, it must be a constant
+                expression of type :class:`~.types.Duration`.
+            unit: the unit of the duration (if numeric). Must be "dt" or an SI-prefixed seconds unit.
+            num_qubits: number of qubits this delay applies to (default 1).
         """
         duration, self._unit = self._validate_arguments(duration, unit)
-        super().__init__("delay", 1, 0, params=[duration])
+        if num_qubits < 1:
+            raise CircuitError("Delay must apply to at least one qubit.")
+        super().__init__("delay", num_qubits, 0, params=[duration])
 
     @staticmethod
     def _validate_arguments(duration, unit):
@@ -71,8 +65,6 @@ class Delay(Instruction):
             # Integer durations should only exist when using dt units
             duration = float(duration)
         return duration, unit
-
-    broadcast_arguments = Gate.broadcast_arguments
 
     def inverse(self, annotated: bool = False):
         """Special case. Return self."""
@@ -102,7 +94,6 @@ class Delay(Instruction):
     def to_matrix(self) -> np.ndarray:
         """Return a Numpy.array for the unitary matrix. This has been
         added to enable simulation without making delay a full Gate type.
-
         Returns:
             np.ndarray: matrix representation.
         """
@@ -110,15 +101,20 @@ class Delay(Instruction):
 
     def __eq__(self, other):
         return (
-            isinstance(other, Delay) and self.unit == other.unit and self._compare_parameters(other)
+            isinstance(other, Delay) and
+            self.unit == other.unit and
+            self.num_qubits == other.num_qubits and
+            self._compare_parameters(other)
         )
 
     def __repr__(self):
-        """Return the official string representing the delay."""
-        return f"{self.__class__.__name__}(duration={self.params[0]}[unit={self.unit}])"
+        return (
+            f"{self.__class__.__name__}(duration={self.params[0]}[unit={self.unit}], "
+            f"num_qubits={self.num_qubits})"
+        )
 
     def validate_parameter(self, parameter):
-        """Delay parameter (i.e. duration) must be Expr, int, float or ParameterExpression."""
+        """Delay parameter must be Expr, int, float or ParameterExpression."""
         if isinstance(parameter, int):
             if parameter < 0:
                 raise CircuitError(
@@ -144,7 +140,7 @@ class Delay(Instruction):
             return parameter
         elif isinstance(parameter, ParameterExpression):
             if len(parameter.parameters) > 0:
-                return parameter  # expression has free parameters, we cannot validate it
+                return parameter
             if not parameter.is_real():
                 raise CircuitError(f"Bound parameter expression is complex in delay {self.name}")
             fval = float(parameter)
@@ -156,6 +152,6 @@ class Delay(Instruction):
                 if rounding_error > 1e-15:
                     raise CircuitError("Integer parameter is required for duration in 'dt' unit.")
                 return ival
-            return fval  # per default assume parameters must be real when bound
+            return fval
         else:
             raise CircuitError(f"Invalid param type {type(parameter)} for delay {self.name}.")
