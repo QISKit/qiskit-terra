@@ -1,0 +1,7 @@
+fixes:
+  - |
+    Fixed :class:`.Commuting2qGateRouter` to determine edge reachability using
+    the qubit positions left by previous commuting blocks.  Previously, later
+    blocks could lose gates or be rejected even when they were routable.
+    Edges that the supplied swap strategy cannot route now raise
+    :class:`.TranspilerError` instead of being silently omitted.

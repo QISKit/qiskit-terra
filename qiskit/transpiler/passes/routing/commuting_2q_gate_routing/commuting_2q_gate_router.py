@@ -144,6 +144,7 @@ class Commuting2qGateRouter(TransformationPass):
                 no swap strategy in the property set.
             TranspilerError: If the quantum circuit contains more than one qubit register.
             TranspilerError: If there are qubits that are not contained in the quantum register.
+            TranspilerError: If the swap strategy cannot route a block under the current layout.
         """
         if self._swap_strategy is None:
             swap_strategy = self.property_set["swap_strategy"]
@@ -176,9 +177,6 @@ class Commuting2qGateRouter(TransformationPass):
 
         for node in dag.topological_op_nodes():
             if isinstance(node.op, Commuting2qBlock):
-
-                # Check that the swap strategy creates enough connectivity for the node.
-                self._check_edges(dag, node, swap_strategy)
 
                 # Compose any accumulated non-swap strategy gates to the dag
                 accumulator = self._compose_non_swap_nodes(accumulator, current_layout, new_dag)
@@ -320,6 +318,9 @@ class Commuting2qGateRouter(TransformationPass):
         Returns:
             A dag that is compatible with the coupling map where swap gates have been added
             to map the gates in the :class:`.Commuting2qBlock` to the hardware.
+
+        Raises:
+            TranspilerError: If the swap strategy cannot route an edge under ``current_layout``.
         """
         trivial_layout = Layout.generate_trivial_layout(*dag.qregs.values())
         gate_layers = self._make_op_layers(dag, node.op, current_layout, swap_strategy)
@@ -366,35 +367,18 @@ class Commuting2qGateRouter(TransformationPass):
         for node in op.node_block:
             edge = (dag.find_bit(node.qargs[0]).index, dag.find_bit(node.qargs[1]).index)
 
-            bit0 = layout.get_virtual_bits()[dag.qubits[edge[0]]]
-            bit1 = layout.get_virtual_bits()[dag.qubits[edge[1]]]
-
-            distance = swap_strategy.distance_matrix[bit0, bit1]
+            # Use the same inverse-layout convention as gate placement.
+            bit0, bit1 = self._position_in_cmap(dag, *edge, layout)
+            distance_matrix = swap_strategy.distance_matrix
+            distance = (
+                distance_matrix[bit0, bit1] if max(bit0, bit1) < distance_matrix.shape[0] else -1
+            )
+            if distance < 0:
+                raise TranspilerError(
+                    f"The edge {edge}, mapped to {(bit0, bit1)}, cannot be routed "
+                    "by the supplied swap strategy."
+                )
 
             gate_layers[distance][edge] = node.op
 
         return gate_layers
-
-    def _check_edges(self, dag: DAGCircuit, node: DAGOpNode, swap_strategy: SwapStrategy):
-        """Check if the swap strategy can create the required connectivity.
-
-        Args:
-            dag: The dag to check edges from.
-            node: The dag node for which to check if the swap strategy provides enough connectivity.
-            swap_strategy: The swap strategy that is being used.
-
-        Raises:
-            TranspilerError: If there is an edge that the swap strategy cannot accommodate
-                and if the pass has been configured to raise on such issues.
-        """
-        required_edges = set()
-
-        for sub_node in node.op:
-            edge = (dag.find_bit(sub_node.qargs[0]).index, dag.find_bit(sub_node.qargs[1]).index)
-            required_edges.add(edge)
-
-        # Check that the swap strategy supports all required edges
-        if not required_edges.issubset(swap_strategy.possible_edges):
-            raise TranspilerError(
-                f"{swap_strategy} cannot implement all edges in {required_edges}."
-            )

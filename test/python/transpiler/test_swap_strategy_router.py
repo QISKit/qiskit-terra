@@ -104,6 +104,28 @@ class TestPauliEvolutionSwapStrategies(QiskitTestCase):
         self.assertEqual(routed.global_phase, circ.global_phase)
         self.assertEqual(Operator(routed), Operator(circ))
 
+    @data((2, 4), (0, 2))
+    def test_later_block_uses_current_positions(self, second_edge):
+        """Route later blocks using the positions left by earlier swap layers."""
+        circ = QuantumCircuit(5, global_phase=0.2)
+        circ.h(range(5))
+        first = SparsePauliOp.from_sparse_list([("ZZ", [0, 4], 1)], num_qubits=5)
+        second = SparsePauliOp.from_sparse_list([("ZZ", second_edge, 1)], num_qubits=5)
+        circ.append(PauliEvolutionGate(first, time=0.31), range(5))
+        circ.rx(0.17, 1)
+        circ.append(PauliEvolutionGate(second, time=0.47), range(5))
+        strategy = SwapStrategy.from_line(list(range(5)), num_swap_layers=2)
+        manager = PassManager([FindCommutingPauliEvolutions(), Commuting2qGateRouter(strategy)])
+
+        routed = manager.run(circ)
+
+        self.assertEqual(routed.count_ops()["PauliEvolution"], 2)
+        self.assertEqual(Operator.from_circuit(routed), Operator(circ))
+        for instruction in routed.data:
+            if len(instruction.qubits) == 2:
+                left, right = (routed.find_bit(qubit).index for qubit in instruction.qubits)
+                self.assertEqual(abs(left - right), 1)
+
     def test_basic_xx(self):
         """Test to route an XX-based evolution op.
 
@@ -615,6 +637,7 @@ class TestPauliEvolutionSwapStrategies(QiskitTestCase):
         self.assertEqual(full.layout.routing_permutation(), [0, 1, 2, 3])
 
 
+@ddt
 class TestSwapRouterExceptions(QiskitTestCase):
     """Test that exceptions are properly raised."""
 
@@ -664,10 +687,55 @@ class TestSwapRouterExceptions(QiskitTestCase):
     def test_deficient_swap_strategy(self):
         """Test to raise when all edges cannot be implemented."""
 
-        pm_ = PassManager([FindCommutingPauliEvolutions(), Commuting2qGateRouter()])
+        pm_ = PassManager([FindCommutingPauliEvolutions(), Commuting2qGateRouter(self.swap_strat)])
 
         with self.assertRaises(TranspilerError):
             pm_.run(self.circ)
+
+    def test_edge_outside_swap_strategy(self):
+        """Reject an edge with a qubit outside the strategy's coupling map."""
+        circ = QuantumCircuit(5)
+        op = SparsePauliOp.from_sparse_list([("ZZ", [0, 4], 1)], num_qubits=5)
+        circ.append(PauliEvolutionGate(op, time=0.31), range(5))
+        strategy = SwapStrategy.from_line([0, 1, 2])
+        manager = PassManager([FindCommutingPauliEvolutions(), Commuting2qGateRouter(strategy)])
+
+        with self.assertRaises(TranspilerError):
+            manager.run(circ)
+
+    @data(False, True)
+    def test_unreachable_edge_after_previous_block(self, include_reachable_edge):
+        """Reject a later block with an unreachable edge after the layout changes."""
+        circ = QuantumCircuit(5)
+        first = SparsePauliOp.from_sparse_list([("ZZ", [0, 4], 1)], num_qubits=5)
+        second_terms = [("ZZ", [0, 1], 1)]
+        if include_reachable_edge:
+            second_terms.append(("ZZ", [2, 4], 0.8))
+        second = SparsePauliOp.from_sparse_list(second_terms, num_qubits=5)
+        circ.append(PauliEvolutionGate(first, time=0.31), range(5))
+        circ.append(PauliEvolutionGate(second, time=0.47), range(5))
+        strategy = SwapStrategy.from_line(list(range(5)), num_swap_layers=2)
+        manager = PassManager([FindCommutingPauliEvolutions(), Commuting2qGateRouter(strategy)])
+
+        with self.assertRaises(TranspilerError):
+            manager.run(circ)
+
+    def test_swap_decompose_rejects_unreachable_edge(self):
+        """Direct decomposition rejects unreachable edges without changing the layout."""
+        circ = QuantumCircuit(3)
+        op = SparsePauliOp.from_sparse_list([("ZZ", [0, 2], 1)], num_qubits=3)
+        circ.append(PauliEvolutionGate(op, time=0.47), range(3))
+        dag = FindCommutingPauliEvolutions().run(circuit_to_dag(circ))
+        node = dag.op_nodes()[0]
+        layout = Layout.generate_trivial_layout(*circ.qregs)
+        original_layout = layout.copy()
+        strategy = SwapStrategy.from_line(list(range(3)), num_swap_layers=0)
+
+        with self.assertRaises(TranspilerError):
+            Commuting2qGateRouter(strategy).swap_decompose(dag, node, layout, strategy)
+
+        self.assertEqual(layout, original_layout)
+        self.assertEqual(dag.op_nodes(), [node])
 
     def test_commuting2qblocks_errors(self):
         """Test the errors of the 2q commuting block."""
