@@ -235,6 +235,10 @@ mod dag {
             export_fn!(qk_dag_set_global_phase),
             export_fn!(qk_dag_view_instruction),
             export_fn!(qk_dag_apply_custom_operation),
+            export_fn!(qk_dag_apply_pauli_product_rotation),
+            export_fn!(qk_dag_apply_pauli_product_measurement),
+            export_fn!(qk_dag_op_node_pauli_product_rotation),
+            export_fn!(qk_dag_op_node_pauli_product_measurement),
         ]
     });
 }

@@ -1421,6 +1421,160 @@ cleanup:
     return result;
 }
 
+/**
+ * Test a DAG with Pauli-based computation instructions.
+ */
+static int test_dag_pbc_instructions(void) {
+    // build a IXYZ Pauli rotation
+    bool z[4] = {false, false, true, true};
+    bool x[4] = {false, true, true, false};
+    QkParam *angle = qk_param_from_double(1.0);
+    QkPauliProductRotation rotation = {z, x, 4, angle};
+
+    // .. and some ZY measurement
+    bool zm[2] = {true, true};
+    bool xm[2] = {false, true};
+    QkPauliProductMeasurement measure = {zm, xm, 2, true};
+
+    // append them to a DAG
+    QkDag *dag = qk_dag_new();
+    QkQuantumRegister *qr = qk_quantum_register_new(10, "qr");
+    qk_dag_add_quantum_register(dag, qr);
+    QkClassicalRegister *cr = qk_classical_register_new(1, "cr");
+    qk_dag_add_classical_register(dag, cr);
+
+    uint32_t qubits[4] = {0, 1, 2, 3};
+    uint32_t rot_idx = qk_dag_apply_pauli_product_rotation(dag, &rotation, qubits, false);
+
+    uint32_t measure_qubits[2] = {1, 2};
+    uint32_t measure_clbit = 0;
+    uint32_t meas_idx =
+        qk_dag_apply_pauli_product_measurement(dag, &measure, measure_qubits, measure_clbit, false);
+
+    size_t num_op_node = qk_dag_num_op_nodes(dag);
+    int result = Ok;
+    if (num_op_node != 2) {
+        fprintf(stderr, "Expected 2 operation nodes but found %zu\n", num_op_node);
+        result = EqualityError;
+        goto cleanup;
+    }
+
+    QkOperationKind op_kind = qk_dag_op_node_kind(dag, rot_idx);
+    if (op_kind != QkOperationKind_PauliProductRotation) {
+        fprintf(stderr, "Operation kind of node %u is not QkOperationKind_PauliProductRotation.\n",
+                rot_idx);
+        result = EqualityError;
+        goto cleanup;
+    }
+    op_kind = qk_dag_op_node_kind(dag, meas_idx);
+    if (op_kind != QkOperationKind_PauliProductMeasurement) {
+        fprintf(stderr,
+                "Operation kind of node %u is not QkOperationKind_PauliProductMeasurement.\n",
+                meas_idx);
+        result = EqualityError;
+        goto cleanup;
+    }
+
+    // querying a node that is not in the DAG returns an error
+    QkPauliProductRotation wrong_rot;
+    if (qk_dag_op_node_pauli_product_rotation(dag, 1000, &wrong_rot) != QkExitCode_IndexError) {
+        fprintf(stderr, "Expected IndexError for node 1000\n");
+        result = EqualityError;
+        goto cleanup;
+    }
+
+    // querying a node of the wrong kind returns an error
+    if (qk_dag_op_node_pauli_product_rotation(dag, meas_idx, &wrong_rot) !=
+        QkExitCode_InvalidOperationKind) {
+        fprintf(stderr, "Expected InvalidOperationKind for node %u\n", meas_idx);
+        result = EqualityError;
+        goto cleanup;
+    }
+    QkPauliProductMeasurement wrong_meas;
+    if (qk_dag_op_node_pauli_product_measurement(dag, rot_idx, &wrong_meas) !=
+        QkExitCode_InvalidOperationKind) {
+        fprintf(stderr, "Expected InvalidOperationKind for node %u\n", rot_idx);
+        result = EqualityError;
+        goto cleanup;
+    }
+
+    // retrieve the instructions and verify their are correct
+    QkPauliProductRotation out_rot;
+    QkExitCode exit = qk_dag_op_node_pauli_product_rotation(dag, rot_idx, &out_rot);
+
+    if (exit != QkExitCode_Success) {
+        result = RuntimeError;
+        goto cleanup;
+    }
+
+    if (out_rot.len != 4) {
+        fprintf(stderr, "Pauli length is not 4, but %zu\n", out_rot.len);
+        result = EqualityError;
+        goto cleanup_out_rot;
+    }
+    for (size_t i = 0; i < rotation.len; ++i) {
+        if (out_rot.x[i] != x[i] || out_rot.z[i] != z[i]) {
+            fprintf(stderr, "(z, x) term at %zu does not match. Expected (%d, %d), got (%d, %d)\n",
+                    i, z[i], x[i], out_rot.z[i], out_rot.x[i]);
+            result = EqualityError;
+            goto cleanup_out_rot;
+        }
+    }
+    if (!qk_param_equal(out_rot.angle, angle)) {
+        char *out_str = qk_param_str(out_rot.angle);
+        char *expected_str = qk_param_str(angle);
+        fprintf(stderr, "Angle (%s) does not match the original angle (%s).\n", out_str,
+                expected_str);
+        qk_str_free(out_str);
+        qk_str_free(expected_str);
+        result = EqualityError;
+        goto cleanup_out_rot;
+    }
+
+    QkPauliProductMeasurement *out_meas = malloc(sizeof(QkPauliProductMeasurement));
+    exit = qk_dag_op_node_pauli_product_measurement(dag, meas_idx, out_meas);
+
+    if (exit != QkExitCode_Success) {
+        result = RuntimeError;
+        // free the memory, but there's no content to be cleared, so we do not have to
+        // call qk_pauli_product_measurement_clear
+        free(out_meas);
+        goto cleanup_out_rot;
+    }
+
+    if (out_meas->len != 2) {
+        fprintf(stderr, "Pauli length is not 2, but %zu\n", out_meas->len);
+        result = EqualityError;
+        goto cleanup_out_meas;
+    }
+    for (size_t i = 0; i < measure.len; ++i) {
+        if (out_meas->x[i] != xm[i] || out_meas->z[i] != zm[i]) {
+            fprintf(stderr, "(z, x) term at %zu does not match. Expected (%d, %d), got (%d, %d)\n",
+                    i, zm[i], xm[i], out_meas->z[i], out_meas->x[i]);
+            result = EqualityError;
+            goto cleanup_out_meas;
+        }
+    }
+    if (out_meas->flip_outcome != measure.flip_outcome) {
+        fprintf(stderr, "Flip (%i) does not match the original flip (%i).\n",
+                out_meas->flip_outcome, measure.flip_outcome);
+        result = EqualityError;
+    }
+
+cleanup_out_meas:
+    qk_pauli_product_measurement_clear(out_meas);
+    free(out_meas);
+cleanup_out_rot:
+    qk_pauli_product_rotation_clear(&out_rot);
+cleanup:
+    qk_param_free(angle);
+    qk_dag_free(dag);
+    qk_quantum_register_free(qr);
+    qk_classical_register_free(cr);
+
+    return result;
+}
+
 int test_dag(void) {
     int num_failed = 0;
     num_failed += RUN_TEST(test_empty);
@@ -1445,6 +1599,7 @@ int test_dag(void) {
     num_failed += RUN_TEST(test_dag_replace_qubitless_block_with_unitary);
     num_failed += RUN_TEST(test_dag_replace_illegal_block_with_unitary);
     num_failed += RUN_TEST(test_dag_substitute_node_with_unitary);
+    num_failed += RUN_TEST(test_dag_pbc_instructions);
 
     fflush(stderr);
     fprintf(stderr, "=== Number of failed subtests: %i\n", num_failed);

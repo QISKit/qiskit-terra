@@ -1,0 +1,8 @@
+---
+features_c:
+  - |
+    Added :c:func:`qk_dag_apply_pauli_product_rotation`,
+    :c:func:`qk_dag_apply_pauli_product_measurement`,
+    :c:func:`qk_dag_op_node_pauli_product_rotation` and
+    :c:func:`qk_dag_op_node_pauli_product_measurement` for appending and inspecting Pauli product
+    rotations and measurements in a ``QkDag``.
