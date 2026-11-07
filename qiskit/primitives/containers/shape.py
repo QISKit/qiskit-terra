@@ -59,15 +59,18 @@ class ShapedMixin(Shaped):
         return f"{type(self).__name__}(<{self.shape}>)"
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, ...]:
+        """The logical shape of this object."""
         return self._shape
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
+        """The number of dimensions of this object's shape."""
         return len(self._shape)
 
     @property
-    def size(self):
+    def size(self) -> int:
+        """The total number of entries in this object's shape."""
         return int(np.prod(self._shape, dtype=int))
 
 

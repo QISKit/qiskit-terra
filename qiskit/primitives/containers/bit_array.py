@@ -179,6 +179,31 @@ class BitArray(ShapedMixin):
         """
         return self._array.shape[-2]
 
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """The logical shape of this bit array, corresponding to the pub shape.
+
+        More precisely, this is the leading dimensions of :attr:`~.array` excluding the second last
+        axis (:attr:`~.num_shots`) and the last axis (packed bytes).
+        """
+        return self._shape
+
+    @property
+    def ndim(self) -> int:
+        """The number of dimensions of the logical shape of this bit array.
+
+        This equals ``len(self.shape)``.
+        """
+        return len(self._shape)
+
+    @property
+    def size(self) -> int:
+        """The total number of configurations in this bit array.
+
+        This is the product of the entries of :attr:`~.shape`.
+        """
+        return int(np.prod(self._shape, dtype=int))
+
     @staticmethod
     def _bytes_to_bitstring(data: bytes, num_bits: int, mask: int) -> str:
         val = int.from_bytes(data, "big") & mask

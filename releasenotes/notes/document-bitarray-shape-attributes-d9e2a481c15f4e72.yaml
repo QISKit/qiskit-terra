@@ -1,0 +1,5 @@
+---
+features_primitives:
+  - |
+    Added documentation for the :attr:`~.BitArray.shape`, :attr:`~.BitArray.ndim`,
+    and :attr:`~.BitArray.size` attributes of :class:`.BitArray` (and :class:`.ShapedMixin`).
