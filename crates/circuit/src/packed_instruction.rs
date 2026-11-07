@@ -30,7 +30,7 @@ use ndarray::{Array2, CowArray, Ix2};
 use num_complex::Complex64;
 use pyo3::exceptions::PyNotImplementedError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyType};
+use pyo3::types::PyType;
 use smallvec::SmallVec;
 #[cfg(feature = "cache_pygates")]
 use std::sync::OnceLock;
@@ -627,7 +627,7 @@ impl PackedOperation {
     pub fn py_deepcopy<'py>(
         &self,
         py: Python<'py>,
-        memo: Option<&Bound<'py, PyDict>>,
+        memo: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Self> {
         match self.view() {
             OperationRef::PyCustom(inst) => inst.py_deepcopy(py, memo).map(|ob| ob.into()),
@@ -991,7 +991,7 @@ impl PackedInstruction {
     pub fn py_deepcopy_inplace<'py>(
         &mut self,
         py: Python<'py>,
-        memo: Option<&Bound<'py, PyDict>>,
+        memo: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<()> {
         if let OperationRef::PyCustom(inst) = self.op.view() {
             self.op = inst.py_deepcopy(py, memo)?.into();

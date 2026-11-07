@@ -1,0 +1,7 @@
+---
+
+fixes:
+  - |
+    Several Rust-defined Python objects, like :class:`.DAGCircuit` no longer typecheck the ``memo``
+    argument of :func:`copy.deepcopy`.  This was an unnecessary performance cost, and some
+    third-party accelerators of the :mod:`copy` module are known to pass non-:class:`dict` values.

@@ -1013,7 +1013,7 @@ impl PyDAGCircuit {
     pub fn __deepcopy__<'py>(
         &self,
         py: Python<'py>,
-        memo: Option<&Bound<'py, PyDict>>,
+        memo: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Self> {
         let mut out = self.clone();
         let deepcopy = imports::DEEPCOPY.get_bound(py);
