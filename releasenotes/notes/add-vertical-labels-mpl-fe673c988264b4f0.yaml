@@ -1,0 +1,9 @@
+---
+features_visualization:
+  - |
+    Added the ``vertical_labels`` option to :meth:`.QuantumCircuit.draw` and
+    :func:`.circuit_drawer` for the ``mpl`` output. When set to ``True``, multi-qubit
+    gates labels are drawn vertically, instead of the default horizontal orientation,
+    and wrap to fit the available gate height, making the circuit more compact. Short
+    labels (<3 characters) or labels containing math text stay horizontal. The default
+    value is ``False``, meaning horizontally oriented labels.

@@ -37,6 +37,7 @@ from qiskit.circuit.library import (
     Isometry,
     iqp,
 )
+from qiskit.circuit.gate import Gate
 from qiskit.circuit.library import MCXVChain
 from qiskit.circuit.annotated_operation import (
     AnnotatedOperation,
@@ -2005,6 +2006,90 @@ class TestCircuitMatplotlibDrawer(QiskitTestCase):
                     qc.h(0)
         fname = "switch_standalone_var.png"
         self.circuit_drawer(qc, output="mpl", filename=fname)
+
+        ratio = VisualTestUtilities._save_diff(
+            self._image_path(fname),
+            self._reference_path(fname),
+            fname,
+            FAILURE_DIFF_DIR,
+            FAILURE_PREFIX,
+        )
+        self.assertGreaterEqual(ratio, self.threshold)
+
+    def test_vertical_multi_qubit_gate_labels(self):
+        """Test vertical labels for multi-qubit gates."""
+        qc = QuantumCircuit(4)
+        qc.append(
+            Gate(
+                name="gate_with_math_label",
+                num_qubits=2,
+                params=[],
+                label=r"$\theta_{1} + \theta_{2} + \theta_{3} + \theta_{4}$",
+            ),
+            [0, 1],
+        )
+        qc.append(Gate(name="gate_with_small_label", num_qubits=2, params=[], label="g1"), [2, 3])
+        qc.append(
+            Gate(
+                name="first_custom_multi_qubit_gate",
+                num_qubits=2,
+                params=[],
+                label="first_custom_multi_qubit_gate",
+            ),
+            [0, 1],
+        )
+        qc.append(
+            Gate(
+                name="gate_with_small_label_and_params",
+                num_qubits=2,
+                params=[1, 2, 3, 4, 5, 6],
+                label="g2",
+            ),
+            [2, 3],
+        )
+        qc.append(
+            Gate(name="another_very_very_very_long_label", num_qubits=2, params=[1, 2, 3, 4]),
+            [1, 2],
+        )
+        qc.append(
+            Gate(
+                name="second_custom_multi_qubit_gate",
+                num_qubits=3,
+                params=[],
+                label="second_custom_multi_qubit_gate",
+            ),
+            [0, 1, 2],
+        )
+        qc.x(0)
+        qc.append(
+            Gate(name="third_custom_multi_qubit_gate", num_qubits=4, params=[1, 2, 3, 4, 5, 6]),
+            [0, 1, 2, 3],
+        )
+        qc.append(Gate(name="gate_name", num_qubits=4, params=[1, 2, 3, 4, 5, 6]), [0, 1, 2, 3])
+        qc.append(Gate(name="gate_another_name", num_qubits=4, params=[]), [0, 1, 2, 3])
+        qc.append(Gate("orbital_rotation", 2, []), [0, 1])
+        qc.append(Gate("orbital_rotation", 2, []), [2, 3])
+        qc.append(Gate("a_fairly_long_gate_name", 4, []), [0, 1, 2, 3])
+        qc.h(0)
+        qc.append(Gate("parametrized_gate", 2, [0.1234, 0.5678, 0.1234, 0.5678, 0.1234]), [0, 1])
+        qc.append(
+            Gate(
+                "parametrized_gate_2",
+                2,
+                [0.1234, 0.5678, 0.1234, 0.5678, 0.1234, 0.1234, 0.5678, 0.1234, 0.5678, 0.1234],
+            ),
+            [2, 3],
+        )
+        qc.x(0, label="A_very_long_label")
+        qc.append(Gate("psi_gate", 2, [], label="Ψ_unicode_label"), [0, 1])
+        qc.append(QuantumCircuit(1, name="my_long_custom_gate").to_gate().control(1), [2, 3])
+        qc.append(QuantumCircuit(2, name="my_long_custom_gate").to_gate().control(1), [0, 1, 2])
+        gate = QuantumCircuit(2, name="my_long_custom_gate").to_gate()
+        qc.append(QuantumCircuit(2, name="my_long_custom_gate").to_gate().control(1), [1, 2, 3])
+        qc.append(AnnotatedOperation(gate, ControlModifier(1)), [1, 2, 3])
+
+        fname = "vertical_multi_qubit_gate_labels.png"
+        self.circuit_drawer(qc, output="mpl", filename=fname, vertical_labels=True)
 
         ratio = VisualTestUtilities._save_diff(
             self._image_path(fname),

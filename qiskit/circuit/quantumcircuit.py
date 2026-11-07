@@ -4018,6 +4018,7 @@ class QuantumCircuit(IR):
         expr_len: int = 30,
         measure_arrows: bool | None = None,
         barrier_label_len: int = 16,
+        vertical_labels: bool = False,
     ):
         r"""Draw the quantum circuit. Use the output parameter to choose the drawing format:
 
@@ -4132,6 +4133,9 @@ class QuantumCircuit(IR):
             barrier_label_len: The number of characters to display for
                 :class:`.Barrier` labels in the output circuit. If this number is exceeded,
                 the string will be truncated at that number and '...' added to the end.
+            vertical_labels: Only used for ``mpl`` output. Math text and short labels remain
+                horizontal. If True, multiple-qubit gate labels are drawn vertically. Default
+                is False.
 
         Returns:
             :class:`.TextDrawing` or :class:`matplotlib.figure` or :class:`PIL.Image` or
@@ -4185,6 +4189,7 @@ class QuantumCircuit(IR):
             expr_len=expr_len,
             barrier_label_len=barrier_label_len,
             measure_arrows=measure_arrows,
+            vertical_labels=vertical_labels,
         )
 
     def size(

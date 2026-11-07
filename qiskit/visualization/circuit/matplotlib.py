@@ -68,9 +68,15 @@ from ._utils import (
 )
 from ..utils import matplotlib_close_if_inline
 
-# Default gate width and height
+# Default gate width, height and line height
 WID = 0.65
 HIG = 0.65
+
+# Height of one line of text in data units at the default fontsize/subfontsize
+# (FS = 1.2 × 13 pt, SFS = 1.2 × 8 pt).
+LINE_HEIGHT_FS = 0.337
+LINE_HEIGHT_SFS = 0.207
+
 
 # Z dimension order for different drawing types
 PORDER_REGLINE = 1
@@ -111,6 +117,7 @@ class MatplotlibDrawer:
         expr_len=30,
         measure_arrows=None,
         barrier_label_len=16,
+        vertical_labels=False,
     ):
         self._circuit = circuit
         self._qubits = qubits
@@ -142,6 +149,7 @@ class MatplotlibDrawer:
         self._barrier_label_len = barrier_label_len
         self._cregbundle = cregbundle
         self._measure_arrows = measure_arrows
+        self._vertical_labels = vertical_labels
 
         self._lwidth1 = 1.0
         self._lwidth15 = 1.5
@@ -459,6 +467,12 @@ class MatplotlibDrawer:
                 ctrl_width = (
                     self._get_text_width(ctrl_text, glob_data, fontsize=self._style["sfs"]) - 0.05
                 )
+
+                # mandatory check for vertical label compatibility, when vertical_labels is True
+                node_data[node]._effectively_vertical, span = self._is_vertical_label(
+                    node, gate_text, wire_map
+                )
+
                 # get param_width, but 0 for gates with array params or circuits in params
                 if (
                     len(getattr(op, "params", [])) > 0
@@ -472,7 +486,14 @@ class MatplotlibDrawer:
                     raw_param_width = self._get_text_width(
                         param_text, glob_data, fontsize=self._style["sfs"], param=True
                     )
-                    param_width = raw_param_width + 0.08
+                    if node_data[node]._effectively_vertical:
+                        lines_count, text = self._vertical_label_lines(
+                            param_text, raw_param_width, HIG + span
+                        )
+                        node_data[node].param_text = text
+                        param_width = lines_count * LINE_HEIGHT_SFS
+                    else:
+                        param_width = raw_param_width + 0.08
                 else:
                     param_width = raw_param_width = 0.0
 
@@ -661,19 +682,95 @@ class MatplotlibDrawer:
                     raw_gate_width = self._get_text_width(
                         gate_text, glob_data, fontsize=self._style["fs"]
                     )
-                    gate_width = raw_gate_width + 0.10
+
+                    if node_data[node]._effectively_vertical:
+                        lines_count, text = self._vertical_label_lines(
+                            gate_text, raw_gate_width, HIG + span
+                        )
+                        gate_text = text
+                        gate_width = WID + (lines_count - 1) * LINE_HEIGHT_FS
+                        if node_data[node].param_text:
+                            gate_width += param_width
+                    else:
+                        gate_width = raw_gate_width + 0.10
+
+                    node_data[node].gate_text = gate_text
+                    node_data[node].width = gate_width
+
                     # add .21 for the qubit numbers on the left of the multibit gates
                     if len(node.qargs) - num_ctrl_qubits > 1:
                         gate_width += 0.21
 
                 box_width = max(gate_width, ctrl_width, param_width, WID)
                 widest_box = max(widest_box, box_width)
-                if not isinstance(node.op, ControlFlowOp):
+                if (
+                    not isinstance(node.op, ControlFlowOp)
+                    and not node_data[node]._effectively_vertical
+                ):
                     node_data[node].width = max(raw_gate_width, raw_param_width)
             for node in layer:
                 layer_widths[node][0] = int(widest_box) + 1
 
         return layer_widths
+
+    def _is_vertical_label(self, node, gate_text, wire_map):
+        """Return whether the label belongs to a multiqubit gate and should have vertical text
+        and also the wire span of the gate."""
+        num_ctrl_qubits = getattr(node.op, "num_ctrl_qubits", 0)
+        if getattr(node.op, "modifiers", None):
+            num_ctrl_qubits = sum(
+                modifier.num_ctrl_qubits
+                for modifier in node.op.modifiers
+                if isinstance(modifier, ControlModifier)
+            )
+        wire_indices = [
+            wire_map[qarg]
+            for qarg in node.qargs[num_ctrl_qubits:]
+            if qarg in self._qubits and qarg in wire_map
+        ]
+        span = max(wire_indices) - min(wire_indices)
+        op = node.op
+        return (
+            self._vertical_labels
+            and span > 0
+            and gate_text
+            and len(gate_text) > 3
+            and gate_text.count("$") == 0
+            and not isinstance(op, (SwapGate, RZZGate)),
+            span,
+        )
+
+    def _vertical_label_lines(self, gate_text_original, full_text_width, available_height):
+        """Calculate and return how many lines the vertical label will break into and
+        the lines that it will break into."""
+        avg_char_width = full_text_width / len(gate_text_original)
+        max_chars_for_height = max(1, int(available_height / avg_char_width))
+
+        lines = []
+        current_line = ""
+
+        for c in gate_text_original:
+            current_line += c
+            if len(current_line) > max_chars_for_height:
+                break_idx = -1
+                for idx in range(len(current_line) - 2, -1, -1):
+                    if current_line[idx] in " _/-":
+                        break_idx = idx
+                        break
+
+                if break_idx != -1:
+                    lines.append(current_line[: break_idx + 1])
+                    current_line = current_line[break_idx + 1 :]
+                else:
+                    lines.append(current_line[:max_chars_for_height])
+                    current_line = current_line[max_chars_for_height:]
+
+        if current_line:
+            lines.append(current_line)
+
+        final_text = "\n".join(lines)
+
+        return len(lines), final_text
 
     def _set_bit_reg_info(self, wire_map, qubits_dict, clbits_dict, glob_data):
         """Get all the info for drawing bit/reg names and numbers"""
@@ -1572,12 +1669,15 @@ class MatplotlibDrawer:
                     zorder=PORDER_TEXT,
                 )
         if node_data[node].gate_text:
-            gate_ypos = ypos + 0.5 * qubit_span
+            gate_xpos, gate_ypos, param_xpos, param_ypos, rotation = (
+                self._multiqubit_gate_text_position(
+                    node, node_data, xpos, ypos, wid, height, qubit_span
+                )
+            )
             if node_data[node].param_text:
-                gate_ypos = ypos + 0.4 * height
                 self._ax.text(
-                    xpos + 0.11,
-                    ypos + 0.2 * height,
+                    param_xpos,
+                    param_ypos,
                     node_data[node].param_text,
                     ha="center",
                     va="center",
@@ -1585,9 +1685,10 @@ class MatplotlibDrawer:
                     color=node_data[node].sc,
                     clip_on=True,
                     zorder=PORDER_TEXT,
+                    rotation=rotation,
                 )
             self._ax.text(
-                xpos + 0.11,
+                gate_xpos,
                 gate_ypos,
                 node_data[node].gate_text,
                 ha="center",
@@ -1596,7 +1697,36 @@ class MatplotlibDrawer:
                 color=node_data[node].gt,
                 clip_on=True,
                 zorder=PORDER_TEXT,
+                rotation=rotation,
             )
+
+    def _multiqubit_gate_text_position(self, node, node_data, xpos, ypos, wid, height, qubit_span):
+        # Default positions
+        gate_ypos = ypos + 0.5 * qubit_span
+        gate_xpos = xpos + 0.11
+        param_ypos = ypos + 0.2 * height
+        param_xpos = xpos + 0.11
+        rotation = 90 if node_data[node]._effectively_vertical else 0
+
+        if node_data[node].param_text:
+            gate_ypos = ypos + 0.4 * height
+            # Vertical label checks for correct placement inside the gate rectangle
+            if node_data[node]._effectively_vertical:
+                gate_ypos = ypos + 0.5 * qubit_span
+                param_xpos = xpos + wid / 2 - 0.11
+                param_ypos = gate_ypos
+
+                count = node_data[node].param_text.count("\n")
+                if count > 0:
+                    # Shifting to the left for (almost) centered text
+                    param_xpos -= 0.11 * count + 0.04
+                    gate_xpos -= 0.11 * count + 0.09
+                else:
+                    # Minor shifting
+                    param_xpos -= 0.07
+                    gate_xpos -= 0.12
+
+        return gate_xpos, gate_ypos, param_xpos, param_ypos, rotation
 
     def _flow_op_gate(self, node, node_data, glob_data):
         """Draw the box for a flow op circuit"""
@@ -2079,3 +2209,6 @@ class NodeData:
         self.indexset = ()  # List of indices used for ForLoopOp
         self.jump_values = []  # List of jump values used for SwitchCaseOp
         self.circ_num = 0  # Which block is it in op.blocks
+
+        # Whether the gate can actually be displayed with vertical text
+        self._effectively_vertical = False
