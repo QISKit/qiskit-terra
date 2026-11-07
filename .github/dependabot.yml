@@ -5,6 +5,16 @@ updates:
     schedule:
       interval: "weekly"
     groups:
+      # When we use crates that depend on PyO3, we all have to agree on the version used, so they
+      # need to be bumped as one group.  Typically, minor-version bumps of PyO3 will require manual
+      # intervention, but it's still helpful to have Dependabot prod us to do it.
+      pyo3:
+        patterns:
+          - "pyo3"
+          - "numpy"
+        update-types:
+          - "major"
+          - "minor"
       cargo:
         patterns: ['*']
     labels:
@@ -12,18 +22,6 @@ updates:
       - "theme: qa"
       - "dependencies"
       - "Changelog: None"
-    ignore:
-      # faer has historically made major breaking changes between minor versions, so it's easier to
-      # do things manually ourselves.
-      - { dependency-name: "faer", versions: [">0.19.4"] }
-      - { dependency-name: "faer-ext", versions: [">0.2.0"] }
-      # nalgebra 0.34 bumped its MSRV to 1.87, which is too high for us.
-      - { dependency-name: "nalgebra", versions: [">0.33.2"] }
-      # Used by the experimental OQ3 exporter at a time when we were expecting to make updates
-      # manually to this.
-      - { dependency-name: "oq3_semantics", versions: [">0.0.7"] }
-      # hashbrown 0.13.0 bumped the MSRV to 1.61
-      - { dependency-name: "hashbrown", versions: [">0.12.3"] }
 
   - package-ecosystem: "github-actions"
     directory: "/"
