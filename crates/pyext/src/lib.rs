@@ -98,7 +98,6 @@ fn _accelerate(m: &Bound<PyModule>) -> PyResult<()> {
     add_submodule(m, ::qiskit_synthesis::two_qubit_decompose::two_qubit_decompose, "two_qubit_decompose")?;
     add_submodule(m, ::qiskit_synthesis::pauli_products::pauli_products_mod, "pauli_products")?;
     add_submodule(m, ::qiskit_transpiler::passes::unitary_synthesis_mod, "unitary_synthesis")?;
-    add_submodule(m, ::qiskit_accelerate::uc_gate::uc_gate, "uc_gate")?;
     add_submodule(m, ::qiskit_transpiler::passes::unroll_3q_or_more_mod, "unroll_3q_or_more")?;
     add_submodule(m, ::qiskit_transpiler::passes::vf2_layout_mod, "vf2_layout")?;
     add_submodule(m, ::qiskit_circuit::circuit, "circuit")?;

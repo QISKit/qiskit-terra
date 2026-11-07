@@ -19,7 +19,6 @@ pub mod pauli_exp_val;
 pub mod results;
 pub mod sampled_exp_val;
 pub mod twirling;
-pub mod uc_gate;
 
 import_exception!(qiskit.exceptions, QiskitError);
 import_exception!(qiskit.circuit.exceptions, CircuitError);

@@ -1,0 +1,18 @@
+---
+performance:
+  - |
+    The decomposition of :class:`.UCGate` and :class:`.DiagonalGate` has been migrated to
+    Rust, improving runtime performance with no API or circuit-equivalence changes.
+    Benchmarks show speedups of **~15.9x** when decomposing :class:`.UCGate` and absorbing
+    the trailing diagonal into the next gate, **~11.3x** when decomposing :class:`.UCGate`
+    into a complete circuit, and **~2.5x** when synthesizing a :class:`.DiagonalGate`
+    circuit. Both gates' ``.definition`` now expresses the trailing diagonal directly as ``rz``/
+    ``cx`` instructions, rather than as a single sub-gate that required further
+    decomposition to reach the primitive gates.
+    See `#16908 <https://github.com/Qiskit/qiskit/pull/16908>`__ for more details.
+upgrade:
+  - |
+    When ``mux_simp=True``, :class:`.UCGate` now compares single-qubit gates with an
+    absolute tolerance of ``1e-8`` only,  instead of also including a relative tolerance.
+    Gates that differ by between ``1e-8`` and ``1e-5`` are no longer merged, so a control
+    qubit may be kept where it was previously removed.
