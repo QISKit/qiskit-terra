@@ -46,3 +46,6 @@ features = ["union", "const_generics"]
 [dependencies.numpy]
 workspace = true
 features = ["nalgebra"]
+
+[features]
+cache_pygates = ["qiskit-circuit/cache_pygates"]

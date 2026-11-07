@@ -1,0 +1,11 @@
+---
+performance:
+  - The internal implementation of :func:`.random_circuit` has been rewritten in Rust which greatly
+    speeds up the function.
+features_c:
+  - Added a new function :c:func:`qk_circuit_library_random_circuit`  to generate a random circuit
+    of a given size which is
+upgrade_circuits:
+  - The internal implementation of :func:`.random_circuit` has been rewritten to optimize the
+    performance. This will result in different :class:`.QuantumCircuit` being returned for a fixed
+    seed value. In general the exact output of the function is never guaranteed between environments.

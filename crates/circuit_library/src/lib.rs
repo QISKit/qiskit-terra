@@ -21,6 +21,7 @@ pub mod parameter_ledger;
 pub mod pauli_evolution;
 mod pauli_feature_map;
 pub mod quantum_volume;
+pub mod random_circuit;
 pub mod suzuki_trotter;
 
 import_exception!(qiskit.exceptions, QiskitError);
@@ -34,6 +35,7 @@ pub fn circuit_library(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(iqp::py_random_iqp))?;
     m.add_wrapped(wrap_pyfunction!(quantum_volume::quantum_volume))?;
     m.add_wrapped(wrap_pyfunction!(multi_local::py_n_local))?;
+    m.add_wrapped(wrap_pyfunction!(random_circuit::py_random_circuit))?;
     m.add_class::<blocks::Block>()?;
 
     Ok(())

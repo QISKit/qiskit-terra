@@ -180,6 +180,7 @@ mod circuit_library {
             export_fn!(pbc::qk_pauli_product_measurement_clear),
             export_fn!(n_local::qk_circuit_library_n_local),
             export_fn!(n_local::qk_circuit_library_n_local_settings_default),
+            export_fn!(random_circuit::qk_circuit_library_random_circuit),
         ]
     });
 }

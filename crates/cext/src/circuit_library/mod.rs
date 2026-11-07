@@ -14,4 +14,5 @@ pub mod iqp;
 pub mod n_local;
 pub mod pbc;
 pub mod quantum_volume;
+pub mod random_circuit;
 pub mod suzuki_trotter;

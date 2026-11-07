@@ -23,6 +23,7 @@ from qiskit.circuit import Reset
 from qiskit.circuit.library import standard_gates
 from qiskit.circuit.exceptions import CircuitError
 from qiskit.quantum_info.operators.symplectic.clifford_circuits import _BASIS_1Q, _BASIS_2Q
+from qiskit._accelerate.circuit_library import random_circuit as random_circuit_rs
 
 # (Gate class, number of qubits, number of parameters)
 gates_1q_data = [
@@ -498,9 +499,8 @@ def random_circuit(
     Raises:
         CircuitError: when invalid options given
     """
-    if seed is None:
-        seed = np.random.randint(0, np.iinfo(np.int32).max)
-    rng = np.random.default_rng(seed)
+    if num_qubits == 0:
+        return QuantumCircuit()
 
     if num_operand_distribution:
         if min(num_operand_distribution.keys()) < 1 or max(num_operand_distribution.keys()) > 4:
@@ -512,174 +512,19 @@ def random_circuit(
                     f" for circuit with {num_qubits} qubits"
                 )
         num_operand_distribution = dict(sorted(num_operand_distribution.items()))
+        # Here we will use np.isclose() because very rarely there might be floating
+        # point precision errors
+        if not np.isclose(sum(num_operand_distribution.values()), 1):
+            raise CircuitError("The sum of all the values in 'num_operand_distribution' is not 1.")
 
     if not num_operand_distribution and max_operands:
         if max_operands < 1 or max_operands > 4:
             raise CircuitError("max_operands must be between 1 and 4")
-        max_operands = max_operands if num_qubits > max_operands else num_qubits
-        rand_dist = rng.dirichlet(
-            np.ones(max_operands)
-        )  # This will create a random distribution that sums to 1
-        num_operand_distribution = {i + 1: rand_dist[i] for i in range(max_operands)}
-        num_operand_distribution = dict(sorted(num_operand_distribution.items()))
 
-    # Here we will use np.isclose() because very rarely there might be floating
-    # point precision errors
-    if not np.isclose(sum(num_operand_distribution.values()), 1):
-        raise CircuitError("The sum of all the values in 'num_operand_distribution' is not 1.")
-
-    if num_qubits == 0:
-        return QuantumCircuit()
-
-    gates_3q = [
-        (standard_gates.CCXGate, 3, 0),
-        (standard_gates.CSwapGate, 3, 0),
-        (standard_gates.CCZGate, 3, 0),
-        (standard_gates.RCCXGate, 3, 0),
-    ]
-
-    gates_4q = [
-        (standard_gates.C3SXGate, 4, 0),
-        (standard_gates.RC3XGate, 4, 0),
-    ]
-
-    gates_1q = np.array(
-        gates_1q_data + [(Reset, 1, 0)] if reset else gates_1q_data,
-        dtype=[("class", object), ("num_qubits", np.int64), ("num_params", np.int64)],
+    circuit_data = random_circuit_rs(
+        num_qubits, depth, max_operands, measure, conditional, reset, seed, num_operand_distribution
     )
-
-    gates_2q = np.array(gates_2q_data, dtype=gates_1q.dtype)
-    gates_3q = np.array(gates_3q, dtype=gates_1q.dtype)
-    gates_4q = np.array(gates_4q, dtype=gates_1q.dtype)
-
-    all_gate_lists = [gates_1q, gates_2q, gates_3q, gates_4q]
-
-    # Here we will create a list 'gates_to_consider' that will have a
-    # subset of different n-qubit gates and will also create a list for
-    # ratio (or probability) for each gates
-    gates_to_consider = []
-    distribution = []
-    for n_qubits, ratio in num_operand_distribution.items():
-        gate_list = all_gate_lists[n_qubits - 1]
-        gates_to_consider.extend(gate_list)
-        distribution.extend([ratio / len(gate_list)] * len(gate_list))
-
-    gates = np.array(gates_to_consider, dtype=gates_1q.dtype)
-
-    qc = QuantumCircuit(num_qubits)
-
-    if measure or conditional:
-        cr = ClassicalRegister(num_qubits, "c")
-        qc.add_register(cr)
-
-    qubits = np.array(qc.qubits, dtype=object, copy=True)
-
-    # Counter to keep track of number of different gate types
-    counter = np.zeros(len(all_gate_lists) + 1, dtype=np.int64)
-    total_gates = 0
-
-    # Apply arbitrary random operations in layers across all qubits.
-    for layer_number in range(depth):
-        # We generate all the randomness for the layer in one go, to avoid many separate calls to
-        # the randomization routines, which can be fairly slow.
-
-        # This reliably draws too much randomness, but it's less expensive than looping over more
-        # calls to the rng. After, trim it down by finding the point when we've used all the qubits.
-
-        # Due to the stochastic nature of generating a random circuit, the resulting ratios
-        # may not precisely match the specified values from `num_operand_distribution`. Expect
-        # greater deviations from the target ratios in quantum circuits with fewer qubits and
-        # shallower depths, and smaller deviations in larger and deeper quantum circuits.
-        # For more information on how the distribution changes with number of qubits and depth
-        # refer to the pull request #12483 on Qiskit GitHub.
-
-        gate_specs = rng.choice(gates, size=len(qubits), p=distribution)
-        cumulative_qubits = np.cumsum(gate_specs["num_qubits"], dtype=np.int64)
-
-        # Efficiently find the point in the list where the total gates would use as many as
-        # possible of, but not more than, the number of qubits in the layer.  If there's slack, fill
-        # it with 1q gates.
-        max_index = np.searchsorted(cumulative_qubits, num_qubits, side="right")
-        gate_specs = gate_specs[:max_index]
-
-        slack = num_qubits - cumulative_qubits[max_index - 1]
-
-        # Updating the counter for 1-qubit, 2-qubit, 3-qubit and 4-qubit gates
-        gate_qubits = gate_specs["num_qubits"]
-        counter += np.bincount(gate_qubits, minlength=len(all_gate_lists) + 1)
-
-        total_gates += len(gate_specs)
-
-        # Slack handling loop, this loop will add gates to fill
-        # the slack while respecting the 'num_operand_distribution'
-        while slack > 0:
-            gate_added_flag = False
-
-            for key, dist in sorted(num_operand_distribution.items(), reverse=True):
-                if slack >= key and counter[key] / total_gates < dist:
-                    gate_to_add = np.array(
-                        all_gate_lists[key - 1][rng.integers(0, len(all_gate_lists[key - 1]))]
-                    )
-                    gate_specs = np.hstack((gate_specs, gate_to_add))
-                    counter[key] += 1
-                    total_gates += 1
-                    slack -= key
-                    gate_added_flag = True
-            if not gate_added_flag:
-                break
-
-        # For efficiency in the Python loop, this uses Numpy vectorization to pre-calculate the
-        # indices into the lists of qubits and parameters for every gate, and then suitably
-        # randomizes those lists.
-        q_indices = np.empty(len(gate_specs) + 1, dtype=np.int64)
-        p_indices = np.empty(len(gate_specs) + 1, dtype=np.int64)
-        q_indices[0] = p_indices[0] = 0
-        np.cumsum(gate_specs["num_qubits"], out=q_indices[1:])
-        np.cumsum(gate_specs["num_params"], out=p_indices[1:])
-        parameters = rng.uniform(0, 2 * np.pi, size=p_indices[-1])
-        rng.shuffle(qubits)
-
-        # We've now generated everything we're going to need.  Now just to add everything.  The
-        # conditional check is outside the two loops to make the more common case of no conditionals
-        # faster, since in Python we don't have a compiler to do this for us.
-        if conditional and layer_number != 0:
-            is_conditional = rng.random(size=len(gate_specs)) < 0.1
-            condition_values = rng.integers(
-                0, 1 << min(num_qubits, 63), size=np.count_nonzero(is_conditional)
-            )
-            c_ptr = 0
-            for gate, q_start, q_end, p_start, p_end, is_cond in zip(
-                gate_specs["class"],
-                q_indices[:-1],
-                q_indices[1:],
-                p_indices[:-1],
-                p_indices[1:],
-                is_conditional,
-            ):
-                operation = gate(*parameters[p_start:p_end])
-
-                if is_cond:
-                    qc.measure(qc.qubits, cr)
-                    # The condition values are required to be bigints, not Numpy's fixed-width type.
-                    with qc.if_test((cr, int(condition_values[c_ptr]))):
-                        c_ptr += 1
-                        qc.append(
-                            CircuitInstruction(operation=operation, qubits=qubits[q_start:q_end])
-                        )
-                else:
-                    qc._append(
-                        CircuitInstruction(operation=operation, qubits=qubits[q_start:q_end])
-                    )
-        else:
-            for gate, q_start, q_end, p_start, p_end in zip(
-                gate_specs["class"], q_indices[:-1], q_indices[1:], p_indices[:-1], p_indices[1:]
-            ):
-                operation = gate(*parameters[p_start:p_end])
-                qc._append(CircuitInstruction(operation=operation, qubits=qubits[q_start:q_end]))
-    if measure:
-        qc.measure(qc.qubits, cr)
-
-    return qc
+    return QuantumCircuit.from_circuit_data(circuit_data)
 
 
 def random_clifford_circuit(num_qubits, num_gates, gates="all", seed=None):
