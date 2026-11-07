@@ -86,14 +86,25 @@ class BasePass(GenericPass[DAGCircuit, DAGCircuit], metaclass=MetaPass):
         return hash(self) == hash(other)
 
     @abstractmethod
-    def run(self, dag: DAGCircuit):  # pylint:disable=arguments-renamed
-        """Run a pass on the DAGCircuit. This is implemented by the pass developer.
+    def run(self, dag: DAGCircuit) -> DAGCircuit | None:
+        """Run a pass on the :class:`.DAGCircuit`. This is implemented by the pass developer.
+
+        This method is typically not called directly by users, but is called by the
+        :class:`.PassMangaer` infrastructure.  The :class:`.PassManager` infrastructure will
+        override the :attr:`property_set` field of the instance to the current compilation state
+        before calling this method.  Implementers of this method can read and write into that same
+        :class:`.PropertySet` to affect the compilation state.
+
+        Implementers of this can mutate the ``dag`` inplace.  If the return value is a
+        :class:`.DAGCircuit`, compilation will continue from the new circuit.  If ``None``,
+        compilation continues from the same ``dag`` argument that was passed.  Implementers of
+        :class:`.AnalysisPass` must not mutate the circuit.
 
         Args:
             dag: the dag on which the pass is run.
 
-        Raises:
-            NotImplementedError: when this is left unimplemented for a pass.
+        Returns:
+            optionally, a new :class:`.DAGCircuit` to continue the compilation on.
         """
         raise NotImplementedError
 
