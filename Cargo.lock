@@ -2567,6 +2567,7 @@ dependencies = [
  "qiskit-circuit",
  "qiskit-quantum-info",
  "qiskit-util",
+ "rayon",
  "smallvec",
  "thiserror 2.0.21",
  "uuid",

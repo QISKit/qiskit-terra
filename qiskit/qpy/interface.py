@@ -283,6 +283,15 @@ def load(
 
     This function is used to load a serialized QPY Qiskit program file and create
     :class:`~qiskit.circuit.QuantumCircuit` objects from its contents.
+
+    For QPY payloads of version 16 or later, circuits are deserialized concurrently
+    across multiple threads. This is controlled by the ``QISKIT_IN_PARALLEL`` and
+    ``QISKIT_FORCE_THREADS`` environment variables, the same ones used to control
+    multithreading elsewhere in Qiskit. By default, it will create threads
+    equal to the number of CPUs. You can tune the number of threads with the
+    ``RAYON_NUM_THREADS`` environment variable. For example, setting
+    ``RAYON_NUM_THREADS=4`` would limit the thread pool to 4 threads.
+
     For example:
 
     .. code-block:: python

@@ -1,0 +1,6 @@
+---
+
+features_qpy:
+  - When loading a QPY of version 16 or later, :func:`~qiskit.qpy.load` deserializes the circuits concurrently across
+    multiple threads, which can significantly speed up the loading in case of many circuits. This can be controlled
+    with the ``QISKIT_IN_PARALLEL``, ``QISKIT_FORCE_THREADS`` and ``RAYON_NUM_THREADS`` environment variables.

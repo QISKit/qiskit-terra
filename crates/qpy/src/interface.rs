@@ -22,6 +22,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyDict};
 use qiskit_circuit::circuit_data::CircuitData;
 use qiskit_circuit::converters::QuantumCircuitData;
+use qiskit_util::getenv_use_multiple_threads;
+use rayon::prelude::*;
 
 use crate::annotations::{AnnotationHandler, NativeDeserializers, NativeSerializers};
 use crate::bytes::Bytes;
@@ -288,6 +290,11 @@ pub fn native_dump_qpy<'a, W: Write + Seek>(
 
 /// Deserializes native circuits from a complete QPY payload.
 ///
+/// For QPY version 16 or later, circuits are deserialized concurrently across multiple
+/// threads using `rayon`. This is controlled by the `QISKIT_IN_PARALLEL` and
+/// `QISKIT_FORCE_THREADS` environment variables — see
+/// [`qiskit_util::getenv_use_multiple_threads`] for the exact logic.
+///
 /// # Arguments
 ///
 /// * data: The complete QPY payload as a byte slice.
@@ -344,7 +351,7 @@ pub fn load_qpy(
     cursor.seek(std::io::SeekFrom::Start(header_size as u64))?;
     if qpy_file_header.qpy_version >= 16 {
         let qpy_raw_circuits = read_raw_circuits(&mut cursor, num_programs)?;
-        for raw_circuit in &qpy_raw_circuits {
+        let load_one_circuit = |raw_circuit: &Bytes| -> Result<LoadedCircuit, QpyError> {
             let (packed_circuit, _) = deserialize_with_args::<QPYCircuit, (u8,)>(
                 raw_circuit,
                 (qpy_file_header.qpy_version,),
@@ -356,10 +363,22 @@ pub fn load_qpy(
                 annotation_handler.child()?,
                 caller,
             )?;
-            circuits.push(LoadedCircuit {
+            Ok(LoadedCircuit {
                 circuit_data,
                 packed_circuit,
-            });
+            })
+        };
+
+        if getenv_use_multiple_threads() && num_programs > 1 {
+            let parallel_circuits: Vec<LoadedCircuit> = qpy_raw_circuits
+                .par_iter()
+                .map(load_one_circuit)
+                .collect::<Result<Vec<_>, _>>()?;
+            circuits.extend(parallel_circuits);
+        } else {
+            for raw_circuit in &qpy_raw_circuits {
+                circuits.push(load_one_circuit(raw_circuit)?);
+            }
         }
     } else {
         // QPY version < 16, no offset table
@@ -396,6 +415,11 @@ pub fn load_qpy(
 /// circuit, and then applies Python-only metadata, layout, and annotation data
 /// to create Python `QuantumCircuit` objects.
 ///
+/// For QPY version 16 or later, circuits are deserialized concurrently across multiple
+/// threads using `rayon`. This is controlled by the `QISKIT_IN_PARALLEL` and
+/// `QISKIT_FORCE_THREADS` environment variables — see
+/// [`qiskit_util::getenv_use_multiple_threads`] for the exact logic.
+///
 /// # Arguments
 ///
 /// * py: The GIL handle.
@@ -416,7 +440,9 @@ pub fn py_load_qpy<'py>(
     let data: Bytes = file_obj.call_method0("read")?.extract()?;
 
     let annotation_handler = AnnotationHandler::python(&annotation_factories.clone().unbind())?;
-    load_qpy(&data, Some(annotation_handler), Some(QpyCaller::Python))?
+    let loaded_circuits =
+        py.detach(|| load_qpy(&data, Some(annotation_handler), Some(QpyCaller::Python)))?;
+    loaded_circuits
         .into_iter()
         .map(|loaded| {
             py_circuit_data_to_quantum_circuit(

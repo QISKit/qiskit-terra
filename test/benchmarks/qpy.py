@@ -12,6 +12,8 @@
 
 
 import io
+import os
+from unittest.mock import patch
 from qiskit.circuit import Parameter
 from qiskit import QuantumCircuit
 from qiskit import qpy
@@ -46,6 +48,39 @@ class RandomBenchmarks:
         qpy.dump(self.circuit, qpy_file)
         qpy_file.seek(0)
         qpy.load(qpy_file)
+
+
+class ParallelLoadBenchmarks:
+
+    params = ([1, 10, 50], [20], [50])
+
+    param_names = ["num_circuits", "n_qubits", "depth"]
+    timeout = 300
+
+    def setup(self, num_circuits, n_qubits, depth):
+        circuits = [
+            random_circuit(
+                n_qubits,
+                depth,
+                measure=True,
+                conditional=True,
+                reset=True,
+                seed=seed,
+                max_operands=3,
+            )
+            for seed in range(num_circuits)
+        ]
+        qpy_file = io.BytesIO()
+        qpy.dump(circuits, qpy_file)
+        self.qpy_bytes = qpy_file.getvalue()
+
+    def time_load_sequential(self, _, __, ___):
+        with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "TRUE"}):
+            qpy.load(io.BytesIO(self.qpy_bytes))
+
+    def time_load_parallel(self, _, __, ___):
+        with patch.dict(os.environ, {"QISKIT_IN_PARALLEL": "FALSE"}):
+            qpy.load(io.BytesIO(self.qpy_bytes))
 
 
 class CustomGateBenchmarks:
