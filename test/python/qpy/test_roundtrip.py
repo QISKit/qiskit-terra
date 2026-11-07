@@ -16,9 +16,11 @@ import io
 import uuid
 
 from ddt import ddt, idata, unpack
+import numpy as np
 
 from qiskit.circuit import QuantumCircuit, QuantumRegister, ClassicalRegister, Duration
-from qiskit.circuit.library import PauliEvolutionGate
+from qiskit.circuit import library as circuit_library
+from qiskit.circuit.library import MCXVChain, PauliEvolutionGate
 from qiskit.circuit.random import random_circuit
 from qiskit.circuit.parameter import Parameter
 from qiskit.circuit.parametervector import ParameterVector
@@ -94,6 +96,147 @@ class TestQPYRoundtrip(QiskitTestCase):
         qc.cx(1, 2)
         qc.measure_all()
         self.assert_roundtrip_equal(qc, version=version, read_with=read_with, write_with=write_with)
+
+    @all_qpy_combinations(19)
+    def test_python_gate_initialization_parameters(self, version, write_with, read_with):
+        """Constructor state outside ``Instruction.params`` survives round trip."""
+        with self.assertWarns(DeprecationWarning):
+            gate = MCXVChain(
+                3,
+                ctrl_state=0,
+                dirty_ancillas=True,
+                relative_phase=True,
+                action_only=True,
+            )
+        qc = QuantumCircuit(gate.num_qubits)
+        qc.append(gate, qc.qubits)
+
+        with self.assertWarns(DeprecationWarning):
+            self.assert_roundtrip_equal(
+                qc, version=version, read_with=read_with, write_with=write_with
+            )
+
+    def test_qpy_19_python_gate_constructor_state(self):
+        """QPY 19 preserves Python-gate state required by their constructors."""
+        cases = [
+            (circuit_library.StatePreparation(1, 2, inverse=True), ("_inverse",)),
+            (
+                circuit_library.UCGate(
+                    [np.eye(2), np.array([[0, 1], [1, 0]])],
+                    up_to_diagonal=True,
+                    mux_simp=False,
+                ),
+                ("_gate_list", "up_to_diagonal", "_mux_simp"),
+            ),
+            (circuit_library.RVGate(1, 2, 3, basis="ZYZ"), ("basis",)),
+            (circuit_library.MSGate(3, 0.2), ("num_qubits", "theta")),
+            (
+                circuit_library.UniformSuperpositionGate(3, 3),
+                ("num_superpos_states", "num_qubits"),
+            ),
+            (
+                circuit_library.Isometry(np.eye(2), 1, 1, epsilon=1e-8),
+                ("iso_data", "num_ancillas_zero", "num_ancillas_dirty", "_epsilon"),
+            ),
+            (
+                circuit_library.MCGupDiag(np.eye(2), 2, 1, 1),
+                ("gate", "num_controls", "num_ancillas_zero", "num_ancillas_dirty"),
+            ),
+            (circuit_library.AndGate(2, [-1, 1]), ("num_variable_qubits", "flags")),
+            (circuit_library.OrGate(2, [1, 0]), ("num_variable_qubits", "flags")),
+            (circuit_library.BitwiseXorGate(3, 2), ("num_qubits", "amount")),
+            (circuit_library.InnerProductGate(2), ("register_width",)),
+            (
+                circuit_library.BitFlipOracleGate("a & b", ["b", "a"]),
+                ("expression", "var_order"),
+            ),
+            (
+                circuit_library.PhaseOracleGate("a | b", ["b", "a"]),
+                ("expression", "var_order"),
+            ),
+            (circuit_library.HalfAdderGate(2), ("num_state_qubits",)),
+            (circuit_library.ModularAdderGate(2), ("num_state_qubits",)),
+            (circuit_library.FullAdderGate(2), ("num_state_qubits",)),
+            (
+                circuit_library.MultiplierGate(2, 3),
+                ("num_state_qubits", "num_result_qubits"),
+            ),
+            (
+                circuit_library.IntegerComparatorGate(2, 1, geq=False),
+                ("num_state_qubits", "value", "geq"),
+            ),
+            (
+                circuit_library.LinearPauliRotationsGate(2, 2, 3, "X"),
+                ("num_state_qubits", "slope", "offset", "basis"),
+            ),
+            (
+                circuit_library.PolynomialPauliRotationsGate(2, [1, 2], "Z"),
+                ("num_state_qubits", "coeffs", "basis"),
+            ),
+            (
+                circuit_library.PiecewiseLinearPauliRotationsGate(
+                    2, [0, 2], [1, 2], [0, 1], "Y"
+                ),
+                ("num_state_qubits", "breakpoints", "slopes", "offsets", "basis"),
+            ),
+            (
+                circuit_library.PiecewisePolynomialPauliRotationsGate(
+                    2, [0, 2], [[1, 2], [3]], "X"
+                ),
+                ("num_state_qubits", "breakpoints", "coeffs", "basis"),
+            ),
+            (
+                circuit_library.PiecewiseChebyshevGate(lambda x: x, 2, 2, [0, 2]),
+                ("num_state_qubits", "degree", "breakpoints", "polynomials"),
+            ),
+            (
+                circuit_library.LinearAmplitudeFunctionGate(
+                    2, [1, 2], [0, 1], (0, 1), (0, 1), 1, [0, 0.5]
+                ),
+                (
+                    "num_state_qubits",
+                    "slope",
+                    "offset",
+                    "domain",
+                    "image",
+                    "rescaling_factor",
+                    "breakpoints",
+                ),
+            ),
+            (
+                circuit_library.QuadraticFormGate(3, [[1, 0], [0, 1]], [1, 2], 1),
+                ("num_result_qubits", "quadratic", "linear", "offset"),
+            ),
+            (
+                circuit_library.ExactReciprocalGate(3, 0.5, neg_vals=True),
+                ("num_state_qubits", "scaling", "neg_vals"),
+            ),
+            (
+                circuit_library.WeightedSumGate(3, [1, 2, 3]),
+                ("num_state_qubits", "weights"),
+            ),
+            (circuit_library.LinearFunction(np.eye(3, dtype=bool)), ("linear",)),
+        ]
+
+        circuits = []
+        for operation, _ in cases:
+            circuit = QuantumCircuit(operation.num_qubits)
+            circuit.append(operation, circuit.qubits)
+            circuits.append(circuit)
+
+        qpy_file = io.BytesIO()
+        dump(circuits, qpy_file, version=19)
+        qpy_file.seek(0)
+        loaded = load(qpy_file)
+
+        for (operation, attributes), circuit in zip(cases, loaded):
+            new_operation = circuit.data[0].operation
+            with self.subTest(operation=type(operation).__name__):
+                self.assertIs(type(new_operation), type(operation))
+                for attribute in attributes:
+                    np.testing.assert_equal(
+                        getattr(new_operation, attribute), getattr(operation, attribute)
+                    )
 
     @all_qpy_combinations(QPY_RUST_READ_MIN_VERSION)
     def test_ifelse(self, version, write_with, read_with):

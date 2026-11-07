@@ -415,16 +415,18 @@ class PiecewisePolynomialPauliRotationsGate(Gate):
             degree = 0
             coeffs = [[1]]
         else:
+            coeffs = [list(poly) for poly in coeffs]
             # store a list of coefficients as homogeneous polynomials adding 0's where necessary
             degree = len(max(coeffs, key=len)) - 1
             coeffs = [poly + [0] * (degree + 1 - len(poly)) for poly in coeffs]
 
         # ensure the breakpoint contains 2 ** num_state_qubits
-        breakpoints = breakpoints.copy()
         if breakpoints is None:
             breakpoints = [0, 2**num_state_qubits]
-        elif breakpoints[-1] < 2**num_state_qubits:
-            breakpoints.append(2**num_state_qubits)
+        else:
+            breakpoints = list(breakpoints)
+            if breakpoints[-1] < 2**num_state_qubits:
+                breakpoints.append(2**num_state_qubits)
 
         self.coeffs = coeffs
         self.breakpoints = breakpoints
@@ -434,6 +436,11 @@ class PiecewisePolynomialPauliRotationsGate(Gate):
         super().__init__(
             "PiecewisePolyPauli", num_state_qubits + self.num_compare + 1, [], label=label
         )
+
+    @property
+    def num_state_qubits(self):
+        """Return the number of state qubits."""
+        return self.num_qubits - self.num_compare - 1
 
     def evaluate(self, x: float) -> float:
         """Classically evaluate the piecewise polynomial rotation.

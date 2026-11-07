@@ -193,6 +193,11 @@ class IntegerComparatorGate(Gate):
         self.value = value
         self.geq = geq
 
+    @property
+    def num_state_qubits(self):
+        """Return the number of state qubits."""
+        return self.num_qubits - 1
+
     def _define(self):
         from qiskit.synthesis.arithmetic.comparators import synth_integer_comparator_greedy
 

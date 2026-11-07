@@ -207,6 +207,16 @@ class PhaseOracleGate(Gate):
             label=label,
         )
 
+    @property
+    def expression(self):
+        """Return the source expression used to construct the oracle."""
+        return self.boolean_expression.expression
+
+    @property
+    def var_order(self):
+        """Return the variable ordering used by the oracle."""
+        return self.boolean_expression.args
+
     def _define(self):
         """Defined by the synthesized phase oracle"""
         self.definition = self.boolean_expression.synth(circuit_type="phase")

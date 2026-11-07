@@ -343,6 +343,11 @@ class PolynomialPauliRotationsGate(Gate):
         self.basis = basis.lower()
         super().__init__("PolyPauli", num_state_qubits + 1, [], label=label)
 
+    @property
+    def num_state_qubits(self):
+        """Return the number of state qubits."""
+        return self.num_qubits - 1
+
     def _define(self):
         circuit = QuantumCircuit(self.num_qubits)
         qr_state = circuit.qubits[: self.num_qubits - 1]

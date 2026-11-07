@@ -47,6 +47,13 @@ class RandomBenchmarks:
         qpy_file.seek(0)
         qpy.load(qpy_file)
 
+    def track_dump_size(self, _, __, ___):
+        qpy_file = io.BytesIO()
+        qpy.dump(self.circuit, qpy_file)
+        return qpy_file.tell()
+
+    track_dump_size.unit = "bytes"
+
 
 class CustomGateBenchmarks:
 
@@ -76,6 +83,13 @@ class CustomGateBenchmarks:
         qpy_file.seek(0)
         qpy.load(qpy_file)
 
+    def track_dump_size(self, _, __):
+        qpy_file = io.BytesIO()
+        qpy.dump(self.circuit, qpy_file)
+        return qpy_file.tell()
+
+    track_dump_size.unit = "bytes"
+
 
 class ParameterizedBenchmarks:
 
@@ -101,3 +115,10 @@ class ParameterizedBenchmarks:
         qpy.dump(self.circuit, qpy_file)
         qpy_file.seek(0)
         qpy.load(qpy_file)
+
+    def track_dump_size(self, _, __):
+        qpy_file = io.BytesIO()
+        qpy.dump(self.circuit, qpy_file)
+        return qpy_file.tell()
+
+    track_dump_size.unit = "bytes"

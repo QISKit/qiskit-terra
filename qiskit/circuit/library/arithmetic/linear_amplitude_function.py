@@ -117,8 +117,10 @@ class LinearAmplitudeFunction(QuantumCircuit):
         # ensure that the breakpoints include the first point of the domain
         if breakpoints is None:
             breakpoints = [domain[0]]
-        elif not np.isclose(breakpoints[0], domain[0]):
-            breakpoints = [domain[0]] + breakpoints
+        else:
+            breakpoints = list(breakpoints)
+            if not np.isclose(breakpoints[0], domain[0]):
+                breakpoints = [domain[0]] + breakpoints
 
         _check_sizes_match(slope, offset, breakpoints)
         _check_sorted_and_in_range(breakpoints, domain)
@@ -285,6 +287,11 @@ class LinearAmplitudeFunctionGate(Gate):
 
         num_compare = int(len(breakpoints) > 1)
         super().__init__("LinFunction", num_state_qubits + num_compare + 1, [], label=label)
+
+    @property
+    def num_state_qubits(self):
+        """Return the number of state qubits."""
+        return self.num_qubits - int(len(self.breakpoints) > 1) - 1
 
     def _define(self):
         num_compare = int(len(self.breakpoints) > 1)

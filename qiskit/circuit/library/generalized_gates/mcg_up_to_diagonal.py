@@ -64,6 +64,11 @@ class MCGupDiag(Gate):
         num_qubits = 1 + num_controls + num_ancillas_zero + num_ancillas_dirty
         super().__init__("MCGupDiag", num_qubits, [gate])
 
+    @property
+    def gate(self):
+        """Return the single-qubit unitary used to construct the gate."""
+        return self.params[0]
+
     def _define(self):
         mcg_up_diag_circuit, _ = self._dec_mcg_up_diag()
         gate = mcg_up_diag_circuit.to_instruction()

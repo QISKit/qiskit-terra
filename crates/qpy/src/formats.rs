@@ -12,16 +12,14 @@
 
 use crate::bytes::Bytes;
 use crate::error::{QpyError, to_binrw_error};
-use crate::expr::{read_expression, write_expression};
+pub(crate) use crate::formats_19::*;
 use crate::params::ParameterType;
 use crate::value::{
     BitType, CircuitInstructionType, ExpressionType, ExpressionVarDeclaration, ModifierType,
-    ProgramType, QPYReadData, QPYWriteData, RegisterType, SymbolicEncoding, ValueType,
+    ProgramType, RegisterType, SymbolicEncoding, ValueType,
 };
 use binrw::{BinRead, BinResult, BinWrite, Endian, binread, binrw, binwrite};
-use qiskit_circuit::classical::expr::Expr;
 use std::io::{Read, Seek, Write};
-use std::marker::PhantomData;
 
 /// The QPY file header
 /// This is up-to-date with all the header data found in QPY13.
@@ -62,21 +60,84 @@ pub struct QPYFileHeader {
 #[derive(Debug)]
 #[brw(import (version: u8))]
 pub struct QPYCircuit {
-    #[brw(args(version,))]
-    pub header: CircuitHeaderV12Pack,
-    #[br(count = header.num_vars)]
+    #[br(args(version,))]
+    pub header: CircuitHeaderPack,
+    #[br(count = header.num_vars())]
     pub standalone_vars: Vec<ExpressionVarDeclarationPack>,
     #[br(if(version >= 15))]
     pub annotation_headers: Option<AnnotationHeaderStaticPack>,
     #[br(if(version >= 18))]
     pub parameter_vectors: Option<ParameterVectorTablePack>,
     pub custom_instructions: CustomCircuitInstructionsPack,
-    #[br(count = header.num_instructions, args { inner: (true,) })]
-    pub instructions: Vec<CircuitInstructionV2Pack>,
+    #[br(count = header.num_instructions(), args { inner: (version, true,) })]
+    #[bw(args(version))]
+    pub instructions: Vec<CircuitInstructionPack>,
     #[brw(if(version < 18), args(version,))]
     pub calibrations: Option<CalibrationsPack>,
     #[brw(args(version,))]
     pub layout: LayoutV2Pack,
+}
+
+#[binrw]
+#[derive(Debug)]
+#[br(import (version: u8))]
+pub enum CircuitHeaderPack {
+    #[br(pre_assert(version <= 18))]
+    V12(#[br(args(version,))] CircuitHeaderV12Pack),
+
+    #[br(pre_assert(version >= 19))]
+    V19(#[br(args(version,))] CircuitHeaderV19Pack),
+}
+
+impl CircuitHeaderPack {
+    pub fn num_vars(&self) -> u32 {
+        match self {
+            Self::V12(header) => header.num_vars,
+            Self::V19(header) => header.num_vars,
+        }
+    }
+
+    pub fn num_instructions(&self) -> u64 {
+        match self {
+            Self::V12(header) => header.num_instructions,
+            Self::V19(header) => header.num_instructions,
+        }
+    }
+
+    pub fn num_qubits(&self) -> u32 {
+        match self {
+            Self::V12(header) => header.num_qubits,
+            Self::V19(header) => header.num_qubits,
+        }
+    }
+
+    pub fn num_clbits(&self) -> u32 {
+        match self {
+            Self::V12(header) => header.num_clbits,
+            Self::V19(header) => header.num_clbits,
+        }
+    }
+
+    pub fn registers(&self) -> &Vec<RegisterPack> {
+        match self {
+            Self::V12(header) => &header.registers,
+            Self::V19(header) => &header.registers,
+        }
+    }
+
+    pub fn metadata(&self) -> &Bytes {
+        match self {
+            Self::V12(header) => &header.metadata,
+            Self::V19(header) => &header.metadata,
+        }
+    }
+
+    pub fn circuit_name(&self) -> &String {
+        match self {
+            Self::V12(header) => &header.circuit_name,
+            Self::V19(header) => &header.circuit_name.value,
+        }
+    }
 }
 
 // The header contains the global data of the circuit: name, global phase;
@@ -122,7 +183,23 @@ pub enum RegisterPack {
     V18(RegisterV18Pack),
 }
 
-// The data for a specific instruction in the circuit
+#[binrw]
+#[derive(Debug)]
+#[br(import (version: u8, read_bits: bool))]
+#[bw(import(version: u8))]
+pub enum CircuitInstructionPack {
+    #[br(pre_assert(version <= 18))]
+    V2(#[br(args(read_bits))] CircuitInstructionV2Pack),
+
+    #[br(pre_assert(version >= 19))]
+    V19(
+        #[br(args(version))]
+        #[bw(args(version))]
+        CircuitInstructionV19Pack,
+    ),
+}
+
+// The data for a specific instruction in the circuit, for QPY versions until QPY18
 // Each instruction has a name, an optional label,
 // number of qubits ("qargs") and clbits ("cargs")
 // and a "gate_class_name" used to identify the instruction (for Python-based gates, this will be the
@@ -1009,28 +1086,11 @@ pub struct MappingItem {
 }
 
 // *****Expression handling (used in expr.rs)*****
-// expressions are stored as a consecutive list of expression elements
-// that encode a tree structure in inorder traversal
-// since QPY doesn't explicitly store the number of elements in the expression
-// we need to manually handle byte-level reading along with parsing the expression
-#[binrw]
-#[brw(big)]
-#[derive(Debug)]
-#[br(import(qpy_read_data: &QPYReadData))]
-#[bw(import(qpy_write_data: &'a QPYWriteData<'a>))]
-pub struct ExpressionPack<'a> {
-    #[br(parse_with = read_expression, args(qpy_read_data))]
-    #[bw(write_with = write_expression, args(qpy_write_data))]
-    pub expression: Expr,
-
-    #[br(ignore)]
-    #[bw(ignore)]
-    pub _phantom: PhantomData<&'a Option<Expr>>,
-}
-
+// Expressions are recursive, self-delimiting trees. References to circuit objects remain in their
+// wire representation here and are resolved only after the surrounding circuit has been built.
 // The types of values for elements of the expression - boolean and specific-width ints
 // That can correspond to the values of specific clbits, floats and durations
-#[derive(BinWrite, BinRead, Debug)]
+#[derive(BinWrite, BinRead, Clone, Debug)]
 #[brw(big)]
 pub enum ExpressionTypePack {
     #[brw(magic = b'b')]
@@ -1043,13 +1103,11 @@ pub enum ExpressionTypePack {
     Duration,
 }
 
-// The various node types in an expression:
-// Either a variable, a stretch, a concrete value, a cast,
-// a unary op, a binary op or an index.
-// These correspond to qiskit_circuit::classical::expr::expr
-#[derive(BinWrite, BinRead, Debug)]
+/// Context-free representation of a classical expression in the QPY wire format.
+/// Circuit references remain encoded as indices or names until the circuit reader resolves them.
+#[derive(BinWrite, BinRead, Clone, Debug)]
 #[brw(big)]
-pub enum ExpressionElementPack {
+pub enum PackedExpression {
     #[brw(magic = b'x')]
     Var(ExpressionTypePack, ExpressionVarElementPack),
     #[brw(magic = b's')]
@@ -1057,17 +1115,26 @@ pub enum ExpressionElementPack {
     #[brw(magic = b'v')]
     Value(ExpressionTypePack, ExpressionValueElementPack),
     #[brw(magic = b'c')]
-    Cast(ExpressionTypePack, u8),
+    Cast(ExpressionTypePack, u8, Box<PackedExpression>),
     #[brw(magic = b'u')]
-    Unary(ExpressionTypePack, u8),
+    Unary(ExpressionTypePack, u8, Box<PackedExpression>),
     #[brw(magic = b'b')]
-    Binary(ExpressionTypePack, u8),
+    Binary(
+        ExpressionTypePack,
+        u8,
+        Box<PackedExpression>,
+        Box<PackedExpression>,
+    ),
     #[brw(magic = b'i')]
-    Index(ExpressionTypePack),
+    Index(
+        ExpressionTypePack,
+        Box<PackedExpression>,
+        Box<PackedExpression>,
+    ),
 }
 
 // An expression's var data - either a clbit, a register, or given by a uuid (for a standalone var)
-#[derive(BinWrite, BinRead, Debug)]
+#[derive(BinWrite, BinRead, Clone, Debug)]
 #[brw(big)]
 pub enum ExpressionVarElementPack {
     #[brw(magic = b'C')]
@@ -1081,7 +1148,7 @@ pub enum ExpressionVarElementPack {
 // An expression register data, specifically it's name
 #[binrw]
 #[brw(big)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ExpressionVarRegisterPack {
     #[bw(calc = name.len() as u16)]
     pub name_size: u16,
@@ -1093,7 +1160,7 @@ pub struct ExpressionVarRegisterPack {
 // The storage for a value of an expression value
 // Note that integers are arbitrary large
 // TODO: this may be consolidated with GenericValue in QPY18?
-#[derive(BinWrite, BinRead, Debug)]
+#[derive(BinWrite, BinRead, Clone, Debug)]
 #[brw(big)]
 pub enum ExpressionValueElementPack {
     #[brw(magic = b'b')]
@@ -1107,7 +1174,7 @@ pub enum ExpressionValueElementPack {
 }
 
 // An enum for the various duration types and their values
-#[derive(BinWrite, BinRead, Debug)]
+#[derive(BinWrite, BinRead, Clone, Debug)]
 #[brw(big)]
 pub enum DurationPack {
     #[brw(magic = b't')] // DT
@@ -1127,7 +1194,7 @@ pub enum DurationPack {
 // A struct for storing arbitrary-length integers, as they are saved in QPY
 #[binrw]
 #[brw(big)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BigIntPack {
     #[bw(calc = bytes.len() as u8)]
     pub num_bytes: u8,

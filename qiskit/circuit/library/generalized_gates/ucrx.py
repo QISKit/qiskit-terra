@@ -24,7 +24,7 @@ class UCRXGate(UCPauliRotGate):
     :math:`U_i = R_X(a_i)` where :math:`a_i \in \mathbb{R}` is the rotation angle.
     """
 
-    def __init__(self, angle_list: list[float]) -> None:
+    def __init__(self, angle_list: list[float] | tuple[float, ...]) -> None:
         r"""
         Args:
             angle_list: List of rotation angles :math:`[a_0, ..., a_{2^{k-1}}]`.

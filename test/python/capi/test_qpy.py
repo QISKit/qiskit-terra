@@ -74,7 +74,6 @@ class TestQpyCAPI(QiskitTestCase):
         size = ctypes.c_size_t()
         error = ctypes.POINTER(ctypes.c_char)()
 
-        # should fail due to unsupported version
         result = capi.qk_qpy_dump_buffer(
             circuit_ptrs,
             len(circuit_ptrs),
@@ -125,7 +124,6 @@ class TestQpyCAPI(QiskitTestCase):
         size = ctypes.c_size_t()
         error = ctypes.POINTER(ctypes.c_char)()
 
-        # should fail due to unsupported version
         result = capi.qk_qpy_dump_buffer(
             circuit_ptrs,
             len(circuit_ptrs),
@@ -160,48 +158,7 @@ class TestQpyCAPI(QiskitTestCase):
         size = ctypes.c_size_t()
         error = ctypes.POINTER(ctypes.c_char)()
 
-        # should fail due to unsupported version
-        result = capi.qk_qpy_dump_buffer(
-            circuit_ptrs,
-            len(circuit_ptrs),
-            ctypes.byref(buffer),
-            ctypes.byref(size),
-            ctypes.byref(error),
-        )
-        self.assertEqual(result, capi.QkExitCode.QpyError.value.value)
-        self.assertIn(
-            b"'Python defined instruction' is only available when QPY is invoked from Python",
-            ctypes.string_at(error),
-        )
-        capi.qk_str_free(error)
-        with io.BytesIO() as buf:
-            dump(circuit, buf)
-            buffer = buf.getvalue()
-        length = len(buffer)
-        array_type = ctypes.c_ubyte * length
-        array_data = array_type.from_buffer(bytearray(buffer))
-        output = capi.QkQpyLoadedCircuits(None, 0)
-        result = capi.qk_qpy_load_buffer(
-            ctypes.byref(output), ctypes.POINTER(ctypes.c_ubyte)(array_data), length, error
-        )
-        self.assertEqual(result, capi.QkExitCode.QpyError.value.value)
-        self.assertIn(
-            b"'Python defined instructions' is only available when QPY is invoked from Python",
-            ctypes.string_at(error),
-        )
-
-    def test_python_custom_op(self):
-        circuit = QuantumCircuit(6)
-        gate = SdgGate().control(5, annotated=True)
-        circuit.append(gate, range(6))
-        circuit_ptrs = (ctypes.POINTER(capi.QkCircuit) * 1)(
-            capi.qk_circuit_borrow_from_python(circuit._data)
-        )
-        buffer = ctypes.POINTER(ctypes.c_uint8)()
-        size = ctypes.c_size_t()
-        error = ctypes.POINTER(ctypes.c_char)()
-
-        # should fail due to unsupported version
+        # Python-defined operations are not supported by the native QPY entry point.
         result = capi.qk_qpy_dump_buffer(
             circuit_ptrs,
             len(circuit_ptrs),
@@ -227,7 +184,47 @@ class TestQpyCAPI(QiskitTestCase):
         )
         self.assertEqual(result, capi.QkExitCode.QpyError.value.value)
         self.assertIn(
-            b"'Custom instructions' is only available when QPY is invoked from Python",
+            b"'unpack Python-defined operation' is only available when QPY is invoked from Python",
+            ctypes.string_at(error),
+        )
+
+    def test_python_custom_op(self):
+        circuit = QuantumCircuit(6)
+        gate = SdgGate().control(5, annotated=True)
+        circuit.append(gate, range(6))
+        circuit_ptrs = (ctypes.POINTER(capi.QkCircuit) * 1)(
+            capi.qk_circuit_borrow_from_python(circuit._data)
+        )
+        buffer = ctypes.POINTER(ctypes.c_uint8)()
+        size = ctypes.c_size_t()
+        error = ctypes.POINTER(ctypes.c_char)()
+
+        result = capi.qk_qpy_dump_buffer(
+            circuit_ptrs,
+            len(circuit_ptrs),
+            ctypes.byref(buffer),
+            ctypes.byref(size),
+            ctypes.byref(error),
+        )
+        self.assertEqual(result, capi.QkExitCode.QpyError.value.value)
+        self.assertIn(
+            b"'Python-defined operations' is only available when QPY is invoked from Python",
+            ctypes.string_at(error),
+        )
+        capi.qk_str_free(error)
+        with io.BytesIO() as buf:
+            dump(circuit, buf)
+            buffer = buf.getvalue()
+        length = len(buffer)
+        array_type = ctypes.c_ubyte * length
+        array_data = array_type.from_buffer(bytearray(buffer))
+        output = capi.QkQpyLoadedCircuits(None, 0)
+        result = capi.qk_qpy_load_buffer(
+            ctypes.byref(output), ctypes.POINTER(ctypes.c_ubyte)(array_data), length, error
+        )
+        self.assertEqual(result, capi.QkExitCode.QpyError.value.value)
+        self.assertIn(
+            b"'unpack modifier' is only available when QPY is invoked from Python",
             ctypes.string_at(error),
         )
         capi.qk_str_free(error)
@@ -246,7 +243,6 @@ class TestQpyCAPI(QiskitTestCase):
         size = ctypes.c_size_t()
         error = ctypes.POINTER(ctypes.c_char)()
 
-        # should fail due to unsupported version
         result = capi.qk_qpy_dump_buffer(
             circuit_ptrs,
             len(circuit_ptrs),
@@ -254,18 +250,12 @@ class TestQpyCAPI(QiskitTestCase):
             ctypes.byref(size),
             ctypes.byref(error),
         )
-        self.assertEqual(result, capi.QkExitCode.QpyError.value.value)
-        self.assertIn(
-            b"'Control Flow operations' is only available when QPY is invoked from Python",
-            ctypes.string_at(error),
-        )
-        capi.qk_str_free(error)
-        with io.BytesIO() as buf:
-            dump(circuit, buf)
-            buffer = buf.getvalue()
-        length = len(buffer)
+        self.assertEqual(result, capi.QkExitCode.Success.value.value)
+        length = size.value
+        buffer_array = ctypes.cast(buffer, ctypes.POINTER(ctypes.c_uint8 * length))
+        data = bytes(buffer_array.contents)
         array_type = ctypes.c_ubyte * length
-        array_data = array_type.from_buffer(bytearray(buffer))
+        array_data = array_type.from_buffer(bytearray(data))
         output = capi.QkQpyLoadedCircuits(None, 0)
         result = capi.qk_qpy_load_buffer(
             ctypes.byref(output), ctypes.POINTER(ctypes.c_ubyte)(array_data), length, error
@@ -275,6 +265,7 @@ class TestQpyCAPI(QiskitTestCase):
         self.assertEqual(
             capi.qk_circuit_to_python_full(capi.qk_circuit_copy(output.data[0])), circuit
         )
+        capi.qk_qpy_free_buffer(buffer, size)
         capi.qk_qpy_loaded_circuits_clear(output)
 
     def test_dt_delay(self):
@@ -287,7 +278,6 @@ class TestQpyCAPI(QiskitTestCase):
         size = ctypes.c_size_t()
         error = ctypes.POINTER(ctypes.c_char)()
 
-        # should fail due to unsupported version
         result = capi.qk_qpy_dump_buffer(
             circuit_ptrs,
             len(circuit_ptrs),

@@ -404,6 +404,8 @@ class PiecewiseChebyshevGate(Gate):
         degree: int | None = None,
         breakpoints: list[int] | None = None,
         label: str | None = None,
+        *,
+        _polynomials: list[list[float]] | None = None,
     ) -> None:
         r"""
         Args:
@@ -424,6 +426,8 @@ class PiecewiseChebyshevGate(Gate):
         # validate the breakpoints
         if breakpoints is None:
             breakpoints = [0]
+        else:
+            breakpoints = list(breakpoints)
 
         # If the last breakpoint is < num_states, add the identity polynomial
         num_states = 2**num_state_qubits
@@ -439,8 +443,18 @@ class PiecewiseChebyshevGate(Gate):
         num_compare = int(len(breakpoints) > 2)
         super().__init__("PiecewiseChebyshev", num_state_qubits + num_compare + 1, [], label)
 
-        # after initialization, build the polynomials
-        self.polynomials = self._build_polynomials()
+        # QPY can reconstruct from the generated polynomials without serializing an arbitrary
+        # Python callable.
+        self.polynomials = (
+            self._build_polynomials()
+            if _polynomials is None
+            else [list(polynomial) for polynomial in _polynomials]
+        )
+
+    @property
+    def _qpy_f_x(self):
+        """Return a serializable placeholder when reconstruction uses stored polynomials."""
+        return self.f_x if isinstance(self.f_x, (float, int)) else 0
 
     def _build_polynomials(self):
         """The polynomials for the piecewise approximation.

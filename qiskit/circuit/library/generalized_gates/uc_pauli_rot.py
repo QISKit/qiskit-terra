@@ -37,16 +37,17 @@ class UCPauliRotGate(Gate):
     the rotation angle.
     """
 
-    def __init__(self, angle_list: list[float], rot_axis: str) -> None:
+    def __init__(self, angle_list: list[float] | tuple[float, ...], rot_axis: str) -> None:
         r"""
         Args:
-            angle_list: List of rotation angles :math:`[a_0, ..., a_{2^{k-1}}]`.
+            angle_list: Sequence of rotation angles :math:`[a_0, ..., a_{2^{k-1}}]`.
             rot_axis: Rotation axis. Must be either of ``"X"``, ``"Y"`` or ``"Z"``.
         """
         self.rot_axes = rot_axis
         # Check if angle_list has type "list"
-        if not isinstance(angle_list, list):
-            raise QiskitError("The angles are not provided in a list.")
+        if not isinstance(angle_list, (list, tuple)):
+            raise QiskitError("The angles are not provided in a list or tuple.")
+        angle_list = list(angle_list)
         # Check if the angles in angle_list are real numbers
         for angle in angle_list:
             try:

@@ -97,6 +97,11 @@ class ExactReciprocalGate(Gate):
         self.scaling = scaling
         self.neg_vals = neg_vals
 
+    @property
+    def num_state_qubits(self):
+        """Return the number of state qubits."""
+        return self.num_qubits - 1
+
     def _define(self):
         num_state_qubits = self.num_qubits - 1
         qr_state = QuantumRegister(num_state_qubits, "state")
