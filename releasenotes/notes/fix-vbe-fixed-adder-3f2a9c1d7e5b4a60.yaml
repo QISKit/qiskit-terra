@@ -1,0 +1,7 @@
+---
+fixes:
+  - |
+    Fixed :func:`.adder_ripple_v95` (and therefore :class:`.VBERippleCarryAdder` and the
+    ``"ripple_v95"`` synthesis plugin for :class:`.ModularAdderGate`) computing incorrect sums for
+    ``kind="fixed"`` with ``num_state_qubits >= 2``. The most significant bit of the result used
+    the carry of the wrong position, and for two state qubits it was not computed at all.

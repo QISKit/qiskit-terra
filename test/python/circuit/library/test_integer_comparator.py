@@ -22,6 +22,7 @@ from qiskit.circuit.library import IntegerComparator
 from qiskit.synthesis.arithmetic import synth_integer_comparator_2s, synth_integer_comparator_greedy
 from qiskit.quantum_info import Statevector
 from test import QiskitTestCase
+from test.python.circuit.library.arithmetic_checks import assert_maps_basis_states
 
 
 @ddt
@@ -49,6 +50,15 @@ class TestIntegerComparator(QiskitTestCase):
                     self.assertEqual(x >= value, comp_result == 1)
                 else:
                     self.assertEqual(x < value, comp_result == 1)
+
+        def comparison(index):
+            result = index >= value if geq else index < value
+            return index + (int(result) << num_state_qubits)
+
+        qc = QuantumCircuit(2 * num_state_qubits)
+        qc.append(comp, list(range(comp.num_qubits)))
+        tqc = transpile(qc, qubits_initially_zero=False)
+        assert_maps_basis_states(self, tqc, num_state_qubits, comparison)
 
     @data(
         [1, 0, True],

@@ -30,6 +30,7 @@ from qiskit.circuit.library import (
 from qiskit.transpiler.passes import HighLevelSynthesis, HLSConfig
 from qiskit.synthesis.arithmetic import multiplier_qft_r17, multiplier_cumulative_h18
 from test import QiskitTestCase
+from test.python.circuit.library.arithmetic_checks import assert_maps_basis_states
 
 
 @ddt
@@ -78,6 +79,17 @@ class TestMultiplier(QiskitTestCase):
                 index = int(bin_index, 2)
                 expectations[index] += 1 / 2 ** (2 * num_state_qubits)
         np.testing.assert_array_almost_equal(expectations, probabilities)
+
+        def multiply(index):
+            x, y = index % 2**num_state_qubits, index >> num_state_qubits
+            return index + ((x * y % 2**num_result_qubits) << (2 * num_state_qubits))
+
+        plain = transpile(
+            multiplier,
+            basis_gates=["h", "p", "cp", "rz", "cx", "ccx", "swap"],
+            qubits_initially_zero=False,
+        )
+        assert_maps_basis_states(self, plain, 2 * num_state_qubits, multiply)
 
     @data(
         (3, RGQFTMultiplier),

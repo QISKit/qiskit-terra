@@ -23,6 +23,7 @@ from qiskit.circuit.library import WeightedAdder, WeightedSumGate
 from qiskit.quantum_info import Statevector
 from qiskit.transpiler.passes import HighLevelSynthesis
 from test import QiskitTestCase
+from test.python.circuit.library.arithmetic_checks import assert_maps_basis_states
 
 
 @ddt
@@ -62,6 +63,18 @@ class TestWeightedAdder(QiskitTestCase):
 
         for state, probability in probabilities.items():
             self.assertAlmostEqual(probability, expectations[state])
+
+        def weighted_sum(index):
+            total = sum(w for i, w in enumerate(weights) if index >> i & 1)
+            return index + (total << num_state_qubits)
+
+        plain = QuantumCircuit(circuit.num_qubits)
+        plain.append(adder, list(range(adder.num_qubits)))
+        # synthesize the gate with clean auxiliary qubits, but do not let the subsequent
+        # optimization assume that the state qubits start in |0>
+        plain = HighLevelSynthesis()(plain)
+        plain = transpile(plain, basis_gates=["u", "cx"], qubits_initially_zero=False)
+        assert_maps_basis_states(self, plain, num_state_qubits, weighted_sum)
 
     @data([0], [1, 2, 1], [4], [1, 2, 1, 1, 4])
     def test_summation(self, weights):
